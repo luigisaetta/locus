@@ -77,6 +77,8 @@
   "src/locus/memory/conversation.py": 91.18,
   "src/locus/memory/delta.py": 93.55,
   "src/locus/memory/manager.py": 87.94,
+  "src/locus/memory/managers/__init__.py": 100.0,
+  "src/locus/memory/managers/oracle_agent_memory.py": 81.35,
   "src/locus/memory/registry.py": 90.91,
   "src/locus/memory/store.py": 97.24,
   "src/locus/memory/store_backends/__init__.py": 100.0,
