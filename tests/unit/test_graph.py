@@ -1060,6 +1060,217 @@ class TestStateGraphInterruptBefore:
         assert "__resume_node__" in result.final_state
         assert result.final_state["__resume_node__"] == "step2"
 
+    @pytest.mark.asyncio
+    async def test_interrupt_before_saves_through_checkpointer(self):
+        """When a checkpointer is configured, the interrupt_before pause
+        boundary writes through to it — durable resume needs the paused
+        state on disk, not just on the returned ``GraphResult``."""
+        from locus.memory.backends.memory import MemoryCheckpointer
+
+        graph = StateGraph()
+
+        async def gate(inputs):
+            return {"gated": True}
+
+        async def after(inputs):
+            return {"done": True}
+
+        graph.add_node("gate", gate)
+        graph.add_node("after", after)
+        graph.add_edge(START, "gate")
+        graph.add_edge("gate", "after")
+        graph.add_edge("after", END)
+
+        cp = MemoryCheckpointer()
+        cfg = GraphConfig(
+            interrupt_before=["gate"],
+            checkpointer=cp,
+            thread_id="t-save",
+        )
+        result = await graph.execute({"x": 1}, config=cfg)
+        assert result.interrupt is not None
+        assert result.interrupt.node_id == "gate"
+
+        saved = await cp.load("t-save")
+        assert saved is not None, "interrupt_before must persist when a checkpointer is wired"
+        assert saved.metadata.get("interrupted_node") == "gate"
+        assert saved.metadata.get("graph_state", {}).get("x") == 1
+
+    @pytest.mark.asyncio
+    async def test_resume_after_interrupt_before_advances_past_gate(self):
+        """``Command(resume=...)`` must continue past the gate node — the
+        previous behaviour re-paused on every resume, so durable
+        human-in-the-loop flows needed application-side bookkeeping to
+        rewrite ``__resume_node__``."""
+        from locus.memory.backends.memory import MemoryCheckpointer
+
+        graph = StateGraph()
+
+        async def gate(inputs):
+            return {"gated": True}
+
+        async def after(inputs):
+            return {"done": True}
+
+        graph.add_node("gate", gate)
+        graph.add_node("after", after)
+        graph.add_edge(START, "gate")
+        graph.add_edge("gate", "after")
+        graph.add_edge("after", END)
+
+        cp = MemoryCheckpointer()
+        cfg = GraphConfig(
+            interrupt_before=["gate"],
+            checkpointer=cp,
+            thread_id="t-resume",
+        )
+        first = await graph.execute({}, config=cfg)
+        assert first.interrupt is not None  # paused
+
+        resumed = await graph.execute(Command(resume=True), config=cfg)
+        assert resumed.interrupt is None, "resume should not re-pause at the gate"
+        assert resumed.final_state.get("done") is True
+
+    @pytest.mark.asyncio
+    async def test_resume_without_checkpointer_uses_resume_node_in_state(self):
+        """Same advance-past-gate behaviour for the checkpointer-less path
+        (``Command(resume=..., update={...with __resume_node__})``)."""
+        graph = StateGraph()
+
+        async def gate(inputs):
+            return {"gated": True}
+
+        async def after(inputs):
+            return {"done": True}
+
+        graph.add_node("gate", gate)
+        graph.add_node("after", after)
+        graph.add_edge(START, "gate")
+        graph.add_edge("gate", "after")
+        graph.add_edge("after", END)
+
+        cfg = GraphConfig(interrupt_before=["gate"])
+        first = await graph.execute({}, config=cfg)
+        assert first.interrupt is not None
+        carry = dict(first.final_state)  # includes __resume_node__ == "gate"
+
+        resumed = await graph.execute(Command(resume=True, update=carry), config=cfg)
+        assert resumed.interrupt is None
+        assert resumed.final_state.get("done") is True
+
+    @pytest.mark.asyncio
+    async def test_interrupt_before_round_trips_through_file_checkpointer(self, tmp_path):
+        """The pause-boundary save shape must round-trip through any
+        BaseCheckpointer-conformant backend, not just MemoryCheckpointer.
+        FileCheckpointer exercises JSON serialization on disk — proves
+        ``AgentState.metadata`` survives ``to_checkpoint()`` →
+        ``from_checkpoint()`` for the non-memory path too."""
+        from locus.memory.backends.file import FileCheckpointer
+
+        graph = StateGraph()
+
+        async def gate(inputs):
+            return {"gated": True}
+
+        async def after(inputs):
+            return {"done": True}
+
+        graph.add_node("gate", gate)
+        graph.add_node("after", after)
+        graph.add_edge(START, "gate")
+        graph.add_edge("gate", "after")
+        graph.add_edge("after", END)
+
+        cp = FileCheckpointer(base_dir=tmp_path / "cps")
+        cfg = GraphConfig(
+            interrupt_before=["gate"],
+            checkpointer=cp,
+            thread_id="t-file",
+        )
+        paused = await graph.execute({"x": 1}, config=cfg)
+        assert paused.interrupt is not None
+
+        # Reload through the file backend (verifies on-disk shape).
+        saved = await cp.load("t-file")
+        assert saved is not None
+        assert saved.metadata.get("interrupted_node") == "gate"
+        assert saved.metadata.get("graph_state", {}).get("x") == 1
+
+        resumed = await graph.execute(Command(resume=True), config=cfg)
+        assert resumed.interrupt is None
+        assert resumed.final_state.get("done") is True
+
+
+class TestInlineInterruptCheckpointerSave:
+    """The inline ``interrupt()`` save site at the other end of the
+    execution loop uses the same shape as the new ``interrupt_before``
+    save. Was crashing before the fix (``state=None`` against any
+    backend that calls ``state.to_checkpoint()``). These tests prove the
+    shape works on both memory and file backends."""
+
+    @pytest.mark.asyncio
+    async def test_inline_interrupt_persists_to_memory_checkpointer(self):
+        from locus.memory.backends.memory import MemoryCheckpointer
+
+        graph = StateGraph()
+
+        async def prepare(inputs):
+            return {"prepared": True}
+
+        async def approve(inputs):
+            approval = interrupt({"message": "Approve?"})
+            return {"approved": approval == "yes"}
+
+        async def execute_action(inputs):
+            return {"executed": True}
+
+        graph.add_node("prepare", prepare)
+        graph.add_node("approve", approve)
+        graph.add_node("execute_action", execute_action)
+        graph.add_edge(START, "prepare")
+        graph.add_edge("prepare", "approve")
+        graph.add_edge("approve", "execute_action")
+        graph.add_edge("execute_action", END)
+
+        cp = MemoryCheckpointer()
+        cfg = GraphConfig(checkpointer=cp, thread_id="t-inline-mem")
+        result = await graph.execute({}, config=cfg)
+        assert result.is_interrupted
+        assert result.interrupt.node_id == "approve"
+
+        saved = await cp.load("t-inline-mem")
+        assert saved is not None
+        assert saved.metadata.get("interrupted_node") == "approve"
+        assert "interrupt" in saved.metadata
+
+    @pytest.mark.asyncio
+    async def test_inline_interrupt_persists_to_file_checkpointer(self, tmp_path):
+        from locus.memory.backends.file import FileCheckpointer
+
+        graph = StateGraph()
+
+        async def prepare(inputs):
+            return {"prepared": True}
+
+        async def approve(inputs):
+            approval = interrupt({"message": "Approve?"})
+            return {"approved": approval == "yes"}
+
+        graph.add_node("prepare", prepare)
+        graph.add_node("approve", approve)
+        graph.add_edge(START, "prepare")
+        graph.add_edge("prepare", "approve")
+        graph.add_edge("approve", END)
+
+        cp = FileCheckpointer(base_dir=tmp_path / "cps-inline")
+        cfg = GraphConfig(checkpointer=cp, thread_id="t-inline-file")
+        result = await graph.execute({}, config=cfg)
+        assert result.is_interrupted
+
+        saved = await cp.load("t-inline-file")
+        assert saved is not None
+        assert saved.metadata.get("interrupted_node") == "approve"
+
 
 class TestStateGraphParallelExecution:
     """Tests for parallel node execution."""
