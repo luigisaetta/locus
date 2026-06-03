@@ -48,6 +48,7 @@ def get_checkpointer(checkpointer_string: str, **kwargs: Any) -> BaseCheckpointe
         - "file:./checkpoints" -> FileCheckpointer(base_dir="./checkpoints")
         - "redis:localhost:6379" -> RedisCheckpointer(url="redis://localhost:6379")
         - "postgresql:mydb" -> PostgreSQLCheckpointer(database="mydb")
+        - "mysql:mydb" -> MySQLCheckpointer(database="mydb")
         - "opensearch" -> OpenSearchCheckpointer()
         - "oci:bucket/namespace" -> OCIBucketCheckpointer(bucket_name="bucket", namespace="namespace")
         - "oracle:mydb" -> OracleCheckpointer(database="mydb")
@@ -138,7 +139,7 @@ def _register_defaults() -> None:
             return redis_checkpointer(**kwargs)
 
         register_checkpointer("redis", redis_factory)
-    except ImportError:
+    except ImportError:  # pragma: no cover - defensive parity with optional backends
         pass
 
     # PostgreSQL (optional)
@@ -152,7 +153,21 @@ def _register_defaults() -> None:
             return postgresql_checkpointer(**kwargs)
 
         register_checkpointer("postgresql", postgresql_factory)
-    except ImportError:
+    except ImportError:  # pragma: no cover - defensive parity with optional backends
+        pass
+
+    # MySQL (optional)
+    try:
+
+        def mysql_factory(config_hint: str | None = None, **kwargs: Any) -> BaseCheckpointer:
+            from locus.memory.backends.adapters import mysql_checkpointer
+
+            if config_hint:
+                kwargs.setdefault("database", config_hint)
+            return mysql_checkpointer(**kwargs)
+
+        register_checkpointer("mysql", mysql_factory)
+    except ImportError:  # pragma: no cover - defensive parity with optional backends
         pass
 
     # OpenSearch (optional)
@@ -168,7 +183,7 @@ def _register_defaults() -> None:
             return opensearch_checkpointer(**kwargs)
 
         register_checkpointer("opensearch", opensearch_factory)
-    except ImportError:
+    except ImportError:  # pragma: no cover - defensive parity with optional backends
         pass
 
     # OCI Bucket (optional)
@@ -184,7 +199,7 @@ def _register_defaults() -> None:
             return oci_bucket_checkpointer(**kwargs)
 
         register_checkpointer("oci", oci_factory)
-    except ImportError:
+    except ImportError:  # pragma: no cover - defensive parity with optional backends
         pass
 
     # Oracle (optional)
@@ -198,7 +213,7 @@ def _register_defaults() -> None:
             return oracle_checkpointer(**kwargs)
 
         register_checkpointer("oracle", oracle_factory)
-    except ImportError:
+    except ImportError:  # pragma: no cover - defensive parity with optional backends
         pass
 
 
