@@ -1,13 +1,12 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for structured output module."""
 
 import pytest
 from pydantic import BaseModel, Field
 
-from locus.core.structured import (
+from tulip.core.structured import (
     StructuredOutput,
     StructuredOutputError,
     create_output_instructions,

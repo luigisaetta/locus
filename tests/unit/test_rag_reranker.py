@@ -1,15 +1,10 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for ``locus.rag.reranker`` (closes #216).
+"""Unit tests for ``tulip.rag.reranker`` (closes #216).
 
-Two test surfaces:
+Test surface:
 
-  * ``CohereReranker`` against a mocked OCI client — exercises the
-    request shape, the response parsing, the empty-input contract, the
-    score / distance preservation, and ``top_n`` truncation. No real
-    OCI auth needed.
   * ``RAGRetriever`` wired to a fake reranker — confirms the
     over-fetch + rerank + trim plumbing in ``retrieve()``.
 """
@@ -19,12 +14,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
-from locus.rag import CohereReranker, RAGRetriever, Reranker
-from locus.rag.stores.base import Document, SearchResult
+from tulip.rag import RAGRetriever, Reranker
+from tulip.rag.stores.base import Document, SearchResult
 
 
 def _doc(doc_id: str, content: str) -> Document:
@@ -39,169 +33,6 @@ def _doc(doc_id: str, content: str) -> Document:
 
 def _hit(doc_id: str, content: str, score: float) -> SearchResult:
     return SearchResult(document=_doc(doc_id, content), score=score, distance=None)
-
-
-# ============================================================================
-# CohereReranker — request/response plumbing against a mocked OCI client.
-# ============================================================================
-
-
-def _mock_oci_client_returning(ranks: list[tuple[int, float]]) -> Any:
-    """Return a mock OCI client whose ``rerank_text`` echoes the given
-    ranks. ``ranks`` is a list of ``(original_index, relevance_score)``
-    tuples in the order the model would return them."""
-    response = SimpleNamespace(
-        data=SimpleNamespace(
-            document_ranks=[
-                SimpleNamespace(index=idx, relevance_score=score) for idx, score in ranks
-            ]
-        )
-    )
-    client = MagicMock()
-    client.rerank_text.return_value = response
-    return client
-
-
-@pytest.mark.asyncio
-async def test_empty_candidates_short_circuits_without_oci_call() -> None:
-    """Contract: rerank([]) returns [] without calling the OCI client.
-
-    Important because real OCI calls cost money + add latency, and the
-    "no hits" path is common with strict thresholds."""
-    client = MagicMock()
-    reranker = CohereReranker(compartment_id="ocid1.compartment.oc1..xxx", _client=client)
-    out = await reranker.rerank("query", [])
-    assert out == []
-    client.rerank_text.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_reorders_by_relevance_score() -> None:
-    """rerank() returns candidates in the order OCI ranked them, with
-    each result carrying the rerank score in ``.score`` and the
-    original embedding score preserved in ``.distance``."""
-    candidates = [
-        _hit("a", "alpha", score=0.6),
-        _hit("b", "bravo", score=0.5),
-        _hit("c", "charlie", score=0.4),
-    ]
-    # OCI says: c is most relevant, then a, then b.
-    client = _mock_oci_client_returning([(2, 0.95), (0, 0.70), (1, 0.10)])
-    reranker = CohereReranker(
-        model="cohere.rerank-v3.5",
-        compartment_id="ocid1.compartment.oc1..xxx",
-        _client=client,
-    )
-
-    out = await reranker.rerank("query", candidates)
-
-    assert [r.document.id for r in out] == ["c", "a", "b"]
-    assert [r.score for r in out] == [0.95, 0.70, 0.10]
-    # Original embedding scores preserved on .distance for diagnostics.
-    assert out[0].distance == 0.4
-    assert out[1].distance == 0.6
-    assert out[2].distance == 0.5
-
-
-@pytest.mark.asyncio
-async def test_top_n_truncates_output() -> None:
-    """``top_n`` caps the number of returned candidates (matches OCI's
-    own ``top_n`` parameter)."""
-    candidates = [_hit(str(i), f"doc-{i}", 0.5) for i in range(10)]
-    client = _mock_oci_client_returning([(i, 1.0 - i * 0.1) for i in range(10)])
-    reranker = CohereReranker(
-        compartment_id="ocid1.compartment.oc1..xxx",
-        top_n=3,
-        _client=client,
-    )
-
-    out = await reranker.rerank("query", candidates)
-
-    assert len(out) == 10  # OCI returned 10; truncation enforced by OCI server
-    # And we explicitly pass top_n through:
-    request_kwargs = client.rerank_text.call_args.kwargs
-    request = request_kwargs["rerank_text_details"]
-    assert request.top_n == 3
-
-
-@pytest.mark.asyncio
-async def test_request_shape_carries_query_documents_and_compartment() -> None:
-    """The OCI request the reranker builds carries the right fields:
-    ``input`` (query), ``documents`` (candidate texts in order),
-    ``compartment_id``, and a Cohere on-demand serving mode."""
-    candidates = [_hit("x", "doc x text", 0.5), _hit("y", "doc y text", 0.5)]
-    client = _mock_oci_client_returning([(0, 0.9), (1, 0.1)])
-    reranker = CohereReranker(
-        model="cohere.rerank-v3.5",
-        compartment_id="ocid1.compartment.oc1..xyz",
-        _client=client,
-    )
-
-    await reranker.rerank("hepcidin role", candidates)
-
-    request = client.rerank_text.call_args.kwargs["rerank_text_details"]
-    assert request.input == "hepcidin role"
-    assert request.documents == ["doc x text", "doc y text"]
-    assert request.compartment_id == "ocid1.compartment.oc1..xyz"
-    assert request.serving_mode.model_id == "cohere.rerank-v3.5"
-
-
-@pytest.mark.asyncio
-async def test_build_client_routes_through_oci_client_helper(monkeypatch: Any) -> None:
-    """Without a ``_client`` override, ``_build_client`` constructs an
-    ``OCIClient`` from ``locus.models.providers.oci.client`` so every
-    auth mode (api_key / security_token / session_token / instance &
-    resource principal) works through the same plumbing as the rest
-    of the locus OCI surface. Covers the construction path (lines
-    134-157) without needing live OCI credentials."""
-    constructed: dict[str, Any] = {}
-
-    class _FakeOCIClient:
-        def __init__(self, cfg: Any) -> None:
-            constructed["config"] = cfg
-            self.compartment_id = "ocid1.compartment.oc1..auto-derived"
-            self.client = MagicMock(name="GenerativeAiInferenceClient")
-
-    monkeypatch.setattr(
-        "locus.models.providers.oci.client.OCIClient",
-        _FakeOCIClient,
-    )
-
-    reranker = CohereReranker(
-        model="cohere.rerank-v4.0-fast",
-        profile_name="DEFAULT",
-        auth_type="security_token",
-        region="us-chicago-1",
-        # compartment_id intentionally unset — should auto-derive.
-    )
-    client = reranker._build_client()
-
-    # The first call returns the fake client; second call is cached.
-    assert client is reranker._build_client()
-    # OCIClient was built with the reranker's auth + endpoint config.
-    cfg = constructed["config"]
-    assert cfg.profile_name == "DEFAULT"
-    assert cfg.auth_type.value == "security_token"
-    assert cfg.service_endpoint == (
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com"
-    )
-    # Compartment auto-derived from the profile's tenancy.
-    assert reranker.compartment_id == "ocid1.compartment.oc1..auto-derived"
-
-
-@pytest.mark.asyncio
-async def test_out_of_range_index_skipped_not_raised() -> None:
-    """OCI returning a malformed index (out of range vs the candidate
-    list) is logged-only — we skip the entry rather than crash the
-    retriever path."""
-    candidates = [_hit("a", "alpha", 0.5), _hit("b", "bravo", 0.5)]
-    # Index 5 is out of range for 2 candidates.
-    client = _mock_oci_client_returning([(5, 0.9), (0, 0.5)])
-    reranker = CohereReranker(compartment_id="ocid1.compartment.oc1..xxx", _client=client)
-
-    out = await reranker.rerank("query", candidates)
-
-    assert [r.document.id for r in out] == ["a"]
 
 
 # ============================================================================

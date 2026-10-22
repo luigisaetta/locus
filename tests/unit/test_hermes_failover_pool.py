@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Integration tests for the Hermes-port failover stack (B.1 + B.2 + B.3).
 
@@ -17,10 +16,10 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import SecretStr
 
-from locus.core.errors import ModelAuthError
-from locus.models.credentials import Credential, CredentialPool
-from locus.models.failover import FailoverReason, classify
-from locus.models.rate_limits import parse_rate_limit_headers
+from tulip.core.errors import ModelAuthError
+from tulip.models.credentials import Credential, CredentialPool
+from tulip.models.failover import FailoverReason, classify
+from tulip.models.rate_limits import parse_rate_limit_headers
 
 
 _NOW = datetime(2026, 4, 25, 12, 0, 0, tzinfo=UTC)

@@ -1,0 +1,1127 @@
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
+
+"""Agent configuration - 100% Pydantic."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from tulip.core.loops import DEFAULT_READ_ONLY_TOOLS
+from tulip.models.profiles import LeakedToolCallFormat
+
+
+class ReflexionConfig(BaseModel):
+    """Configuration for Reflexion reasoning pattern."""
+
+    enabled: bool = True
+    confidence_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
+    diminishing_returns: bool = True
+    evaluate_every_n_iterations: int = Field(default=1, ge=1)
+    include_guidance: bool = True
+    model: str | None = None  # Optional separate model for reflection
+
+    model_config = {"extra": "forbid"}
+
+
+class GroundingConfig(BaseModel):
+    """Configuration for Grounding evaluation."""
+
+    enabled: bool = True
+    threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    max_replans: int = Field(default=2, ge=0)
+    check_before_final: bool = True
+    model: str | None = None  # Optional separate model for grounding
+
+    model_config = {"extra": "forbid"}
+
+
+class ModelRetryConfig(BaseModel):
+    """Retry of a failed model call inside the agent loop.
+
+    A long run makes hundreds of model calls; one 429, 503, dropped
+    connection or timeout among them otherwise ends the whole run with
+    ``TerminateEvent(reason="error")``. The loop re-issues the same request
+    after an exponential backoff with full jitter, honouring the provider's
+    ``retry-after`` when it sends one.
+
+    Only transient failures are retried — rate limits (429), overload and
+    server errors (5xx), transport errors and timeouts, as
+    :func:`tulip.models.failover.classify` names them. A context-length
+    overflow, a malformed request, a bad key, a billing failure or an
+    unknown model fails at once: the same request would fail the same way.
+    Exceptions the classifier cannot place are not retried either, so a bug
+    in a hook or a provider binding surfaces immediately.
+
+    This sits outside any retry the provider client does itself (the native
+    OpenAI binding retries 3 times by default): the loop starts a new attempt
+    only after the client has given up.
+
+    Attributes:
+        enabled: ``False`` turns loop-level retry off.
+        max_retries: Retries after the first attempt.
+        initial_delay: Backoff ceiling, in seconds, for the first retry; it
+            doubles each retry up to ``max_delay``. The actual delay is drawn
+            uniformly below the ceiling (full jitter), so parallel agents
+            hitting one rate limit do not retry in lockstep.
+        max_delay: Largest backoff ceiling, in seconds.
+        total_budget_seconds: Wall-clock seconds, from the first attempt,
+            after which no further retry starts. A ``retry-after`` that would
+            end past the budget fails the call at once instead of sleeping.
+        retry_unclassified: ``True`` also retries failures the classifier
+            cannot place, with the same backoff. Off by default, because such
+            an exception is as likely a bug in a hook as a provider hiccup.
+    """
+
+    enabled: bool = True
+    max_retries: int = Field(default=6, ge=0)
+    initial_delay: float = Field(default=1.0, ge=0.0)
+    max_delay: float = Field(default=60.0, ge=0.0)
+    total_budget_seconds: float = Field(default=300.0, gt=0.0)
+    retry_unclassified: bool = False
+
+    model_config = {"extra": "forbid"}
+
+
+class GSARConfig(BaseModel):
+    """Configuration for the GSAR typed-grounding layer.
+
+    Wires the framework from `arXiv:2604.23366` onto an ``Agent``. When
+    set on :class:`AgentConfig`, the agent runs the configured judge
+    over its final assistant message + tool-execution history after
+    the loop completes; the resulting :class:`~tulip.reasoning.gsar_judge.JudgeOutput`,
+    scalar score ``S``, and decision ``δ`` are surfaced on
+    :class:`~tulip.agent.result.AgentResult`.
+
+    This is a single-pass v1 — the agent produces an answer, the judge
+    scores it, and the result is exposed for the caller to act on. The
+    full Algorithm-1 outer loop with regenerate / replan callbacks
+    lives separately in :mod:`tulip.reasoning.gsar_evaluator`; wire it
+    explicitly when you want the loop dynamics.
+    """
+
+    judge: Any = Field(
+        default=None,
+        description=(
+            "A :class:`~tulip.reasoning.gsar_judge.BaseGSARJudge` "
+            "instance. When ``None`` the agent constructs a default "
+            "``StructuredOutputGSARJudge`` over the agent's primary "
+            "model — that's almost never what you want for production "
+            "(the paper recommends a different model from the generator), "
+            "so prefer to pass an explicit judge."
+        ),
+    )
+
+    contradiction_penalty: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="``ρ`` from Eq. 2. Default 0.5 (Appendix B reference).",
+    )
+
+    tau_proceed: float = Field(
+        default=0.80,
+        ge=0.0,
+        le=1.0,
+        description="``τ_proceed`` from Eq. 3. Default 0.80 (Appendix B).",
+    )
+
+    tau_regenerate: float = Field(
+        default=0.65,
+        ge=0.0,
+        le=1.0,
+        description="``τ_regenerate`` from Eq. 3. Default 0.65 (Appendix B).",
+    )
+
+    weight_map: dict[str, float] | None = Field(
+        default=None,
+        description=(
+            "Optional override of the Appendix-B reference weights. "
+            "Keys must be ``EvidenceType`` enum values "
+            "(``'tool_match'`` etc.). ``None`` uses the defaults."
+        ),
+    )
+
+    fail_on_low_score: bool = Field(
+        default=False,
+        description=(
+            "When True, an ``AgentResult`` whose GSAR decision is not "
+            "``proceed`` raises a ``GSARValidationError`` instead of "
+            "returning. Useful for pipelines that should refuse to "
+            "ship un-grounded summaries; off by default so callers "
+            "can inspect the judgment and decide."
+        ),
+    )
+
+    model_config = {"arbitrary_types_allowed": True, "extra": "forbid"}
+
+    @field_validator("tau_regenerate")
+    @classmethod
+    def _ordered(cls, v: float, info: Any) -> float:
+        proceed = getattr(info, "data", {}).get("tau_proceed", 0.80)
+        if v >= proceed:
+            raise ValueError(
+                f"tau_regenerate ({v}) must be strictly less than tau_proceed ({proceed})."
+            )
+        return v
+
+
+class CompactionConfig(BaseModel):
+    """How an agent with a known context window keeps a long run inside it.
+
+    Applies when the agent has no explicit ``conversation_manager`` and its
+    window is known (``context_window``, ``TULIP_CONTEXT_WINDOW``, model
+    metadata, or the model itself). Once the request reaches
+    ``trigger_fraction`` of the usable window (the window minus
+    ``reserved_tokens``), old tool outputs are cleared; when that is not
+    enough, ``summary_model`` summarises the older history for continuation
+    and the run carries on. A compaction that cannot get under the threshold,
+    or summaries needed again within ``min_iterations_between_summaries``,
+    ends the run with ``context_exhausted``. See
+    :class:`tulip.memory.compaction.ContextCompactor`.
+
+    ``enabled=False`` (or ``AgentConfig(compaction=False)``) keeps the
+    pre-summary behaviour: old tool output pruned and a token-budgeted tail
+    sent each call, with no model calls of its own.
+    """
+
+    model_config = {"arbitrary_types_allowed": True, "extra": "forbid"}
+
+    enabled: bool = True
+    trigger_fraction: float = Field(default=0.9, gt=0.0, le=1.0)
+    reserved_tokens: int | None = Field(
+        default=None,
+        ge=0,
+        description="Room kept for the reply. Default min(20_000, window // 5).",
+    )
+    tail_turns: int = Field(default=6, ge=1)
+    tail_token_fraction: float = Field(default=0.25, gt=0.0, lt=1.0)
+    tool_output_keep_tokens: int | None = Field(
+        default=None,
+        ge=0,
+        description="Newest tool output kept when clearing. Default min(40_000, usable // 4).",
+    )
+    summary_model: str | Any | None = Field(
+        default=None,
+        description=(
+            "Model that writes the summary: a provider string or a model "
+            "instance. None uses the agent's own model, which already knows "
+            "the task's vocabulary and has the window the summary is for."
+        ),
+    )
+    summary_max_tokens: int | None = Field(default=None, ge=1)
+    min_iterations_between_summaries: int = Field(default=3, ge=0)
+
+
+class ObservationPackConfig(BaseModel):
+    """Send large old tool outputs as recallable placeholders (ObservationPack).
+
+    A text tool output over ``threshold_bytes`` goes whole in its first
+    ``full_sends`` requests; after that the request shows a placeholder (an id,
+    its size, a kilobyte of its first and last lines) while the run's state
+    keeps the output, and the ``obs_recall`` tool, registered with it, pages
+    the exact bytes back from a per-session archive under ``directory``.
+    Swaps are batched and priced against the prompt cache (see
+    :class:`tulip.memory.observation_pack.SwapCostModel`), and compaction
+    clears outputs into recallable stubs instead of lossy ones. A tool output
+    is no longer cut at ``max_tool_result_length``: up to ``max_inline_chars``
+    goes whole, and anything larger is archived whole and cut around a pointer
+    to the archive. Subagents a run starts get a pack of their own, archived
+    under the run's session. See :mod:`tulip.memory.observation_pack`.
+    """
+
+    model_config = {"arbitrary_types_allowed": True, "extra": "forbid"}
+
+    enabled: bool = False
+    directory: str | Path | None = Field(
+        default=None,
+        description=(
+            "Where per-session archives live, as <directory>/<session>/observation-pack/. "
+            "None uses $TMPDIR/tulip-observation-pack."
+        ),
+    )
+    threshold_bytes: int = Field(default=10 * 1024, ge=0)
+    max_inline_chars: int | None = Field(
+        default=128_000,
+        ge=1,
+        description=(
+            "Largest tool output, in characters, sent whole while the pack is on; "
+            "``max_tool_result_length`` stops applying. Larger outputs are archived "
+            "whole and sent cut around a pointer to the archive. Never more than an "
+            "eighth of a known context window, never less than max_tool_result_length. "
+            "None: only the window bounds it."
+        ),
+    )
+    full_sends: int = Field(default=2, ge=0)
+    excerpt_bytes: int = Field(default=1024, ge=0)
+    recall_max_bytes: int = Field(default=16 * 1024, gt=512)
+    recall_max_lines: int = Field(default=400, gt=2)
+    # The cost model. Prices are relative to an uncached input token.
+    min_batch_bytes: int = Field(
+        default=32 * 1024,
+        ge=0,
+        description="Bytes a swap batch must free before it may break a cached prefix.",
+    )
+    cache_read_cost: float = Field(default=0.1, ge=0.0)
+    cache_write_cost: float = Field(default=1.0, ge=0.0)
+    horizon_requests: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Requests a swap is expected to save on. None: the requests made so far "
+            "(at least min_horizon_requests)."
+        ),
+    )
+    min_horizon_requests: int = Field(default=4, ge=1)
+
+
+class AgentConfig(BaseModel):
+    """
+    Configuration for an Agent instance.
+
+    All parameters can be validated before agent creation.
+    """
+
+    model_config = {"arbitrary_types_allowed": True, "extra": "forbid"}
+
+    # Model specification
+    model: str | Any = Field(
+        ...,
+        description="Model string ('openai:gpt-4o' or 'anthropic:claude-sonnet-4-6') or ModelProtocol instance",
+    )
+
+    # Provider configuration that has to travel with the string form.
+    #
+    # ``extra="forbid"`` above is deliberate — it turns a misspelled field
+    # into an error instead of a silently ignored setting — but it also
+    # means a provider kwarg cannot ride along with ``model=``:
+    #
+    #   Agent(model="openai-compatible:my-model", base_url="https://host/v1")
+    #   → ValidationError: base_url  Extra inputs are not permitted
+    #
+    # So the one-string convenience used to evaporate exactly when the
+    # configuration was least standard. ``openai-compatible:`` *requires* a
+    # ``base_url``, which left it usable only through the environment; the
+    # same applied to pointing ``vllm:`` or ``ollama:`` at another host, or
+    # passing a per-agent key.
+    model_kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Provider keyword arguments forwarded to ``get_model()`` when "
+            "``model`` is a string — ``base_url``, ``api_key``, "
+            "``temperature``, or anything else the provider accepts. "
+            "Ignored for a ModelProtocol instance, which is already "
+            "configured; passing both is an error rather than a silent "
+            "no-op. Applies to ``model`` only: ``auxiliary_model`` and "
+            "``grounding.model`` are usually on a different provider, so "
+            "give those a pre-built model from ``get_model()`` when they "
+            "need their own configuration."
+        ),
+    )
+
+    # Auxiliary (cheap/fast) model for summarization, classification,
+    # and other side-calls where quality matters less than cost /
+    # latency. Defaults to the primary model when unset.
+    #
+    # Typical use:
+    #   config.auxiliary_model = "openai:gpt-4o-mini"
+    #   # Context compactor uses it for middle-turn summarization,
+    #   # keeping the primary model's budget for the actual task.
+    auxiliary_model: str | Any | None = Field(
+        default=None,
+        description=(
+            "Cheap / fast model for non-primary calls. When set, the "
+            "agent uses it for the max-iterations final summary, "
+            "grounding evaluation (when ``grounding.model`` isn't set "
+            "explicitly), and any conversation manager that supports "
+            "an auxiliary fallback (``LLMCompactor``). The primary "
+            "ReAct loop and structured-output repair stay on "
+            "``model``. String (``'openai:gpt-4o-mini'``) or "
+            "ModelProtocol instance. ``None`` (default) falls back to "
+            "``model`` everywhere."
+        ),
+    )
+
+    # Tools
+    tools: list[Any] = Field(
+        default_factory=list,
+        description="List of tools available to the agent",
+    )
+
+    # MCP servers whose tools join the registry on the first run. Held as
+    # ``MCPClient`` instances rather than URLs because connecting is async
+    # while ``Agent.__init__`` is not: the agent connects (if it must),
+    # lists, and attaches once, from inside the first ``run()``.
+    mcp_servers: list[Any] = Field(
+        default_factory=list,
+        description="MCPClient instances whose tools are attached on the first "
+        "run. Every tool the server advertises becomes an ordinary Tulip tool, "
+        "so it is gated, hooked, and idempotency-checked like any other.",
+    )
+
+    # System prompt — string or callable(context) -> str for dynamic prompts
+    system_prompt: Any = Field(
+        default="You are a helpful AI assistant.",
+        description="System prompt for the agent. Can be a string or a callable "
+        "that receives context dict and returns a string for dynamic prompts.",
+    )
+
+    # Iteration limits
+    max_iterations: int = Field(
+        default=20,
+        ge=1,
+        le=500,
+        description="Maximum iterations before stopping",
+    )
+
+    # Budget limits
+    token_budget: int | None = Field(
+        default=None,
+        ge=1,
+        description="Maximum total tokens before stopping (None = unlimited)",
+    )
+
+    max_cost_usd: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Maximum spend in USD before stopping (None = unlimited). Checked before "
+            "each model call against that call's worst case, and again after it. Needs "
+            "the model's prices in model metadata; an unpriced model refuses a budget."
+        ),
+    )
+
+    time_budget_seconds: float | None = Field(
+        default=None,
+        gt=0.0,
+        description="Maximum wall-clock seconds before stopping (None = unlimited)",
+    )
+
+    budget_nudge_at: float | None = Field(
+        default=0.8,
+        gt=0.0,
+        lt=1.0,
+        description=(
+            "Once the run has used this fraction of any of its budgets "
+            "(token_budget, max_cost_usd, time_budget_seconds, max_iterations), "
+            "append one note asking the model to converge: finish the change in "
+            "progress, verify it, report. Once per run; the note is appended, so "
+            "the cached prefix is kept. None turns it off."
+        ),
+    )
+
+    model_retry: ModelRetryConfig | None = Field(
+        default_factory=ModelRetryConfig,
+        description=(
+            "Retry of transient model-call failures (429, 5xx, connection "
+            "errors, timeouts) with exponential backoff and jitter. On by "
+            "default; ``False``/``None`` disables it, ``True`` restores the "
+            "defaults. See ``ModelRetryConfig``."
+        ),
+    )
+
+    # Reasoning patterns. Both fields accept either ``True`` (use sensible
+    # defaults — see ``ReflexionConfig`` / ``GroundingConfig``), an
+    # explicit config instance, or ``None`` (disabled). The boolean
+    # shorthand is what the docs advertise as ``reflexion=True``.
+    reflexion: ReflexionConfig | None = Field(
+        default=None,
+        description="Reflexion configuration. Pass True for sensible defaults, None to disable.",
+    )
+
+    grounding: GroundingConfig | None = Field(
+        default=None,
+        description="Grounding evaluation configuration. Pass True for sensible defaults, None to disable.",
+    )
+
+    gsar: GSARConfig | None = Field(
+        default=None,
+        description=(
+            "GSAR typed-grounding layer config (`arXiv:2604.23366`). "
+            "When set, the agent runs the configured judge over its "
+            "final answer + tool-execution history after the loop "
+            "completes and surfaces the JudgeOutput / score / decision "
+            "on ``AgentResult``. Use for safety-critical pipelines "
+            "where typed-evidence partitioning earns its keep over the "
+            "binary ``grounding=True`` path. ``None`` (default) "
+            "disables GSAR."
+        ),
+    )
+
+    # Planning
+    planning: bool = Field(
+        default=False,
+        description=(
+            "When True, the agent generates an explicit plan on the first "
+            "iteration before taking action. The plan is stored in state "
+            "metadata and can be revised if the agent gets stuck."
+        ),
+    )
+
+    # Terminal tools
+    terminal_tools: set[str] = Field(
+        default_factory=lambda: {"submit", "done", "finish", "complete", "task_complete"},
+        description="Tool names that signal task completion",
+    )
+
+    # Completion mode
+    completion_mode: Literal["auto", "explicit"] = Field(
+        default="auto",
+        description=(
+            "How the agent decides it's done. "
+            "'auto' = stops on confidence, no tool calls, or terminal tool. "
+            "'explicit' = only stops on terminal tool, max_iterations, or budgets. "
+            "Use 'explicit' for multi-step tasks that require verification."
+        ),
+    )
+
+    # Verification reminders
+    verify_tools: set[str] = Field(
+        default_factory=lambda: {"write_file", "write", "save", "create_file", "update_file"},
+        description=(
+            "Tool names that trigger a verification reminder. "
+            "When tools in this set are called, a system message is injected "
+            "reminding the agent to verify changes before completing."
+        ),
+    )
+
+    # Verification gate for task_complete
+    require_verification: bool = Field(
+        default=True,
+        description=(
+            "When True and completion_mode='explicit', task_complete is blocked "
+            "unless a verification tool (run_command, run_tests, etc.) was called "
+            "after the last write. Forces write→test→fix→complete workflow."
+        ),
+    )
+    verification_tools: set[str] = Field(
+        default_factory=lambda: {"run_command", "run_tests", "run", "execute", "pytest", "test"},
+        description="Tool names that count as verification (running tests/commands).",
+    )
+
+    # Tool loop detection
+    tool_loop_threshold: int = Field(
+        default=3,
+        ge=2,
+        description=(
+            "Consecutive identical steps (same calls, same arguments, same "
+            "results) that make a tool loop. The first time a loop is seen the "
+            "model is warned; the run stops only if it repeats after that."
+        ),
+    )
+    tool_loop_read_only_threshold: int | None = Field(
+        default=None,
+        ge=2,
+        description=(
+            "The same threshold for a step made only of read-only tools, whose "
+            "repeats are normal work. None means tool_loop_threshold + 1."
+        ),
+    )
+    tool_loop_read_only_tools: set[str] = Field(
+        default_factory=lambda: set(DEFAULT_READ_ONLY_TOOLS),
+        description="Tool names counted as read-only by the tool-loop detector.",
+    )
+
+    # Execution strategy
+    text_tool_calls: Literal["auto", "on", "off"] = Field(
+        default="auto",
+        description=(
+            "Whether a tool call written in the message body (no structured "
+            "``tool_calls``) is parsed and executed. ``'on'`` is for models "
+            "served without a tool parser that print calls as text; it accepts "
+            "only unambiguous shapes — a message that is entirely a JSON call "
+            "or entirely ``name(key=value)`` lines, a ``json`` / ``tool_call`` / "
+            "``tool_code`` fence, or a ``<tool_call>`` tag — never a call "
+            "mentioned inside prose. ``'off'`` never parses. ``'auto'`` (the "
+            "default) parses only when the model declares "
+            "``supports_native_tool_calls = False``: with native tool calling, "
+            "text that looks like a call is the model talking about a tool, "
+            "and running it executes a command nobody issued."
+        ),
+    )
+    leaked_tool_call_formats: list[LeakedToolCallFormat] | None = Field(
+        default=None,
+        description=(
+            "Tool-call markup to recognise in the message body even though the "
+            "model calls tools natively: its own training format, which a "
+            "router or server sometimes leaves as text (DeepSeek's "
+            "``<｜DSML｜tool_calls>``, Kimi's ``<|tool_calls_section_begin|>``). "
+            "``None`` (the default) takes the formats from the model's capability "
+            "profile (``tulip.models.profiles``); ``[]`` turns this off. A block is "
+            "a call only when it is the whole message after any leading prose and "
+            "every call names a registered tool with declared arguments; "
+            "``text_tool_calls='off'`` turns this off too."
+        ),
+    )
+    tool_execution: Literal["sequential", "concurrent"] = Field(
+        default="concurrent",
+        description="How to execute multiple tool calls",
+    )
+
+    code_mode: bool = Field(
+        default=False,
+        description=(
+            "Register the run_code tool: the model writes a Python program "
+            "that calls the agent's other tools via tools.call(...) without "
+            "round-tripping each result through the conversation. Every "
+            "in-program call still clears the hook seam and any gate_tool "
+            "wrapper — deferral of the transcript, never of the policy. "
+            "See tulip.tools.code_mode (#176)."
+        ),
+    )
+
+    max_concurrency: int = Field(
+        default=10,
+        ge=1,
+        description="Max concurrent tool executions",
+    )
+
+    tool_event_order: Literal["sequential", "completion"] = Field(
+        default="sequential",
+        description=(
+            "When ``tool_execution='concurrent'``, controls *when* "
+            "``ToolCompleteEvent`` is emitted. ``'sequential'`` (default) "
+            "fires events in tool_call order after all parallel tools in a "
+            "batch have completed — deterministic event stream for batch "
+            "agents and tests. ``'completion'`` fires each event the moment "
+            "its tool finishes — lower-latency for interactive UIs that "
+            "want to surface 'tool X done' the moment it happens. "
+            "``state.tool_executions`` order stays in tool_call order in "
+            "both modes — only event timing changes."
+        ),
+    )
+
+    max_tool_result_length: int = Field(
+        default=32000,
+        ge=0,
+        description=(
+            "Max chars per tool result (0 = unlimited). Longer results keep their "
+            "head and tail with a marker saying how much was cut; see "
+            "``tool_result_head_fraction``."
+        ),
+    )
+
+    # A test runner, compiler or linter prints its verdict last: the failing
+    # assertion, the error count, the summary line. A head-only cut drops
+    # exactly that, so the cut keeps both ends and loses the middle.
+    tool_result_head_fraction: float = Field(
+        default=0.4,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Share of ``max_tool_result_length`` kept from the start of an "
+            "oversized tool result; the rest is kept from its end. 1.0 keeps "
+            "only the head, 0.0 only the tail."
+        ),
+    )
+
+    # Optional external offload for oversized tool results. When set,
+    # results above ``max_tool_result_length`` are persisted via the
+    # store and replaced inline with a recoverable reference key
+    # instead of being cut. See
+    # ``tulip.tools.result_storage.ToolResultStore`` for the contract.
+    tool_result_store: Any | None = Field(
+        default=None,
+        description=(
+            "Optional ToolResultStore. When set, oversized tool "
+            "results are offloaded to its backend and a reference "
+            "key is inlined; without it the agent keeps the head and "
+            "tail of the result and cuts the middle."
+        ),
+    )
+
+    # State management
+    conversation_manager: Any | None = Field(
+        default=None,
+        description="Conversation manager for message pruning/summarization",
+    )
+
+    context_window: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "The model's input context window, in tokens. When set, and no "
+            "conversation_manager is given, the default manager counts tokens "
+            "against this window (see ``compaction``) instead of keeping a "
+            "message window. Overrides the model-metadata window. Unset, the "
+            "TULIP_CONTEXT_WINDOW environment variable applies, then model "
+            "metadata, then a context_window/context_length the model object "
+            "itself reports."
+        ),
+    )
+
+    compaction: CompactionConfig = Field(
+        default_factory=CompactionConfig,
+        description=(
+            "How a known context window is kept on a long run: clear old tool "
+            "output, then summarise older history and continue. ``False`` "
+            "turns summarising off. Ignored when conversation_manager is given "
+            "or the window is unknown."
+        ),
+    )
+
+    @field_validator("compaction", mode="before")
+    @classmethod
+    def _compaction_flag(cls, v: Any) -> Any:
+        # ``compaction=False`` / ``True`` read better at a call site than a
+        # config object when all that is wanted is on or off.
+        if isinstance(v, bool):
+            return CompactionConfig(enabled=v)
+        if v is None:
+            return CompactionConfig()
+        return v
+
+    observation_pack: ObservationPackConfig = Field(
+        default_factory=ObservationPackConfig,
+        description=(
+            "Send large old tool outputs as recallable placeholders and register "
+            "obs_recall (off by default). ``True`` turns it on with the defaults."
+        ),
+    )
+
+    @field_validator("observation_pack", mode="before")
+    @classmethod
+    def _observation_pack_flag(cls, v: Any) -> Any:
+        if isinstance(v, bool):
+            return ObservationPackConfig(enabled=v)
+        if v is None:
+            return ObservationPackConfig()
+        return v
+
+    memory_manager: Any | None = Field(
+        default=None,
+        description=(
+            "Long-term memory manager. When set, the agent retrieves stored "
+            "memories at session start (injected after the turn's prompt) and "
+            "extracts new memories at session end (persisted to the configured "
+            "store backend). Pass a BaseMemoryManager instance; use "
+            "LLMMemoryManager for LLM-backed extraction with any store backend."
+        ),
+    )
+
+    checkpointer: Any | None = Field(
+        default=None,
+        description="Checkpointer for state persistence",
+    )
+
+    # ``None`` picks per iteration whenever that leaves nothing behind: the
+    # run has a thread and the checkpointer can delete a single checkpoint, so
+    # the turn's final save removes the iteration saves it supersedes. The
+    # thread's history and ``fork`` then see what they saw with per-turn
+    # saves, and storage grows with turns rather than iterations. A
+    # checkpointer that cannot delete keeps per-turn saves, because there
+    # every iteration save would stay for good.
+    checkpoint_every_n_iterations: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Save a checkpoint every N iterations, after the iteration's tool "
+            "results are in the state (0 = only at the end of the turn and on "
+            "an interrupt). With 1, a process killed mid-turn loses at most "
+            "the iteration in flight, and Agent.continue_turn(thread_id) "
+            "picks the turn up from the last save. None (the default) means 1 "
+            "for a run with a thread_id on a checkpointer that can delete a "
+            "single checkpoint, and 0 otherwise. Iteration saves are deleted "
+            "once the turn's final save supersedes them, unless "
+            "keep_iteration_checkpoints is set."
+        ),
+    )
+
+    keep_iteration_checkpoints: bool = Field(
+        default=False,
+        description=(
+            "Keep per-iteration checkpoints after the turn's final save, so "
+            "get_state_history and fork can reach mid-turn states. Off by "
+            "default: they exist to survive a crash, and keeping them grows "
+            "storage with every iteration of every turn."
+        ),
+    )
+
+    # Hooks and plugins
+    hooks: list[Any] = Field(
+        default_factory=list,
+        description="Lifecycle hooks (HookProvider instances)",
+    )
+    plugins: list[Any] = Field(
+        default_factory=list,
+        description="Plugins that bundle hooks + tools (Plugin instances)",
+    )
+    callback_handler: Any = Field(
+        default=None,
+        description="Simple callback function: fn(event) called for every agent event",
+    )
+    skills: list[Any] = Field(
+        default_factory=list,
+        description="Skills (Skill instances or paths to skill directories)",
+    )
+
+    # Termination (composable conditions)
+    termination: Any | None = Field(
+        default=None,
+        description="Composable termination condition (TerminationCondition instance). "
+        "Overrides default termination logic when set.",
+    )
+
+    # Output auto-save
+    output_key: str | None = Field(
+        default=None,
+        description="If set, agent's final message is saved to state metadata under this key. "
+        "Enables simple data flow between agents in multi-agent setups.",
+    )
+
+    # Structured output — coerce the agent's final answer into a Pydantic model.
+    output_schema: Any | None = Field(
+        default=None,
+        description=(
+            "Optional Pydantic ``BaseModel`` subclass. When set, the agent's "
+            "final assistant message is parsed into an instance of this schema "
+            "and surfaced on ``AgentResult.parsed``. Supporting providers "
+            "(OpenAI-compatible) receive a strict ``response_format`` "
+            "for constrained decoding; others fall back to prompted JSON + "
+            "validate-and-retry."
+        ),
+    )
+
+    output_schema_retries: int = Field(
+        default=2,
+        ge=0,
+        le=10,
+        description=(
+            "Maximum re-prompts after a structured-output validation failure. "
+            "Each retry feeds the Pydantic ``ValidationError`` details back to "
+            "the model so it can repair the response. Set to 0 to disable."
+        ),
+    )
+
+    output_schema_strict: bool = Field(
+        default=True,
+        description=(
+            "When True (default), request provider-enforced strict mode for "
+            "``output_schema`` on supporting providers. Disable for providers "
+            "that reject strict ``json_schema`` mode (some model families)."
+        ),
+    )
+
+    # Final-answer verification — see tulip.agent.verification.
+    final_answer_verifier: Any | None = Field(
+        default=None,
+        description=(
+            "Async ``(draft_text, FinalAnswerContext) -> str | None`` run on "
+            "every final answer in auto completion mode, whether or not a tool "
+            "was called. ``None``/empty accepts; text rejects the draft and is "
+            "fed back to the model for another attempt (see "
+            "``final_answer_verifier_max_replans``). The rejected draft and the "
+            "feedback are kept out of checkpoints and the result state. Off "
+            "(``None``) by default."
+        ),
+    )
+    final_answer_verifier_max_replans: int = Field(
+        default=1,
+        ge=0,
+        le=10,
+        description=(
+            "How many rejected drafts the verifier may send back for another "
+            "attempt. When they run out the last draft is returned and the "
+            "FinalAnswerVerificationEvent reports it did not pass. 0 = judge "
+            "only, never replan."
+        ),
+    )
+    final_answer_fallback: Any | None = Field(
+        default=None,
+        description=(
+            "Async ``(draft_text, FinalAnswerContext, feedback) -> str | None`` "
+            "called when the final_answer_verifier rejects a draft and no "
+            "replan is left. Text it returns REPLACES the draft: it is the "
+            "run's answer, the assistant message saved to state and "
+            "checkpoints, and (with ``hold_final_answer_tokens``) the only "
+            "content streamed — the rejected draft is never shown. ``None`` "
+            "keeps the last draft (the behaviour without a fallback). A "
+            "raising fallback keeps the draft and says so on the event."
+        ),
+    )
+    hold_final_answer_tokens: bool = Field(
+        default=False,
+        description=(
+            "With ``stream_tokens=True`` and a ``final_answer_verifier``: hold "
+            "each model call's content chunks until the call is over, release "
+            "them at once when it turned out to be a tool-calling step or its "
+            "answer passed the verifier (or replans ran out), and drop them "
+            "when the answer is rejected — so a streaming UI never shows a "
+            "draft the verifier sent back. Reasoning chunks still stream live. "
+            "Costs the token-by-token feel of the final answer: it arrives as "
+            "one burst after verification."
+        ),
+    )
+    hold_tool_step_text: bool = Field(
+        default=False,
+        description=(
+            "With ``hold_final_answer_tokens``: the text of a call that turned "
+            'out to be a tool-calling step ("let me check…") is dropped from '
+            "the stream instead of released, so the stream carries only the "
+            "verified final answer — words the verifier never saw never reach "
+            "the user. The text stays in the conversation the model sees, the "
+            "tool-call chunks and tool events still stream (a UI can show a "
+            "status line per tool)."
+        ),
+    )
+
+    @field_validator("final_answer_verifier")
+    @classmethod
+    def _validate_final_answer_verifier(cls, v: Any) -> Any:
+        if v is not None and not callable(v):
+            raise TypeError(f"final_answer_verifier must be an async callable, got: {v!r}")
+        return v
+
+    @field_validator("final_answer_fallback")
+    @classmethod
+    def _validate_final_answer_fallback(cls, v: Any) -> Any:
+        if v is not None and not callable(v):
+            raise TypeError(f"final_answer_fallback must be an async callable, got: {v!r}")
+        return v
+
+    @field_validator("output_schema")
+    @classmethod
+    def _validate_output_schema(cls, v: Any) -> Any:
+        """Ensure output_schema is a Pydantic BaseModel subclass."""
+        if v is None:
+            return None
+        if not (isinstance(v, type) and issubclass(v, BaseModel)):
+            raise TypeError(f"output_schema must be a pydantic.BaseModel subclass, got: {v!r}")
+        return v
+
+    @field_validator("reflexion", mode="before")
+    @classmethod
+    def _coerce_reflexion(cls, v: Any) -> Any:
+        """Accept ``True`` as shorthand for default ReflexionConfig().
+
+        The docs advertise ``Agent(reflexion=True)`` as a one-liner;
+        without this validator that call would TypeError. ``False`` /
+        ``None`` keep reflexion off.
+        """
+        if v is True:
+            return ReflexionConfig()
+        if v is False:
+            return None
+        return v
+
+    @field_validator("model_retry", mode="before")
+    @classmethod
+    def _coerce_model_retry(cls, v: Any) -> Any:
+        """Accept ``True`` / ``False`` as shorthand, like ``reflexion``."""
+        if v is True:
+            return ModelRetryConfig()
+        if v is False:
+            return None
+        return v
+
+    @field_validator("grounding", mode="before")
+    @classmethod
+    def _coerce_grounding(cls, v: Any) -> Any:
+        """Accept ``True`` as shorthand for default GroundingConfig()."""
+        if v is True:
+            return GroundingConfig()
+        if v is False:
+            return None
+        return v
+
+    # Multi-modal provider registry. Setting any of these wires a matching
+    # auto-registered ``@tool`` so the model can call the capability the
+    # same way it calls a hand-written tool.
+    web_search: Any | None = Field(
+        default=None,
+        description=(
+            "Optional ``tulip.providers.web_search.BaseWebSearchProvider``. "
+            "When set, ``Agent`` registers a ``web_search(query, "
+            "max_results=5)`` tool that delegates to the provider."
+        ),
+    )
+
+    web_fetch: Any | None = Field(
+        default=None,
+        description=(
+            "Optional ``tulip.providers.web_fetch.BaseWebFetchProvider``. "
+            "When set, ``Agent`` registers a ``web_fetch(url, "
+            "max_chars=50000)`` tool that delegates to the provider."
+        ),
+    )
+
+    image_generator: Any | None = Field(
+        default=None,
+        description=(
+            "Optional ``tulip.providers.image.BaseImageGenerationProvider``. "
+            "When set, ``Agent`` registers a ``generate_image(prompt, "
+            "size, n)`` tool that delegates to the provider."
+        ),
+    )
+
+    speech_provider: Any | None = Field(
+        default=None,
+        description=(
+            "Optional ``tulip.providers.speech.BaseSpeechProvider``. When "
+            "set, ``Agent`` registers ``speak`` and/or ``transcribe`` tools "
+            "depending on the provider's ``capabilities``."
+        ),
+    )
+
+    # Playbook enforcement (optional). When set, a PlaybookEnforcerHook is
+    # auto-installed during Agent initialization so the model is held to the
+    # playbook's step sequence and tool constraints.
+    playbook: Any | None = Field(
+        default=None,
+        description=(
+            "Optional ``tulip.playbooks.models.Playbook`` instance. When "
+            "provided, ``Agent`` installs a ``PlaybookEnforcerHook`` that "
+            "validates each tool call against the current step and "
+            "auto-advances when the step's ``expected_tools`` are exhausted."
+        ),
+    )
+
+    # Agent identity
+    agent_id: str | None = Field(
+        default=None,
+        description="Unique agent identifier",
+    )
+
+    # Display name (separate from agent_id). Used by multi-agent
+    # composers (Orchestrator, Swarm, StateGraph nodes) to label the
+    # agent in logs and routing decisions. Users putting ``name=`` on
+    # an ``Agent`` constructor expect it to flow through to here, so
+    # surface it explicitly rather than swallowing it as an extra kwarg.
+    name: str | None = Field(
+        default=None,
+        description=(
+            "Human-readable display name for the agent. Distinct from "
+            "``agent_id`` (which is meant to be unique) — ``name`` is "
+            "what shows up in logs, traces, and multi-agent labels."
+        ),
+    )
+
+    # Model parameters
+    temperature: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description=(
+            "Model temperature. ``None`` (the default) defers to the model's "
+            "own configuration — an agent-level value is forwarded as a "
+            "per-call override and would otherwise silently beat whatever "
+            "get_model(...) was given."
+        ),
+    )
+
+    max_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Max tokens per completion. ``None`` (the default) defers to the "
+            "model's own configuration, for the same reason as temperature."
+        ),
+    )
+
+    # Metadata
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Custom metadata passed to tools",
+    )
+
+    @model_validator(mode="after")
+    def tool_step_text_needs_the_answer_hold(self) -> AgentConfig:
+        """``hold_tool_step_text`` drops what ``hold_final_answer_tokens`` holds;
+        without that hold nothing is held, and the flag would silently do nothing."""
+        if self.hold_tool_step_text and not self.hold_final_answer_tokens:
+            raise ValueError(
+                "hold_tool_step_text needs hold_final_answer_tokens=True (and a "
+                "final_answer_verifier): only held text can be dropped."
+            )
+        return self
+
+    @model_validator(mode="before")
+    @classmethod
+    def point_unknown_fields_at_model_kwargs(cls, data: Any) -> Any:
+        """Say where provider configuration goes, instead of only that it cannot go here.
+
+        ``extra="forbid"`` catches typos, which is worth keeping, but on its
+        own it answers the wrong question. A reader who writes the documented
+        one-string form and adds the ``base_url`` that provider *requires*
+        gets ``Extra inputs are not permitted`` and no hint that the setting
+        is supported at all, one field over. That is how a supported path
+        reads as a missing feature.
+        """
+        if not isinstance(data, dict):
+            return data
+        unknown = sorted(set(data) - set(cls.model_fields))
+        if unknown:
+            raise ValueError(
+                f"{unknown} {'is' if len(unknown) == 1 else 'are'} not "
+                f"{'a ' if len(unknown) == 1 else ''}field"
+                f"{'' if len(unknown) == 1 else 's'} of AgentConfig. If this is "
+                "provider configuration for a string model, pass it as "
+                "model_kwargs={...} — e.g. "
+                'Agent(model="openai-compatible:my-model", '
+                'model_kwargs={"base_url": "https://host/v1"}).'
+            )
+        return data
+
+    @field_validator("model", mode="before")
+    @classmethod
+    def validate_model(cls, v: Any) -> Any:
+        """Validate model is a string or ModelProtocol."""
+        if isinstance(v, str):
+            if ":" not in v:
+                raise ValueError(
+                    f"Model string must be 'provider:model', got: {v}. Example: 'openai:gpt-4o'"
+                )
+            return v
+        # Assume it's a ModelProtocol instance
+        return v
+
+    @field_validator("tools", mode="before")
+    @classmethod
+    def validate_tools(cls, v: Any) -> list[Any]:
+        """Ensure tools is a list."""
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            return [v]
+        return v
+
+    def with_reflexion(
+        self,
+        enabled: bool = True,
+        confidence_threshold: float = 0.85,
+        **kwargs: Any,
+    ) -> AgentConfig:
+        """Return a copy with Reflexion configured."""
+        return self.model_copy(
+            update={
+                "reflexion": ReflexionConfig(
+                    enabled=enabled,
+                    confidence_threshold=confidence_threshold,
+                    **kwargs,
+                )
+            }
+        )
+
+    def with_grounding(
+        self,
+        enabled: bool = True,
+        threshold: float = 0.65,
+        **kwargs: Any,
+    ) -> AgentConfig:
+        """Return a copy with Grounding configured."""
+        return self.model_copy(
+            update={
+                "grounding": GroundingConfig(
+                    enabled=enabled,
+                    threshold=threshold,
+                    **kwargs,
+                )
+            }
+        )
+
+    def with_hooks(self, *hooks: Any) -> AgentConfig:
+        """Return a copy with additional hooks."""
+        return self.model_copy(update={"hooks": [*self.hooks, *hooks]})

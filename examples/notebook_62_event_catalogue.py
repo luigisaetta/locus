@@ -1,26 +1,30 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Notebook 57: Full event catalogue tour.
+"""Notebook 62: The event taxonomy as a compliance artifact.
 
-Every component in Locus emits typed events under one stable prefix:
-agent.*, multiagent.*, composition.*, router.*, rag.*, memory.*, a2a.*,
-skills.*, deepagent.*. The EV_* constants in locus.observability.emit
-are the canonical registry — change one place, propagates everywhere.
+When a PCI DSS assessor asks "what can your payment agents do, and how
+would you know they did it?" — the question behind a payments-operations
+monitoring control — the answer is the event catalogue. Every component
+in Tulip emits typed events under one stable prefix: agent.*,
+multiagent.*, composition.*, router.*, rag.*, memory.*, a2a.*, skills.*,
+deepagent.*. The EV_* constants in tulip.observability.emit are the
+canonical registry — change one place, propagates everywhere — so the
+artifact you hand an assessor is generated from the code itself, not a
+spreadsheet that drifts out of date the day after it's signed.
 
 - List every EV_* constant and its category prefix (always in sync with
-  the codebase because it's read at import time).
-- Drive a SequentialPipeline + LoopAgent that surfaces composition.*
-  events end-to-end.
+  the codebase because it's read at import time — no stale spreadsheet).
+- Drive a two-stage dispute-triage pipeline (SequentialPipeline +
+  LoopAgent machinery) that surfaces composition.* events end-to-end.
 
 Run it
-    # Default: OCI Generative AI auto-detected from ~/.oci/config
+    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
     python examples/notebook_62_event_catalogue.py
 
     # Offline / no credentials:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_62_event_catalogue.py
+    TULIP_MODEL_PROVIDER=mock python examples/notebook_62_event_catalogue.py
 """
 
 from __future__ import annotations
@@ -31,19 +35,19 @@ from collections import defaultdict
 
 from config import get_model
 
-from locus.agent import Agent
-from locus.agent.composition import LoopAgent, SequentialPipeline
-from locus.observability import get_event_bus, run_context
+from tulip.agent import Agent
+from tulip.agent.composition import LoopAgent, SequentialPipeline
+from tulip.observability import get_event_bus, run_context
 
 
-# Part 1: enumerate the EV_* constants at runtime so the catalogue
+# Part 1: enumerate the EV_* constants at runtime so the audit artifact
 # never drifts from the codebase.
 
 
 def part1_catalogue_tour() -> None:
     print("\n--- Part 1: canonical event_type catalogue ---")
 
-    emit_mod = sys.modules["locus.observability.emit"]
+    emit_mod = sys.modules["tulip.observability.emit"]
     by_prefix: dict[str, list[str]] = defaultdict(list)
     for name in dir(emit_mod):
         if not name.startswith("EV_"):
@@ -61,16 +65,17 @@ def part1_catalogue_tour() -> None:
 
 
 # Part 2: SequentialPipeline and LoopAgent emit composition.* events
-# at every stage / iteration boundary.
+# at every stage / iteration boundary — each stage of the dispute-triage
+# pipeline leaves its own entry in the audit trail.
 
 
 async def part2_composition() -> None:
     print("\n--- Part 2: composition.* events ---")
 
-    a = Agent(model=get_model(), max_iterations=1)
-    b = Agent(model=get_model(), max_iterations=1)
+    enricher = Agent(model=get_model(), max_iterations=1)
+    verdict_writer = Agent(model=get_model(), max_iterations=1)
 
-    pipeline = SequentialPipeline(agents=[a, b])
+    pipeline = SequentialPipeline(agents=[enricher, verdict_writer])
 
     async with run_context() as rid:
         bus = get_event_bus()
@@ -89,7 +94,10 @@ async def part2_composition() -> None:
         consumer_task = asyncio.create_task(consumer())
         await asyncio.sleep(0)
 
-        await pipeline.run("Tell me a one-line haiku about JSON.")
+        await pipeline.run(
+            "Summarize this disputed charge in one line: cardholder reports an "
+            "unrecognized $420.00 payment to merchant ACME-STORE on card ending 4242."
+        )
         await bus.close_stream(rid)
         await consumer_task
 

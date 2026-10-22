@@ -1,21 +1,21 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Tests for multi-agent orchestration."""
 
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from locus.core.messages import Message
-from locus.core.protocols import ModelResponse
-from locus.core.state import AgentState
-from locus.multiagent import (
+from tulip.core.messages import Message
+from tulip.core.protocols import ModelResponse
+from tulip.core.state import AgentState
+from tulip.multiagent import (
     Edge,
     HandoffContext,
     HandoffReason,
@@ -258,7 +258,7 @@ class TestGraph:
     @pytest.mark.asyncio
     async def test_execute_linear_graph(self):
         """Execute linear graph in order."""
-        from locus.multiagent import END, START
+        from tulip.multiagent import END, START
 
         execution_order = []
 
@@ -294,12 +294,16 @@ class TestGraph:
     @pytest.mark.asyncio
     async def test_execute_parallel_graph(self):
         """Execute independent nodes in parallel."""
-        from locus.multiagent import END, START
+        from tulip.multiagent import END, START
 
         graph = create_graph()
 
+        spans: list[tuple[float, float]] = []
+
         async def slow_fn(inputs: dict[str, Any]) -> dict[str, str]:
+            start = time.monotonic()
             await asyncio.sleep(0.1)
+            spans.append((start, time.monotonic()))
             return {"result": "done"}
 
         n1 = Node(name="parallel1", executor=slow_fn)
@@ -319,14 +323,17 @@ class TestGraph:
         result = await graph.execute({})
 
         assert result.success
-        # With parallel execution, n1 and n2 should run concurrently
-        # So total time should be ~100ms, not ~200ms
-        assert result.duration_ms < 250  # Allow some overhead
+        # n1 and n2 run concurrently: each started before the other finished. This
+        # checks overlap rather than wall time, which a loaded CI runner stretches.
+        assert len(spans) == 2
+        (a_start, a_end), (b_start, b_end) = spans
+        assert a_start < b_end
+        assert b_start < a_end
 
     @pytest.mark.asyncio
     async def test_execute_passes_data_between_nodes(self):
         """Data flows between connected nodes."""
-        from locus.multiagent import END, START
+        from tulip.multiagent import END, START
 
         graph = create_graph()
 
@@ -903,7 +910,7 @@ class TestHandoffAgent:
     @pytest.mark.asyncio
     async def test_receive_handoff_with_tools(self, mock_model):
         """Agent receives handoff with tools."""
-        from locus.tools.decorator import tool
+        from tulip.tools.decorator import tool
 
         @tool
         def test_tool(x: int) -> str:
@@ -1177,7 +1184,7 @@ class TestMultiAgentIntegration:
             result = await spec2.execute(f"Summarize: {analysis}")
             return {"summary": result.output}
 
-        from locus.multiagent import END, START
+        from tulip.multiagent import END, START
 
         graph = create_graph()
 

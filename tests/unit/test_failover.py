@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Tests for ``locus.models.failover.classify`` and its taxonomy."""
+"""Tests for ``tulip.models.failover.classify`` and its taxonomy."""
 
 from __future__ import annotations
 
@@ -11,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from locus.models.failover import FailoverDecision, FailoverReason, classify
+from tulip.models.failover import FailoverDecision, FailoverReason, classify
 
 
 class _HTTPError(Exception):

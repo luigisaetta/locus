@@ -1,6 +1,5 @@
-# Copyright (c) 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for ``create_deepagent(datastores=...)``.
 
@@ -13,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from locus.deepagent.factory import create_deepagent
+from tulip.deepagent.factory import create_deepagent
 
 
 class _StubRetriever:
@@ -25,7 +24,7 @@ class _StubRetriever:
         self.store = None
 
     async def retrieve(self, *args, **kwargs):  # pragma: no cover - never called
-        from locus.rag.retriever import RetrievalResult
+        from tulip.rag.retriever import RetrievalResult
 
         return RetrievalResult(query="", documents=[], total_results=0)
 
@@ -36,9 +35,9 @@ def _make_stub_retriever() -> object:
     Going through the actual constructor keeps the ``isinstance`` check in
     ``create_deepagent`` honest — we shouldn't have to hack around it.
     """
-    from locus.rag.embeddings.base import BaseEmbedding, EmbeddingConfig, EmbeddingResult
-    from locus.rag.retriever import RAGRetriever
-    from locus.rag.stores.memory import InMemoryVectorStore
+    from tulip.rag.embeddings.base import BaseEmbedding, EmbeddingConfig, EmbeddingResult
+    from tulip.rag.retriever import RAGRetriever
+    from tulip.rag.stores.memory import InMemoryVectorStore
 
     class StubEmbedder(BaseEmbedding):
         @property
@@ -47,7 +46,7 @@ def _make_stub_retriever() -> object:
 
         @property
         def capabilities(self):  # type: ignore[override]
-            from locus.rag.embeddings.base import EmbeddingCapabilities
+            from tulip.rag.embeddings.base import EmbeddingCapabilities
 
             return EmbeddingCapabilities()
 
@@ -67,16 +66,15 @@ def _make_stub_retriever() -> object:
 
 
 def _build_agent(monkeypatch: pytest.MonkeyPatch, **overrides):
-    """Build a deepagent against a stub OCI model registration.
+    """Build a deepagent against a stub model registration.
 
-    Mirrors the helper used in ``test_deepagent.py``: a fake ``OCI_PROFILE``
-    env var lets the registry resolve ``oci:`` model strings without
-    actually opening an OCI client (the client is lazy and never used in
-    these structural tests).
+    Mirrors the helper used in ``test_deepagent.py``: the registry
+    resolves model strings lazily, so no real client is opened in these
+    structural tests.
     """
-    monkeypatch.setenv("OCI_PROFILE", "DEFAULT")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     base = {
-        "model": "oci:openai.gpt-4o-mini",
+        "model": "openai:gpt-4o-mini",
         "system_prompt": "Answer questions.",
         "tools": [],
         "reflexion": False,

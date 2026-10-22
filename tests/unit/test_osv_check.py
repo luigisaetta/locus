@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the OSV malware pre-check in ``locus.integrations.osv``.
+"""Tests for the OSV malware pre-check in ``tulip.integrations.osv``.
 
 The public entry point is ``check_package_for_malware(command, args)``.
 All network calls are patched via ``urllib.request.urlopen`` so the
@@ -17,8 +16,8 @@ from typing import Any
 
 import pytest
 
-from locus.integrations import osv
-from locus.integrations.osv import check_package_for_malware
+from tulip.integrations import osv
+from tulip.integrations.osv import check_package_for_malware
 
 
 class _FakeResp(io.BytesIO):
@@ -214,13 +213,13 @@ class TestFailOpen:
 class TestGlobalOptOut:
     @pytest.mark.parametrize("val", ["1", "true", "TRUE", "yes", "YES"])
     def test_env_var_disables_check(self, val: str, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("LOCUS_MCP_SKIP_OSV", val)
+        monkeypatch.setenv("TULIP_MCP_SKIP_OSV", val)
         # If the check ran despite opt-out, this patched response would
         # force a malware verdict. We assert it does not.
         _patch_osv_response(monkeypatch, vulns=[{"id": "MAL-WOULD-FAIL"}])
         assert check_package_for_malware("npx", ["would-be-blocked"]) is None
 
     def test_env_unset_enables_check(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("LOCUS_MCP_SKIP_OSV", raising=False)
+        monkeypatch.delenv("TULIP_MCP_SKIP_OSV", raising=False)
         _patch_osv_response(monkeypatch, vulns=[{"id": "MAL-2025-0001", "summary": "proof"}])
         assert check_package_for_malware("npx", ["pkg"]) is not None

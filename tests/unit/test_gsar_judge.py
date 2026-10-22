@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for the GSAR judge protocol + reference judge.
 
@@ -24,14 +23,14 @@ from typing import Any
 
 import pytest
 
-from locus.core.messages import Message
-from locus.models.base import ModelResponse
-from locus.reasoning.gsar import (
+from tulip.core.messages import Message
+from tulip.models.base import ModelResponse
+from tulip.reasoning.gsar import (
     NEUTRAL_SCORE_ON_EMPTY,
     Claim,
     EvidenceType,
 )
-from locus.reasoning.gsar_judge import (
+from tulip.reasoning.gsar_judge import (
     BaseGSARJudge,
     JudgeOutput,
     StructuredOutputGSARJudge,

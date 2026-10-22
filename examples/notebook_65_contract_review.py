@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Notebook 60: Contract-review workflow (parallel review and negotiation loop).
+"""Notebook 65: Vendor DPA review — data-subject rights, retention, transfer gaps.
 
-Real contract review involves multiple stakeholders working in parallel,
-then a back-and-forth negotiation phase, then sign-off::
+Reviewing a data processor's Data Processing Agreement involves multiple
+stakeholders working in parallel, then a back-and-forth negotiation
+phase, then sign-off::
 
-    Contract intake
+    DPA intake
        │
        ▼
     Parser  (extracts clauses)
        │
        ▼
     Scatter to 3 parallel reviewers
-       ├── Legal    (regulatory risk, indemnity, termination)
-       ├── Risk     (financial exposure, liability cap)
-       └── Commercial (price, terms, SLAs)
+       ├── Legal       (lawful basis, data-subject rights, consent, purpose)
+       ├── Governance  (minimisation, retention/deletion, residency, sub-processors)
+       └── Compliance  (GDPR/CCPA, DPIA, transfer mechanisms, liability for fines)
        ▼
     Synthesizer  (consolidated review report)
        │
@@ -32,21 +32,30 @@ then a back-and-forth negotiation phase, then sign-off::
                                                 ▼
                                           ContractDecision (typed)
 
+The processor here is a marketing-analytics SaaS that ingests your
+customers' personal data (email addresses, device identifiers,
+behavioural events) — a data processor in the controller's vendor chain.
+A weak erasure SLA or a vague international-transfer mechanism is a real
+compliance gap, not a paperwork nit: the vendor's breach-notification
+window should track the GDPR Art. 33 72-hour timeline you owe your own
+supervisory authority. The DPO — the privacy office's data-protection
+officer — writes the typed sign-off.
+
 - Send: three reviewers run concurrently.
 - add_conditional_edges with cycles enabled: negotiation can loop back
   to re-review when terms change. Hard cap of 3 rounds.
 - interrupt(): negotiation step pauses for human counsel to edit terms.
-- output_schema=ContractDecision: typed terminal artifact.
+- output_schema=ContractDecision: the DPO's typed terminal artifact.
 
 Run it
-    # Default: OCI Generative AI auto-detected from ~/.oci/config
+    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
     python examples/notebook_65_contract_review.py
 
     # Offline / no credentials:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_65_contract_review.py
+    TULIP_MODEL_PROVIDER=mock python examples/notebook_65_contract_review.py
 
     # Pin a strong-enough model for the structured ContractDecision schema:
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_65_contract_review.py
+    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_65_contract_review.py
 """
 
 from __future__ import annotations
@@ -57,18 +66,18 @@ from typing import Any
 from config import get_model
 from pydantic import BaseModel, Field
 
-from locus.agent import Agent, AgentConfig
-from locus.core import Command, interrupt
-from locus.core.events import TerminateEvent
-from locus.core.send import Send
-from locus.multiagent.graph import END, START, GraphConfig, StateGraph
+from tulip.agent import Agent, AgentConfig
+from tulip.core import Command, interrupt
+from tulip.core.events import TerminateEvent
+from tulip.core.send import Send
+from tulip.multiagent.graph import END, START, GraphConfig, StateGraph
 
 
 # Data shapes.
 
 
 class ReviewerFinding(BaseModel):
-    perspective: str  # "legal" | "risk" | "commercial"
+    perspective: str  # "legal" | "governance" | "compliance"
     blockers: list[str]
     recommended_changes: list[str]
     risk_score: float = Field(ge=0.0, le=1.0)
@@ -89,17 +98,23 @@ class ContractDecision(BaseModel):
 
 PROMPTS = {
     "legal": (
-        "You are an in-house counsel. Read the contract excerpt and identify "
-        "concrete legal blockers (indemnity, jurisdiction, termination, IP, "
-        "liability cap). Bullets. End with: BLOCKERS=<count>."
+        "You are privacy legal counsel. Read the DPA excerpt and identify "
+        "concrete data-protection blockers (lawful basis, data-subject rights "
+        "— access, erasure, portability — consent, and purpose limitation). "
+        "Bullets. End with: BLOCKERS=<count>."
     ),
-    "risk": (
-        "You are an enterprise-risk analyst. Identify concrete financial "
-        "or operational risks. Bullets. End with: BLOCKERS=<count>."
+    "governance": (
+        "You are a data-governance reviewer assessing a vendor that will "
+        "process the company's customer personal data. Identify concrete "
+        "governance gaps (data minimisation, retention and deletion SLAs, "
+        "data residency, and sub-processor controls). Bullets. End with: "
+        "BLOCKERS=<count>."
     ),
-    "commercial": (
-        "You are a commercial-terms reviewer. Identify pricing or SLA "
-        "concerns. Bullets. End with: BLOCKERS=<count>."
+    "compliance": (
+        "You are a privacy-compliance analyst. Identify regulatory gaps "
+        "(GDPR / CCPA obligations, DPIA requirements, cross-border transfer "
+        "mechanisms such as SCCs, GDPR Art. 28 terms, and liability for "
+        "regulatory fines). Bullets. End with: BLOCKERS=<count>."
     ),
 }
 
@@ -107,7 +122,7 @@ PROMPTS = {
 def _make_agent(role: str, model: Any) -> Agent:
     return Agent(
         config=AgentConfig(
-            agent_id=f"contract-{role}",
+            agent_id=f"dpa-{role}",
             model=model,
             system_prompt=PROMPTS[role],
             max_iterations=2,
@@ -128,12 +143,12 @@ async def _run(agent: Agent, prompt: str) -> str:
 
 
 async def parse_contract(state: dict[str, Any]) -> dict[str, Any]:
-    """In production this would chunk the PDF; here we normalise text."""
+    """In production this would chunk the signed PDF; here we normalise text."""
     return {"clauses": state.get("contract_text", "").strip()}
 
 
 async def scatter_reviewers(state: dict[str, Any]) -> list[Send]:
-    perspectives = ("legal", "risk", "commercial")
+    perspectives = ("legal", "governance", "compliance")
     return [
         Send(node="review_one", payload={"perspective": p}, metadata={"perspective": p})
         for p in perspectives
@@ -145,7 +160,7 @@ async def review_one(state: dict[str, Any]) -> dict[str, Any]:
     agent = _make_agent(perspective, state["__model__"])
     text = await _run(
         agent,
-        f"Contract clauses:\n{state.get('clauses', '')}\n\nGive your {perspective} review.",
+        f"DPA clauses:\n{state.get('clauses', '')}\n\nGive your {perspective} review.",
     )
     # Heuristic: any bulleted line is a finding; first half are blockers,
     # the rest are recommended changes.
@@ -174,7 +189,7 @@ async def synthesize(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def negotiation_gate(state: dict[str, Any]) -> str:
-    """Loop back to re-review if blockers exist and we're under the cap."""
+    """Loop back to re-review if compliance gaps exist and we're under the cap."""
     if not state.get("open_blockers"):
         return "sign_off"
     if state.get("rounds", 0) >= 3:
@@ -188,8 +203,8 @@ async def negotiate(state: dict[str, Any]) -> Command:
 
     Three outcomes:
 
-    - ``RESOLVED``: counterparty accepted our terms. Route to sign-off.
-    - ``WALK``: counterparty refused; route to sign-off as 'abandoned'.
+    - ``RESOLVED``: vendor accepted our terms. Route to sign-off.
+    - ``WALK``: vendor refused; route to sign-off as 'abandoned'.
     - Custom redline text: route back to ``parse`` with the new clauses
       so the parallel reviewers re-evaluate.
     """
@@ -198,11 +213,11 @@ async def negotiate(state: dict[str, Any]) -> Command:
         {
             "type": "negotiation",
             "round": state.get("rounds"),
-            "question": "Counterparty redline the contract — what's the new clause language?",
+            "question": "Vendor redlined the DPA — what's the new clause language?",
             "open_blockers": open_blockers,
             "options": [
-                "RESOLVED: counterparty agreed to our terms",
-                "WALK: counterparty refused; abandon",
+                "RESOLVED: vendor agreed to our terms",
+                "WALK: vendor refused; abandon",
                 "<custom redline text>",
             ],
         }
@@ -221,7 +236,7 @@ async def negotiate(state: dict[str, Any]) -> Command:
                 "clauses": state.get("clauses", "") + "\n[All blockers resolved per redline.]",
             },
         )
-    # Counterparty redlined — re-parse the new text and re-run reviewers.
+    # Vendor redlined — re-parse the new text and re-run reviewers.
     return Command(
         goto="parse",
         update={
@@ -233,7 +248,7 @@ async def negotiate(state: dict[str, Any]) -> Command:
 
 
 async def sign_off(state: dict[str, Any]) -> dict[str, Any]:
-    """Emit ContractDecision via Agent.output_schema=ContractDecision.
+    """SCRIBE emits ContractDecision via Agent.output_schema=ContractDecision.
 
     The Agent reads accumulated state and produces the typed Pydantic
     instance. If the model can't honour the JSON schema we surface a
@@ -261,10 +276,10 @@ async def sign_off(state: dict[str, Any]) -> dict[str, Any]:
 
     agent = Agent(
         config=AgentConfig(
-            agent_id="contract-signoff",
+            agent_id="dpo-dpa-signoff",
             model=state["__model__"],
             system_prompt=(
-                "You are a contract-ops officer writing the final ContractDecision. "
+                "You are a data-protection officer writing the final ContractDecision. "
                 "Use the supplied fields. Summarise the final terms in one sentence."
             ),
             output_schema=ContractDecision,
@@ -285,9 +300,9 @@ async def sign_off(state: dict[str, Any]) -> dict[str, Any]:
     result = None
     for attempt in range(3):
         try:
-            result = await _asyncio.to_thread(agent.run_sync, prompt)
+            result = await agent.arun(prompt)
             break
-        except Exception as exc:  # noqa: BLE001 — retry transient OCI flakiness
+        except Exception as exc:  # noqa: BLE001 — retry transient provider flakiness
             last_exc = exc
             await _asyncio.sleep(0.5 * (attempt + 1))
     if result is None:
@@ -300,7 +315,7 @@ async def sign_off(state: dict[str, Any]) -> dict[str, Any]:
             "Sign-off agent returned no parsed ContractDecision. The configured "
             "model could not honor the JSON schema. Use a stronger model "
             "(e.g. openai.gpt-4o, openai.gpt-5, anthropic.claude-3-5-sonnet) "
-            f"for notebook 59. Raw output: {result.message!r}"
+            f"for notebook 65. Raw output: {result.message!r}"
         )
     return {"decision": decision}
 
@@ -310,7 +325,7 @@ async def sign_off(state: dict[str, Any]) -> dict[str, Any]:
 
 def build_review_graph() -> StateGraph:
     g = StateGraph(
-        name="contract-review",
+        name="dpa-review",
         # parse → scatter → synthesize → negotiate → parse is a real cycle,
         # so we have to opt in.
         config=GraphConfig(allow_cycles=True, max_iterations=20),
@@ -335,155 +350,141 @@ def build_review_graph() -> StateGraph:
     return g
 
 
-# Driver and sample contract text.
+# Driver and sample DPA text (invented for this notebook — deliberately
+# full of compliance gaps for the reviewers to catch).
 
 
 SAMPLE_CONTRACT = """\
-MASTER SERVICES AGREEMENT — EXCERPT
+DATA PROCESSING ADDENDUM — EXCERPT
 
-This Master Services Agreement ("Agreement") is entered into by and between
-MegaCorp Cloud Solutions, Inc. ("Vendor") and the customer entity named on
-the order form ("Customer"), and is effective as of the date of last signature
-below.
+This Data Processing Addendum ("DPA") is entered into by and between
+PixelPulse Analytics, Inc. ("Vendor", the processor) and the customer
+entity named on the order form ("Customer", the controller), and forms part
+of the Master Services Agreement between the parties.
 
-1. SERVICES AND ORDER FORMS
+1. PROCESSING AND SUB-PROCESSORS
 
-1.1 Vendor will provide the cloud-platform services described in one or more
-order forms executed by the parties. Each order form is incorporated into
-this Agreement by reference. In the event of a conflict between an order form
-and this Agreement, the order form controls.
+1.1 Vendor processes Customer Personal Data (end-user email addresses,
+device identifiers, and page-view and behavioural events) to provide the
+marketing-analytics Services as described in the applicable order form.
+Vendor may also use Customer Personal Data to improve its own products.
 
-1.2 Vendor reserves the right to modify the technical implementation of the
-Services at any time provided that the functional description on the most
-recent order form is materially preserved.
+1.2 Vendor may appoint sub-processors at its sole discretion and without
+prior notice to Customer. A list of current sub-processors is available on
+written request, within thirty (30) days of the request.
 
-2. TERM AND RENEWAL
+2. SECURITY MEASURES
 
-2.1 The initial term is thirty-six (36) months from the effective date.
+2.1 Vendor will maintain commercially reasonable technical and
+organisational measures. Customer Personal Data is encrypted at rest where
+practicable. Encryption in transit applies to public-network hops only;
+traffic between Vendor's internal services may be unencrypted.
 
-2.2 The Agreement auto-renews for successive twelve (12) month terms unless
-Customer provides written notice of non-renewal at least ninety (90) days
-prior to the end of the then-current term. Notice given any later than that
-window will not be effective until the following renewal cycle.
+2.2 Vendor's online Security Policy, as amended by Vendor from time to time
+in its sole discretion, sets out the current measures and controls, and in
+the event of conflict the online Security Policy controls over this DPA.
 
-3. FEES, PAYMENT, AND PRICE ESCALATION
+3. PERSONAL DATA BREACH NOTIFICATION
 
-3.1 Customer shall pay all fees within Net-30 of invoice date. Fees not paid
-when due bear a late charge of five percent (5%) per month, compounding, with
-no cap on the total late charge accumulation.
+3.1 Vendor will notify Customer of a Personal Data Breach without undue
+delay, and in any event within thirty (30) days of Vendor confirming the
+breach. Whether an incident constitutes a notifiable breach is determined
+by Vendor in its sole discretion.
 
-3.2 At each renewal, Vendor may increase fees in its sole discretion and is
-not obligated to provide advance notice of the increase prior to invoicing
-the renewal term.
+3.2 Vendor's notification obligations are satisfied by posting to the
+Vendor status page; direct notice to Customer's privacy contact is not
+required.
 
-4. INTELLECTUAL PROPERTY
+4. AUDIT RIGHTS
 
-4.1 Customer retains all right, title and interest in Customer Data.
+4.1 On-site audits are not permitted. On written request no more than once
+per year, Vendor will provide a summary letter describing its most recent
+SOC 2 examination. Full reports are not shared. Customer bears Vendor's
+reasonable costs of responding to any audit request.
 
-4.2 Any feedback, suggestions, or requests submitted by Customer or its users
-regarding the Services (including bug reports, feature requests, and any
-configuration patterns or workflows developed using the Services) shall be
-deemed assigned to Vendor on a worldwide, royalty-free, perpetual,
-sublicensable basis without further consideration.
+5. DATA RESIDENCY AND INTERNATIONAL TRANSFERS
 
-5. INDEMNITY
+5.1 Customer Personal Data may be processed and stored in any region in
+which Vendor or its sub-processors operate. Transfers out of the original
+region rely on appropriate safeguards as determined by Vendor.
 
-5.1 Vendor will defend and indemnify Customer against third-party claims
-alleging that the Services infringe a U.S. patent or copyright, subject to
-the liability cap in Section 7.
+6. RETENTION AND DELETION
 
-5.2 Customer will defend, indemnify, and hold harmless Vendor and its
-affiliates, officers, employees and contractors from and against any and all
-claims, damages, losses, fines, judgments, and reasonable attorneys' fees
-arising out of or relating to (a) Customer's use of the Services, (b) any
-content uploaded to the Services by Customer or its end users, and (c) any
-breach of this Agreement by Customer. Customer's obligations under this
-Section 5.2 are not subject to the liability cap in Section 7.
+6.1 Upon termination, Vendor will retain Customer Personal Data for at
+least thirty (30) days for billing reconciliation. Backup copies may be
+retained indefinitely. Deletion certifications are not provided.
 
-6. DATA, PROCESSING, AND DELETION
+7. DATA SUBJECT REQUESTS
 
-6.1 Customer Data may be processed and stored in any region in which Vendor
-or its sub-processors operate. Vendor will use commercially reasonable
-efforts to comply with applicable data-protection law.
+7.1 Vendor will forward any data-subject access, erasure, or portability
+request it receives to Customer within thirty (30) days. Vendor does not
+otherwise assist Customer in responding, and charges professional-services
+fees for any data export performed on Customer's behalf.
 
-6.2 Upon termination, Vendor will retain Customer Data for at least thirty
-(30) days for operational continuity. After thirty days Vendor may, but is
-not obligated to, delete Customer Data; deletion certifications are not
-provided.
+8. LIABILITY FOR DATA INCIDENTS
 
-7. LIABILITY CAP
-
-7.1 Each party's aggregate liability under this Agreement is capped at one
-times (1×) the fees paid by Customer in the twelve months preceding the claim,
-except as set out in Sections 5.2 and 8.
-
-8. TERMINATION
-
-8.1 Either party may terminate this Agreement for the other party's
-uncured material breach upon thirty (30) days written notice.
-
-8.2 Vendor may additionally terminate this Agreement, or any order form, for
-convenience upon thirty (30) days written notice. Customer may not terminate
-for convenience.
-
-8.3 Service-level credits, if any, are Customer's sole and exclusive remedy
-for unavailability or performance failures. The SLA schedule, attached as
-Exhibit A, may be revised by Vendor unilaterally with thirty (30) days
-notice.
+8.1 Vendor's aggregate liability for any breach of this DPA, including
+regulatory fines and penalties arising from Vendor's negligence, is capped
+at one times (1×) the fees paid by Customer in the twelve months preceding
+the claim.
 """
 
 REDLINE_ROUND_1 = """\
-MASTER SERVICES AGREEMENT — EXCERPT (counterparty redline, round 1)
+DATA PROCESSING ADDENDUM — EXCERPT (vendor redline, round 1)
 
-The contract above stands except for the following counterparty edits:
+The DPA above stands except for the following vendor edits:
 
-3.1 Late charge reduced to one percent (1.0%) per month, capped at fifteen
-percent (15%) of the unpaid invoice. Payment terms remain Net-30.
+2.1 Vendor commits to encryption of Customer Personal Data in transit and
+at rest in all cases (TLS 1.2+ and AES-256 or equivalent), including
+traffic between Vendor's internal services.
 
-5.2 Customer indemnity is now subject to the same liability cap in Section 7
-as Vendor's indemnity. The carve-outs for content-based and breach claims
-remain.
+2.2 The unilateral-precedence clause is removed. The security measures in
+this DPA control; the online Security Policy may only add protections, not
+reduce them.
 
-8.2 Vendor's right to terminate for convenience is removed. Either party may
-terminate for material uncured breach on 30 days notice; otherwise the
-Agreement runs to end of term.
+3.1 Breach notification window shortened to seventy-two (72) hours from
+confirmation, with direct notice to Customer's designated privacy contact.
+The status-page-only provision in 3.2 is deleted.
 
-All other clauses (term length, renewal notice window, IP feedback
-assignment, data residency, liability cap, SLA unilateral revision) are
-unchanged from the prior draft.
+All other clauses (sub-processor discretion, audit rights, data residency,
+retention and deletion, data-subject requests, liability cap including
+fines) are unchanged from the prior draft.
 """
 
 REDLINE_ROUND_2 = """\
-MASTER SERVICES AGREEMENT — EXCERPT (counterparty redline, round 2)
+DATA PROCESSING ADDENDUM — EXCERPT (vendor redline, round 2)
 
-Building on round-1 edits, counterparty has further accepted:
+Building on round-1 edits, vendor has further accepted:
 
-2.2 Renewal-notice window shortened from 90 days to 30 days, and Customer
-may opt out of renewal at any time after the initial 36-month term with 30
-days written notice (no auto-roll into a new 12-month commit).
+1.2 Vendor will give thirty (30) days advance written notice of any new
+sub-processor, with a right for Customer to object on reasonable
+data-protection grounds. The current sub-processor list is published and
+kept up to date.
 
-3.2 Renewal price escalation capped at the lesser of CPI or 5% per renewal,
-with at least 60 days advance written notice of any increase.
+4.1 Vendor will provide its full SOC 2 Type II report annually under NDA at
+no charge, plus an annual penetration-test summary. One audit (remote or
+on-site) per year is permitted at Customer's own cost following a confirmed
+Personal Data Breach.
 
-4.2 IP-feedback assignment removed. Customer feedback and suggestions remain
-Customer's property; Vendor receives only a non-exclusive licence to act on
-the feedback.
+6.1 Vendor will delete Customer Personal Data, including backups, within
+sixty (60) days of termination and provide a written deletion certification
+at no charge.
 
-6.2 Vendor will delete Customer Data within 60 days of termination and
-provide a written deletion certification at no charge.
+7.1 Vendor will assist Customer in fulfilling data-subject access, erasure,
+and portability requests within ten (10) business days at no charge, and
+provides a self-service export endpoint. The product-improvement use in 1.1
+is removed; Vendor processes Customer Personal Data only on documented
+instructions.
 
-8.3 SLA schedule may not be revised unilaterally by Vendor; revisions
-require Customer's written consent. Service-level credits remain a remedy
-but are no longer the *sole* remedy.
-
-Open items (counterparty's position): liability cap remains 1× annual fees;
-data-residency clause remains "any region"; sub-processor list will be made
-available on request.
+Open items (vendor's position): liability cap remains 1× annual fees and
+continues to include regulatory fines; data-residency clause remains "any
+region", with transfers governed by standard contractual clauses on
+request.
 """
 
 
 def _print_decision(d: ContractDecision | None) -> None:
-    print("\nContract decision:")
+    print("\nDPA decision:")
     print("-" * 60)
     if d is None:
         print("(missing)")
@@ -497,26 +498,26 @@ def _print_decision(d: ContractDecision | None) -> None:
 
 
 async def main() -> None:
-    print("Notebook 60: Contract review workflow")
+    print("Notebook 65: Vendor DPA / data-processing-agreement review")
     print("=" * 60)
 
     model = get_model()
     graph = build_review_graph()
     initial = {
-        "contract_id": "C-2026-0815",
-        "counterparty": "MegaCorp Cloud Solutions",
+        "contract_id": "DPA-2026-0815",
+        "counterparty": "PixelPulse Analytics",
         "contract_text": SAMPLE_CONTRACT,
         "__model__": model,
     }
 
     print(f"\nReviewing: {initial['counterparty']} ({initial['contract_id']})")
 
-    # Drive two negotiation rounds: counterparty redlines, redlines again,
+    # Drive two negotiation rounds: vendor redlines, redlines again,
     # then accepts our terms on the third pass.
     answers = [
         REDLINE_ROUND_1,
         REDLINE_ROUND_2,
-        "RESOLVED: counterparty agreed to our terms",
+        "RESOLVED: vendor agreed to our terms",
     ]
     result = await graph.execute(initial)
     answer_idx = 0

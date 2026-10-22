@@ -1,15 +1,14 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for the multi-modal provider registry.
 
 Covers:
 
-- Pydantic types in ``locus.providers.types`` are frozen and validate.
+- Pydantic types in ``tulip.providers.types`` are frozen and validate.
 - The four ``BaseXxxProvider`` Protocols accept duck-typed implementations
   via ``runtime_checkable``.
-- The auto-tool factories in ``locus.providers.tools`` produce real
+- The auto-tool factories in ``tulip.providers.tools`` produce real
   ``@tool``-decorated callables that delegate to the underlying provider
   and return the documented tool-string format.
 - ``auto_register`` on a real ``ToolRegistry`` registers exactly the
@@ -25,23 +24,23 @@ from typing import Any
 
 import pytest
 
-from locus.providers.image import BaseImageGenerationProvider, ImageResult
-from locus.providers.speech import (
+from tulip.providers.image import BaseImageGenerationProvider, ImageResult
+from tulip.providers.speech import (
     BaseSpeechProvider,
     SpeechTranscript,
     SynthesizedAudio,
 )
-from locus.providers.tools import (
+from tulip.providers.tools import (
     auto_register,
     make_image_generation_tool,
     make_speech_tools,
     make_web_fetch_tool,
     make_web_search_tool,
 )
-from locus.providers.types import SearchResult, WebPage
-from locus.providers.web_fetch import BaseWebFetchProvider
-from locus.providers.web_search import BaseWebSearchProvider
-from locus.tools.registry import ToolRegistry
+from tulip.providers.types import SearchResult, WebPage
+from tulip.providers.web_fetch import BaseWebFetchProvider
+from tulip.providers.web_search import BaseWebSearchProvider
+from tulip.tools.registry import ToolRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -394,18 +393,18 @@ class TestAutoRegister:
 
 class TestSearchPreviewSamplingGate:
     def test_detects_native_search_preview(self) -> None:
-        from locus.models.native.openai import OpenAIModel
+        from tulip.models.native.openai import OpenAIModel
 
         assert OpenAIModel._rejects_sampling_params("gpt-4o-search-preview")
         assert OpenAIModel._rejects_sampling_params("gpt-4o-mini-search-preview")
 
     def test_detects_oci_namespaced_search_preview(self) -> None:
-        from locus.models.native.openai import OpenAIModel
+        from tulip.models.native.openai import OpenAIModel
 
         assert OpenAIModel._rejects_sampling_params("openai.gpt-4o-search-preview")
 
     def test_regular_models_unaffected(self) -> None:
-        from locus.models.native.openai import OpenAIModel
+        from tulip.models.native.openai import OpenAIModel
 
         assert not OpenAIModel._rejects_sampling_params("gpt-4o-mini")
         assert not OpenAIModel._rejects_sampling_params("gpt-5.1")
@@ -419,7 +418,7 @@ class TestSearchPreviewSamplingGate:
 
 class TestAgentConfigWiring:
     def test_config_accepts_provider_fields(self) -> None:
-        from locus.agent.config import AgentConfig
+        from tulip.agent.config import AgentConfig
 
         cfg = AgentConfig(
             model="openai:gpt-4o-mini",
@@ -439,7 +438,7 @@ class TestAgentConfigWiring:
         assert cfg.speech_provider is not None
 
     def test_agent_registers_provider_tools_on_initialize(self) -> None:
-        from locus.agent import Agent
+        from tulip.agent import Agent
 
         class _StubModel:
             async def complete(self, *args: Any, **kwargs: Any) -> Any:

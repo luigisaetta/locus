@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for the hooks Plugin base class and PluginAdapter."""
 
@@ -8,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from locus.hooks.plugin import Plugin, PluginAdapter, hook
-from locus.tools.decorator import tool
+from tulip.hooks.plugin import Plugin, PluginAdapter, hook
+from tulip.tools.decorator import tool
 
 
 class _StubPlugin(Plugin):

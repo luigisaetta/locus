@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for ``AgentConfig.auxiliary_model`` wiring.
 
@@ -18,10 +17,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from locus.agent import Agent
-from locus.agent.config import GroundingConfig
-from locus.core.messages import Message, ToolCall
-from locus.models.base import ModelResponse
+from tulip.agent import Agent
+from tulip.agent.config import GroundingConfig
+from tulip.core.messages import Message, ToolCall
+from tulip.models.base import ModelResponse
 
 
 class _LabelledModel:
@@ -108,7 +107,7 @@ class TestAuxiliaryResolution:
         aux = _LabelledModel("aux")
         explicit = _LabelledModel("grounding-explicit")
 
-        with patch("locus.agent.agent.get_model", return_value=explicit) as mocked:
+        with patch("tulip.agent.agent.get_model", return_value=explicit) as mocked:
             agent = Agent(
                 model=primary,
                 auxiliary_model=aux,
@@ -131,7 +130,7 @@ class TestMaxIterationsSummaryRouting:
 
         # Primary keeps calling a tool forever; built-in max_iterations
         # triggers the summary call path which we want routed to aux.
-        @__import__("locus.tools.decorator", fromlist=["tool"]).tool
+        @__import__("tulip.tools.decorator", fromlist=["tool"]).tool
         def echo(msg: str) -> str:  # type: ignore[no-redef]
             return f"echo: {msg}"
 
@@ -168,7 +167,7 @@ class TestMaxIterationsSummaryRouting:
     def test_summary_call_falls_back_to_primary_when_no_aux(self):
         """Without an auxiliary model, the summary uses the primary."""
 
-        @__import__("locus.tools.decorator", fromlist=["tool"]).tool
+        @__import__("tulip.tools.decorator", fromlist=["tool"]).tool
         def echo2(msg: str) -> str:  # type: ignore[no-redef]
             return f"echo: {msg}"
 

@@ -2,9 +2,9 @@
 name: incident-triage
 description: Use when diagnosing a live production incident — guides the agent through alert triage, metric correlation, and impact assessment.
 allowed-tools: get_metric list_alerts kb_search
-license: UPL-1.0
+license: Apache-2.0
 metadata:
-  author: locus
+  author: tulip
   domain: observability
 ---
 

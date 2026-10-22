@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for memory registry module."""
 
@@ -8,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from locus.memory.registry import (
+from tulip.memory.registry import (
     _CHECKPOINTERS,
     get_checkpointer,
     list_checkpointers,
@@ -164,9 +163,9 @@ class TestRedisCheckpointer:
         # Mock the redis_checkpointer to avoid actual connection
         mock_cp = MagicMock()
 
-        with patch("locus.memory.backends.adapters.redis_checkpointer", return_value=mock_cp):
+        with patch("tulip.memory.backends.adapters.redis_checkpointer", return_value=mock_cp):
             # Re-register to use patched version
-            from locus.memory.registry import _CHECKPOINTERS
+            from tulip.memory.registry import _CHECKPOINTERS
 
             original_factory = _CHECKPOINTERS.get("redis")
 
@@ -203,18 +202,18 @@ class TestConfigHintMultipleColons:
 
         del _CHECKPOINTERS["url_test"]
 
-    def test_config_hint_with_oci_bucket(self):
-        """Test config hint with OCI bucket format."""
+    def test_config_hint_with_path_like_hint(self):
+        """Test config hint with a path-like ``bucket/namespace`` format."""
         mock_factory = MagicMock(return_value=MagicMock())
 
-        register_checkpointer("oci_test", mock_factory)
+        register_checkpointer("path_test", mock_factory)
 
-        get_checkpointer("oci_test:my-bucket/my-namespace")
+        get_checkpointer("path_test:my-bucket/my-namespace")
 
         call_kwargs = mock_factory.call_args.kwargs
         assert call_kwargs.get("config_hint") == "my-bucket/my-namespace"
 
-        del _CHECKPOINTERS["oci_test"]
+        del _CHECKPOINTERS["path_test"]
 
 
 class TestErrorMessages:
@@ -292,7 +291,7 @@ class TestRedisFactoryConfigHint:
             return MagicMock()
 
         # Patch redis_checkpointer at module level
-        with patch("locus.memory.backends.adapters.redis_checkpointer", mock_redis_checkpointer):
+        with patch("tulip.memory.backends.adapters.redis_checkpointer", mock_redis_checkpointer):
             # Re-register with patched import
             def redis_factory(config_hint=None, **kwargs):
                 if config_hint:
@@ -396,68 +395,6 @@ class TestOpenSearchFactoryConfigHint:
             _CHECKPOINTERS["opensearch"] = original_factory
 
 
-class TestOCIFactoryConfigHint:
-    """Tests for OCI bucket factory config_hint processing."""
-
-    def test_oci_factory_parses_bucket_namespace(self):
-        """Test OCI factory parses bucket/namespace format."""
-        providers = list_checkpointers()
-        if "oci" not in providers:
-            pytest.skip("OCI not available")
-
-        original_factory = _CHECKPOINTERS["oci"]
-        captured_kwargs = {}
-
-        def mock_oci_checkpointer(**kwargs):
-            captured_kwargs.update(kwargs)
-            return MagicMock()
-
-        def oci_factory(config_hint=None, **kwargs):
-            if config_hint and "/" in config_hint:
-                bucket, namespace = config_hint.split("/", 1)
-                kwargs.setdefault("bucket_name", bucket)
-                kwargs.setdefault("namespace", namespace)
-            return mock_oci_checkpointer(**kwargs)
-
-        _CHECKPOINTERS["oci"] = oci_factory
-
-        try:
-            get_checkpointer("oci:my-bucket/my-namespace")
-            assert captured_kwargs.get("bucket_name") == "my-bucket"
-            assert captured_kwargs.get("namespace") == "my-namespace"
-        finally:
-            _CHECKPOINTERS["oci"] = original_factory
-
-    def test_oci_factory_handles_namespace_with_slashes(self):
-        """Test OCI factory handles namespace with extra slashes."""
-        providers = list_checkpointers()
-        if "oci" not in providers:
-            pytest.skip("OCI not available")
-
-        original_factory = _CHECKPOINTERS["oci"]
-        captured_kwargs = {}
-
-        def mock_oci_checkpointer(**kwargs):
-            captured_kwargs.update(kwargs)
-            return MagicMock()
-
-        def oci_factory(config_hint=None, **kwargs):
-            if config_hint and "/" in config_hint:
-                bucket, namespace = config_hint.split("/", 1)
-                kwargs.setdefault("bucket_name", bucket)
-                kwargs.setdefault("namespace", namespace)
-            return mock_oci_checkpointer(**kwargs)
-
-        _CHECKPOINTERS["oci"] = oci_factory
-
-        try:
-            get_checkpointer("oci:bucket/ns/with/slashes")
-            assert captured_kwargs.get("bucket_name") == "bucket"
-            assert captured_kwargs.get("namespace") == "ns/with/slashes"
-        finally:
-            _CHECKPOINTERS["oci"] = original_factory
-
-
 class TestPostgreSQLFactoryConfigHint:
     """Tests for PostgreSQL factory config_hint processing."""
 
@@ -518,39 +455,6 @@ class TestMySQLFactoryConfigHint:
             _CHECKPOINTERS["mysql"] = original_factory
 
 
-class TestOracleFactoryConfigHint:
-    """Tests for Oracle factory config_hint processing."""
-
-    def test_oracle_factory_sets_database(self):
-        """Test oracle factory sets database from hint."""
-        providers = list_checkpointers()
-        if "oracle" not in providers:
-            pytest.skip("Oracle not available")
-
-        original_factory = _CHECKPOINTERS.get("oracle")
-        captured_kwargs = {}
-
-        def mock_oracle_checkpointer(**kwargs):
-            captured_kwargs.update(kwargs)
-            return MagicMock()
-
-        def oracle_factory(config_hint=None, **kwargs):
-            if config_hint:
-                kwargs.setdefault("database", config_hint)
-            return mock_oracle_checkpointer(**kwargs)
-
-        _CHECKPOINTERS["oracle"] = oracle_factory
-
-        try:
-            get_checkpointer("oracle:oracledb")
-            assert captured_kwargs.get("database") == "oracledb"
-        finally:
-            if original_factory:
-                _CHECKPOINTERS["oracle"] = original_factory
-            else:
-                del _CHECKPOINTERS["oracle"]
-
-
 class TestActualRedisFactory:
     """Tests for actual Redis factory invocation."""
 
@@ -561,7 +465,7 @@ class TestActualRedisFactory:
             pytest.skip("Redis not available")
 
         # Patch at the right level to catch the actual factory invocation
-        with patch("locus.memory.backends.adapters.redis_checkpointer") as mock_redis:
+        with patch("tulip.memory.backends.adapters.redis_checkpointer") as mock_redis:
             mock_redis.return_value = MagicMock()
 
             # Need to re-invoke the factory, so patch before calling
@@ -569,7 +473,7 @@ class TestActualRedisFactory:
 
             # The actual factory from _register_defaults
             def actual_redis_factory(config_hint=None, **kwargs):
-                from locus.memory.backends.adapters import redis_checkpointer
+                from tulip.memory.backends.adapters import redis_checkpointer
 
                 if config_hint:
                     if not config_hint.startswith("redis://"):
@@ -593,13 +497,13 @@ class TestActualRedisFactory:
         if "redis" not in providers:
             pytest.skip("Redis not available")
 
-        with patch("locus.memory.backends.adapters.redis_checkpointer") as mock_redis:
+        with patch("tulip.memory.backends.adapters.redis_checkpointer") as mock_redis:
             mock_redis.return_value = MagicMock()
 
             original = _CHECKPOINTERS["redis"]
 
             def actual_redis_factory(config_hint=None, **kwargs):
-                from locus.memory.backends.adapters import redis_checkpointer
+                from tulip.memory.backends.adapters import redis_checkpointer
 
                 if config_hint:
                     if not config_hint.startswith("redis://"):

@@ -1,15 +1,14 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Tests for ``locus.tools.result_storage.ToolResultStore``."""
+"""Tests for ``tulip.tools.result_storage.ToolResultStore``."""
 
 from __future__ import annotations
 
 import pytest
 
-from locus.core.messages import ToolResult
-from locus.tools.result_storage import (
+from tulip.core.messages import ToolResult
+from tulip.tools.result_storage import (
     REFERENCE_MARKER,
     ToolResultStore,
     extract_reference_key,
@@ -100,7 +99,7 @@ class TestReferenceKey:
         assert extract_reference_key("") is None
 
     def test_load_unknown_key_returns_none(self, store: ToolResultStore) -> None:
-        assert store.load("locus:result:missing:0:tool") is None
+        assert store.load("tulip:result:missing:0:tool") is None
 
 
 # ---------------------------------------------------------------------------
@@ -121,10 +120,10 @@ class TestKeyFormat:
         # Key shouldn't be broken apart by extract_reference_key's
         # whitespace stop — colons and slashes would, so the
         # implementation replaces them.
-        assert ":" in key  # the locus:result:...:N prefix uses colons
+        assert ":" in key  # the tulip:result:...:N prefix uses colons
         # But no embedded user colon / slash should survive in
         # the ID segments (we asserted those get replaced with _).
-        user_segments = key.split(":")[2:]  # drop 'locus:result'
+        user_segments = key.split(":")[2:]  # drop 'tulip:result'
         assert not any("/" in seg for seg in user_segments)
 
 

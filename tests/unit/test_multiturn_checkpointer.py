@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Multi-turn regression test: checkpointed state + new user message must
 re-enter the model.
@@ -19,10 +18,10 @@ from typing import Any
 
 import pytest
 
-from locus.agent.agent import Agent
-from locus.core.messages import Message
-from locus.memory.backends.memory import MemoryCheckpointer
-from locus.models.base import ModelResponse
+from tulip.agent.agent import Agent
+from tulip.core.messages import Message
+from tulip.memory.backends.memory import MemoryCheckpointer
+from tulip.models.base import ModelResponse
 
 
 class RecordingModel:

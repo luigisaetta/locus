@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for RAG retriever."""
 
@@ -8,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from locus.rag.retriever import (
+from tulip.rag.retriever import (
     ChunkConfig,
     RAGRetriever,
     RetrievalResult,
 )
-from locus.rag.stores.base import Document, SearchResult
+from tulip.rag.stores.base import Document, SearchResult
 
 
 class TestRetrievalResult:
@@ -413,7 +412,7 @@ class TestRAGRetrieverAddFile:
     @pytest.mark.asyncio
     async def test_add_file_text(self, mock_embedder, mock_store):
         """Test adding a text file."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="File content here",
@@ -421,7 +420,7 @@ class TestRAGRetrieverAddFile:
             metadata={"encoding": "utf-8"},
         )
 
-        with patch("locus.rag.multimodal.MultimodalProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.MultimodalProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -438,7 +437,7 @@ class TestRAGRetrieverAddFile:
     @pytest.mark.asyncio
     async def test_add_file_with_metadata(self, mock_embedder, mock_store):
         """Test adding file with additional metadata."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="Content",
@@ -446,7 +445,7 @@ class TestRAGRetrieverAddFile:
             metadata={},
         )
 
-        with patch("locus.rag.multimodal.MultimodalProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.MultimodalProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -466,7 +465,7 @@ class TestRAGRetrieverAddFile:
     @pytest.mark.asyncio
     async def test_add_file_with_chunking(self, mock_embedder, mock_store):
         """Test adding file with chunking enabled."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         # Create long content that will be chunked
         long_content = "A" * 2000
@@ -482,7 +481,7 @@ class TestRAGRetrieverAddFile:
         )
         mock_store.add_batch = AsyncMock(return_value=["doc_0", "doc_1"])
 
-        with patch("locus.rag.multimodal.MultimodalProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.MultimodalProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -499,7 +498,7 @@ class TestRAGRetrieverAddFile:
     @pytest.mark.asyncio
     async def test_add_file_with_custom_id(self, mock_embedder, mock_store):
         """Test adding file with custom document ID."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="Content",
@@ -507,7 +506,7 @@ class TestRAGRetrieverAddFile:
             metadata={},
         )
 
-        with patch("locus.rag.multimodal.MultimodalProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.MultimodalProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -547,7 +546,7 @@ class TestRAGRetrieverAddImage:
     @pytest.mark.asyncio
     async def test_add_image_bytes(self, mock_embedder, mock_store):
         """Test adding image bytes."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="Image description",
@@ -556,7 +555,7 @@ class TestRAGRetrieverAddImage:
             raw_content=b"image bytes",
         )
 
-        with patch("locus.rag.multimodal.ImageProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.ImageProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -573,7 +572,7 @@ class TestRAGRetrieverAddImage:
     @pytest.mark.asyncio
     async def test_add_image_with_custom_id(self, mock_embedder, mock_store):
         """Test adding image with custom ID."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="Description",
@@ -582,7 +581,7 @@ class TestRAGRetrieverAddImage:
             raw_content=b"bytes",
         )
 
-        with patch("locus.rag.multimodal.ImageProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.ImageProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -599,7 +598,7 @@ class TestRAGRetrieverAddImage:
     @pytest.mark.asyncio
     async def test_add_image_with_metadata(self, mock_embedder, mock_store):
         """Test adding image with metadata."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="Description",
@@ -608,7 +607,7 @@ class TestRAGRetrieverAddImage:
             raw_content=b"bytes",
         )
 
-        with patch("locus.rag.multimodal.ImageProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.ImageProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -626,7 +625,7 @@ class TestRAGRetrieverAddImage:
     @pytest.mark.asyncio
     async def test_add_image_without_ocr(self, mock_embedder, mock_store):
         """Test adding image without OCR."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="No OCR",
@@ -635,7 +634,7 @@ class TestRAGRetrieverAddImage:
             raw_content=b"bytes",
         )
 
-        with patch("locus.rag.multimodal.ImageProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.ImageProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -671,7 +670,7 @@ class TestRAGRetrieverAddPdf:
     @pytest.mark.asyncio
     async def test_add_pdf(self, mock_embedder, mock_store):
         """Test adding PDF document."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="PDF content here",
@@ -679,7 +678,7 @@ class TestRAGRetrieverAddPdf:
             metadata={"pages": 5},
         )
 
-        with patch("locus.rag.multimodal.PDFProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.PDFProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -696,7 +695,7 @@ class TestRAGRetrieverAddPdf:
     @pytest.mark.asyncio
     async def test_add_pdf_with_chunking(self, mock_embedder, mock_store):
         """Test adding large PDF with chunking."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         # Long content for chunking
         long_content = "A" * 2000
@@ -712,7 +711,7 @@ class TestRAGRetrieverAddPdf:
         )
         mock_store.add_batch = AsyncMock(return_value=["pdf_0", "pdf_1"])
 
-        with patch("locus.rag.multimodal.PDFProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.PDFProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -729,7 +728,7 @@ class TestRAGRetrieverAddPdf:
     @pytest.mark.asyncio
     async def test_add_pdf_no_chunk(self, mock_embedder, mock_store):
         """Test adding PDF without chunking."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="Short PDF",
@@ -737,7 +736,7 @@ class TestRAGRetrieverAddPdf:
             metadata={},
         )
 
-        with patch("locus.rag.multimodal.PDFProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.PDFProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -773,7 +772,7 @@ class TestRAGRetrieverAddAudio:
     @pytest.mark.asyncio
     async def test_add_audio(self, mock_embedder, mock_store):
         """Test adding audio document."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="Transcribed audio content",
@@ -782,7 +781,7 @@ class TestRAGRetrieverAddAudio:
             raw_content=b"audio bytes",
         )
 
-        with patch("locus.rag.multimodal.AudioProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.AudioProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -800,7 +799,7 @@ class TestRAGRetrieverAddAudio:
     @pytest.mark.asyncio
     async def test_add_audio_with_metadata(self, mock_embedder, mock_store):
         """Test adding audio with metadata."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="Transcript",
@@ -809,7 +808,7 @@ class TestRAGRetrieverAddAudio:
             raw_content=b"bytes",
         )
 
-        with patch("locus.rag.multimodal.AudioProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.AudioProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor
@@ -827,7 +826,7 @@ class TestRAGRetrieverAddAudio:
     @pytest.mark.asyncio
     async def test_add_audio_with_custom_id(self, mock_embedder, mock_store):
         """Test adding audio with custom ID."""
-        from locus.rag.multimodal import ContentType, ProcessedContent
+        from tulip.rag.multimodal import ContentType, ProcessedContent
 
         mock_result = ProcessedContent(
             text="Transcript",
@@ -836,7 +835,7 @@ class TestRAGRetrieverAddAudio:
             raw_content=b"bytes",
         )
 
-        with patch("locus.rag.multimodal.AudioProcessor") as mock_processor_cls:
+        with patch("tulip.rag.multimodal.AudioProcessor") as mock_processor_cls:
             mock_processor = MagicMock()
             mock_processor.process = AsyncMock(return_value=mock_result)
             mock_processor_cls.return_value = mock_processor

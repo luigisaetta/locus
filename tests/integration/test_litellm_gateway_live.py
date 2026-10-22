@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Integration tests: drive a live LiteLLM AI Gateway end-to-end.
 
@@ -13,21 +12,16 @@ forks.
 
 Run locally::
 
-    # 1. Bring up the sample gateway in another shell.
+    # 1. Bring up the sample gateway in another shell with whatever
+    #    upstream provider credentials it is configured for.
     cd examples/litellm-gateway/
-    export OCI_REGION="us-chicago-1"
-    export OCI_USER="ocid1.user.oc1..xxx"
-    export OCI_FINGERPRINT="aa:bb:cc:..."
-    export OCI_TENANCY="ocid1.tenancy.oc1..xxx"
-    export OCI_KEY_FILE="$HOME/.oci/keys/your_api_key.pem"
-    export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..xxx"
     export LITELLM_MASTER_KEY="$(openssl rand -hex 32)"
     docker compose up -d
 
     # 2. Run the test against the gateway.
     export LITELLM_GATEWAY_URL="http://localhost:4000"
     export LITELLM_GATEWAY_KEY="$LITELLM_MASTER_KEY"
-    export LITELLM_GATEWAY_MODEL="oci-cohere-command"   # alias from config.yaml
+    export LITELLM_GATEWAY_MODEL="gpt-4o-mini"   # alias from config.yaml
     pytest tests/integration/test_litellm_gateway_live.py -v
 
 The CI workflow ``.github/workflows/_litellm_integration.yml`` (added
@@ -44,7 +38,7 @@ import pytest
 
 _GATEWAY_URL = os.environ.get("LITELLM_GATEWAY_URL", "").rstrip("/")
 _GATEWAY_KEY = os.environ.get("LITELLM_GATEWAY_KEY", "")
-_GATEWAY_MODEL = os.environ.get("LITELLM_GATEWAY_MODEL", "oci-cohere-command")
+_GATEWAY_MODEL = os.environ.get("LITELLM_GATEWAY_MODEL", "gpt-4o-mini")
 
 pytestmark = [
     pytest.mark.integration,
@@ -60,7 +54,7 @@ pytestmark = [
 
 
 # ---------------------------------------------------------------------------
-# Gateway health (no Locus involvement — just HTTP)
+# Gateway health (no Tulip involvement — just HTTP)
 # ---------------------------------------------------------------------------
 
 
@@ -84,7 +78,7 @@ def test_gateway_models_endpoint_lists_documented_alias():
 
 def test_gateway_rejects_unauthenticated_call():
     """Negative-path: without a Bearer token the gateway must NOT
-    forward to OCI. This catches "I forgot to set master_key" and
+    forward upstream. This catches "I forgot to set master_key" and
     open-gateway-by-accident regressions."""
     import httpx
 
@@ -99,7 +93,7 @@ def test_gateway_rejects_unauthenticated_call():
 
 
 # ---------------------------------------------------------------------------
-# End-to-end through Locus's existing OpenAIModel
+# End-to-end through Tulip's existing OpenAIModel
 # ---------------------------------------------------------------------------
 
 
@@ -107,7 +101,7 @@ def test_gateway_rejects_unauthenticated_call():
 def model():
     """Build the exact OpenAIModel the docs / notebook 71 instruct users
     to build. If this fixture stops working, the docs are wrong."""
-    from locus.models.native.openai import OpenAIModel
+    from tulip.models.native.openai import OpenAIModel
 
     return OpenAIModel(
         model=_GATEWAY_MODEL,
@@ -120,8 +114,8 @@ def model():
 
 @pytest.mark.asyncio
 async def test_basic_completion_via_gateway(model):
-    """Locus → gateway → OCI → response. The minimal happy path."""
-    from locus.core.messages import Message
+    """Tulip → gateway → upstream → response. The minimal happy path."""
+    from tulip.core.messages import Message
 
     resp = await model.complete(
         messages=[Message.user("What is the capital of Japan? Reply with one word only.")],
@@ -129,7 +123,7 @@ async def test_basic_completion_via_gateway(model):
     assert resp.message.content
     assert "Tokyo" in resp.message.content
     # Usage must arrive populated — the gateway propagates upstream usage
-    # back through to Locus.
+    # back through to Tulip.
     assert resp.usage.get("prompt_tokens", 0) > 0
     assert resp.usage.get("completion_tokens", 0) > 0
 
@@ -138,7 +132,7 @@ async def test_basic_completion_via_gateway(model):
 async def test_multi_turn_with_system_message(model):
     """System + user multi-turn must round-trip through the gateway
     unchanged."""
-    from locus.core.messages import Message
+    from tulip.core.messages import Message
 
     resp = await model.complete(
         messages=[
@@ -154,8 +148,8 @@ async def test_multi_turn_with_system_message(model):
 async def test_streaming_via_gateway(model):
     """SSE end-to-end. The gateway re-serialises upstream events, so
     this is the regression test that catches a broken passthrough."""
-    from locus.core.events import ModelChunkEvent
-    from locus.core.messages import Message
+    from tulip.core.events import ModelChunkEvent
+    from tulip.core.messages import Message
 
     chunks: list[str] = []
     terminal = 0
@@ -169,7 +163,7 @@ async def test_streaming_via_gateway(model):
                 terminal += 1
 
     assert chunks, "gateway returned no streamed content chunks"
-    # Locus's OpenAIModel may emit more than one ``done=True`` event on a
+    # Tulip's OpenAIModel may emit more than one ``done=True`` event on a
     # successful stream (final content delta + a trailing finish-reason
     # event); the contract is that at least one done event fires before
     # iteration ends.
@@ -180,7 +174,7 @@ async def test_streaming_via_gateway(model):
 async def test_tool_call_via_gateway(model):
     """Tool calling must work through the gateway. OpenAI-shape tool
     schema in, OpenAI-shape tool call out."""
-    from locus.core.messages import Message
+    from tulip.core.messages import Message
 
     tools = [
         {
@@ -204,10 +198,9 @@ async def test_tool_call_via_gateway(model):
     # Most chat models will issue the call given an explicit prompt.
     # If the configured alias points at a non-tool-capable model and
     # this assertion ever flakes, change LITELLM_GATEWAY_MODEL to a
-    # tool-capable alias (e.g. oci-grok or oci-gpt5-mini).
+    # tool-capable alias.
     assert resp.message.tool_calls, (
-        "model issued no tool call — set LITELLM_GATEWAY_MODEL to a "
-        "tool-capable alias (e.g. oci-grok)"
+        "model issued no tool call — set LITELLM_GATEWAY_MODEL to a tool-capable alias"
     )
     tc = resp.message.tool_calls[0]
     assert tc.name == "get_weather"
@@ -224,8 +217,8 @@ async def test_tool_call_via_gateway(model):
 async def test_agent_loop_via_gateway(model):
     """Build an Agent, run a prompt, assert the result — this is what
     notebook_71 does in production form. Confirms the entire wiring
-    (Agent + OpenAIModel + gateway + OCI) holds together."""
-    from locus.agent import Agent
+    (Agent + OpenAIModel + gateway + upstream) holds together."""
+    from tulip.agent import Agent
 
     agent = Agent(model=model, system_prompt="Reply with a single sentence.")
     result = agent.run_sync("Name one programming language.")

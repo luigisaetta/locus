@@ -14,6 +14,10 @@ jobs:
   build:
     name: "lint+typecheck #${{ matrix.python-version }}"
     runs-on: ubuntu-latest
+    env:
+      # ``hatch run check`` also runs the unit tests; the MCP loopback-server
+      # suite must run there, not skip (see _test.yml).
+      TULIP_REQUIRE_MCP_SERVER_TESTS: "1"
     strategy:
       matrix:
         # Lint on the min and max supported Python versions. mypy can
@@ -32,6 +36,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
+
+      # Stdlib only (tomllib), so it runs before Hatch is installed and fails
+      # in seconds rather than after a full lint+typecheck. SECURITY.md once
+      # claimed 2.1.x support while the package shipped 2.10.0; nothing in CI
+      # noticed, and an outside reviewer found it.
+      - name: Check release metadata is self-consistent
+        run: python scripts/check_release_consistency.py --verbose
 
       - name: Install Hatch
         run: pip install hatch==${{ env.HATCH_VERSION }}

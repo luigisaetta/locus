@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Tests for ``locus.models.pooled.CredentialPoolModel``."""
+"""Tests for ``tulip.models.pooled.CredentialPoolModel``."""
 
 from __future__ import annotations
 
@@ -11,11 +10,11 @@ from typing import Any
 import pytest
 from pydantic import SecretStr
 
-from locus.core.errors import ModelAuthError
-from locus.core.messages import Message
-from locus.models import ModelResponse
-from locus.models.credentials import Credential, CredentialPool
-from locus.models.pooled import CredentialPoolModel
+from tulip.core.errors import ModelAuthError
+from tulip.core.messages import Message
+from tulip.models import ModelResponse
+from tulip.models.credentials import Credential, CredentialPool
+from tulip.models.pooled import CredentialPoolModel
 
 
 # ---------------------------------------------------------------------------

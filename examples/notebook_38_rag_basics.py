@@ -1,42 +1,39 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
-"""Notebook 39: RAG basics on Oracle Database 26ai.
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
+"""Notebook 38: RAG basics — a cloud Well-Architected knowledge base.
 
 Retrieval-Augmented Generation (RAG) grounds an agent's answers in your
-own documents. The pipeline has four steps:
+own documents. For a cloud-platform team that means the AWS
+Well-Architected best-practice catalogue, mapped to your internal
+runbooks — not whatever the model half-remembers about ``REL`` or
+``COST`` ids. This notebook builds the Index that the cloud-ops agent
+(STRATUS, notebook 40) reads from. The pipeline has four steps:
 
-- **Embed** — turn text into vectors with ``OCIEmbeddings`` (Cohere V3
-  English, 1024 dims, on the OCI GenAI inference endpoint).
-- **Store** — persist the vectors in ``OracleVectorStore``, backed by
-  Oracle Database 26ai's native ``VECTOR(N, FLOAT32)`` column.
-- **Search** — find the closest vectors with the ``VECTOR_DISTANCE``
-  SQL function. The native type and operator are 26ai differentiators
-  — no extension required.
+- **Embed** — turn text into vectors with ``OpenAIEmbeddings``
+  (``text-embedding-3-small``, 1536 dims).
+- **Store** — persist the vectors in a vector store. This notebook uses
+  the pure-Python ``InMemoryVectorStore`` so it runs anywhere with no
+  external service and no native dependencies (even in a browser); swap
+  in ``QdrantVectorStore`` / ``PgVectorStore`` / ``OpenSearchVectorStore``
+  for a durable backend.
+- **Search** — find the closest vectors by cosine distance.
 - **Generate** — feed the retrieved chunks to the LLM as grounded
   context. (This notebook focuses on steps 1–3; notebook 40 wires it
   into an agent.)
 
-This notebook drives the whole pipeline against a real 26ai instance.
-There is no in-memory or local fallback — provision an Autonomous
-Database 26ai and set the env vars below before running.
+The corpus is Well-Architected best practices (``REL-xx``, ``COST-xx``,
+``SEC-xx``, ``OPS-xx``); the retrieval quality of this Index directly
+bounds how grounded STRATUS's answers can be. A low-coverage or stale
+Index leaves the ops agent guessing instead of citing your runbooks —
+the failure mode notebook 40 hardens against.
 
 Run it:
-    # OCI GenAI is the default for embeddings — auto-detected from ~/.oci/config.
-    python examples/notebook_44_rag_basics.py
+    # Embeddings need an OpenAI api key:
+    export OPENAI_API_KEY=sk-...
+    python examples/notebook_38_rag_basics.py
 
-    # Offline (skips the live demo cleanly when env vars are missing):
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_44_rag_basics.py
-
-Prerequisites:
-    export ORACLE_DSN=mydb_low                   # tnsnames alias
-    export ORACLE_USER=locus_app                 # least-privileged user
-    export ORACLE_PASSWORD='<app-password>'
-    export ORACLE_WALLET=~/.oci/wallets/mydb
-    export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if encrypted
-    export OCI_PROFILE=<your-profile>
-    export OCI_REGION=us-chicago-1
-    export OCI_COMPARTMENT=ocid1.compartment.oc1..…
+    # Offline (skips the live demo cleanly when the key is missing):
+    python examples/notebook_38_rag_basics.py
 """
 
 import asyncio
@@ -44,47 +41,24 @@ import math
 import os
 import sys
 
-from locus.rag import OCIEmbeddings, OracleVectorStore, RAGRetriever
-from locus.rag.stores.base import Document
+from config import get_embedder
 
-
-_REQUIRED_ENV = (
-    "ORACLE_DSN",
-    "ORACLE_USER",
-    "ORACLE_PASSWORD",
-    "ORACLE_WALLET",
-    "OCI_COMPARTMENT",
-)
+from tulip.rag import InMemoryVectorStore, OpenAIEmbeddings, RAGRetriever
+from tulip.rag.stores.base import Document
 
 
 def _missing_env() -> list[str]:
-    return [name for name in _REQUIRED_ENV if not os.environ.get(name)]
+    return [name for name in ("OPENAI_API_KEY",) if not os.environ.get(name)]
 
 
-def _get_embedder() -> OCIEmbeddings:
-    region = os.environ.get("LOCUS_OCI_REGION") or os.environ.get("OCI_REGION", "us-chicago-1")
-    return OCIEmbeddings(
-        model_id="cohere.embed-english-v3.0",
-        profile_name=os.environ.get("LOCUS_OCI_PROFILE")
-        or os.environ.get("OCI_PROFILE", "DEFAULT"),
-        auth_type=os.environ.get("LOCUS_OCI_AUTH_TYPE")
-        or os.environ.get("OCI_AUTH_TYPE", "api_key"),
-        compartment_id=os.environ["OCI_COMPARTMENT"],
-        service_endpoint=(f"https://inference.generativeai.{region}.oci.oraclecloud.com"),
-    )
+def _get_embedder() -> OpenAIEmbeddings:
+    # id comes from TULIP_EMBEDDING_MODEL so this runs against a
+    # self-hosted embedding endpoint too, not only api.openai.com
+    return get_embedder()
 
 
-def _get_store(table_suffix: str, dimension: int = 1024) -> OracleVectorStore:
-    return OracleVectorStore(
-        dsn=os.environ["ORACLE_DSN"],
-        user=os.environ["ORACLE_USER"],
-        password=os.environ["ORACLE_PASSWORD"],
-        wallet_location=os.path.expanduser(os.environ["ORACLE_WALLET"]),
-        wallet_password=os.environ.get("ORACLE_WALLET_PASSWORD", ""),
-        table_name=f"locus_notebook_44_{table_suffix}",
-        dimension=dimension,
-        distance_metric="COSINE",
-    )
+def _get_store(dimension: int = 1536) -> InMemoryVectorStore:
+    return InMemoryVectorStore(dimension=dimension)
 
 
 # =============================================================================
@@ -94,7 +68,7 @@ def _get_store(table_suffix: str, dimension: int = 1024) -> OracleVectorStore:
 
 async def understand_embeddings():
     print("=" * 60)
-    print("Step 1: Embeddings (OCI GenAI · Cohere V3, 1024-dim)")
+    print("Step 1: Embeddings (OpenAI · text-embedding-3-small)")
     print("=" * 60)
 
     embedder = _get_embedder()
@@ -102,9 +76,9 @@ async def understand_embeddings():
     print(f"Embedding dimension: {embedder.config.dimension}")
 
     texts = [
-        "Python is a programming language",
-        "Python is used for machine learning",
-        "Cats are fluffy animals",
+        "Auto Scaling groups add instances when average CPU exceeds the target",
+        "Horizontal pod autoscaling adds replicas when observed CPU rises",
+        "IAM policies grant least-privilege access to cloud resources",
     ]
     results = await embedder.embed_batch(texts)
 
@@ -123,53 +97,59 @@ async def understand_embeddings():
     sim_01 = cosine(results[0].embedding, results[1].embedding)
     sim_02 = cosine(results[0].embedding, results[2].embedding)
     print("\nCosine similarity:")
-    print(f"  'Python programming' vs 'Python ML': {sim_01:.4f}")
-    print(f"  'Python programming' vs 'Cats':     {sim_02:.4f}")
+    print(f"  'Auto Scaling' vs 'Pod autoscaling': {sim_01:.4f}")
+    print(f"  'Auto Scaling' vs 'IAM policies':    {sim_02:.4f}")
 
 
 # =============================================================================
-# Step 2: OracleVectorStore — write to a native VECTOR column, query with
-#         VECTOR_DISTANCE.
+# Step 2: InMemoryVectorStore — store vectors, query by cosine distance.
 # =============================================================================
 
 
 async def using_vector_store():
     print("\n" + "=" * 60)
-    print("Step 2: OracleVectorStore (native VECTOR, COSINE)")
+    print("Step 2: InMemoryVectorStore (cosine)")
     print("=" * 60)
 
     embedder = _get_embedder()
-    store = _get_store("manual", dimension=embedder.config.dimension)
-    print(f"Created OracleVectorStore table=locus_notebook_39_manual dim={store.config.dimension}")
+    store = _get_store(dimension=embedder.config.dimension)
+    print(f"Created InMemoryVectorStore dim={store.config.dimension}")
 
+    # AWS Well-Architected best-practice summaries — the operational
+    # backbone the ops agent cites. Ids follow the pillar-prefixed form.
     docs_text = [
-        "Python is great for data science and machine learning.",
-        "JavaScript is the language of the web browser.",
-        "Oracle Database is an enterprise relational database.",
-        "PostgreSQL is a popular open-source database.",
-        "Docker containers package applications with dependencies.",
+        "REL-04 Auto Scaling: scale compute horizontally on demand metrics so "
+        "capacity tracks load and unhealthy instances are replaced automatically.",
+        "REL-07 Multi-AZ Deployment: spread workloads across availability zones "
+        "so a single zone failure does not take the whole service down.",
+        "COST-03 Rightsizing: match instance types to measured utilization to "
+        "stop paying for idle compute and memory headroom you never use.",
+        "SEC-02 Least-Privilege IAM: grant the minimum permissions a workload "
+        "needs and rotate long-lived credentials on a schedule.",
+        "OPS-05 Infrastructure as Code: define resources in version-controlled "
+        "templates for repeatable, reviewable, auditable provisioning.",
     ]
 
-    print("\nEmbedding and inserting documents…")
+    print("\nEmbedding and inserting Well-Architected best practices…")
     for i, text in enumerate(docs_text):
         result = await embedder.embed(text)
         await store.add(
             Document(
-                id=f"doc_{i}",
+                id=f"practice_{i}",
                 content=text,
                 embedding=result.embedding,
-                metadata={"source": "notebook", "index": i},
+                metadata={"source": "well_architected_kb", "index": i},
             )
         )
         print(f"  inserted: {text[:50]}…")
 
-    print("\nSearching for 'database systems'…")
-    q = await embedder.embed("database systems")
+    print("\nSearching for 'surviving a datacenter zone outage'…")
+    q = await embedder.embed("surviving a datacenter zone outage")
     hits = await store.search(query_embedding=q.embedding, limit=3)
     for i, hit in enumerate(hits, start=1):
         print(f"  #{i}  score={hit.score:.4f}  {hit.document.content}")
 
-    print(f"\nTotal rows in table: {await store.count()}")
+    print(f"\nTotal rows in store: {await store.count()}")
 
 
 # =============================================================================
@@ -180,11 +160,11 @@ async def using_vector_store():
 
 async def using_rag_retriever():
     print("\n" + "=" * 60)
-    print("Step 3: RAGRetriever over Oracle 26ai")
+    print("Step 3: RAGRetriever")
     print("=" * 60)
 
     embedder = _get_embedder()
-    store = _get_store("retriever", dimension=embedder.config.dimension)
+    store = _get_store(dimension=embedder.config.dimension)
 
     retriever = RAGRetriever(
         embedder=embedder,
@@ -196,73 +176,80 @@ async def using_rag_retriever():
 
     knowledge_base = [
         """
-        Python was created by Guido van Rossum and first released in 1991.
-        It emphasizes code readability with its notable use of significant
-        indentation. Python is dynamically typed and garbage-collected.
+        REL-07 Multi-AZ Deployment: run at least two instances of every tier
+        in separate availability zones behind a load balancer, and put the
+        database in a Multi-AZ configuration with automatic failover. Runbook:
+        when a zone is reported unhealthy, drain its targets, confirm the
+        replica has taken the primary role, and let Auto Scaling backfill
+        capacity in the surviving zones.
         """,
         """
-        Oracle Cloud Infrastructure (OCI) is a cloud computing service
-        offered by Oracle Corporation. It provides servers, storage,
-        network, applications and services through a global network of
-        Oracle Corporation managed data centers.
+        A vector store keeps embeddings in a structure that supports fast
+        nearest-neighbour search. Tulip ships in-memory, pgvector,
+        OpenSearch, Qdrant, and Chroma stores behind one interface —
+        the same API whether the Index holds five Well-Architected
+        practices or the full framework plus every team runbook.
         """,
         """
-        Machine learning is a subset of artificial intelligence (AI) that
-        provides systems the ability to automatically learn and improve
-        from experience without being explicitly programmed.
+        REL-04 Auto Scaling: a scaling policy adds instances when a target
+        metric (average CPU, request count per target, or queue depth) stays
+        above its threshold for the configured period, and removes them when
+        it falls below. Runbook: if instances flap, widen the cooldown window
+        and switch from a simple step policy to target-tracking.
         """,
     ]
 
     for doc in knowledge_base:
         ids = await retriever.add_document(doc.strip())
-        print(f"  inserted document → {len(ids)} chunk(s)")
+        print(f"  inserted practice note → {len(ids)} chunk(s)")
 
-    print("\nQuerying: 'When was Python created?'")
-    result = await retriever.retrieve("When was Python created?", limit=2)
+    print("\nQuerying: 'How do I keep a service up when a zone fails?'")
+    result = await retriever.retrieve("How do I keep a service up when a zone fails?", limit=2)
     for i, doc_result in enumerate(result.documents, 1):
         print(f"\n  result {i} (score={doc_result.score:.4f}):")
         print(f"  {doc_result.document.content[:200]}…")
 
-    print("\nUsing retrieve_text() for the same query on a different prompt:")
-    text = await retriever.retrieve_text("What is Oracle Cloud?", limit=2)
+    print("\nUsing retrieve_text() for the same Index on a different question:")
+    text = await retriever.retrieve_text("How does autoscaling decide to add capacity?", limit=2)
     print(f"\n{text[:300]}…")
 
 
 # =============================================================================
-# Step 4: Metadata-tagged retrieval — store arbitrary JSON alongside the
-#         vector and use it to narrow results beyond similarity alone.
+# Step 4: Metadata-tagged retrieval — store Well-Architected pillar/practice
+#         tags alongside the vector and use them to narrow results beyond
+#         similarity alone.
 # =============================================================================
 
 
 async def rag_with_metadata():
     print("\n" + "=" * 60)
-    print("Step 4: RAG with metadata in Oracle 26ai")
+    print("Step 4: RAG with metadata")
     print("=" * 60)
 
     embedder = _get_embedder()
-    store = _get_store("metadata", dimension=embedder.config.dimension)
+    store = _get_store(dimension=embedder.config.dimension)
     retriever = RAGRetriever(embedder=embedder, store=store)
 
     documents = [
         (
-            "Python supports async/await syntax for concurrency.",
-            {"category": "programming", "language": "python"},
+            "Auto Scaling groups add instances when average CPU exceeds the target.",
+            {"pillar": "reliability", "practice": "REL-04"},
         ),
         (
-            "Use pip to install Python packages.",
-            {"category": "programming", "language": "python"},
+            "Run every tier across multiple availability zones with automatic failover.",
+            {"pillar": "reliability", "practice": "REL-07"},
         ),
         (
-            "JavaScript uses async/await for async operations.",
-            {"category": "programming", "language": "javascript"},
+            "Rightsize instances to measured utilization to stop paying for idle compute.",
+            {"pillar": "cost-optimization", "practice": "COST-03"},
         ),
         (
-            "Set up Oracle Database with these steps.",
-            {"category": "database", "type": "oracle"},
+            "Grant workloads least-privilege IAM and rotate long-lived credentials.",
+            {"pillar": "security", "practice": "SEC-02"},
         ),
         (
-            "PostgreSQL is an open-source database.",
-            {"category": "database", "type": "postgresql"},
+            "Define all infrastructure in version-controlled templates for repeatability.",
+            {"pillar": "operational-excellence", "practice": "OPS-05"},
         ),
     ]
 
@@ -270,8 +257,8 @@ async def rag_with_metadata():
         await retriever.add_document(content, metadata=metadata)
         print(f"  inserted: {content[:40]}… {metadata}")
 
-    print("\nQuerying 'async programming'…")
-    result = await retriever.retrieve("async programming", limit=3)
+    print("\nQuerying 'scaling compute out when load increases'…")
+    result = await retriever.retrieve("scaling compute out when load increases", limit=3)
     for r in result.documents:
         print(f"  score={r.score:.4f}  {r.document.content[:60]}…")
         print(f"    metadata: {r.document.metadata}")
@@ -285,17 +272,14 @@ async def rag_with_metadata():
 async def main():
     missing = _missing_env()
     if missing:
-        print("\n--- Notebook 39: RAG basics on Oracle 26ai ---")
+        print("\n--- Notebook 38: RAG basics (Well-Architected Index) ---")
         print(
             "Required environment variables not set; skipping the live "
             "demo so this file still runs cleanly in CI.\n"
         )
         for name in missing:
             print(f"  - {name}")
-        print(
-            "\nProvision an Autonomous Database 26ai + an OCI GenAI "
-            "compartment, then set the variables above and re-run."
-        )
+        print("\nSet OPENAI_API_KEY (for embeddings), then re-run.")
         return
 
     await understand_embeddings()
@@ -304,7 +288,7 @@ async def main():
     await rag_with_metadata()
 
     print("\n" + "=" * 60)
-    print("Notebook 39 complete — every vector now lives in Oracle 26ai.")
+    print("Notebook 38 complete.")
     print("=" * 60)
 
 

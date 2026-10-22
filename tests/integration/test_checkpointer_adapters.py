@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Integration tests for checkpointer adapters with Agent."""
 
@@ -12,9 +11,9 @@ from uuid import uuid4
 
 import pytest
 
-from locus.core.messages import Message, Role
-from locus.core.state import AgentState
-from locus.memory.backends import (
+from tulip.core.messages import Message, Role
+from tulip.core.state import AgentState
+from tulip.memory.backends import (
     MemoryCheckpointer,
     StorageBackendAdapter,
 )
@@ -185,8 +184,8 @@ class TestAgentWithCheckpointer:
         """Agent with MemoryCheckpointer."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from locus import Agent
-        from locus.models.base import ModelResponse
+        from tulip import Agent
+        from tulip.models.base import ModelResponse
 
         # Create mock model
         mock_model = MagicMock()
@@ -228,8 +227,8 @@ class TestAgentWithCheckpointer:
         """Agent resumes conversation from checkpoint."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from locus import Agent
-        from locus.models.base import ModelResponse
+        from tulip import Agent
+        from tulip.models.base import ModelResponse
 
         checkpointer = MemoryCheckpointer()
 
@@ -271,9 +270,9 @@ class TestAgentWithCheckpointer:
         """Agent with auto-checkpoint every N iterations."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from locus import Agent
-        from locus.core.messages import ToolCall
-        from locus.tools import tool
+        from tulip import Agent
+        from tulip.core.messages import ToolCall
+        from tulip.tools import tool
 
         checkpointer = MemoryCheckpointer()
 
@@ -340,11 +339,11 @@ class TestRedisAdapter:
 
     @pytest.fixture
     async def adapter(self):
-        from locus.memory.backends import redis_checkpointer
+        from tulip.memory.backends import redis_checkpointer
 
         adapter = redis_checkpointer(
             url=os.getenv("REDIS_URL", "redis://localhost:6379"),
-            prefix="locus:test:adapter:",
+            prefix="tulip:test:adapter:",
         )
         yield adapter
         # Cleanup
@@ -373,12 +372,12 @@ class TestPostgreSQLAdapter:
 
     @pytest.fixture
     async def adapter(self):
-        from locus.memory.backends import postgresql_checkpointer
+        from tulip.memory.backends import postgresql_checkpointer
 
         adapter = postgresql_checkpointer(
             host=os.getenv("POSTGRES_HOST", "localhost"),
             port=int(os.getenv("POSTGRES_PORT", "5432")),
-            database=os.getenv("POSTGRES_DB", "locus_test"),
+            database=os.getenv("POSTGRES_DB", "tulip_test"),
             user=os.getenv("POSTGRES_USER", "postgres"),
             password=os.getenv("POSTGRES_PASSWORD", ""),
         )
@@ -407,14 +406,14 @@ class TestMySQLAdapter:
     """Test MySQL checkpointer adapter."""
 
     def _mysql_adapter(self, table_name: str):
-        from locus.memory.backends import mysql_checkpointer
+        from tulip.memory.backends import mysql_checkpointer
 
         return mysql_checkpointer(
             host=os.getenv("MYSQL_HOST", "localhost"),
             port=int(os.getenv("MYSQL_PORT", "3306")),
-            database=os.getenv("MYSQL_DB", "locus_test"),
-            user=os.getenv("MYSQL_USER", "locus"),
-            password=os.getenv("MYSQL_PASSWORD", "locus"),
+            database=os.getenv("MYSQL_DB", "tulip_test"),
+            user=os.getenv("MYSQL_USER", "tulip"),
+            password=os.getenv("MYSQL_PASSWORD", "tulip"),
             table_name=table_name,
         )
 
@@ -474,13 +473,13 @@ class TestOpenSearchAdapter:
 
     @pytest.fixture
     async def adapter(self):
-        from locus.memory.backends import opensearch_checkpointer
+        from tulip.memory.backends import opensearch_checkpointer
 
         hosts_env = os.getenv("OPENSEARCH_HOSTS") or os.getenv("OPENSEARCH_HOST", "localhost:9200")
         hosts = [h.strip() for h in hosts_env.split(",")]
         adapter = opensearch_checkpointer(
             hosts=hosts,
-            index_name="locus-test-adapter",
+            index_name="tulip-test-adapter",
             username=os.getenv("OPENSEARCH_USER"),
             password=os.getenv("OPENSEARCH_PASSWORD"),
             use_ssl=os.getenv("OPENSEARCH_USE_SSL", "false").lower() == "true",
@@ -501,155 +500,3 @@ class TestOpenSearchAdapter:
         loaded = await adapter.load("os-thread")
         assert loaded is not None
         assert loaded.agent_id == sample_state.agent_id
-
-
-# =============================================================================
-# OCI Bucket Backend Tests (requires OCI)
-# =============================================================================
-
-
-@pytest.mark.requires_oci_bucket
-class TestOCIBucketAdapter:
-    """Test OCI Bucket checkpointer adapter."""
-
-    @pytest.fixture
-    async def adapter(self, oci_bucket_config):
-        from locus.memory.backends import oci_bucket_checkpointer
-
-        adapter = oci_bucket_checkpointer(
-            bucket_name=oci_bucket_config["bucket_name"],
-            namespace=oci_bucket_config["namespace"],
-            prefix=f"{oci_bucket_config['prefix']}adapter/",
-            profile_name=oci_bucket_config["profile_name"],
-            auth_type=oci_bucket_config["auth_type"],
-            region=oci_bucket_config["region"],
-        )
-        yield adapter
-        await adapter.delete("oci-thread")
-
-    @pytest.mark.asyncio
-    async def test_oci_adapter_roundtrip(self, adapter, sample_state):
-        """OCI Bucket adapter save/load roundtrip."""
-        checkpoint_id = await adapter.save(sample_state, "oci-thread")
-        assert checkpoint_id is not None
-
-        loaded = await adapter.load("oci-thread")
-        assert loaded is not None
-        assert loaded.agent_id == sample_state.agent_id
-
-
-# =============================================================================
-# Agent + OCIBucketBackend end-to-end (requires OCI)
-# =============================================================================
-
-
-@pytest.mark.requires_oci_bucket
-class TestAgentWithOCIBucketBackend:
-    """End-to-end: ``Agent(checkpointer=OCIBucketBackend(...))``.
-
-    This is the integration that matters for downstream consumers — the
-    bucket backend is passed directly to an Agent, the Agent persists
-    state across a simulated restart, and a *second* Agent instance with
-    the same ``thread_id`` continues the conversation from the bucket.
-    No adapter. No wrapping. Just the SDK primitive.
-    """
-
-    @pytest.fixture
-    async def backend(self, oci_bucket_config):
-        from locus.memory.backends import OCIBucketBackend
-
-        backend = OCIBucketBackend(
-            bucket_name=oci_bucket_config["bucket_name"],
-            namespace=oci_bucket_config["namespace"],
-            prefix=f"{oci_bucket_config['prefix']}agent-e2e/",
-            profile_name=oci_bucket_config["profile_name"],
-            auth_type=oci_bucket_config["auth_type"],
-            region=oci_bucket_config["region"],
-        )
-        yield backend
-        threads = await backend.list_threads(limit=1000)
-        for t in threads:
-            await backend.delete(t)
-
-    @staticmethod
-    def _mock_model(reply: str):
-        """Tiny mock chat model that always returns ``reply``."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from locus.models.base import ModelResponse
-
-        model = MagicMock()
-        model.complete = AsyncMock(
-            return_value=ModelResponse(
-                message=Message(role=Role.ASSISTANT, content=reply, tool_calls=[]),
-                usage={"total_tokens": 10},
-                raw={},
-            )
-        )
-        return model
-
-    @staticmethod
-    async def _run_once(agent, prompt: str, thread_id: str) -> str:
-        """Drain the Agent's event stream and return the final assistant message."""
-        from locus.core.events import TerminateEvent
-
-        final = ""
-        async for event in agent.run(prompt, thread_id=thread_id):
-            if isinstance(event, TerminateEvent):
-                final = event.final_message or ""
-        return final
-
-    @pytest.mark.asyncio
-    async def test_agent_can_take_backend_as_checkpointer(self, backend):
-        """``Agent(checkpointer=OCIBucketBackend(...))`` runs to completion
-        and persists state — no StorageBackendAdapter involved."""
-        from locus import Agent
-
-        agent = Agent(
-            model=self._mock_model("acknowledged"),
-            system_prompt="You are a test agent.",
-            checkpointer=backend,
-            max_iterations=3,
-        )
-
-        final = await self._run_once(agent, "ping-alpha", "agent-e2e-1")
-        assert "acknowledged" in final
-
-        # State is durably in the bucket — no in-memory magic.
-        assert await backend.exists("agent-e2e-1")
-        loaded = await backend.load("agent-e2e-1")
-        assert loaded is not None
-        assert any(
-            m.role == Role.USER and "ping-alpha" in (m.content or "") for m in loaded.messages
-        )
-
-    @pytest.mark.asyncio
-    async def test_second_agent_resumes_from_bucket(self, backend):
-        """Simulates a worker restart: a fresh Agent with the same thread_id
-        picks up the saved state from Object Storage and continues."""
-        from locus import Agent
-
-        agent1 = Agent(
-            model=self._mock_model("stored-first"),
-            system_prompt="You are a test agent.",
-            checkpointer=backend,
-            max_iterations=3,
-        )
-        await self._run_once(agent1, "turn-one-marker", "agent-e2e-resume")
-
-        # Brand-new Agent instance — as if the worker process was restarted.
-        agent2 = Agent(
-            model=self._mock_model("stored-second"),
-            system_prompt="You are a test agent.",
-            checkpointer=backend,
-            max_iterations=3,
-        )
-        await self._run_once(agent2, "turn-two-marker", "agent-e2e-resume")
-
-        # The conversation loaded from the bucket must contain the earlier
-        # user turn — proving cross-instance durability.
-        loaded = await backend.load("agent-e2e-resume")
-        assert loaded is not None
-        user_turns = [m.content or "" for m in loaded.messages if m.role == Role.USER]
-        assert any("turn-one-marker" in c for c in user_turns)
-        assert any("turn-two-marker" in c for c in user_turns)

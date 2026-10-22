@@ -1,11 +1,10 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Contract tests for the Locus exception hierarchy.
+"""Contract tests for the Tulip exception hierarchy.
 
-A single ``except LocusError:`` handler must catch any exception
-raised from inside Locus. Every subclass ships a stable ``kind``
+A single ``except TulipError:`` handler must catch any exception
+raised from inside Tulip. Every subclass ships a stable ``kind``
 attribute for structured logging.
 """
 
@@ -15,12 +14,12 @@ import inspect
 
 import pytest
 
-from locus.core import errors
+from tulip.core import errors
 
 
-class TestLocusErrorHierarchy:
-    def test_locus_error_is_exception(self) -> None:
-        assert issubclass(errors.LocusError, Exception)
+class TestTulipErrorHierarchy:
+    def test_tulip_error_is_exception(self) -> None:
+        assert issubclass(errors.TulipError, Exception)
 
     @pytest.mark.parametrize(
         "cls",
@@ -43,9 +42,9 @@ class TestLocusErrorHierarchy:
             errors.ConfigError,
         ],
     )
-    def test_every_error_subclasses_locus_error(self, cls: type[Exception]) -> None:
+    def test_every_error_subclasses_tulip_error(self, cls: type[Exception]) -> None:
         """One handler catches them all."""
-        assert issubclass(cls, errors.LocusError)
+        assert issubclass(cls, errors.TulipError)
 
     def test_sub_hierarchies(self) -> None:
         """Within-subsystem catches work too."""
@@ -62,7 +61,7 @@ class TestLocusErrorHierarchy:
         leaves = [
             c
             for _, c in inspect.getmembers(errors, inspect.isclass)
-            if issubclass(c, errors.LocusError) and c is not errors.LocusError
+            if issubclass(c, errors.TulipError) and c is not errors.TulipError
         ]
         kinds = [c.kind for c in leaves]
         # All lower-case + underscores
@@ -70,7 +69,7 @@ class TestLocusErrorHierarchy:
             assert k == k.lower()
             assert " " not in k
         # Every subclass overrode the default
-        assert all(k != "locus_error" for k in kinds)
+        assert all(k != "tulip_error" for k in kinds)
         # No duplicates
         assert len(kinds) == len(set(kinds))
 
@@ -81,11 +80,11 @@ class TestLocusErrorHierarchy:
         assert str(err) == "save failed"
         assert err.__cause__ is root
 
-    def test_can_be_caught_as_locus_error(self) -> None:
+    def test_can_be_caught_as_tulip_error(self) -> None:
         """The headline ergonomic: one handler for everything."""
-        with pytest.raises(errors.LocusError):
+        with pytest.raises(errors.TulipError):
             raise errors.ToolExecutionError("boom")
-        with pytest.raises(errors.LocusError):
+        with pytest.raises(errors.TulipError):
             raise errors.ModelThrottledError("slow down")
-        with pytest.raises(errors.LocusError):
+        with pytest.raises(errors.TulipError):
             raise errors.CheckpointNotFoundError("missing thread")

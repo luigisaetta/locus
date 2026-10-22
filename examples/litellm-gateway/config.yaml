@@ -1,97 +1,65 @@
-# LiteLLM AI Gateway — sample config for fronting Oracle Generative AI.
+# LiteLLM AI Gateway — sample config for fronting OpenAI + Anthropic.
 #
 # Used by docker-compose.yml in this directory. Stand the gateway up with:
 #
 #   cd examples/litellm-gateway/
 #   docker compose up
 #
-# The gateway picks up OCI credentials from the env vars exported into the
-# container by docker-compose.yml. See docs/how-to/litellm-gateway.md.
+# The gateway picks up provider credentials from the env vars exported into
+# the container by docker-compose.yml. See docs/how-to/litellm-gateway.md.
 
 model_list:
   # ---------------------------------------------------------------------------
-  # OCI Generative AI Infrastructure — native API (/20231130/actions/chat).
-  # LiteLLM handles the OCI Signature v1 RSA-SHA256 signing internally.
+  # OpenAI + Anthropic — LiteLLM handles each provider's auth internally.
   # ---------------------------------------------------------------------------
 
-- model_name: oci-cohere-command
+- model_name: gpt-4o
   litellm_params:
-    model: oci/cohere.command-latest
-    oci_region: os.environ/OCI_REGION
-    oci_user: os.environ/OCI_USER
-    oci_fingerprint: os.environ/OCI_FINGERPRINT
-    oci_tenancy: os.environ/OCI_TENANCY
-    oci_key_file: os.environ/OCI_KEY_FILE
-    oci_compartment_id: os.environ/OCI_COMPARTMENT_ID
+    model: openai/gpt-4o
+    api_key: os.environ/OPENAI_API_KEY
 
-- model_name: oci-grok
+- model_name: gpt-4o-mini
   litellm_params:
-    model: oci/xai.grok-4.20
-    oci_region: os.environ/OCI_REGION
-    oci_user: os.environ/OCI_USER
-    oci_fingerprint: os.environ/OCI_FINGERPRINT
-    oci_tenancy: os.environ/OCI_TENANCY
-    oci_key_file: os.environ/OCI_KEY_FILE
-    oci_compartment_id: os.environ/OCI_COMPARTMENT_ID
+    model: openai/gpt-4o-mini
+    api_key: os.environ/OPENAI_API_KEY
 
-- model_name: oci-gpt5-mini
+- model_name: gpt-5-mini
   litellm_params:
-    model: oci/openai.gpt-5-mini
-    oci_region: os.environ/OCI_REGION
-    oci_user: os.environ/OCI_USER
-    oci_fingerprint: os.environ/OCI_FINGERPRINT
-    oci_tenancy: os.environ/OCI_TENANCY
-    oci_key_file: os.environ/OCI_KEY_FILE
-    oci_compartment_id: os.environ/OCI_COMPARTMENT_ID
+    model: openai/gpt-5-mini
+    api_key: os.environ/OPENAI_API_KEY
 
-- model_name: oci-llama-4-maverick
+- model_name: claude-sonnet-4-6
   litellm_params:
-    model: oci/meta.llama-4-maverick-17b-128e-instruct-fp8
-    oci_region: os.environ/OCI_REGION
-    oci_user: os.environ/OCI_USER
-    oci_fingerprint: os.environ/OCI_FINGERPRINT
-    oci_tenancy: os.environ/OCI_TENANCY
-    oci_key_file: os.environ/OCI_KEY_FILE
-    oci_compartment_id: os.environ/OCI_COMPARTMENT_ID
+    model: anthropic/claude-sonnet-4-6
+    api_key: os.environ/ANTHROPIC_API_KEY
 
-- model_name: oci-gemini-2.5-flash
+- model_name: claude-haiku
   litellm_params:
-    model: oci/google.gemini-2.5-flash
-    oci_region: os.environ/OCI_REGION
-    oci_user: os.environ/OCI_USER
-    oci_fingerprint: os.environ/OCI_FINGERPRINT
-    oci_tenancy: os.environ/OCI_TENANCY
-    oci_key_file: os.environ/OCI_KEY_FILE
-    oci_compartment_id: os.environ/OCI_COMPARTMENT_ID
+    model: anthropic/claude-3-5-haiku-20241022
+    api_key: os.environ/ANTHROPIC_API_KEY
 
-- model_name: oci-cohere-embed
+- model_name: text-embedding-3-small
   litellm_params:
-    model: oci/cohere.embed-v4.0
-    oci_region: os.environ/OCI_REGION
-    oci_user: os.environ/OCI_USER
-    oci_fingerprint: os.environ/OCI_FINGERPRINT
-    oci_tenancy: os.environ/OCI_TENANCY
-    oci_key_file: os.environ/OCI_KEY_FILE
-    oci_compartment_id: os.environ/OCI_COMPARTMENT_ID
+    model: openai/text-embedding-3-small
+    api_key: os.environ/OPENAI_API_KEY
 
 
-# Fallback chains across the OCI model catalog. If oci-gpt5-mini returns
+# Fallback chains across the model catalog. If gpt-5-mini returns
 # a 5xx / rate-limit error, the gateway transparently retries against
-# oci-grok, then oci-cohere-command. The agent never sees the upstream
+# claude-sonnet-4-6, then gpt-4o. The agent never sees the upstream
 # failure — only the eventual successful response.
 router_settings:
   fallbacks:
-  - oci-gpt5-mini:
-    - oci-grok
-    - oci-cohere-command
-  - oci-grok:
-    - oci-cohere-command
+  - gpt-5-mini:
+    - claude-sonnet-4-6
+    - gpt-4o
+  - claude-sonnet-4-6:
+    - gpt-4o
 
 
 # Gateway-wide settings. ``drop_params`` strips OpenAI kwargs the
-# upstream provider doesn't accept (e.g. ``parallel_tool_calls`` on
-# Cohere) so cross-vendor agent loops don't 400. ``set_verbose`` is
-# kept off here; flip it on for debugging.
+# upstream provider doesn't accept so cross-vendor agent loops don't
+# 400. ``set_verbose`` is kept off here; flip it on for debugging.
 litellm_settings:
   drop_params: true
   set_verbose: false
@@ -107,7 +75,7 @@ litellm_settings:
 
 # Master key for the admin API (used by /key/generate to issue
 # per-team virtual keys). Treat as a secret. In production, mount via
-# Kubernetes secrets or OCI Vault rather than baking it into the image.
+# Kubernetes secrets rather than baking it into the image.
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   # Postgres backing for virtual keys + spend logs.

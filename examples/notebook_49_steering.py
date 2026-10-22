@@ -1,105 +1,128 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
-"""Notebook 46: steering — runtime tool approval driven by a policy LLM.
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
+"""Notebook 49: steering — a policy LLM gates a live production incident.
 
 ``SteeringHook`` runs a second LLM ("the steering model") in front of
-every tool call. The steering model reads a natural-language policy
-plus the agent's activity so far, then returns one of three actions:
+every tool call, which is how you steer an on-call agent while it is
+running — keep it read-only, redirect it ("check the canary first"),
+or stop a mutating action that nobody approved. The steering model
+reads a natural-language policy plus the agent's activity so far, then
+returns one of three actions:
 
 - ``PROCEED`` — let the tool call go through.
-- ``GUIDE`` — let it through but inject a note for the agent to read.
+- ``GUIDE`` — let it through but inject a note for the agent to read
+  (e.g. "check the canary metrics before scaling").
 - ``INTERRUPT`` — block the tool call and return a refusal message.
 
 The result is a real-time guardrail you can author in plain English —
-no rules engine, no policy DSL.
+no rules engine, no policy DSL — and every decision is recorded for
+the post-incident review. Holding a diagnostics session read-only is a
+direct control against blast radius: the agent can query Prometheus and
+read logs all day, but it cannot reach a mutating operation — restarting
+a service, scaling a deployment, terminating an instance — that no one
+approved.
 
 - ``SteeringHook(model=..., policy="...")`` — attach it to any agent
   via the ``hooks=`` parameter.
 - ``steering.decisions`` — every action with its reason, for audit.
 
-OCI GenAI drives both the agent and the steering model by default.
+The configured provider drives both the agent and the steering model.
 
 Run it:
-    # OCI GenAI is the default — auto-detected from ~/.oci/config.
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_51_steering.py
+    # The bundled mock model is the default; set TULIP_MODEL_PROVIDER for a live provider.
+    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_49_steering.py
 
     # Offline:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_51_steering.py
+    TULIP_MODEL_PROVIDER=mock python examples/notebook_49_steering.py
 
 Prerequisites:
-- An OCI profile with GenAI access, or set ``LOCUS_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``TULIP_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 """
 
+import asyncio
+
 from config import get_model
 
-from locus.agent import Agent, AgentConfig
-from locus.hooks.builtin.steering import SteeringHook
-from locus.tools.decorator import tool
+from tulip.agent import Agent, AgentConfig
+from tulip.hooks.builtin.steering import SteeringHook
+from tulip.tools.decorator import tool
 
 
 # =============================================================================
-# Part 1: A read-only policy. Delete is blocked, read is allowed.
+# Part 1: A read-only diagnostics policy. Mutating ops are blocked,
+#         metric queries are allowed.
 # =============================================================================
 
 
-def example_steering():
+async def example_steering():
     print("=== Steering: LLM-Powered Tool Approval ===\n")
 
     model = get_model()
 
     @tool
-    def read_data(query: str) -> str:
-        """Read data from the database."""
-        return f"Data: {query}"
+    def query_metrics(query: str) -> str:
+        """Run a read-only PromQL query against the metrics backend."""
+        return f"Metrics results: {query}"
 
     @tool
-    def delete_data(table: str) -> str:
-        """Delete a database table."""
-        return f"Deleted {table}"
+    def restart_service(service: str) -> str:
+        """Restart a production service (mutating action)."""
+        return f"Restarted {service}"
 
     steering = SteeringHook(
         model=model,
-        policy="Only allow read operations. Never allow delete or write operations.",
+        policy=(
+            "This is a read-only diagnostics session. Only allow metric and log queries. "
+            "Never allow mutating or destructive operations such as restarting services, "
+            "scaling deployments, or terminating instances."
+        ),
     )
 
     agent = Agent(
         config=AgentConfig(
-            system_prompt="You are a database assistant.",
+            system_prompt="You are an SRE incident diagnostics assistant.",
             max_iterations=5,
             model=model,
-            tools=[read_data, delete_data],
+            tools=[query_metrics, restart_service],
             hooks=[steering],
         )
     )
 
-    # Should be INTERRUPTed — the policy forbids deletes.
-    print("Attempt: Delete the users table")
-    result = agent.run_sync("Delete the users table")
+    # Should be INTERRUPTed — the policy forbids mutating actions.
+    print("Attempt: Restart service checkout-api")
+    result = await agent.arun("Restart service checkout-api")
     print(f"Response: {result.message[:150]}")
     print(f"\nSteering decisions:")
     for d in steering.decisions:
         print(f"  {d.action}: {d.reason[:60]}")
 
-    # Should PROCEED — reads are allowed.
-    print("\nAttempt: Read all users")
+    # Should PROCEED — read-only metric queries are allowed.
+    print("\nAttempt: Query p99 latency for checkout-api")
     steering2 = SteeringHook(
         model=model,
-        policy="Only allow read operations. Never allow delete or write operations.",
+        policy=(
+            "This is a read-only diagnostics session. Only allow metric and log queries. "
+            "Never allow mutating or destructive operations such as restarting services, "
+            "scaling deployments, or terminating instances."
+        ),
     )
     agent2 = Agent(
         config=AgentConfig(
-            system_prompt="You are a database assistant.",
+            system_prompt="You are an SRE incident diagnostics assistant.",
             max_iterations=5,
             model=model,
-            tools=[read_data, delete_data],
+            tools=[query_metrics, restart_service],
             hooks=[steering2],
         )
     )
-    result2 = agent2.run_sync("Read all users from the database")
+    result2 = await agent2.arun("Query the metrics backend for p99 latency on checkout-api")
     print(f"Response: {result2.message[:150]}")
 
 
+async def main() -> None:
+    await example_steering()
+
+
 if __name__ == "__main__":
-    example_steering()
+    asyncio.run(main())

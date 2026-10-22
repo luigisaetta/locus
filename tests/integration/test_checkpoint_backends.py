@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Integration tests for checkpoint backends."""
 
@@ -11,8 +10,8 @@ import os
 
 import pytest
 
-from locus.core.messages import Message, Role
-from locus.core.state import AgentState
+from tulip.core.messages import Message, Role
+from tulip.core.state import AgentState
 
 
 pytestmark = pytest.mark.integration
@@ -53,7 +52,7 @@ class TestMemoryCheckpointer:
 
     @pytest.fixture
     def backend(self):
-        from locus.memory.backends import MemoryCheckpointer
+        from tulip.memory.backends import MemoryCheckpointer
 
         return MemoryCheckpointer()
 
@@ -114,11 +113,11 @@ class TestRedisBackend:
 
     @pytest.fixture
     async def backend(self):
-        from locus.memory.backends import RedisBackend
+        from tulip.memory.backends import RedisBackend
 
         backend = RedisBackend(
             url=os.getenv("REDIS_URL", "redis://localhost:6379"),
-            prefix="locus:test:",
+            prefix="tulip:test:",
         )
         yield backend
         # Cleanup
@@ -177,12 +176,12 @@ class TestPostgreSQLBackend:
 
     @pytest.fixture
     async def backend(self):
-        from locus.memory.backends import PostgreSQLBackend
+        from tulip.memory.backends import PostgreSQLBackend
 
         backend = PostgreSQLBackend(
             host=os.getenv("POSTGRES_HOST", "localhost"),
             port=int(os.getenv("POSTGRES_PORT", "5432")),
-            database=os.getenv("POSTGRES_DB", "locus_test"),
+            database=os.getenv("POSTGRES_DB", "tulip_test"),
             user=os.getenv("POSTGRES_USER", "postgres"),
             password=os.getenv("POSTGRES_PASSWORD", ""),
             table_name="test_checkpoints",
@@ -259,14 +258,14 @@ class TestMySQLBackend:
 
     @pytest.fixture
     async def backend(self):
-        from locus.memory.backends import MySQLBackend
+        from tulip.memory.backends import MySQLBackend
 
         backend = MySQLBackend(
             host=os.getenv("MYSQL_HOST", "localhost"),
             port=int(os.getenv("MYSQL_PORT", "3306")),
-            database=os.getenv("MYSQL_DB", "locus_test"),
-            user=os.getenv("MYSQL_USER", "locus"),
-            password=os.getenv("MYSQL_PASSWORD", "locus"),
+            database=os.getenv("MYSQL_DB", "tulip_test"),
+            user=os.getenv("MYSQL_USER", "tulip"),
+            password=os.getenv("MYSQL_PASSWORD", "tulip"),
             table_name="test_checkpoints",
             min_pool_size=0,
             max_pool_size=5,
@@ -389,14 +388,14 @@ class TestMySQLBackend:
         """
         import uuid
 
-        from locus.memory.backends import mysql_checkpointer
+        from tulip.memory.backends import mysql_checkpointer
 
         ck = mysql_checkpointer(
             host=os.getenv("MYSQL_HOST", "localhost"),
             port=int(os.getenv("MYSQL_PORT", "3306")),
-            database=os.getenv("MYSQL_DB", "locus_test"),
-            user=os.getenv("MYSQL_USER", "locus"),
-            password=os.getenv("MYSQL_PASSWORD", "locus"),
+            database=os.getenv("MYSQL_DB", "tulip_test"),
+            user=os.getenv("MYSQL_USER", "tulip"),
+            password=os.getenv("MYSQL_PASSWORD", "tulip"),
             table_name="test_cold_" + uuid.uuid4().hex[:8],
         )
         state = AgentState(agent_id="x", max_iterations=1).with_message(
@@ -424,13 +423,13 @@ class TestOpenSearchBackend:
 
     @pytest.fixture
     async def backend(self):
-        from locus.memory.backends import OpenSearchBackend
+        from tulip.memory.backends import OpenSearchBackend
 
         hosts_env = os.getenv("OPENSEARCH_HOSTS") or os.getenv("OPENSEARCH_HOST", "localhost:9200")
         hosts = [h.strip() for h in hosts_env.split(",")]
         backend = OpenSearchBackend(
             hosts=hosts,
-            index_name="locus-test-checkpoints",
+            index_name="tulip-test-checkpoints",
             username=os.getenv("OPENSEARCH_USER"),
             password=os.getenv("OPENSEARCH_PASSWORD"),
             use_ssl=os.getenv("OPENSEARCH_USE_SSL", "false").lower() == "true",
@@ -484,148 +483,6 @@ class TestOpenSearchBackend:
 
 
 # =============================================================================
-# OCIBucketBackend Tests (requires OCI)
-# =============================================================================
-
-
-@pytest.mark.requires_oci_bucket
-class TestOCIBucketBackend:
-    """Test OCI Object Storage checkpointer (native BaseCheckpointer)."""
-
-    @pytest.fixture
-    async def backend(self, oci_bucket_config):
-        from locus.memory.backends import OCIBucketBackend
-
-        backend = OCIBucketBackend(
-            bucket_name=oci_bucket_config["bucket_name"],
-            namespace=oci_bucket_config["namespace"],
-            prefix=f"{oci_bucket_config['prefix']}checkpoints/",
-            profile_name=oci_bucket_config["profile_name"],
-            auth_type=oci_bucket_config["auth_type"],
-            region=oci_bucket_config["region"],
-        )
-        yield backend
-        # Cleanup every thread the test produced.
-        threads = await backend.list_threads(limit=1000)
-        for t in threads:
-            await backend.delete(t)
-
-    @pytest.mark.asyncio
-    async def test_save_and_load(self, backend, sample_state):
-        """Round-trip an AgentState through the native interface."""
-        checkpoint_id = await backend.save(sample_state, "thread-1")
-        assert checkpoint_id
-
-        loaded = await backend.load("thread-1")
-        assert loaded is not None
-        assert loaded.agent_id == sample_state.agent_id
-        assert len(loaded.messages) == len(sample_state.messages)
-
-    @pytest.mark.asyncio
-    async def test_exists(self, backend, sample_state):
-        """``exists`` follows the ``_latest`` pointer."""
-        assert not await backend.exists("thread-nonexistent")
-
-        await backend.save(sample_state, "thread-1")
-        assert await backend.exists("thread-1")
-
-    @pytest.mark.asyncio
-    async def test_list_checkpoints_newest_first(self, backend, sample_state):
-        """Multiple checkpoints per thread are listed newest-first."""
-        cp1 = await backend.save(sample_state, "thread-1")
-        await asyncio.sleep(1.1)  # Object Storage timestamps are second-granularity.
-        cp2 = await backend.save(sample_state, "thread-1")
-
-        checkpoints = await backend.list_checkpoints("thread-1")
-        assert checkpoints[:2] == [cp2, cp1]
-
-    @pytest.mark.asyncio
-    async def test_load_specific_checkpoint(self, backend, sample_state):
-        """Loading by checkpoint_id returns that exact checkpoint."""
-        cp1 = await backend.save(sample_state, "thread-1")
-        other_state = sample_state.with_message(Message(role=Role.USER, content="second turn"))
-        await backend.save(other_state, "thread-1")
-
-        loaded_first = await backend.load("thread-1", cp1)
-        assert loaded_first is not None
-        assert len(loaded_first.messages) == len(sample_state.messages)
-
-    @pytest.mark.asyncio
-    async def test_list_threads(self, backend, sample_state):
-        """List thread IDs via prefix-delimiter listing."""
-        await backend.save(sample_state, "oci-thread-a")
-        await backend.save(sample_state, "oci-thread-b")
-
-        threads = await backend.list_threads()
-        assert "oci-thread-a" in threads
-        assert "oci-thread-b" in threads
-
-    @pytest.mark.asyncio
-    async def test_metadata(self, backend, sample_state):
-        """Metadata persists alongside the checkpoint."""
-        await backend.save(sample_state, "thread-1", metadata={"user": "test-user"})
-
-        meta = await backend.get_metadata("thread-1")
-        assert meta is not None
-        assert meta["metadata"]["user"] == "test-user"
-
-    @pytest.mark.asyncio
-    async def test_list_with_metadata(self, backend, sample_state):
-        """``list_with_metadata`` returns per-thread latest metadata."""
-        await backend.save(sample_state, "thread-1", metadata={"priority": "high"})
-        await backend.save(sample_state, "thread-2", metadata={"priority": "low"})
-
-        results = await backend.list_with_metadata()
-        by_thread = {r["thread_id"]: r["metadata"].get("priority") for r in results}
-        assert by_thread.get("thread-1") == "high"
-        assert by_thread.get("thread-2") == "low"
-
-    @pytest.mark.asyncio
-    async def test_delete_single_checkpoint(self, backend, sample_state):
-        """Deleting a specific checkpoint leaves siblings intact."""
-        cp1 = await backend.save(sample_state, "thread-1")
-        cp2 = await backend.save(sample_state, "thread-1")
-
-        await backend.delete("thread-1", cp1)
-        remaining = await backend.list_checkpoints("thread-1")
-        assert cp1 not in remaining
-        assert cp2 in remaining
-
-    @pytest.mark.asyncio
-    async def test_delete_entire_thread(self, backend, sample_state):
-        """Deleting without a checkpoint_id wipes the whole thread."""
-        await backend.save(sample_state, "thread-1")
-        await backend.save(sample_state, "thread-1")
-
-        assert await backend.delete("thread-1")
-        assert not await backend.exists("thread-1")
-        assert await backend.list_checkpoints("thread-1") == []
-
-    @pytest.mark.asyncio
-    async def test_copy_thread_branching(self, backend, sample_state):
-        """Branching: source checkpoints are copied to dest."""
-        await backend.save(sample_state, "source-thread")
-        await backend.save(sample_state, "source-thread")
-
-        assert await backend.copy_thread("source-thread", "dest-thread")
-        source_ids = set(await backend.list_checkpoints("source-thread"))
-        dest_ids = set(await backend.list_checkpoints("dest-thread"))
-        assert source_ids == dest_ids
-        assert await backend.exists("dest-thread")
-
-    @pytest.mark.asyncio
-    async def test_capabilities_advertised(self, backend):
-        """The backend advertises the capabilities it implements."""
-        caps = backend.capabilities
-        assert caps.list_threads
-        assert caps.list_with_metadata
-        assert caps.metadata_query
-        assert caps.branching
-        assert caps.vacuum
-        assert caps.persistent_checkpoint_ids
-
-
-# =============================================================================
 # Cross-Backend Compatibility Tests
 # =============================================================================
 
@@ -636,7 +493,7 @@ class TestBackendCompatibility:
     @pytest.mark.asyncio
     async def test_state_roundtrip_memory(self, sample_state):
         """State survives memory backend roundtrip."""
-        from locus.memory.backends import MemoryCheckpointer
+        from tulip.memory.backends import MemoryCheckpointer
 
         backend = MemoryCheckpointer()
         await backend.save(sample_state, "thread-1")

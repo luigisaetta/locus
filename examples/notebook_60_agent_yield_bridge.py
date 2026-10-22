@@ -1,30 +1,31 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Notebook 55: Agent yield bridge and token usage.
+"""Notebook 60: Privacy-review telemetry — the agent yield bridge.
 
-Every Agent.run is decorated with @_bus_bridge so the nine typed events
-it yields (ThinkEvent, ToolStartEvent, ToolCompleteEvent, ReflectEvent,
-GroundingEvent, ModelChunkEvent, ModelCompleteEvent, InterruptEvent,
-TerminateEvent) get republished on the bus as agent.* events when a
-run_context is open. ModelCompleteEvent additionally fires
+A data-privacy agent's tool calls are the part DPOs and auditors care
+about most. Every Agent.run is decorated with @_bus_bridge so the nine
+typed events it yields (ThinkEvent, ToolStartEvent, ToolCompleteEvent,
+ReflectEvent, GroundingEvent, ModelChunkEvent, ModelCompleteEvent,
+InterruptEvent, TerminateEvent) get republished on the bus as agent.*
+events when a run_context is open — every dataset the reviewer inspects
+is visible in the run stream. ModelCompleteEvent additionally fires
 agent.tokens.used so cost dashboards subscribe without parsing the
 completion payload.
 
-- How nine yielded LocusEvent types map to agent.* bus events.
+- How nine yielded TulipEvent types map to agent.* bus events.
 - Tool-call telemetry with span_id pairing (agent.tool.started and
-  agent.tool.completed share an id).
+  agent.tool.completed share an id) — start/finish of each review step.
 - Token usage from result.metrics — the canonical source for cost
-  meters and budget enforcers.
+  meters and budget enforcers on always-on privacy-review automation.
 
 Run it
-    # Default: OCI Generative AI auto-detected from ~/.oci/config
+    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
     python examples/notebook_60_agent_yield_bridge.py
 
     # Offline / no credentials:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_60_agent_yield_bridge.py
+    TULIP_MODEL_PROVIDER=mock python examples/notebook_60_agent_yield_bridge.py
 """
 
 from __future__ import annotations
@@ -33,25 +34,27 @@ import asyncio
 
 from config import get_model
 
-from locus.agent import Agent
-from locus.observability import get_event_bus, run_context
-from locus.tools import tool
+from tulip.agent import Agent
+from tulip.observability import get_event_bus, run_context
+from tulip.tools import tool
 
 
 @tool
-def add_numbers(a: int, b: int) -> int:
-    """Return the sum of two integers."""
-    return a + b
+def classify_field_sensitivity(field: str) -> str:
+    """Return a canned sensitivity tier for a data field (offline mock data)."""
+    restricted = {"national_id", "ssn", "email", "phone", "dob"}
+    return "restricted" if field in restricted else "public"
 
 
 @tool
-def multiply_numbers(a: int, b: int) -> int:
-    """Return the product of two integers."""
-    return a * b
+def count_pii_records(dataset: str) -> int:
+    """Return a canned count of records containing PII in a dataset (offline mock data)."""
+    return 1287 if dataset == "customers" else 12
 
 
-# Part 1: full agent.* lifecycle on one tool-using run. Print every
-# event with its span_id so you can see start/complete pairing.
+# Part 1: full agent.* lifecycle on one privacy-review run. Print every
+# event with its span_id so you can see start/complete pairing — each
+# tool span is one auditable review step.
 
 
 async def part1_full_lifecycle() -> None:
@@ -59,10 +62,11 @@ async def part1_full_lifecycle() -> None:
 
     agent = Agent(
         model=get_model(),
-        tools=[add_numbers, multiply_numbers],
+        tools=[classify_field_sensitivity, count_pii_records],
         max_iterations=4,
         system_prompt=(
-            "You answer with one tool call at a time. After all tool calls, give the final answer."
+            "You are a data-privacy review agent. Make one tool call at a time. After "
+            "all tool calls, report your findings."
         ),
     )
 
@@ -82,8 +86,11 @@ async def part1_full_lifecycle() -> None:
         await asyncio.sleep(0)
 
         result = None
-        async for event in agent.run("Compute (3 + 4) and then (5 * 7), and tell me both."):
-            from locus.core.events import TerminateEvent
+        async for event in agent.run(
+            "Classify the sensitivity of the 'national_id' field, count PII records in "
+            "the 'customers' dataset, and report both."
+        ):
+            from tulip.core.events import TerminateEvent
 
             if isinstance(event, TerminateEvent):
                 result = event
@@ -94,7 +101,8 @@ async def part1_full_lifecycle() -> None:
 
 # Part 2: token usage as a cost meter. result.metrics is authoritative;
 # agent.tokens.used SSE events are for streaming consumers that want
-# per-call deltas instead of the final total.
+# per-call deltas instead of the final total. Always-on privacy-review
+# automation needs both: budget enforcement and live burn-rate dashboards.
 
 
 async def part2_token_meter() -> None:
@@ -102,15 +110,15 @@ async def part2_token_meter() -> None:
 
     running_prompt = running_completion = running_total = 0
 
-    # Multi-run session: accumulate token totals across calls.
+    # Multi-run shift: accumulate token totals across review calls.
     prompts = [
-        "In one sentence: what is JSON?",
-        "In one sentence: what is a REST API?",
+        "In one sentence: what is personally identifiable information?",
+        "In one sentence: what is data minimization?",
     ]
 
     for prompt in prompts:
         agent = Agent(model=get_model(), max_iterations=2)
-        result = agent.run_sync(prompt)
+        result = await agent.arun(prompt)
         m = result.metrics
         running_prompt += m.prompt_tokens
         running_completion += m.completion_tokens
@@ -122,7 +130,7 @@ async def part2_token_meter() -> None:
         )
 
     print(
-        f"  ─── session total: prompt={running_prompt}  "
+        f"  ─── shift total: prompt={running_prompt}  "
         f"completion={running_completion}  total={running_total}"
     )
 

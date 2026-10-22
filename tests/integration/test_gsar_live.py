@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Live integration tests for the GSAR layer.
 
@@ -22,6 +21,8 @@ Skipped automatically when the key isn't set.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from tests.integration.conftest import skip_without_openai
@@ -30,13 +31,15 @@ from tests.integration.conftest import skip_without_openai
 @skip_without_openai
 @pytest.mark.asyncio
 async def test_gsar_grounded_report_proceeds() -> None:
-    from locus.models.native.openai import OpenAIModel
-    from locus.reasoning.gsar import Decision
-    from locus.reasoning.gsar_evaluator import GSAREvaluator
-    from locus.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
+    from tulip.models.native.openai import OpenAIModel
+    from tulip.reasoning.gsar import Decision
+    from tulip.reasoning.gsar_evaluator import GSAREvaluator
+    from tulip.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
 
     judge = StructuredOutputGSARJudge(
-        model=OpenAIModel(model="gpt-4o-mini", max_tokens=2048),
+        model=OpenAIModel(
+            model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=2048
+        ),
     )
 
     report = (
@@ -79,13 +82,15 @@ async def test_gsar_grounded_report_proceeds() -> None:
 @skip_without_openai
 @pytest.mark.asyncio
 async def test_gsar_ungrounded_report_does_not_proceed_first_iteration() -> None:
-    from locus.models.native.openai import OpenAIModel
-    from locus.reasoning.gsar import Decision
-    from locus.reasoning.gsar_evaluator import GSAREvaluator
-    from locus.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
+    from tulip.models.native.openai import OpenAIModel
+    from tulip.reasoning.gsar import Decision
+    from tulip.reasoning.gsar_evaluator import GSAREvaluator
+    from tulip.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
 
     judge = StructuredOutputGSARJudge(
-        model=OpenAIModel(model="gpt-4o-mini", max_tokens=2048),
+        model=OpenAIModel(
+            model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=2048
+        ),
     )
 
     # Report makes specific factual claims that the evidence does not
@@ -142,12 +147,14 @@ async def test_gsar_judge_emits_partition_with_evidence_types() -> None:
     judge has to map natural-language claims onto the eight-element
     evidence taxonomy, not just emit a binary verdict.
     """
-    from locus.models.native.openai import OpenAIModel
-    from locus.reasoning.gsar import EvidenceType
-    from locus.reasoning.gsar_judge import StructuredOutputGSARJudge
+    from tulip.models.native.openai import OpenAIModel
+    from tulip.reasoning.gsar import EvidenceType
+    from tulip.reasoning.gsar_judge import StructuredOutputGSARJudge
 
     judge = StructuredOutputGSARJudge(
-        model=OpenAIModel(model="gpt-4o-mini", max_tokens=2048),
+        model=OpenAIModel(
+            model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=2048
+        ),
     )
 
     out = await judge.judge(
@@ -201,13 +208,15 @@ async def test_gsar_recovery_then_proceed_live_cycle() -> None:
     *recovers* and *converges*. Discrete-tier dispatch is covered
     in the unit tests against a scripted judge.
     """
-    from locus.models.native.openai import OpenAIModel
-    from locus.reasoning.gsar import Decision, GSARThresholds
-    from locus.reasoning.gsar_evaluator import GSAREvaluator
-    from locus.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
+    from tulip.models.native.openai import OpenAIModel
+    from tulip.reasoning.gsar import Decision, GSARThresholds
+    from tulip.reasoning.gsar_evaluator import GSAREvaluator
+    from tulip.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
 
     judge = StructuredOutputGSARJudge(
-        model=OpenAIModel(model="gpt-4o-mini", max_tokens=2048),
+        model=OpenAIModel(
+            model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=2048
+        ),
     )
 
     # Mix grounded + a directly-contradicted claim. The contradicted
@@ -296,13 +305,15 @@ async def test_gsar_replan_then_proceed_live_cycle() -> None:
     re-dispatches specialists. We simulate the dispatch by appending
     new tool outputs to the evidence corpus.
     """
-    from locus.models.native.openai import OpenAIModel
-    from locus.reasoning.gsar import Decision
-    from locus.reasoning.gsar_evaluator import GSAREvaluator
-    from locus.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
+    from tulip.models.native.openai import OpenAIModel
+    from tulip.reasoning.gsar import Decision
+    from tulip.reasoning.gsar_evaluator import GSAREvaluator
+    from tulip.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
 
     judge = StructuredOutputGSARJudge(
-        model=OpenAIModel(model="gpt-4o-mini", max_tokens=2048),
+        model=OpenAIModel(
+            model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=2048
+        ),
     )
 
     # Specific factual claims with literally no evidence corpus on the
@@ -373,12 +384,14 @@ async def test_gsar_budget_exhaustion_sets_degraded_live() -> None:
     bad evidence in place; the loop should exhaust ``K_max`` and
     return with the flag set.
     """
-    from locus.models.native.openai import OpenAIModel
-    from locus.reasoning.gsar_evaluator import GSAREvaluator
-    from locus.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
+    from tulip.models.native.openai import OpenAIModel
+    from tulip.reasoning.gsar_evaluator import GSAREvaluator
+    from tulip.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
 
     judge = StructuredOutputGSARJudge(
-        model=OpenAIModel(model="gpt-4o-mini", max_tokens=2048),
+        model=OpenAIModel(
+            model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=2048
+        ),
     )
 
     # Specific factual claims, no supporting evidence at all. Judge
@@ -427,12 +440,14 @@ async def test_gsar_rho_zero_inflation_visible_live() -> None:
     property is what prevents adversarial summarisers from boosting
     their score by silently dropping refuted claims.
     """
-    from locus.models.native.openai import OpenAIModel
-    from locus.reasoning.gsar import gsar_score
-    from locus.reasoning.gsar_judge import StructuredOutputGSARJudge
+    from tulip.models.native.openai import OpenAIModel
+    from tulip.reasoning.gsar import gsar_score
+    from tulip.reasoning.gsar_judge import StructuredOutputGSARJudge
 
     judge = StructuredOutputGSARJudge(
-        model=OpenAIModel(model="gpt-4o-mini", max_tokens=2048),
+        model=OpenAIModel(
+            model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=2048
+        ),
     )
 
     # Mixed report: most claims grounded, but one factually wrong claim
@@ -505,15 +520,19 @@ async def test_gsar_cross_judge_score_directional_agreement() -> None:
     don't pin the exact decision tier — judges legitimately disagree
     on tier under variance — but the score-ordering must be stable.
     """
-    from locus.models.native.openai import OpenAIModel
-    from locus.reasoning.gsar import gsar_score
-    from locus.reasoning.gsar_judge import StructuredOutputGSARJudge
+    from tulip.models.native.openai import OpenAIModel
+    from tulip.reasoning.gsar import gsar_score
+    from tulip.reasoning.gsar_judge import StructuredOutputGSARJudge
 
     j_mini = StructuredOutputGSARJudge(
-        model=OpenAIModel(model="gpt-4o-mini", max_tokens=2048),
+        model=OpenAIModel(
+            model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=2048
+        ),
     )
     j_full = StructuredOutputGSARJudge(
-        model=OpenAIModel(model="gpt-4o", max_tokens=2048),
+        model=OpenAIModel(
+            model=os.environ.get("TULIP_OPENAI_TEST_MODEL_STRONG", "gpt-4o"), max_tokens=2048
+        ),
     )
 
     grounded = {

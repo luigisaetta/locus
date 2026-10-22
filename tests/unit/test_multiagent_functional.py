@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for ``locus.multiagent.functional`` (``@task`` + ``@entrypoint``).
+"""Unit tests for ``tulip.multiagent.functional`` (``@task`` + ``@entrypoint``).
 
 The functional API is a decorator-based alternative to the
 ``StateGraph`` builder. Coverage was 0% — these tests exercise both
@@ -16,7 +15,7 @@ import asyncio
 
 import pytest
 
-from locus.multiagent.functional import (
+from tulip.multiagent.functional import (
     EntrypointResult,
     TaskResult,
     entrypoint,

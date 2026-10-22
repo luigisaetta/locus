@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the SSRF pre-flight guard in ``locus.tools.url_safety``."""
+"""Tests for the SSRF pre-flight guard in ``tulip.tools.url_safety``."""
 
 from __future__ import annotations
 
@@ -11,9 +10,9 @@ from typing import Any
 
 import pytest
 
-from locus.core.errors import ValidationError
-from locus.tools import url_safety
-from locus.tools.url_safety import is_safe_url, validate_url
+from tulip.core.errors import ValidationError
+from tulip.tools import url_safety
+from tulip.tools.url_safety import is_safe_url, validate_url
 
 
 def _mock_resolution(ip: str) -> Any:
@@ -71,17 +70,17 @@ class TestPublicAddresses:
 )
 class TestPrivateAddressesBlocked:
     def test_default_blocks(self, ip: str, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("LOCUS_ALLOW_PRIVATE_URLS", raising=False)
+        monkeypatch.delenv("TULIP_ALLOW_PRIVATE_URLS", raising=False)
         monkeypatch.setattr(socket, "getaddrinfo", _mock_resolution(ip))
         assert is_safe_url("https://internal.example/") is False
 
     def test_opt_in_allows(self, ip: str, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("LOCUS_ALLOW_PRIVATE_URLS", raising=False)
+        monkeypatch.delenv("TULIP_ALLOW_PRIVATE_URLS", raising=False)
         monkeypatch.setattr(socket, "getaddrinfo", _mock_resolution(ip))
         assert is_safe_url("https://internal.example/", allow_private=True) is True
 
     def test_env_var_allows(self, ip: str, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("LOCUS_ALLOW_PRIVATE_URLS", "true")
+        monkeypatch.setenv("TULIP_ALLOW_PRIVATE_URLS", "true")
         monkeypatch.setattr(socket, "getaddrinfo", _mock_resolution(ip))
         assert is_safe_url("https://internal.example/") is True
 
@@ -94,7 +93,7 @@ class TestPrivateAddressesBlocked:
 @pytest.mark.parametrize(
     "ip",
     [
-        "169.254.169.254",  # AWS / GCP / Azure / OCI / DO IMDS
+        "169.254.169.254",  # AWS / GCP / Azure / DO IMDS
         "169.254.170.2",  # AWS ECS task role metadata
         "169.254.169.253",  # Azure IMDS wire server
         "169.254.99.99",  # arbitrary link-local — whole /16 blocked
@@ -112,7 +111,7 @@ class TestMetadataAlwaysBlocked:
         assert is_safe_url("https://imds.example/", allow_private=True) is False
 
     def test_env_var_still_blocks(self, ip: str, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("LOCUS_ALLOW_PRIVATE_URLS", "true")
+        monkeypatch.setenv("TULIP_ALLOW_PRIVATE_URLS", "true")
         monkeypatch.setattr(socket, "getaddrinfo", _mock_resolution(ip))
         assert is_safe_url("https://imds.example/") is False
 
@@ -166,18 +165,18 @@ class TestDegenerateInput:
 class TestEnvVarParsing:
     @pytest.mark.parametrize("val", ["true", "TRUE", "True", "1", "yes", "YES"])
     def test_truthy_values(self, val: str, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("LOCUS_ALLOW_PRIVATE_URLS", val)
+        monkeypatch.setenv("TULIP_ALLOW_PRIVATE_URLS", val)
         monkeypatch.setattr(socket, "getaddrinfo", _mock_resolution("127.0.0.1"))
         assert is_safe_url("https://h/") is True
 
     @pytest.mark.parametrize("val", ["false", "0", "no", "", "maybe", " "])
     def test_falsy_values(self, val: str, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("LOCUS_ALLOW_PRIVATE_URLS", val)
+        monkeypatch.setenv("TULIP_ALLOW_PRIVATE_URLS", val)
         monkeypatch.setattr(socket, "getaddrinfo", _mock_resolution("127.0.0.1"))
         assert is_safe_url("https://h/") is False
 
     def test_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("LOCUS_ALLOW_PRIVATE_URLS", raising=False)
+        monkeypatch.delenv("TULIP_ALLOW_PRIVATE_URLS", raising=False)
         monkeypatch.setattr(socket, "getaddrinfo", _mock_resolution("127.0.0.1"))
         assert is_safe_url("https://h/") is False
 

@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Coverage tests for the image- and speech-generation providers.
 
@@ -15,12 +14,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from locus.providers.image import (
+from tulip.providers.image import (
     BaseImageGenerationProvider,
     ImageResult,
     OpenAIImageProvider,
 )
-from locus.providers.speech import (
+from tulip.providers.speech import (
     BaseSpeechProvider,
     OpenAISpeechProvider,
     SpeechTranscript,

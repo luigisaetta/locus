@@ -71,7 +71,7 @@ cover/
 .env
 .env.*
 !.env.example
-.venv
+.venv*
 env/
 venv/
 ENV/
@@ -236,8 +236,8 @@ docs/_build/
 config.local.yaml
 config.local.yml
 
-# Oracle wallet files
-**/oracle_wallet/
+# DB wallet / credential files
+**/db_wallet/
 *.wallet
 cwallet.sso
 ewallet.p12
@@ -266,3 +266,32 @@ examples/notebook_49_response.mp3
 examples/notebook_50_question.wav
 examples/notebook_50_answer.wav
 examples/notebook_50_answer.mp3
+examples/notebook_67_answer.wav
+
+# Generated audio demo artifacts (notebooks 66/67 recreate them on live runs)
+examples/*.mp3
+examples/*.wav
+
+# Internal-only notes (mythos, roadmaps, competitive comparison, and the
+# side-channel method shape). MUST NOT ship in the public repo — kept on
+# disk for local use only. NOTE: these remain in git HISTORY; a filter-repo
+# scrub of docs/internal/** is REQUIRED before this repo goes public.
+docs/internal/
+
+# Internal market/positioning briefs + proposal examples — local-only, must
+# not ship public. NOTE: the brief remains in git HISTORY until a filter-repo
+# scrub of docs/market/** is run.
+docs/market/
+
+# Local credentials — never commit (kept outside the repo)
+secrets.env
+
+# Research eval outputs — regenerate with examples/research/*, don't commit
+heldout_results.json
+family_eval_results.json
+baseline_*.json
+frontier_*.json
+sample600.json
+
+# Output of packages/tulip-agents-security/examples/grounding_ablation.py
+ablation_report.json

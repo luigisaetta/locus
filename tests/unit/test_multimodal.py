@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for multimodal content processing."""
 
@@ -11,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from locus.rag.multimodal import (
+from tulip.rag.multimodal import (
     AudioProcessor,
     ContentType,
     ImageProcessor,
@@ -256,6 +255,43 @@ class TestImageProcessor:
             assert "Image Description" in result.text
             assert "A beautiful sunset" in result.text
             assert result.metadata["description"] == "A beautiful sunset"
+
+    @pytest.mark.asyncio
+    async def test_vision_description_sync_callback(self):
+        """A sync vision_model callback returns a description."""
+        processor = ImageProcessor(
+            use_ocr=False,
+            use_vision_llm=True,
+            vision_model=lambda img: f"image of {len(img)} bytes",
+        )
+        desc = await processor._get_vision_description(b"\x00" * 10)
+        assert desc == "image of 10 bytes"
+
+    @pytest.mark.asyncio
+    async def test_vision_description_async_callback(self):
+        """An async vision_model callback is awaited."""
+
+        async def describe(img: bytes) -> str:
+            return "async description"
+
+        processor = ImageProcessor(use_ocr=False, use_vision_llm=True, vision_model=describe)
+        assert await processor._get_vision_description(b"\x00" * 4) == "async description"
+
+    @pytest.mark.asyncio
+    async def test_vision_description_failure_degrades_to_none(self):
+        """A failing callback returns None rather than raising."""
+
+        def boom(img: bytes) -> str:
+            raise RuntimeError("vision backend down")
+
+        processor = ImageProcessor(use_ocr=False, use_vision_llm=True, vision_model=boom)
+        assert await processor._get_vision_description(b"\x00") is None
+
+    @pytest.mark.asyncio
+    async def test_vision_description_no_model_returns_none(self):
+        """No vision_model configured -> None."""
+        processor = ImageProcessor(use_ocr=False, use_vision_llm=True, vision_model=None)
+        assert await processor._get_vision_description(b"\x00") is None
 
     @pytest.mark.asyncio
     async def test_extract_text_ocr_import_error(self, processor):

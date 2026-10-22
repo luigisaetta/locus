@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for ``locus.observability.context`` + ``emit`` helpers.
+"""Unit tests for ``tulip.observability.context`` + ``emit`` helpers.
 
 The contract these tests lock in is the **opt-in invariant**: an SDK
 user who never enters a ``run_context`` must pay zero cost. Every
@@ -27,7 +26,7 @@ import sys
 
 import pytest
 
-from locus.observability import (
+from tulip.observability import (
     current_run_id,
     emit,
     emit_sync,
@@ -100,7 +99,7 @@ class TestConcurrentDispatches:
         different ``current_run_id`` values, even when ``asyncio.gather``
         interleaves them.
 
-        This is the property that lets the workbench dispatch many runs
+        This is the property that lets a host dispatch many runs
         on one event loop without cross-talk.
         """
         seen: dict[str, list[str | None]] = {"a": [], "b": []}
@@ -150,7 +149,7 @@ class TestEmitNoOp:
         reset_event_bus()
 
         # Sanity check: import didn't already construct the bus.
-        from locus.observability import event_bus as bus_mod  # noqa: PLC0415
+        from tulip.observability import event_bus as bus_mod  # noqa: PLC0415
 
         bus_mod._event_bus = None  # type: ignore[attr-defined]
 
@@ -191,10 +190,10 @@ class TestEmitSync:
     async def test_emit_sync_pins_task_on_background_set(self):
         """``emit_sync`` must keep a strong ref to the task it spawns,
         otherwise the GC can reap it before the publish lands."""
-        # ``locus.observability.emit`` resolves to the *function* via
+        # ``tulip.observability.emit`` resolves to the *function* via
         # the package's re-export, not the module — fetch the module
         # directly out of ``sys.modules``.
-        emit_mod = sys.modules["locus.observability.emit"]
+        emit_mod = sys.modules["tulip.observability.emit"]
 
         emit_mod._BACKGROUND_TASKS.clear()
         async with run_context("run-Y"):
@@ -220,7 +219,7 @@ class TestEmitSync:
         # branch is reachable and doesn't blow up.
         import asyncio as _aio  # noqa: PLC0415
 
-        emit_mod = sys.modules["locus.observability.emit"]
+        emit_mod = sys.modules["tulip.observability.emit"]
 
         # Patch get_running_loop to raise — simulates sync code path.
         original = _aio.get_running_loop
@@ -260,8 +259,8 @@ class TestSDKWithoutSSE:
                 _sys.executable,
                 "-c",
                 (
-                    "import locus.observability;"
-                    "from locus.observability import event_bus as m;"
+                    "import tulip.observability;"
+                    "from tulip.observability import event_bus as m;"
                     "import sys; "
                     "sys.exit(0 if m._event_bus is None else 1)"
                 ),
@@ -270,7 +269,7 @@ class TestSDKWithoutSSE:
             capture_output=True,
         )
         assert proc.returncode == 0, (
-            "Re-importing locus.observability must not eagerly create the bus; "
+            "Re-importing tulip.observability must not eagerly create the bus; "
             f"stdout={proc.stdout!r} stderr={proc.stderr!r}"
         )
 
@@ -278,7 +277,7 @@ class TestSDKWithoutSSE:
         """End-to-end no-op: every public emit verb the SDK uses returns
         immediately and produces no observable side effects when no
         ``run_context`` is active."""
-        from locus.observability.emit import (  # noqa: PLC0415
+        from tulip.observability.emit import (  # noqa: PLC0415
             EV_CHECKPOINT_LOADED,
             EV_CHECKPOINT_SAVED,
             EV_HANDOFF_INITIATED,
@@ -300,7 +299,7 @@ class TestSDKWithoutSSE:
         emit_sync(EV_SKILL_ACTIVATED, skill_name="research")
 
         # Bus should remain unborn.
-        from locus.observability import event_bus as bus_mod  # noqa: PLC0415
+        from tulip.observability import event_bus as bus_mod  # noqa: PLC0415
 
         assert bus_mod._event_bus is None, (  # type: ignore[attr-defined]
             "All-emits-without-context invariant violated"

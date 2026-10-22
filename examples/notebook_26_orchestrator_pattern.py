@@ -1,17 +1,25 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 """
-Notebook 27: orchestrator — one supervisor, many specialists, parallel fan-out.
+Notebook 26: STEWARD — one privacy officer, many data-privacy specialists.
 
-An orchestrator routes a task to a chosen set of specialist agents, runs
-them in parallel under a semaphore, then correlates their outputs into a
-single summary. Compared with a swarm (Notebook 25), the decision of who
-does what is centralised here instead of emerging from capability tags.
+STEWARD is the privacy team's named data-protection-officer agent. An
+orchestrator routes a privacy request (a data-subject access/erasure
+request) to a chosen set of specialist agents, runs them in parallel
+under a semaphore, then correlates their outputs into a single privacy
+assessment. Compared with a swarm (Notebook 24), the decision of who
+investigates what is centralised in the privacy officer instead of
+emerging from capability tags — which means the routing step is a
+single, auditable choke point. That matters for compliance: a central
+router constrains which systems each specialist may touch and makes
+over-collection or unauthorized access far easier to evidence than the
+same fleet self-organizing — exactly the accountability and
+data-minimization posture GDPR and CCPA expect you to demonstrate.
 
 - ``Specialist`` is a domain-focused agent with tools, a system prompt,
-  and a confidence threshold. Locus ships pre-built ones for logs,
-  metrics, traces, and code.
+  and a confidence threshold. Tulip ships pre-built ones for logs,
+  metrics, traces, and code — all useful evidence sources when tracing
+  where personal data flows.
 - ``Orchestrator`` registers specialists, emits ``RoutingDecision``
   objects, and runs the chosen specialists concurrently behind
   ``max_parallel_specialists`` (an asyncio.Semaphore).
@@ -22,20 +30,19 @@ does what is centralised here instead of emerging from capability tags.
   the decisions trail, and a correlated summary.
 
 Run it:
-    .venv/bin/python examples/notebook_32_orchestrator_pattern.py
+    .venv/bin/python examples/notebook_26_orchestrator_pattern.py
 
-The default provider is OCI Generative AI. With ``~/.oci/config``
-present the agents talk to a live OCI model (canonical pick:
-``openai.gpt-4.1`` or ``meta.llama-3.3-70b-instruct``). Set
-``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
+The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+(or anthropic) and the matching credentials to use a live model. Set
+``TULIP_MODEL_PROVIDER=mock`` for offline runs.
 
-This notebook uses Locus's "Model B" slot (``LOCUS_MODEL_ID_B``) for the
+This notebook uses Tulip's "Model B" slot (``TULIP_MODEL_ID_B``) for the
 short commentary calls — set a cheaper model there to cut runtime; falls
 back to Model A when unset.
 
 Prerequisites:
-- Notebook 08 (Agent basics).
-- Notebook 25 (Swarm) for the unsupervised counterpoint.
+- Notebook 06 (Agent basics).
+- Notebook 24 (Swarm) for the unsupervised counterpoint.
 """
 
 import asyncio
@@ -43,8 +50,8 @@ import time
 
 from config import get_model, get_model_b, print_config
 
-from locus.agent import Agent
-from locus.multiagent import (
+from tulip.agent import Agent
+from tulip.multiagent import (
     Orchestrator,
     RoutingDecision,
     Specialist,
@@ -54,18 +61,18 @@ from locus.multiagent import (
     create_orchestrator,
     create_trace_analyst,
 )
-from locus.tools.decorator import tool
+from tulip.tools.decorator import tool
 
 
-def _llm_call(
+async def _llm_call(
     prompt: str, *, system: str = "Reply in one short sentence.", max_tokens: int = 80
 ) -> str:
     """One model call with a timing/token banner — used for commentary."""
     # Slot B (a cheaper/faster model) is enough for short commentary;
-    # falls back to slot A when LOCUS_MODEL_ID_B is unset.
+    # falls back to slot A when TULIP_MODEL_ID_B is unset.
     agent = Agent(model=get_model_b(max_tokens=max_tokens), system_prompt=system)
     t0 = time.perf_counter()
-    res = agent.run_sync(prompt)
+    res = await agent.arun(prompt)
     dt = time.perf_counter() - t0
     print(
         f"  [model call: {dt:.2f}s · {res.metrics.prompt_tokens}→{res.metrics.completion_tokens} tokens]"
@@ -75,7 +82,7 @@ def _llm_call(
 
 async def main():
     print("=" * 60)
-    print("Notebook 27: orchestrator — supervisor + specialists + parallel fan-out")
+    print("Notebook 26: STEWARD privacy officer — orchestrator + specialists + fan-out")
     print("=" * 60)
     print()
     print_config()
@@ -100,7 +107,9 @@ async def main():
         print()
 
     t0 = time.perf_counter()
-    p1 = await log_analyst.execute(task="In one sentence, summarise what a log analyst does.")
+    p1 = await log_analyst.execute(
+        task="In one sentence, what does a log analyst contribute to a data-privacy investigation?"
+    )
     dt = time.perf_counter() - t0
     print(f"  [model call: {dt:.2f}s · log_analyst.execute()]")
     if p1.output:
@@ -111,45 +120,52 @@ async def main():
     # =========================================================================
     print("\n=== Part 2: Custom Specialists ===\n")
 
-    @tool(name="check_database", description="Check database health and connections")
-    async def check_database() -> str:
-        return "Database: 45/50 connections used, avg query time 250ms"
+    @tool(
+        name="query_data_catalog",
+        description="Query the data catalog for stores holding a subject's records",
+    )
+    async def query_data_catalog() -> str:
+        return "Catalog: 3 stores hold records for subject S-8842, latest: crm.customers with email, phone, home address"
 
-    @tool(name="check_cache", description="Check cache hit rates")
-    async def check_cache() -> str:
-        return "Cache hit rate: 85%, memory usage: 2.1GB/4GB"
+    @tool(
+        name="check_consent_ledger",
+        description="Check the consent ledger for a subject's current permissions",
+    )
+    async def check_consent_ledger() -> str:
+        return "Consent ledger: marketing consent withdrawn 2026-03-12 for S-8842; 2 systems still receiving feeds"
 
-    database_specialist = Specialist(
-        name="Database Specialist",
-        specialist_type="database_analyst",
-        description="Analyzes database performance, connections, and queries",
-        system_prompt="""You are a database specialist. Your expertise includes:
-- Analyzing query performance
-- Monitoring connection pools
-- Identifying slow queries
-- Recommending optimizations
+    inventory_specialist = Specialist(
+        name="Data Inventory Specialist",
+        specialist_type="data_inventory_analyst",
+        description="Maps where personal data for a subject lives and which purposes it serves",
+        system_prompt="""You are a data-inventory privacy specialist. Your expertise includes:
+- Locating personal data for a subject across catalogued stores
+- Mapping each data element to a processing purpose and lawful basis
+- Correlating storage with the subject's current consent status
+- Recommending minimization, restriction, or erasure steps
 
-When analyzing, look for connection leaks, slow queries, and lock contention.""",
-        tools=[check_database, check_cache],
+When analyzing, look for processing without a lawful basis, stale retention, and untracked copies.""",
+        tools=[query_data_catalog, check_consent_ledger],
         max_iterations=5,
         confidence_threshold=0.8,
         model=model,
     )
 
-    print(f"Custom Specialist: {database_specialist.name}")
-    print(f"  Tools: {[t.name for t in database_specialist.tools]}")
-    print(
-        f"AI commentary: {_llm_call('In one sentence, why is a custom Specialist with domain tools better than a generic Agent for DB diagnostics?')}"
+    print(f"Custom Specialist: {inventory_specialist.name}")
+    print(f"  Tools: {[t.name for t in inventory_specialist.tools]}")
+    _ai_note = await _llm_call(
+        "In one sentence, why is a custom Specialist with data-catalog tools better than a generic Agent for personal-data discovery?"
     )
+    print(f"AI commentary: {_ai_note}")
 
     # =========================================================================
     # Part 3: run one specialist on its own
     # =========================================================================
     print("\n=== Part 3: Executing a Specialist ===\n")
 
-    result = await database_specialist.execute(
-        task="Analyze current database performance and identify issues",
-        context={"incident_id": "INC-12345", "reported_issue": "Slow API responses"},
+    result = await inventory_specialist.execute(
+        task="Map every store holding personal data for subject S-8842 and flag any processing without a lawful basis",
+        context={"request_id": "DSAR-2026-042", "request_type": "Access + Erasure"},
     )
 
     print("Specialist Result:")
@@ -160,13 +176,13 @@ When analyzing, look for connection leaks, slow queries, and lock contention."""
         print(f"  Output: {result.output[:300]}...")
 
     # =========================================================================
-    # Part 4: wire the orchestrator
+    # Part 4: wire the privacy officer
     # =========================================================================
     print("\n=== Part 4: Creating an Orchestrator ===\n")
 
     orchestrator = create_orchestrator(
-        name="Incident Analysis Orchestrator",
-        specialists=[log_analyst, metrics_analyst, database_specialist],
+        name="STEWARD Privacy Officer",
+        specialists=[log_analyst, metrics_analyst, inventory_specialist],
         model=model,
     )
 
@@ -190,16 +206,16 @@ When analyzing, look for connection leaks, slow queries, and lock contention."""
     print(f"Correlation threshold: {orchestrator.correlation_threshold}")
 
     custom_orchestrator = Orchestrator(
-        name="Custom Orchestrator",
-        description="Orchestrates analysis with custom logic",
-        system_prompt="""You coordinate specialist agents for incident analysis.
+        name="Privacy Response Coordinator",
+        description="Coordinates privacy specialists for data-subject request handling",
+        system_prompt="""You coordinate specialist agents for data-subject request handling.
 
 When routing:
-1. For performance issues -> metrics + database specialists
-2. For error spikes -> log + trace specialists
-3. For unknown issues -> all specialists
+1. For access/erasure requests -> data_inventory + log specialists
+2. For consent disputes -> log + metrics specialists
+3. For unknown requests -> all specialists
 
-Prioritize based on urgency indicated in the task.""",
+Prioritize based on the urgency and statutory deadline indicated in the task.""",
         model=model,
     )
     custom_orchestrator.register_specialists([log_analyst, metrics_analyst])
@@ -213,12 +229,12 @@ Prioritize based on urgency indicated in the task.""",
 
     routing = RoutingDecision(
         decision_type="invoke",
-        specialists=["log_analyst", "metrics_analyst"],
-        reasoning="Performance issue requires log and metrics analysis",
+        specialists=["log_analyst", "data_inventory_analyst"],
+        reasoning="Erasure request needs a full data map plus access-log corroboration",
         context={
             "subtasks": {
-                "log_analyst": "Search for timeout errors in the last hour",
-                "metrics_analyst": "Check CPU and memory trends",
+                "log_analyst": "Search access logs for reads of subject S-8842's records in the last 90 days",
+                "data_inventory_analyst": "Enumerate every store holding personal data for subject S-8842",
             }
         },
     )
@@ -235,8 +251,12 @@ Prioritize based on urgency indicated in the task.""",
     print("\n=== Part 7: Full Orchestration ===\n")
 
     orch_result = await orchestrator.execute(
-        task="API response times have increased from 200ms to 2000ms in the last 30 minutes",
-        context={"severity": "high", "affected_services": ["api-gateway", "user-service"]},
+        task="A data subject filed a DSAR (access + erasure) for subject S-8842: locate all "
+        "personal data and flag any processing without a lawful basis",
+        context={
+            "request_type": "access+erasure",
+            "affected_systems": ["crm.customers", "marketing.feeds"],
+        },
     )
 
     print("Orchestration Result:")
@@ -269,24 +289,24 @@ Prioritize based on urgency indicated in the task.""",
     # =========================================================================
     print("\n=== Part 8: Dynamic Specialist Registration ===\n")
 
-    network_specialist = Specialist(
-        name="Network Analyst",
-        specialist_type="network_analyst",
-        description="Analyzes network connectivity and latency",
-        system_prompt="You analyze network issues including DNS, latency, and connectivity.",
+    retention_specialist = Specialist(
+        name="Retention Policy Analyst",
+        specialist_type="retention_analyst",
+        description="Reviews retention schedules, minimization gaps, and lawful-basis records",
+        system_prompt="You analyze retention evidence: retention schedules, minimization gaps, lawful-basis records.",
         model=model,
     )
 
-    orchestrator.register_specialist(network_specialist)
-    print(f"Added specialist: {network_specialist.name}")
+    orchestrator.register_specialist(retention_specialist)
+    print(f"Added specialist: {retention_specialist.name}")
     print(f"Total specialists: {len(orchestrator.specialists)}")
 
     t0 = time.perf_counter()
-    p8 = await network_specialist.execute(
-        task="In one short sentence, what would you check first if a service had intermittent timeouts?",
+    p8 = await retention_specialist.execute(
+        task="In one short sentence, what would you check first if a dataset has no documented retention period?",
     )
     dt = time.perf_counter() - t0
-    print(f"  [model call: {dt:.2f}s · network_specialist.execute()]")
+    print(f"  [model call: {dt:.2f}s · retention_specialist.execute()]")
     if p8.output:
         print(f"  Output: {p8.output[:160]}")
 
@@ -296,27 +316,29 @@ Prioritize based on urgency indicated in the task.""",
     print("\n=== Part 9: Common Patterns ===\n")
 
     print("Pattern 1: Parallel Analysis")
-    print("  Invoke multiple specialists at once, correlate, produce one summary.")
+    print("  Invoke multiple specialists at once, correlate, produce one privacy assessment.")
     print()
 
     print("Pattern 2: Sequential Refinement")
-    print("  Broad pass first, then route to a specific specialist based on findings.")
+    print("  Broad data discovery first, then route to a specific specialist based on findings.")
     print()
 
     print("Pattern 3: Hierarchical Routing")
-    print("  Top-level orchestrator routes to sub-orchestrators per domain.")
+    print(
+        "  Top-level officer routes to sub-orchestrators per domain (customer data, employee data)."
+    )
     print()
 
     print("Pattern 4: Consensus Analysis")
-    print("  Multiple specialists analyse the same data; flag disagreements.")
+    print("  Multiple specialists analyse the same records; flag disagreements.")
 
     # =========================================================================
     # Part 10: things to keep in mind
     # =========================================================================
     print("\n=== Part 10: Best Practices ===\n")
 
-    print("1. Give specialists focused, non-overlapping domains.")
-    print("2. Use clear specialist_type names — they show up in audit logs.")
+    print("1. Give specialists focused, non-overlapping data domains.")
+    print("2. Use clear specialist_type names — they show up in the audit trail.")
     print("3. Write domain-specific system prompts.")
     print("4. Set max_parallel_specialists to match your provider quota.")
     print("5. Include correlation logic in the summariser.")
@@ -324,7 +346,7 @@ Prioritize based on urgency indicated in the task.""",
     print("7. Track per-specialist confidence and duration.")
 
     print("\n" + "=" * 60)
-    print("Next: Notebook 28 — Specialist Agents")
+    print("Next: Notebook 27 — Specialist Agents")
     print("=" * 60)
 
 

@@ -20,8 +20,8 @@ import pytest
 
 pytest.importorskip("anthropic")
 
-from locus.core.messages import Message
-from locus.models.native.anthropic import AnthropicModel
+from tulip.core.messages import Message
+from tulip.models.native.anthropic import AnthropicModel
 
 
 def _make_response_with_usage(
@@ -50,7 +50,7 @@ def _make_response_with_usage(
 
 def _build_model_with_mocked_client(*, prompt_cache: bool):
     model = AnthropicModel(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         api_key="sk-test",
         prompt_cache=prompt_cache,
     )
@@ -125,7 +125,7 @@ def test_cache_tokens_surfaced_on_usage_dict():
     """When the response includes cache stats, they flow into ModelResponse.usage."""
     import asyncio
 
-    model = AnthropicModel(model="claude-sonnet-4-20250514", api_key="sk-test", prompt_cache=True)
+    model = AnthropicModel(model="claude-sonnet-4-6", api_key="sk-test", prompt_cache=True)
     mock_client = AsyncMock()
     mock_client.messages.create = AsyncMock(
         return_value=_make_response_with_usage(
@@ -149,7 +149,7 @@ def test_no_cache_fields_when_anthropic_omits_them():
     """Old SDK versions / non-cache responses don't include cache fields."""
     import asyncio
 
-    model = AnthropicModel(model="claude-sonnet-4-20250514", api_key="sk-test", prompt_cache=False)
+    model = AnthropicModel(model="claude-sonnet-4-6", api_key="sk-test", prompt_cache=False)
     mock_client = AsyncMock()
     mock_client.messages.create = AsyncMock(
         return_value=_make_response_with_usage(input_tokens=50, output_tokens=10)
@@ -164,7 +164,7 @@ def test_no_cache_fields_when_anthropic_omits_them():
 
 def test_execution_metrics_have_cache_fields():
     """ExecutionMetrics carries cache_creation_input_tokens / cache_read_input_tokens."""
-    from locus.agent.result import ExecutionMetrics
+    from tulip.agent.result import ExecutionMetrics
 
     metrics = ExecutionMetrics(
         iterations=2,
@@ -179,7 +179,7 @@ def test_execution_metrics_have_cache_fields():
 
 def test_state_with_token_usage_accepts_cache_counts():
     """AgentState.with_token_usage accepts and accumulates cache counts."""
-    from locus.core.state import AgentState
+    from tulip.core.state import AgentState
 
     state = AgentState()
     state = state.with_token_usage(

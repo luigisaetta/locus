@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
-"""Interactive Coding Assistant powered by Locus.
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
+"""Interactive Secure-Coding Assistant powered by Tulip.
+
+An application-security reviewer that hunts for vulnerabilities in a
+codebase, applies fixes, and verifies them — and only reports findings
+it can point to in the code. It looks for the usual suspects: injection
+(CWE-89 SQL, CWE-78 OS command), hard-coded secrets (CWE-798), unsafe
+deserialization (CWE-502), and path traversal (CWE-22).
 
 Demonstrates the full interactive agent loop:
 - completion_mode="explicit" — agent keeps going until task_complete
 - ask_user — agent asks clarifying questions mid-execution
-- verification reminders — agent reminded to test after writing
+- verification reminders — agent reminded to test after fixing
 - reflexion — agent self-assesses progress
 
 Usage:
-    python examples/coding_assistant.py "Build a FastAPI todo app with SQLite"
+    python examples/coding_assistant.py "Audit /tmp/myapp for injection bugs, then fix them"
 
 Requires:
-    OCI_PROFILE, OCI_ENDPOINT, OCI_COMPARTMENT env vars set for OCI GenAI.
+    OPENAI_API_KEY or ANTHROPIC_API_KEY set for a live model.
 """
 
 from __future__ import annotations
@@ -24,8 +29,10 @@ import os
 import sys
 from pathlib import Path
 
-from locus.agent import Agent, ReflexionConfig
-from locus.core.events import (
+from config import get_model
+
+from tulip.agent import Agent, ReflexionConfig
+from tulip.core.events import (
     InterruptEvent,
     ReflectEvent,
     TerminateEvent,
@@ -33,11 +40,11 @@ from locus.core.events import (
     ToolCompleteEvent,
     ToolStartEvent,
 )
-from locus.tools.decorator import tool
+from tulip.tools.decorator import tool
 
 
 # =============================================================================
-# Coding Tools (user-land, not SDK)
+# Code-Review Tools (user-land, not SDK)
 # =============================================================================
 
 
@@ -105,78 +112,59 @@ def run_command(command: str, working_dir: str) -> str:
 # =============================================================================
 
 
-def get_model():
-    """Build model from environment variables.
+def _build_model():
+    """Model for the review agent.
 
-    OCI: routes ``cohere.command-r-*`` model ids to ``OCIModel`` (the OCI
-    SDK transport, required for those) and everything else to
-    ``OCIChatCompletionsModel`` against ``/openai/v1`` (real SSE streaming, day-0
-    model support). See ``docs/how-to/oci-models.md``.
+    Delegates to the shared ``examples/config.py`` helper so the id comes from
+    TULIP_MODEL_ID like every other example. This file used to hardcode
+    gpt-4o-mini, which meant that against any self-hosted or gateway endpoint
+    the run died on a 404 and printed only "Done: error".
     """
-    profile = os.getenv("OCI_PROFILE")
-    if profile:
-        model_id = os.getenv("OCI_MODEL_ID", "openai.gpt-5")
-        if model_id.lower().startswith("cohere.command-r"):
-            from locus.models import OCIModel
-
-            return OCIModel(
-                model_id=model_id,
-                profile_name=profile,
-                auth_type=os.getenv("OCI_AUTH_TYPE", "api_key"),
-                service_endpoint=os.getenv("OCI_ENDPOINT"),
-                compartment_id=os.getenv("OCI_COMPARTMENT"),
-                max_tokens=4096,
-            )
-        from locus.models import OCIChatCompletionsModel
-
-        return OCIChatCompletionsModel(
-            model=model_id,
-            profile=profile,
-            region=os.getenv("OCI_REGION", "us-chicago-1"),
-            max_tokens=4096,
-        )
-
-    if os.getenv("OPENAI_API_KEY"):
-        from locus.models import OpenAIModel
-
-        return OpenAIModel(model="gpt-4o-mini", max_tokens=4096)
-
-    print("Error: Set OCI_PROFILE or OPENAI_API_KEY")
-    sys.exit(1)
+    return get_model()
 
 
 async def main():
     task = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else None
     if not task:
-        print('Usage: python examples/coding_assistant.py "<task description>"')
+        # Exit 0, not 1. Every other example runs bare, and notebooks 52 and 68
+        # already set the convention: print what is missing and leave cleanly so
+        # a "run every example" pass stays green. A required argument is not a
+        # failure of the example.
+        print('Usage: python examples/coding_assistant.py "<review task>"')
         print(
-            'Example: python examples/coding_assistant.py "Build a FastAPI todo app in /tmp/myapp"'
+            "Example: python examples/coding_assistant.py "
+            '"Audit /tmp/myapp for SQL injection and hard-coded secrets, then fix them"'
         )
-        sys.exit(1)
+        print("\nNo task given, so there is nothing to review — exiting cleanly.")
+        sys.exit(0)
 
-    model = get_model()
+    model = _build_model()
 
     agent = Agent(
         model=model,
         tools=[read_file, write_file, list_directory, run_command],
         system_prompt=(
-            "You are a senior Python engineer and coding assistant.\n\n"
+            "You are a senior application-security engineer doing a secure code review.\n\n"
             "Available tools:\n"
-            "- write_file(path, content): Create/update files\n"
+            "- list_directory(path): Map the project structure\n"
             "- read_file(path): Read file contents\n"
-            "- list_directory(path): See project structure\n"
-            "- run_command(command, working_dir): Run shell commands\n"
+            "- write_file(path, content): Apply fixes to files\n"
+            "- run_command(command, working_dir): Run tests / linters\n"
             "- ask_user(question, options): Ask the user a question\n"
             "- task_complete(summary, status): Signal you're done\n\n"
             "Workflow:\n"
-            "1. If requirements are ambiguous, use ask_user to clarify\n"
-            "2. Create project structure and write ALL files\n"
-            "3. Install dependencies if needed\n"
-            "4. Run tests to verify everything works\n"
-            "5. If tests fail, read errors, fix code, rerun\n"
-            "6. Only call task_complete after tests pass\n\n"
-            "Write MULTIPLE files in parallel when possible.\n"
-            "Always verify your changes work before completing.\n"
+            "1. If the review scope is ambiguous, use ask_user to clarify\n"
+            "2. Map the codebase, then read the files in scope\n"
+            "3. Hunt for: SQL/command injection (CWE-89, CWE-78), missing\n"
+            "   authz checks, hard-coded secrets (CWE-798), unsafe\n"
+            "   deserialization (CWE-502), path traversal (CWE-22)\n"
+            "4. For each finding, cite the exact file and line — never report\n"
+            "   a vulnerability you cannot point to in the code\n"
+            "5. Apply minimal fixes with write_file, then run the test suite\n"
+            "6. If tests fail, read errors, fix code, rerun\n"
+            "7. Only call task_complete after fixes are verified\n\n"
+            "In your summary, list each finding with severity (low/medium/high/critical).\n"
+            "Always verify your fixes work before completing.\n"
             "Use python3 for running commands."
         ),
         completion_mode="explicit",
@@ -187,7 +175,7 @@ async def main():
     )
 
     print(f"\n{'=' * 60}")
-    print(f"  LOCUS CODING ASSISTANT")
+    print(f"  TULIP SECURE-CODING ASSISTANT")
     print(f"{'=' * 60}")
     print(f"  Task: {task}")
     print(f"  Mode: explicit (agent runs until task_complete)")
@@ -213,7 +201,7 @@ async def main():
                 for tc in event.tool_calls:
                     if tc.name == "write_file":
                         path = tc.arguments.get("path", "?")
-                        print(f"     ✏️  write {path}")
+                        print(f"     ✏️  fix {path}")
                     elif tc.name == "run_command":
                         cmd = tc.arguments.get("command", "?")[:50]
                         print(f"     ⚡ run: {cmd}")
@@ -265,8 +253,16 @@ async def main():
             print(f"  {e} Done: {event.reason}")
             print(f"     Iterations: {event.iterations_used}")
             print(f"     Tool calls: {event.total_tool_calls}")
+            # TerminateEvent carries no cause, so reason="error" is all the
+            # event stream can tell us — a 404 on the model id looks identical
+            # to a broken agent. Point the reader at the usual culprit.
+            if event.reason == "error":
+                print(
+                    "     (the event stream carries no cause; check the model "
+                    "id and endpoint — TULIP_MODEL_ID / OPENAI_BASE_URL)"
+                )
             if event.final_message:
-                print(f"\n  Final message:")
+                print(f"\n  Final report:")
                 for line in event.final_message.split("\n")[:10]:
                     print(f"     {line}")
             print(f"{'=' * 60}")

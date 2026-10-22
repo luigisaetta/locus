@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Coverage tests for ``locus.memory.backends.adapters``.
+"""Coverage tests for ``tulip.memory.backends.adapters``.
 
 The existing ``test_storage_adapters.py`` covers happy-path save/load.
 This file targets the remaining gaps:
@@ -17,9 +16,9 @@ This file targets the remaining gaps:
 - ``list_threads`` signature variations: ``pattern=`` arg, ``limit=`` arg,
   no-arg, plus client-side pattern filter when backend doesn't support it.
 - ``list_with_metadata`` and ``close`` delegation.
-- Each factory function (``redis``, ``postgresql``, ``mysql``, ``opensearch``,
-  ``oci_bucket``, ``oracle``) — uses ``sys.modules`` stubs so we don't
-  need the real SDK clients.
+- Each factory function (``redis``, ``postgresql``, ``mysql``,
+  ``opensearch``) — uses ``sys.modules`` stubs so we don't need the
+  real SDK clients.
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from locus.memory.backends.adapters import StorageBackendAdapter, _callable_has_parameter
+from tulip.memory.backends.adapters import StorageBackendAdapter, _callable_has_parameter
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +285,7 @@ class TestCopyThread:
 
         # Patch AgentState.from_checkpoint so we don't depend on the real
         # state-shape contract.
-        from locus.core import state as state_mod
+        from tulip.core import state as state_mod
 
         class _MiniState:
             def __init__(self, payload: dict[str, Any]) -> None:
@@ -454,9 +453,9 @@ def fake_redis_module(monkeypatch: pytest.MonkeyPatch) -> Any:
         def __init__(self, **kw: Any) -> None:
             self.kwargs = kw
 
-    _stub_module("locus.memory.backends.redis", RedisBackend=FakeRedisBackend)
+    _stub_module("tulip.memory.backends.redis", RedisBackend=FakeRedisBackend)
     yield FakeRedisBackend
-    sys.modules.pop("locus.memory.backends.redis", None)
+    sys.modules.pop("tulip.memory.backends.redis", None)
 
 
 @pytest.fixture
@@ -465,9 +464,9 @@ def fake_pg_module() -> Any:
         def __init__(self, **kw: Any) -> None:
             self.kwargs = kw
 
-    _stub_module("locus.memory.backends.postgresql", PostgreSQLBackend=FakePGBackend)
+    _stub_module("tulip.memory.backends.postgresql", PostgreSQLBackend=FakePGBackend)
     yield FakePGBackend
-    sys.modules.pop("locus.memory.backends.postgresql", None)
+    sys.modules.pop("tulip.memory.backends.postgresql", None)
 
 
 @pytest.fixture
@@ -476,9 +475,9 @@ def fake_mysql_module() -> Any:
         def __init__(self, **kw: Any) -> None:
             self.kwargs = kw
 
-    _stub_module("locus.memory.backends.mysql", MySQLBackend=FakeMySQLBackend)
+    _stub_module("tulip.memory.backends.mysql", MySQLBackend=FakeMySQLBackend)
     yield FakeMySQLBackend
-    sys.modules.pop("locus.memory.backends.mysql", None)
+    sys.modules.pop("tulip.memory.backends.mysql", None)
 
 
 @pytest.fixture
@@ -487,76 +486,39 @@ def fake_os_module() -> Any:
         def __init__(self, **kw: Any) -> None:
             self.kwargs = kw
 
-    _stub_module("locus.memory.backends.opensearch", OpenSearchBackend=FakeOSBackend)
+    _stub_module("tulip.memory.backends.opensearch", OpenSearchBackend=FakeOSBackend)
     yield FakeOSBackend
-    sys.modules.pop("locus.memory.backends.opensearch", None)
-
-
-@pytest.fixture
-def fake_oci_module() -> Any:
-    class FakeOCIBucketBackend:
-        def __init__(self, **kw: Any) -> None:
-            self.kwargs = kw
-
-    _stub_module("locus.memory.backends.oci_bucket", OCIBucketBackend=FakeOCIBucketBackend)
-    yield FakeOCIBucketBackend
-    sys.modules.pop("locus.memory.backends.oci_bucket", None)
-
-
-@pytest.fixture
-def fake_oracle_module() -> Any:
-    class FakeOracleBackend:
-        def __init__(self, **kw: Any) -> None:
-            self.kwargs = kw
-
-    _stub_module("locus.memory.backends.oracle", OracleBackend=FakeOracleBackend)
-    yield FakeOracleBackend
-    sys.modules.pop("locus.memory.backends.oracle", None)
+    sys.modules.pop("tulip.memory.backends.opensearch", None)
 
 
 class TestFactoryFunctions:
     def test_redis_checkpointer(self, fake_redis_module: Any) -> None:
-        from locus.memory.backends.adapters import redis_checkpointer
+        from tulip.memory.backends.adapters import redis_checkpointer
 
         cp = redis_checkpointer(url="redis://x:1", prefix="p:")
         assert isinstance(cp, StorageBackendAdapter)
         assert isinstance(cp._backend, fake_redis_module)
 
     def test_postgresql_checkpointer(self, fake_pg_module: Any) -> None:
-        from locus.memory.backends.adapters import postgresql_checkpointer
+        from tulip.memory.backends.adapters import postgresql_checkpointer
 
         cp = postgresql_checkpointer(database="db", user="u", password="p")  # noqa: S106
         assert isinstance(cp, StorageBackendAdapter)
         assert isinstance(cp._backend, fake_pg_module)
 
     def test_mysql_checkpointer(self, fake_mysql_module: Any) -> None:
-        from locus.memory.backends.adapters import mysql_checkpointer
+        from tulip.memory.backends.adapters import mysql_checkpointer
 
         cp = mysql_checkpointer(database="db", user="u", password="p")  # noqa: S106
         assert isinstance(cp, StorageBackendAdapter)
         assert isinstance(cp._backend, fake_mysql_module)
 
     def test_opensearch_checkpointer(self, fake_os_module: Any) -> None:
-        from locus.memory.backends.adapters import opensearch_checkpointer
+        from tulip.memory.backends.adapters import opensearch_checkpointer
 
         cp = opensearch_checkpointer(hosts=["http://x:9200"])
         assert isinstance(cp, StorageBackendAdapter)
         assert isinstance(cp._backend, fake_os_module)
-
-    def test_oci_bucket_checkpointer(self, fake_oci_module: Any) -> None:
-        from locus.memory.backends.adapters import oci_bucket_checkpointer
-
-        cp = oci_bucket_checkpointer(bucket_name="b", namespace="n")
-        # Returns the raw backend (not wrapped in adapter) — the comment
-        # in the source says it's a native BaseCheckpointer.
-        assert isinstance(cp, fake_oci_module)
-
-    def test_oracle_checkpointer(self, fake_oracle_module: Any) -> None:
-        from locus.memory.backends.adapters import oracle_checkpointer
-
-        cp = oracle_checkpointer(dsn="db_high", user="admin", password="p")  # noqa: S106
-        assert isinstance(cp, StorageBackendAdapter)
-        assert isinstance(cp._backend, fake_oracle_module)
 
 
 # ---------------------------------------------------------------------------

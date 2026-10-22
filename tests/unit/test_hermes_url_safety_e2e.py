@@ -1,10 +1,9 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """End-to-end integration test for the SSRF guard (A.2).
 
-Wires :func:`~locus.tools.url_safety.validate_url` into a real
+Wires :func:`~tulip.tools.url_safety.validate_url` into a real
 ``httpx.AsyncClient`` event hook so the guard runs at the actual
 request-dispatch boundary, exactly as a user-authored fetch tool
 would integrate it. Hostname resolution is monkey-patched so we
@@ -21,8 +20,8 @@ import pytest
 import respx
 from httpx import Request, Response
 
-from locus.core.errors import ValidationError
-from locus.tools.url_safety import validate_url
+from tulip.core.errors import ValidationError
+from tulip.tools.url_safety import validate_url
 
 
 def _force_resolution(monkeypatch: pytest.MonkeyPatch, ip: str) -> None:
@@ -113,7 +112,7 @@ async def test_private_ip_blocked(monkeypatch: pytest.MonkeyPatch, private_ip: s
 async def test_env_opt_in_unblocks_private(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LOCUS_ALLOW_PRIVATE_URLS", "true")
+    monkeypatch.setenv("TULIP_ALLOW_PRIVATE_URLS", "true")
     _force_resolution(monkeypatch, "10.0.0.5")
     respx.get("https://internal.example/health").mock(return_value=Response(200, text="ok"))
 
@@ -126,7 +125,7 @@ async def test_env_opt_in_unblocks_private(
 async def test_env_opt_in_does_not_unblock_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LOCUS_ALLOW_PRIVATE_URLS", "true")
+    monkeypatch.setenv("TULIP_ALLOW_PRIVATE_URLS", "true")
     _force_resolution(monkeypatch, "169.254.169.254")
     async with _make_client() as client:
         with pytest.raises(ValidationError, match="SSRF guard"):

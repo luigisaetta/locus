@@ -1,15 +1,14 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for core config module."""
 
-from locus.core.config import (
+from tulip.core.config import (
     AgentSettings,
     CheckpointerSettings,
-    LocusSettings,
     ModelSettings,
     TelemetrySettings,
+    TulipSettings,
     configure,
     get_settings,
 )
@@ -26,14 +25,6 @@ class TestModelSettings:
         assert settings.max_tokens == 4096
         assert settings.temperature == 0.7
         assert settings.top_p == 0.9
-
-    def test_oci_defaults(self):
-        """Test OCI default settings."""
-        settings = ModelSettings()
-        assert settings.oci_profile == "DEFAULT"
-        assert settings.oci_auth_type == "security_token"
-        assert settings.oci_region == "us-chicago-1"
-        assert settings.oci_compartment_id is None
 
     def test_openai_api_key_none_by_default(self, monkeypatch):
         """Test API key is None by default."""
@@ -77,7 +68,7 @@ class TestTelemetrySettings:
         """Test default telemetry settings."""
         settings = TelemetrySettings()
         assert settings.enabled is False
-        assert settings.service_name == "locus"
+        assert settings.service_name == "tulip"
         assert settings.otlp_endpoint is None
         assert settings.otlp_headers == {}
 
@@ -95,7 +86,7 @@ class TestCheckpointerSettings:
         """Test default checkpointer settings."""
         settings = CheckpointerSettings()
         assert settings.backend == "memory"
-        assert settings.file_path == ".locus/checkpoints"
+        assert settings.file_path == ".tulip/checkpoints"
         assert settings.redis_url is None
         assert settings.http_url is None
         assert settings.http_headers == {}
@@ -107,18 +98,18 @@ class TestCheckpointerSettings:
         assert settings.delta_chain_limit == 5
 
 
-class TestLocusSettings:
-    """Tests for LocusSettings."""
+class TestTulipSettings:
+    """Tests for TulipSettings."""
 
     def test_default_settings(self):
         """Test default root settings."""
-        settings = LocusSettings()
+        settings = TulipSettings()
         assert settings.env == "development"
         assert settings.debug is False
 
     def test_nested_settings(self):
         """Test nested settings are created."""
-        settings = LocusSettings()
+        settings = TulipSettings()
         assert isinstance(settings.model, ModelSettings)
         assert isinstance(settings.agent, AgentSettings)
         assert isinstance(settings.telemetry, TelemetrySettings)
@@ -130,7 +121,7 @@ class TestLocusSettings:
             "env": "production",
             "debug": True,
         }
-        settings = LocusSettings.from_dict(data)
+        settings = TulipSettings.from_dict(data)
         assert settings.env == "production"
         assert settings.debug is True
 
@@ -143,14 +134,14 @@ class TestLocusSettings:
                 "temperature": 0.5,
             },
         }
-        settings = LocusSettings.from_dict(data)
+        settings = TulipSettings.from_dict(data)
         assert settings.env == "staging"
         assert settings.model.default_provider == "openai"
         assert settings.model.temperature == 0.5
 
     def test_to_dict(self):
         """Test exporting settings to dictionary."""
-        settings = LocusSettings()
+        settings = TulipSettings()
         data = settings.to_dict()
 
         assert isinstance(data, dict)
@@ -166,24 +157,24 @@ class TestGetSettings:
 
     def setup_method(self):
         """Reset global settings before each test."""
-        import locus.core.config as config_module
+        import tulip.core.config as config_module
 
         config_module._settings = None
 
     def test_get_settings_creates_default(self):
         """Test get_settings creates default settings."""
-        import locus.core.config as config_module
+        import tulip.core.config as config_module
 
         config_module._settings = None
 
         settings = get_settings()
 
         assert settings is not None
-        assert isinstance(settings, LocusSettings)
+        assert isinstance(settings, TulipSettings)
 
     def test_get_settings_returns_same_instance(self):
         """Test get_settings returns same instance."""
-        import locus.core.config as config_module
+        import tulip.core.config as config_module
 
         config_module._settings = None
 
@@ -198,7 +189,7 @@ class TestConfigure:
 
     def setup_method(self):
         """Reset global settings before each test."""
-        import locus.core.config as config_module
+        import tulip.core.config as config_module
 
         config_module._settings = None
 
@@ -206,7 +197,7 @@ class TestConfigure:
         """Test configure with None creates default."""
         settings = configure(None)
 
-        assert isinstance(settings, LocusSettings)
+        assert isinstance(settings, TulipSettings)
         assert settings.env == "development"
 
     def test_configure_with_dict(self):
@@ -218,7 +209,7 @@ class TestConfigure:
 
     def test_configure_with_settings_instance(self):
         """Test configure with settings instance."""
-        custom = LocusSettings(env="staging")
+        custom = TulipSettings(env="staging")
         settings = configure(custom)
 
         assert settings is custom
@@ -226,7 +217,7 @@ class TestConfigure:
 
     def test_configure_updates_global(self):
         """Test configure updates global settings."""
-        import locus.core.config as config_module
+        import tulip.core.config as config_module
 
         configure({"env": "production"})
 

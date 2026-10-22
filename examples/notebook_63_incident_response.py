@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Notebook 58: Incident-response runbook (SRE workflow).
+"""Notebook 63: SRE on-call incident runbook.
 
-Models the loop a real on-call engineer runs when a page fires::
+Models the loop an infra/devops on-call engineer runs when a page fires::
 
     Page fires
       │
@@ -33,17 +32,17 @@ Models the loop a real on-call engineer runs when a page fires::
 - interrupt(): critical severity pauses for explicit human approval
   before any mitigation runs.
 - output_schema=Postmortem: the final report is a typed Pydantic
-  instance, ready to file into a runbook database.
+  instance, ready to file into the reliability-review database.
 
 Run it
-    # Default: OCI Generative AI auto-detected from ~/.oci/config
+    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
     python examples/notebook_63_incident_response.py
 
     # Offline / no credentials:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_63_incident_response.py
+    TULIP_MODEL_PROVIDER=mock python examples/notebook_63_incident_response.py
 
     # Pin a strong-enough model for the structured postmortem schema:
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_63_incident_response.py
+    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_63_incident_response.py
 """
 
 from __future__ import annotations
@@ -54,11 +53,11 @@ from typing import Any
 from config import get_model
 from pydantic import BaseModel, Field
 
-from locus.agent import Agent, AgentConfig
-from locus.core import Command, interrupt
-from locus.core.events import TerminateEvent
-from locus.core.send import Send
-from locus.multiagent.graph import END, START, StateGraph
+from tulip.agent import Agent, AgentConfig
+from tulip.core import Command, interrupt
+from tulip.core.events import TerminateEvent
+from tulip.core.send import Send
+from tulip.multiagent.graph import END, START, StateGraph
 
 
 # Data shapes for the typed workflow state.
@@ -86,28 +85,33 @@ class InvestigatorReport(BaseModel):
 
 PROMPTS = {
     "triage": (
-        "You are an SRE triage bot. Given an incident description, classify "
-        "severity as one of: info, warn, critical. Reply with one word."
+        "You are an SRE on-call triage bot. Given a production incident "
+        "description, classify severity as one of: info, warn, critical. "
+        "Reply with one word."
     ),
     "logs": (
         "You are a log-analysis bot. List 1–3 concrete error patterns or "
-        "warning sequences a human should investigate. Be specific. Bullets only."
+        "crash/exception sequences in the service and pod logs that a human "
+        "should investigate. Be specific. Bullets only."
     ),
     "metrics": (
         "You are a metrics-analysis bot. List 1–3 specific anomalies (latency "
-        "spikes, error rate, saturation, traffic) that match the symptom. Bullets only."
+        "spikes, error rate, CPU/memory saturation, pod restarts, request "
+        "volume) that match the symptom. Bullets only."
     ),
     "traces": (
-        "You are a distributed-trace bot. Identify 1–3 specific code paths or "
-        "downstream calls likely involved. Bullets only."
+        "You are a distributed-trace bot. Identify 1–3 specific code paths, "
+        "downstream service calls, or database queries likely involved. "
+        "Bullets only."
     ),
     "synthesize": (
         "You are an incident commander. Given investigator reports, name the "
         "single most likely root-cause hypothesis. One sentence."
     ),
     "mitigate": (
-        "You are an automated remediator. Given a root-cause hypothesis, "
-        "propose ONE specific mitigation step. One sentence."
+        "You are an automated remediation runner. Given a root-cause "
+        "hypothesis, propose ONE specific mitigation step (e.g. rollback, "
+        "scale-up, feature-flag toggle, restart). One sentence."
     ),
 }
 
@@ -115,7 +119,7 @@ PROMPTS = {
 def _make_agent(role: str, model: Any) -> Agent:
     return Agent(
         config=AgentConfig(
-            agent_id=f"sre-{role}",
+            agent_id=f"ir-{role}",
             model=model,
             system_prompt=PROMPTS[role],
             max_iterations=2,
@@ -136,7 +140,7 @@ async def _run(agent: Agent, prompt: str) -> str:
 
 
 async def triage(state: dict[str, Any]) -> dict[str, Any]:
-    """Classify severity by asking the triage agent."""
+    """Classify severity by asking the on-call triage agent."""
     symptom = state.get("symptom", "")
     agent = _make_agent("triage", state["__model__"])
     raw = await _run(agent, f"Incident: {symptom}")
@@ -227,8 +231,8 @@ async def write_postmortem(state: dict[str, Any]) -> dict[str, Any]:
             agent_id="postmortem-writer",
             model=state["__model__"],
             system_prompt=(
-                "You are an SRE writing a postmortem. Produce a Postmortem "
-                "object. Be terse and factual."
+                "You are an SRE writing a reliability postmortem. Produce a "
+                "Postmortem object. Be terse and factual."
             ),
             output_schema=Postmortem,
             max_iterations=2,
@@ -248,9 +252,9 @@ async def write_postmortem(state: dict[str, Any]) -> dict[str, Any]:
     result = None
     for attempt in range(3):
         try:
-            result = await _asyncio.to_thread(agent.run_sync, prompt)
+            result = await agent.arun(prompt)
             break
-        except Exception as exc:  # noqa: BLE001 — retry transient OCI flakiness
+        except Exception as exc:  # noqa: BLE001 — retry transient provider flakiness
             last_exc = exc
             await _asyncio.sleep(0.5 * (attempt + 1))
     if result is None:
@@ -263,7 +267,7 @@ async def write_postmortem(state: dict[str, Any]) -> dict[str, Any]:
             "Postmortem writer returned no parsed Postmortem. The configured "
             "model could not honor the JSON schema. Use a stronger model "
             "(e.g. openai.gpt-4o, openai.gpt-5, anthropic.claude-3-5-sonnet) "
-            f"for notebook 57. Raw output: {result.message!r}"
+            f"for notebook 63. Raw output: {result.message!r}"
         )
     return {"postmortem": pm}
 
@@ -315,7 +319,7 @@ def _print_postmortem(pm: Postmortem | None) -> None:
 
 
 async def main() -> None:
-    print("Notebook 58: Incident response runbook")
+    print("Notebook 63: SRE on-call incident runbook")
     print("=" * 60)
 
     model = get_model()
@@ -327,10 +331,13 @@ async def main() -> None:
     initial = {
         "incident_id": "INC-2026-0517",
         "symptom": (
-            "API p99 latency is 8x its baseline and approximately 12% of "
-            "requests return 503. The regression started at 04:12 UTC and is "
-            "ongoing. Customer-facing checkout is degraded for paying users "
-            "across multiple regions; on-call has been paged."
+            "Checkout API p99 latency is 8x its baseline and approximately 12% "
+            "of requests return 503, starting 6 minutes after the v4.12.0 "
+            "deploy rolled out to production at 04:12 UTC. The payments-service "
+            "pods are in CrashLoopBackOff with rising memory usage and OOMKills, "
+            "and the connection pool to the orders database is saturated. "
+            "Customer-facing checkout is degraded for paying users across "
+            "multiple regions; on-call has been paged."
         ),
         "__model__": model,
     }

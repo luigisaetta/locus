@@ -1,0 +1,145 @@
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
+
+"""Base model types - 100% Pydantic."""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+from pydantic import BaseModel, Field
+
+from tulip.core.messages import Message
+
+
+if TYPE_CHECKING:
+    from tulip.core.events import ModelChunkEvent
+
+
+@runtime_checkable
+class ModelProtocol(Protocol):
+    """Protocol defining the model interface."""
+
+    async def complete(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> ModelResponse:
+        """Complete a chat request."""
+        ...
+
+    # NOTE: declared as ``def`` (not ``async def``) so the Protocol
+    # matches concrete async-generator implementations. An ``async def``
+    # function whose body contains ``yield`` returns ``AsyncIterator[X]``
+    # directly, not a coroutine — mypy types the Protocol that way only
+    # when the declaration is plain ``def`` returning ``AsyncIterator``.
+    def stream(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ModelChunkEvent]:
+        """Stream a chat response."""
+        ...
+
+
+@runtime_checkable
+class RequestBuilder(Protocol):
+    """Protocol for building provider-specific requests."""
+
+    def build(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        **kwargs: Any,
+    ) -> Any:
+        """Build a provider-specific request."""
+        ...
+
+
+@runtime_checkable
+class ResponseParser(Protocol):
+    """Protocol for parsing provider-specific responses."""
+
+    def parse(self, response: Any) -> ModelResponse:
+        """Parse a provider-specific response."""
+        ...
+
+
+class ModelResponse(BaseModel):
+    """Response from a model completion."""
+
+    message: Message
+    usage: dict[str, int] = Field(default_factory=dict)
+    stop_reason: str | None = None
+    # Opaque per-provider continuation state. Stateless transports
+    # (the default — chat/completions-style) leave this as ``None``.
+    # Server-stateful transports (e.g. ``OCIResponsesModel``) return
+    # a continuation token here (e.g. ``{"previous_response_id":
+    # "resp_abc"}``) so the agent can thread it into the next
+    # ``complete()`` call without resending the full history.
+    provider_state: dict[str, Any] | None = None
+    # Chain-of-thought surfaced by reasoning models (OpenAI o-series,
+    # Qwen/DeepSeek via vLLM, Gemini thinking, etc.). Providers that
+    # ship reasoning in a channel separate from ``message.content`` set
+    # this; the agent loop prefers it for ``ThinkEvent.reasoning``.
+    reasoning: str | None = None
+    # Token log-probabilities, when the caller asked for them
+    # (``logprobs=True``). The shape is the provider's own — it is
+    # passed through rather than normalised, because the consumers of
+    # this (confidence gating, calibration) care about the raw numbers.
+    logprobs: Any | None = None
+    # Additional candidates when the caller asked for more than one
+    # (``n>1``). ``message`` remains the first choice, so single-candidate
+    # callers are unaffected; these are the rest, in the order returned.
+    candidates: list[Message] = Field(default_factory=list)
+    # Annotations from whatever produced this response on the client side —
+    # never sent to the model. ``FallbackChain`` records the tier that served
+    # the call under ``"fallback"`` (``{"tier", "model", "attempts"}``).
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    # What the provider says this call cost in USD, when it says (OpenRouter
+    # puts ``cost`` in the usage block). ``None`` means not reported, never
+    # free; the metadata price table remains the estimate then.
+    cost_usd: float | None = None
+
+    @property
+    def content(self) -> str | None:
+        """Get response content."""
+        return self.message.content
+
+    @property
+    def tool_calls(self) -> list[Any]:
+        """Get tool calls."""
+        return self.message.tool_calls
+
+    @property
+    def prompt_tokens(self) -> int:
+        """Get prompt token count."""
+        return self.usage.get("prompt_tokens", 0)
+
+    @property
+    def completion_tokens(self) -> int:
+        """Get completion token count."""
+        return self.usage.get("completion_tokens", 0)
+
+    @property
+    def total_tokens(self) -> int:
+        """Get total token count."""
+        return self.prompt_tokens + self.completion_tokens
+
+
+class ModelConfig(BaseModel):
+    """Base configuration for models."""
+
+    model: str
+    max_tokens: int = 4096
+    # ``None`` means "omit this parameter" so the server's own default applies.
+    # Self-hosted models publish their recommended sampling in
+    # generation_config.json; a value sent unasked silently overrides it.
+    temperature: float | None = 0.7
+    top_p: float | None = 0.9
+    stop_sequences: list[str] = Field(default_factory=list)
+
+    model_config = {"extra": "allow"}

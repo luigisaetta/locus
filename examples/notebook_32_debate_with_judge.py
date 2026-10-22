@@ -1,37 +1,39 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Notebook 33: adversarial debate with a structured-output judge.
+"""Notebook 32: incident adjudication debate — real incident vs noise.
 
-PRO and CON take turns arguing a resolution. After N rounds a Judge
-reads the full transcript and emits a typed ``Verdict`` — winner,
-confidence, key points, reasoning — that downstream systems (tickets,
-audit logs, databases) can consume directly.
+An INCIDENT advocate and a NOISE advocate take turns arguing over a
+cloud-monitoring alert — here a possible production reliability incident
+(a p99 latency spike paired with autoscaling churn). After N rounds a
+Judge reads the full transcript and emits a typed ``Verdict`` — call,
+confidence, key points, reasoning — that downstream systems (incident
+tooling, audit logs, on-call paging) can consume directly. Two-advocate
+adjudication is a cheap way to surface the disconfirming evidence a
+single-pass triage agent tends to skip.
 
 - Each turn is a ``Turn(side, round, text)`` Pydantic model. The
   transcript is a ``list[Turn]`` accumulated in graph state.
-- The Judge uses Locus's ``output_schema=Verdict``, so the result is a
+- The Judge uses Tulip's ``output_schema=Verdict``, so the result is a
   populated Pydantic object — no JSON parsing in the caller.
 - If the configured model can't honor the schema, the judge node raises
   rather than fabricating a verdict from raw text.
 - A ``check_structured_output_capable()`` guard at the top short-
-  circuits the notebook when the model can't produce JSON (mock,
-  Cohere R-series).
+  circuits the notebook when the model can't produce JSON (the bundled mock).
 
 Run it:
-    .venv/bin/python examples/notebook_38_debate_with_judge.py
+    .venv/bin/python examples/notebook_32_debate_with_judge.py
 
-The default provider is OCI Generative AI. With ``~/.oci/config``
-present the agents talk to a live OCI model that supports constrained
-decoding (canonical pick: ``openai.gpt-4.1`` or ``openai.gpt-5``). Set
-``LOCUS_MODEL_PROVIDER=mock`` and the notebook exits cleanly with
+The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+(or anthropic) and the matching credentials to use a live model that
+supports constrained decoding (e.g. ``openai:gpt-4o``). Set
+``TULIP_MODEL_PROVIDER=mock`` and the notebook exits cleanly with
 setup instructions.
 
 Prerequisites:
-- Notebook 14 (structured output).
-- Notebook 17 (basic graph).
+- Notebook 35 (structured output).
+- Notebook 16 (basic graph).
 """
 
 from __future__ import annotations
@@ -42,9 +44,9 @@ from typing import Any
 from config import get_model
 from pydantic import BaseModel, Field
 
-from locus.agent import Agent, AgentConfig
-from locus.core.events import TerminateEvent
-from locus.multiagent.graph import END, START, StateGraph
+from tulip.agent import Agent, AgentConfig
+from tulip.core.events import TerminateEvent
+from tulip.multiagent.graph import END, START, StateGraph
 
 
 # ---------------------------------------------------------------------------
@@ -53,36 +55,39 @@ from locus.multiagent.graph import END, START, StateGraph
 
 
 class Turn(BaseModel):
-    """One turn of the debate."""
+    """One turn of the adjudication."""
 
-    side: str  # "pro" | "con"
+    side: str  # "incident" | "noise"
     round: int
     text: str
 
 
 class Verdict(BaseModel):
-    """Judge's structured ruling."""
+    """Judge's structured ruling on the alert."""
 
-    winner: str = Field(description="'pro', 'con', or 'tie'")
+    call: str = Field(description="'incident', 'noise', or 'inconclusive'")
     confidence: float = Field(ge=0.0, le=1.0, description="0..1 confidence in the call")
     key_points: list[str] = Field(description="The 2–4 strongest arguments that drove the decision")
     reasoning: str = Field(description="One-paragraph rationale")
 
 
-PRO_PROMPT = (
-    "You are arguing the FOR side. Be specific, cite reasoning, and "
-    "directly rebut the OPPOSITION's most recent point if any. Three "
-    "sentences max."
+INCIDENT_PROMPT = (
+    "You are the INCIDENT advocate in a cloud-reliability adjudication. "
+    "Argue that the alert is a real production incident worth paging "
+    "on-call. Cite the alert telemetry, and directly rebut the noise "
+    "side's most recent point if any. Three sentences max."
 )
-CON_PROMPT = (
-    "You are arguing the AGAINST side. Be specific, cite reasoning, and "
-    "directly rebut the FOR side's most recent point if any. Three "
-    "sentences max."
+NOISE_PROMPT = (
+    "You are the NOISE advocate in a cloud-reliability adjudication. "
+    "Argue that the alert has a benign explanation and does not warrant "
+    "paging. Cite the alert telemetry, and directly rebut the incident "
+    "side's most recent point if any. Three sentences max."
 )
 JUDGE_PROMPT = (
-    "You are an impartial debate judge. Read the full transcript and "
-    "emit a Verdict object. Pick a winner only if one side clearly "
-    "outargued the other; otherwise return 'tie'."
+    "You are an impartial SRE on-call lead. Read the full adjudication "
+    "transcript and emit a Verdict object. Call incident or noise only "
+    "if one side clearly outargued the other; otherwise return "
+    "'inconclusive'."
 )
 
 
@@ -94,22 +99,22 @@ JUDGE_PROMPT = (
 def _make_agent(role: str, prompt: str, model: Any) -> Agent:
     return Agent(
         config=AgentConfig(
-            agent_id=f"debate-{role}",
+            agent_id=f"adjudicate-{role}",
             model=model,
             system_prompt=prompt,
             max_iterations=2,
             # Reasoning-class models (gpt-5.x, o-series) burn thinking
             # tokens before any output; 2000 leaves room for both the
-            # thinking budget and a short debater turn.
+            # thinking budget and a short advocate turn.
             max_tokens=2000,
         )
     )
 
 
-async def _argue(agent: Agent, transcript: list[Turn], topic: str, side: str, rnd: int) -> str:
+async def _argue(agent: Agent, transcript: list[Turn], alert: str, side: str, rnd: int) -> str:
     history = "\n".join(f"[{t.side.upper()} r{t.round}] {t.text}" for t in transcript)
     prompt = (
-        f"Topic: {topic}\n\n"
+        f"Alert under adjudication: {alert}\n\n"
         f"Transcript so far:\n{history or '(no turns yet)'}\n\n"
         f"You are arguing the {side.upper()} side, round {rnd}. Make your point now."
     )
@@ -125,19 +130,21 @@ async def _argue(agent: Agent, transcript: list[Turn], topic: str, side: str, rn
 # ---------------------------------------------------------------------------
 
 
-async def pro_turn(state: dict[str, Any]) -> dict[str, Any]:
-    agent = _make_agent("pro", PRO_PROMPT, state["__model__"])
+async def incident_turn(state: dict[str, Any]) -> dict[str, Any]:
+    agent = _make_agent("incident", INCIDENT_PROMPT, state["__model__"])
     rnd = state.get("round", 0)
-    text = await _argue(agent, state.get("transcript", []), state["topic"], "pro", rnd)
-    return {"transcript": state.get("transcript", []) + [Turn(side="pro", round=rnd, text=text)]}
-
-
-async def con_turn(state: dict[str, Any]) -> dict[str, Any]:
-    agent = _make_agent("con", CON_PROMPT, state["__model__"])
-    rnd = state.get("round", 0)
-    text = await _argue(agent, state.get("transcript", []), state["topic"], "con", rnd)
+    text = await _argue(agent, state.get("transcript", []), state["alert"], "incident", rnd)
     return {
-        "transcript": state.get("transcript", []) + [Turn(side="con", round=rnd, text=text)],
+        "transcript": state.get("transcript", []) + [Turn(side="incident", round=rnd, text=text)]
+    }
+
+
+async def noise_turn(state: dict[str, Any]) -> dict[str, Any]:
+    agent = _make_agent("noise", NOISE_PROMPT, state["__model__"])
+    rnd = state.get("round", 0)
+    text = await _argue(agent, state.get("transcript", []), state["alert"], "noise", rnd)
+    return {
+        "transcript": state.get("transcript", []) + [Turn(side="noise", round=rnd, text=text)],
         "round": rnd + 1,
     }
 
@@ -165,16 +172,16 @@ async def judge_turn(state: dict[str, Any]) -> dict[str, Any]:
     transcript_text = "\n".join(
         f"[{t.side.upper()} r{t.round}] {t.text}" for t in state["transcript"]
     )
-    prompt = f"Topic: {state['topic']}\n\nTranscript:\n{transcript_text}\n\nNow emit your Verdict."
-    # run_sync returns the parsed object. We're already inside an asyncio
-    # loop driving the graph, so hop the call onto a worker thread.
+    prompt = f"Alert: {state['alert']}\n\nTranscript:\n{transcript_text}\n\nNow emit your Verdict."
+    # arun returns the parsed object directly on the running loop — no
+    # worker-thread hop needed (browsers/WASM have no threads).
     last_exc: BaseException | None = None
     final = None
     for attempt in range(3):
         try:
-            final = await _asyncio.to_thread(agent.run_sync, prompt)
+            final = await agent.arun(prompt)
             break
-        # Retry covers transient OCI flakiness.
+        # Retry covers transient provider flakiness.
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             await _asyncio.sleep(0.5 * (attempt + 1))
@@ -191,27 +198,29 @@ async def judge_turn(state: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Routing — N rounds of pro/con, then judge once
+# Routing — N rounds of incident/noise, then judge once
 # ---------------------------------------------------------------------------
 
 
 N_ROUNDS = 2
 
 
-def route_after_con(state: dict[str, Any]) -> str:
+def route_after_noise(state: dict[str, Any]) -> str:
     if state.get("round", 0) >= N_ROUNDS:
         return "judge"
-    return "pro"
+    return "incident"
 
 
 def build_debate_graph() -> StateGraph:
-    graph = StateGraph(name="debate-with-judge")
-    graph.add_node("pro", pro_turn)
-    graph.add_node("con", con_turn)
+    graph = StateGraph(name="incident-adjudication")
+    graph.add_node("incident", incident_turn)
+    graph.add_node("noise", noise_turn)
     graph.add_node("judge", judge_turn)
-    graph.add_edge(START, "pro")
-    graph.add_edge("pro", "con")
-    graph.add_conditional_edges("con", route_after_con, targets={"pro": "pro", "judge": "judge"})
+    graph.add_edge(START, "incident")
+    graph.add_edge("incident", "noise")
+    graph.add_conditional_edges(
+        "noise", route_after_noise, targets={"incident": "incident", "judge": "judge"}
+    )
     graph.add_edge("judge", END)
     return graph
 
@@ -226,26 +235,27 @@ async def main() -> None:
 
     # Short-circuits the notebook when the model can't produce JSON.
     check_structured_output_capable()
-    print("Notebook 33: adversarial debate with a structured-output judge")
+    print("Notebook 32: incident adjudication debate — incident vs noise with a typed judge")
     print("=" * 60)
 
     model = get_model()
     graph = build_debate_graph()
     initial = {
-        "topic": (
-            "Resolved: A 30-engineer SaaS team running a 250k-LOC Python "
-            "monolith on a single Postgres + Redis stack should split the "
-            "monolith into microservices over the next 12 months, given a "
-            "current weekly deploy cadence and ~2 outages per quarter "
-            "traceable to coupling between billing and provisioning code."
+        "alert": (
+            "Alert CLOUD-4189 (suspected reliability incident): service "
+            "checkout-api p99 latency rose from 120ms to 2.4s over 8 minutes; "
+            "the HPA scaled the deployment from 6 to 20 pods; one node in the "
+            "autoscaling group reported MemoryPressure. The error rate held "
+            "flat at 0.1%, a scheduled nightly reindex job is running on the "
+            "same cluster, and no recent deploy preceded the spike."
         ),
         "transcript": [],
         "round": 0,
         "__model__": model,
     }
 
-    print(f"\nTopic: {initial['topic']!r}\n")
-    print(f"Running {N_ROUNDS} rounds of PRO vs CON, then judge…\n")
+    print(f"\nAlert: {initial['alert']!r}\n")
+    print(f"Running {N_ROUNDS} rounds of incident vs noise, then judge…\n")
 
     result = await graph.execute(initial)
     failed = [
@@ -266,7 +276,7 @@ async def main() -> None:
     print()
     print("Verdict:")
     print("-" * 60)
-    print(f"  Winner:     {verdict.winner}")
+    print(f"  Call:       {verdict.call}")
     print(f"  Confidence: {verdict.confidence:.2f}")
     print("  Key points:")
     for p in verdict.key_points:

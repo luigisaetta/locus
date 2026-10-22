@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for memory store."""
 
@@ -8,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from locus.memory.store import (
+from tulip.memory.store import (
     BaseStore,
     InMemoryStore,
     StoreCapabilities,
@@ -453,7 +452,7 @@ class TestBaseStoreDefaultImplementations:
     @pytest.mark.asyncio
     async def test_search_without_capability(self, minimal_store):
         """Search on an unsupporting backend raises a typed capability error."""
-        from locus.memory.store import StoreCapabilityError
+        from tulip.memory.store import StoreCapabilityError
 
         with pytest.raises(StoreCapabilityError) as exc_info:
             await minimal_store.search(("ns",), query="test")
@@ -465,7 +464,7 @@ class TestBaseStoreDefaultImplementations:
     @pytest.mark.asyncio
     async def test_put_with_embedding_without_capability(self, minimal_store):
         """put_with_embedding raises StoreCapabilityError."""
-        from locus.memory.store import StoreCapabilityError
+        from tulip.memory.store import StoreCapabilityError
 
         with pytest.raises(StoreCapabilityError) as exc_info:
             await minimal_store.put_with_embedding(("ns",), "key", "value", [0.1, 0.2, 0.3])
@@ -475,7 +474,7 @@ class TestBaseStoreDefaultImplementations:
     @pytest.mark.asyncio
     async def test_search_by_embedding_without_capability(self, minimal_store):
         """search_by_embedding raises StoreCapabilityError."""
-        from locus.memory.store import StoreCapabilityError
+        from tulip.memory.store import StoreCapabilityError
 
         with pytest.raises(StoreCapabilityError) as exc_info:
             await minimal_store.search_by_embedding(("ns",), [0.1, 0.2, 0.3])
@@ -484,7 +483,7 @@ class TestBaseStoreDefaultImplementations:
     @pytest.mark.asyncio
     async def test_get_embedding_without_capability(self, minimal_store):
         """get_embedding raises StoreCapabilityError."""
-        from locus.memory.store import StoreCapabilityError
+        from tulip.memory.store import StoreCapabilityError
 
         with pytest.raises(StoreCapabilityError) as exc_info:
             await minimal_store.get_embedding(("ns",), "key")
@@ -496,7 +495,7 @@ class TestStoreCapabilityError:
 
     def test_carries_structured_payload(self):
         """The exception exposes capability/store_class/hint as attributes."""
-        from locus.memory.store import StoreCapabilityError
+        from tulip.memory.store import StoreCapabilityError
 
         err = StoreCapabilityError(
             capability="semantic_search",
@@ -511,14 +510,14 @@ class TestStoreCapabilityError:
 
     def test_subclasses_not_implemented_error_for_back_compat(self):
         """Legacy ``except NotImplementedError`` paths still catch it."""
-        from locus.memory.store import StoreCapabilityError
+        from tulip.memory.store import StoreCapabilityError
 
         err = StoreCapabilityError(capability="search", store_class="StubStore")
         assert isinstance(err, NotImplementedError)
 
     def test_hint_is_optional(self):
         """Constructed without a hint, the message is just capability + class."""
-        from locus.memory.store import StoreCapabilityError
+        from tulip.memory.store import StoreCapabilityError
 
         err = StoreCapabilityError(capability="search", store_class="StubStore")
         assert err.hint is None
@@ -704,7 +703,7 @@ class TestSemanticSearchResult:
 
     def test_create_semantic_search_result(self):
         """Test creating SemanticSearchResult."""
-        from locus.memory.store import SemanticSearchResult
+        from tulip.memory.store import SemanticSearchResult
 
         now = datetime.now(UTC)
         item = StoreItem(
@@ -723,7 +722,7 @@ class TestSemanticSearchResult:
 
     def test_semantic_search_result_with_distance(self):
         """Test SemanticSearchResult with distance."""
-        from locus.memory.store import SemanticSearchResult
+        from tulip.memory.store import SemanticSearchResult
 
         now = datetime.now(UTC)
         item = StoreItem(

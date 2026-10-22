@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Integration tests for vector stores: pgvector."""
 
@@ -17,7 +16,7 @@ pytestmark = pytest.mark.integration
 def get_embedder():
     """Get embedder based on available credentials."""
     if os.environ.get("OPENAI_API_KEY"):
-        from locus.rag.embeddings import OpenAIEmbeddings
+        from tulip.rag.embeddings import OpenAIEmbeddings
 
         return OpenAIEmbeddings(model="text-embedding-3-small")
     return None
@@ -40,8 +39,8 @@ class TestPgVectorStore:
     @pytest.mark.asyncio
     async def test_pgvector_basic_operations(self):
         """Test basic operations with pgvector."""
-        from locus.rag.stores import PgVectorStore
-        from locus.rag.stores.base import Document
+        from tulip.rag.stores import PgVectorStore
+        from tulip.rag.stores.base import Document
 
         embedder = get_embedder()
         if not embedder:

@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Coverage gap fills for ``locus.hooks.builtin.guardrails.OutputFilterHook``.
+"""Coverage gap fills for ``tulip.hooks.builtin.guardrails.OutputFilterHook``.
 
 The existing ``test_guardrails.py`` covers the happy paths. These tests
 hit the remaining branches:
@@ -19,14 +18,14 @@ from __future__ import annotations
 
 import pytest
 
-from locus.core.messages import Message
-from locus.hooks.builtin.guardrails import (
+from tulip.core.messages import Message
+from tulip.hooks.builtin.guardrails import (
     ContentPolicy,
     OutputFilterHook,
     TopicPolicy,
 )
-from locus.hooks.provider import AfterModelCallEvent, HookPriority
-from locus.models.base import ModelResponse
+from tulip.hooks.provider import AfterModelCallEvent, HookPriority
+from tulip.models.base import ModelResponse
 
 
 def _event(content: str) -> AfterModelCallEvent:

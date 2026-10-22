@@ -1,13 +1,12 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for multiagent handoff module."""
 
 from datetime import datetime
 
-from locus.core.messages import Message
-from locus.multiagent.handoff import (
+from tulip.core.messages import Message
+from tulip.multiagent.handoff import (
     HandoffContext,
     HandoffEvent,
     HandoffReason,
@@ -159,7 +158,7 @@ class TestHandoffResult:
 
     def test_create_success_result(self):
         """Test creating successful handoff result."""
-        from locus.multiagent.handoff import HandoffResult
+        from tulip.multiagent.handoff import HandoffResult
 
         result = HandoffResult(
             handoff_id="handoff_123",
@@ -177,7 +176,7 @@ class TestHandoffResult:
 
     def test_create_failure_result(self):
         """Test creating failed handoff result."""
-        from locus.multiagent.handoff import HandoffResult
+        from tulip.multiagent.handoff import HandoffResult
 
         result = HandoffResult(
             handoff_id="handoff_456",
@@ -197,7 +196,7 @@ class TestHandoffAgent:
 
     def test_create_agent(self):
         """Test creating handoff agent."""
-        from locus.multiagent.handoff import HandoffAgent
+        from tulip.multiagent.handoff import HandoffAgent
 
         agent = HandoffAgent(
             name="Test Agent",
@@ -212,7 +211,7 @@ class TestHandoffAgent:
         """Test with_model returns copy."""
         from unittest.mock import MagicMock
 
-        from locus.multiagent.handoff import HandoffAgent
+        from tulip.multiagent.handoff import HandoffAgent
 
         agent = HandoffAgent(
             name="Agent",
@@ -231,7 +230,7 @@ class TestHandoff:
 
     def test_create_manager(self):
         """Test creating handoff manager."""
-        from locus.multiagent.handoff import Handoff
+        from tulip.multiagent.handoff import Handoff
 
         manager = Handoff()
         assert manager.id.startswith("handoff_mgr_")
@@ -239,7 +238,7 @@ class TestHandoff:
 
     def test_register_agent(self):
         """Test registering agents."""
-        from locus.multiagent.handoff import Handoff, HandoffAgent
+        from tulip.multiagent.handoff import Handoff, HandoffAgent
 
         manager = Handoff()
         agent = HandoffAgent(
@@ -254,7 +253,7 @@ class TestHandoff:
 
     def test_register_agents(self):
         """Test registering multiple agents."""
-        from locus.multiagent.handoff import Handoff, HandoffAgent
+        from tulip.multiagent.handoff import Handoff, HandoffAgent
 
         manager = Handoff()
         agents = [
@@ -271,7 +270,7 @@ class TestCreateHandoffManager:
 
     def test_create_empty(self):
         """Test creating empty manager."""
-        from locus.multiagent.handoff import create_handoff_manager
+        from tulip.multiagent.handoff import create_handoff_manager
 
         manager = create_handoff_manager()
         assert len(manager.agents) == 0
@@ -279,7 +278,7 @@ class TestCreateHandoffManager:
 
     def test_create_with_agents(self):
         """Test creating manager with agents."""
-        from locus.multiagent.handoff import HandoffAgent, create_handoff_manager
+        from tulip.multiagent.handoff import HandoffAgent, create_handoff_manager
 
         agents = [
             HandoffAgent(name="A1", description="Test", system_prompt="P"),
@@ -290,7 +289,7 @@ class TestCreateHandoffManager:
 
     def test_create_with_max_chain(self):
         """Test creating with custom max chain."""
-        from locus.multiagent.handoff import create_handoff_manager
+        from tulip.multiagent.handoff import create_handoff_manager
 
         manager = create_handoff_manager(max_chain=10)
         assert manager.max_handoff_chain == 10
@@ -301,7 +300,7 @@ class TestCreateHandoffAgent:
 
     def test_create_minimal(self):
         """Test creating minimal agent."""
-        from locus.multiagent.handoff import create_handoff_agent
+        from tulip.multiagent.handoff import create_handoff_agent
 
         agent = create_handoff_agent(name="Test")
         assert agent.name == "Test"
@@ -309,8 +308,8 @@ class TestCreateHandoffAgent:
 
     def test_create_full(self):
         """Test creating agent with all options."""
-        from locus.multiagent.handoff import create_handoff_agent
-        from locus.tools.decorator import tool
+        from tulip.multiagent.handoff import create_handoff_agent
+        from tulip.tools.decorator import tool
 
         @tool
         def my_tool(x: int) -> str:
@@ -333,7 +332,7 @@ class TestHandoffAgentConfidenceEstimation:
 
     def test_confidence_increase_with_solved(self):
         """Test confidence increases for positive keywords."""
-        from locus.multiagent.handoff import HandoffAgent
+        from tulip.multiagent.handoff import HandoffAgent
 
         agent = HandoffAgent(
             name="Test",
@@ -346,7 +345,7 @@ class TestHandoffAgentConfidenceEstimation:
 
     def test_confidence_decrease_with_uncertain(self):
         """Test confidence decreases for uncertain keywords."""
-        from locus.multiagent.handoff import HandoffAgent
+        from tulip.multiagent.handoff import HandoffAgent
 
         agent = HandoffAgent(
             name="Test",
@@ -359,7 +358,7 @@ class TestHandoffAgentConfidenceEstimation:
 
     def test_confidence_slight_increase_default(self):
         """Test default confidence increase."""
-        from locus.multiagent.handoff import HandoffAgent
+        from tulip.multiagent.handoff import HandoffAgent
 
         agent = HandoffAgent(
             name="Test",
@@ -372,7 +371,7 @@ class TestHandoffAgentConfidenceEstimation:
 
     def test_confidence_capped_at_one(self):
         """Test confidence is capped at 1.0."""
-        from locus.multiagent.handoff import HandoffAgent
+        from tulip.multiagent.handoff import HandoffAgent
 
         agent = HandoffAgent(
             name="Test",
@@ -389,8 +388,8 @@ class TestHandoffManagerExtractKeyMessages:
 
     def test_extract_short_conversation(self):
         """Test extracting from short conversation."""
-        from locus.core.state import AgentState
-        from locus.multiagent.handoff import Handoff
+        from tulip.core.state import AgentState
+        from tulip.multiagent.handoff import Handoff
 
         manager = Handoff()
 
@@ -404,8 +403,8 @@ class TestHandoffManagerExtractKeyMessages:
 
     def test_extract_preserves_system_message(self):
         """Test that system message is preserved."""
-        from locus.core.state import AgentState
-        from locus.multiagent.handoff import Handoff
+        from tulip.core.state import AgentState
+        from tulip.multiagent.handoff import Handoff
 
         manager = Handoff()
 
@@ -434,7 +433,7 @@ class TestHandoffManagerSummarizeConversation:
 
     def test_summarize_simple_conversation(self):
         """Test summarizing a simple conversation."""
-        from locus.multiagent.handoff import Handoff
+        from tulip.multiagent.handoff import Handoff
 
         manager = Handoff()
 
@@ -450,7 +449,7 @@ class TestHandoffManagerSummarizeConversation:
 
     def test_summarize_empty_conversation(self):
         """Test summarizing empty conversation."""
-        from locus.multiagent.handoff import Handoff
+        from tulip.multiagent.handoff import Handoff
 
         manager = Handoff()
 

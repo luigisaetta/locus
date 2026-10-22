@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for console handler."""
 
@@ -8,7 +7,7 @@ import io
 
 import pytest
 
-from locus.core.events import (
+from tulip.core.events import (
     CausalEdgeEvent,
     CausalNodeEvent,
     GroundingEvent,
@@ -23,7 +22,7 @@ from locus.core.events import (
     ToolCompleteEvent,
     ToolStartEvent,
 )
-from locus.streaming.console import ConsoleHandler
+from tulip.streaming.console import ConsoleHandler
 
 
 class TestConsoleHandler:
@@ -333,8 +332,12 @@ class TestConsoleHandler:
 
     @pytest.mark.asyncio
     async def test_handle_think_event_hidden(self, output):
-        """Test handling think event when reasoning is hidden."""
+        """``show_reasoning=False`` must actually withhold the reasoning.
+
+        This took a capture buffer and never read it, so it asserted only that
+        the call did not raise — which it would not have, whatever it printed.
+        """
         handler = ConsoleHandler(output=output, use_color=False, show_reasoning=False)
-        event = ThinkEvent(iteration=1, reasoning="Thinking about the task")
-        await handler.on_event(event)
-        # Should not display reasoning when show_reasoning is False
+        await handler.on_event(ThinkEvent(iteration=1, reasoning="Thinking about the task"))
+
+        assert "Thinking about the task" not in output.getvalue()

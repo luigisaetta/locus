@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Tests for ``locus.models.rate_limits``."""
+"""Tests for ``tulip.models.rate_limits``."""
 
 from __future__ import annotations
 
@@ -11,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from pydantic import ValidationError
 
-from locus.models.rate_limits import (
+from tulip.models.rate_limits import (
     RateLimitBucket,
     RateLimitState,
     parse_rate_limit_headers,

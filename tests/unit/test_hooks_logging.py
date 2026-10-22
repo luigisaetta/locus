@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for logging hooks."""
 
@@ -9,9 +8,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from locus.core.state import AgentState
-from locus.hooks.builtin.logging import LoggingHook, StructuredLoggingHook
-from locus.hooks.provider import AfterToolCallEvent, BeforeToolCallEvent
+from tulip.core.state import AgentState
+from tulip.hooks.builtin.logging import LoggingHook, StructuredLoggingHook
+from tulip.hooks.provider import AfterToolCallEvent, BeforeToolCallEvent
 
 
 class TestLoggingHook:

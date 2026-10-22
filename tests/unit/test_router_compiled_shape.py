@@ -1,12 +1,11 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Structural audit of every compiled :class:`Runnable`.
 
 The end-to-end suite (``tests/integration/test_router_e2e.py``) proves
 each protocol *runs*. This file proves each protocol's compiled object
-graph matches the **recommended locus pattern byte-for-byte**:
+graph matches the **recommended tulip pattern byte-for-byte**:
 
     direct_response       → exactly one :class:`Agent`
     plan_execute_validate → :class:`SequentialPipeline` of 3 Agents
@@ -29,9 +28,9 @@ import asyncio
 
 import pytest
 
-from locus.agent.agent import Agent
-from locus.agent.composition import LoopAgent, ParallelPipeline, SequentialPipeline
-from locus.router import (
+from tulip.agent.agent import Agent
+from tulip.agent.composition import LoopAgent, ParallelPipeline, SequentialPipeline
+from tulip.router import (
     HUMAN_SENTINEL,
     AgentRunnable,
     BuilderContext,
@@ -47,9 +46,9 @@ from locus.router import (
     TaskType,
     builtin_protocols,
 )
-from locus.router.compiler import _ApprovalRunnable
-from locus.tools.decorator import tool
-from locus.tools.registry import create_registry
+from tulip.router.compiler import _ApprovalRunnable
+from tulip.tools.decorator import tool
+from tulip.tools.registry import create_registry
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +180,7 @@ class TestDirectResponseShape:
     def test_unknown_capability_silently_dropped(self, compiler: CognitiveCompiler) -> None:
         # The LLM extractor sometimes hallucinates ids; the compiler
         # must drop them rather than crash. (Behaviour pinned in
-        # src/locus/router/compiler.py:117.)
+        # src/tulip/router/compiler.py:117.)
         frame = _frame(
             primary_goal=TaskType.ANSWER,
             required_capabilities=["kb_search", "this_does_not_exist"],

@@ -1,83 +1,130 @@
-# Oracle Generative AI – Multi-Agent Locus SDK Examples
+# tulip examples — build agents with Tulip
+
+Every runnable file in this directory is a self-contained agent you can run.
+They span the domains where agents act — support, payments, infrastructure,
+and data. The snippets below are the smallest possible shapes; the numbered
+`notebook_*.py` files build them out. The security-domain notebooks (red-team,
+SOC triage, fingerprinting, threat scenarios) live with the opt-in
+[`tulip-agents-security`](../packages/tulip-agents-security/examples/) package.
+
+**A note on the numbers.** They are stable identifiers, not a sequence. The
+series runs `06-09 · 11-40 · 45-52 · 55-72 · 81 · 83-87`, and the gaps are
+not missing files — those numbers never existed, or (73-80, 82) belong to the
+security notebooks in `packages/tulip-agents-security/examples/`. Numbers are never reused or reassigned,
+so a link, a bookmark, or a cross-reference from another notebook keeps
+pointing at the same example forever; renumbering to close the gaps would
+break every one of them to fix an appearance.
+
+Nor do the numbers carry difficulty or order: 83 is one of the easiest files
+here, and the gate notebooks (83-87) need no credentials at all. Read in
+whatever order the [documentation](https://tulipagents.ai/notebooks/) puts in
+front of you — it is ordered by what builds on what.
+
+## Start here
+
+[`hello.py`](hello.py) is the API and nothing else — a model, a tool, one
+call, twelve lines:
+
+```bash
+export OPENAI_API_KEY=...        # or point TULIP_MODEL at any provider
+python examples/hello.py
+```
+
+The numbered notebooks below each teach one idea against a worked scenario,
+which makes them longer than the API they demonstrate. That is deliberate, and
+it is the wrong first thing to read.
+
+## How to run
+
+Every numbered notebook runs **offline by default** — with no API key set,
+`config.py` hands the agents a bundled mock model, so you can run the whole
+suite credential-free:
+
+```bash
+pip install "tulip-agents[openai,anthropic]"   # or: pip install -e . from the repo root
+python examples/notebook_06_basic_agent.py     # runs on the mock model, no keys needed
+```
+
+To run against a real provider, set the provider and its key:
+
+```bash
+export TULIP_MODEL_PROVIDER=openai   ; export OPENAI_API_KEY=sk-...
+# or
+export TULIP_MODEL_PROVIDER=anthropic; export ANTHROPIC_API_KEY=sk-ant-...
+export TULIP_MODEL_ID=gpt-4o         # optional — provider-specific model id
+```
+
+The `tulip.control` gate notebooks (83–87) are fully offline by design and
+need no provider at all.
 
 ## Quick Start
 
 ```python
-from locus.agent import Agent
-from locus.models import OCIChatCompletionsModel
+from tulip.agent import Agent
+from tulip.models import get_model
 
-model = OCIChatCompletionsModel(
-    model="openai.gpt-5",
-    profile="MY_PROFILE",  # any profile in ~/.oci/config
-)
+model = get_model("openai:gpt-4o")  # or "anthropic:claude-sonnet-4-6"
 
 agent = Agent(
     model=model,
-    system_prompt="You are a helpful assistant.",
+    system_prompt="You are a concise assistant. Cite the evidence behind every answer.",
 )
 
 # Synchronous
-result = agent.run_sync("What is the capital of France?")
-print(result.message)  # "Paris."
+result = agent.run_sync("Summarize the trade-offs of moving checkout to a queue.")
+print(result.text)  # a one-paragraph answer with the evidence that backs it
 ```
 
-`OCIChatCompletionsModel` uses OCI GenAI's OpenAI-compatible `/openai/v1`
-endpoint — real SSE streaming, day-0 model support, no GenAI Project
-OCID required. For Cohere R-series models, use `OCIModel` instead — see
-[`docs/how-to/oci-models.md`](../docs/how-to/oci-models.md) for the full
-transport story and the production `auth_type=` modes
-(`instance_principal` / `resource_principal`) for OCI VMs and Functions.
+A model is just a string: the prefix before the colon (`openai:`,
+`anthropic:`) selects the provider; the rest is the model id.
+See [the models guide](https://tulipagents.ai/concepts/models/) for the full
+provider story, including any OpenAI-compatible endpoint via `base_url`.
 
 ## With Tools
 
 ```python
-from locus.tools import tool
+from tulip.tools import tool
+
 
 @tool
-def get_weather(city: str) -> str:
-    """Get weather for a city."""
-    return f"Sunny, 72°F in {city}"
+def lookup_order(order_id: str) -> str:
+    """Return status, items, and payment state for an order."""
+    return f"{order_id}: delivered 2026-07-12, 1 item ($49.00), payment settled"
+
 
 @tool
-def calculate(expression: str) -> str:
-    """Evaluate a math expression.
+def issue_refund(order_id: str, amount: float) -> str:
+    """Refund an order — a consequential action worth gating in production."""
+    return f"refund of ${amount:.2f} queued for {order_id}"
 
-    NOTE: Never pass untrusted/model-generated strings to eval(). Use a safe
-    AST-based evaluator in real applications — see examples/notebook_04 for
-    a concrete example.
-    """
-    import ast
-    import operator as op
-
-    ops = {ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul, ast.Div: op.truediv}
-    def _eval(n):
-        if isinstance(n, ast.Expression): return _eval(n.body)
-        if isinstance(n, ast.Constant): return n.value
-        if isinstance(n, ast.BinOp) and type(n.op) in ops:
-            return ops[type(n.op)](_eval(n.left), _eval(n.right))
-        raise ValueError("bad expr")
-    return str(_eval(ast.parse(expression, mode="eval")))
 
 agent = Agent(
     model=model,
-    tools=[get_weather, calculate],
-    system_prompt="Use tools when needed.",
+    tools=[lookup_order, issue_refund],
+    system_prompt="You are a support agent. Look the order up first, then cite what you found.",
 )
 
-result = agent.run_sync("What's the weather in Tokyo?")
+result = agent.run_sync("Customer says ord-4821 arrived broken — are they owed a refund?")
 ```
+
+For tools where a duplicate call would hurt — issuing a refund, paging an
+on-call, filing a ticket — declare `@tool(idempotent=True)`: the loop
+keys every invocation on `(name, args)` and refuses to fire the same one
+twice, even across retries.
 
 ## Streaming
 
 ```python
 import asyncio
 
+
 async def main():
-    async for event in agent.run("Tell me about Python"):
+    async for event in agent.run("Work out why order ord-4821 was charged twice."):
         if event.event_type == "think":
             print(event.reasoning)
         elif event.event_type == "tool_complete":
             print(f"Tool {event.tool_name}: {event.result}")
+
 
 asyncio.run(main())
 ```
@@ -85,32 +132,45 @@ asyncio.run(main())
 ## Multi-Agent (Swarm)
 
 ```python
-from locus.multiagent import create_swarm, create_swarm_agent
+import asyncio
 
-researcher = create_swarm_agent(
-    name="Researcher",
-    capabilities=["search", "analyze"],
-    system_prompt="You research topics thoroughly.",
+from tulip.multiagent import create_swarm, create_swarm_agent
+
+analyst = create_swarm_agent(
+    name="Analyst",
+    capabilities=["lookup", "correlate"],
+    system_prompt="You pull order, payment, and shipping records and correlate them.",
 )
 
-writer = create_swarm_agent(
-    name="Writer",
+reporter = create_swarm_agent(
+    name="Reporter",
     capabilities=["write", "summarize"],
-    system_prompt="You write clear, concise content.",
+    system_prompt="You write clear, evidence-backed case summaries.",
 )
 
-swarm = create_swarm(agents=[researcher, writer], model=model)
-result = await swarm.execute("Research and summarize AI trends")
-print(result.summary)
+swarm = create_swarm(agents=[analyst, reporter], model=model)
+
+
+async def main():
+    result = await swarm.execute(
+        "Work out why order ord-4821 was charged twice and write the case summary."
+    )
+    print(result.summary)
+
+
+asyncio.run(main())
 ```
 
 ## With Hooks
 
 ```python
-from locus.hooks import LoggingHook, GuardrailsHook
+from tulip.hooks.builtin import LoggingHook, GuardrailsHook
 
 agent = Agent(
     model=model,
-    hooks=[LoggingHook(), GuardrailsHook()],
+    hooks=[
+        LoggingHook(),
+        GuardrailsHook(),
+    ],  # audit trail + content guardrails (PII redaction, secret-egress blocks)
 )
 ```

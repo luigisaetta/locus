@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for tools schema generation."""
 
@@ -8,8 +7,8 @@ from typing import Optional, Union
 
 from pydantic import BaseModel
 
-from locus.tools.context import ToolContext
-from locus.tools.schema import (
+from tulip.tools.context import ToolContext
+from tulip.tools.schema import (
     _is_tool_context,
     _parse_docstring_params,
     generate_schema,

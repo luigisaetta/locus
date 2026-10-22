@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for RAG stores base classes."""
 
@@ -9,7 +8,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from locus.rag.stores.base import (
+from tulip.rag.stores.base import (
     BaseVectorStore,
     Document,
     SearchResult,
@@ -199,7 +198,7 @@ class TestVectorStoreProtocol:
     def test_protocol_checking(self):
         """Test that protocol can be used for type checking."""
         # InMemoryVectorStore should implement VectorStore protocol
-        from locus.rag.stores.memory import InMemoryVectorStore
+        from tulip.rag.stores.memory import InMemoryVectorStore
 
         store = InMemoryVectorStore()
         assert isinstance(store, VectorStore)

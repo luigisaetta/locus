@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Notebook 30: DeepAgent — a research-shaped Agent factory with Oracle grounding.
+"""Notebook 29: DeepAgent — scoped service-fleet reliability review grounded in prior notes.
 
-``create_deepagent`` bundles the configuration patterns for deep research
-into one call: reflexion + grounding on by default, a typed termination
-algebra, plus opt-in filesystem scratchspace, todo tracking, subagent
-spawning, and datastore auto-wiring. The result is a plain ``locus.Agent``
-— every hook, checkpointer, and observability primitive in the SDK
-attaches normally.
+``create_deepagent`` bundles the configuration patterns for deep, methodical
+investigation into one call: reflexion + grounding on by default, a typed
+termination algebra, plus opt-in filesystem scratchspace, todo tracking,
+subagent spawning, and datastore auto-wiring. Here the agent runs a scoped
+reliability review over a service-fleet inventory — the pre-release readiness
+step of an on-call rotation, bounded to the services a deploy window actually
+touches. The result is a plain ``tulip.Agent`` — every hook, checkpointer,
+and observability primitive in the SDK attaches normally.
 
 - Typed termination: ``(ToolCalled('submit') & ConfidenceMet(0.85))
   | TokenLimit(N) | MaxIterations(M)`` — composable and testable
@@ -21,28 +22,25 @@ attaches normally.
 - Todo tracking: ``write_todos`` / ``read_todos`` backed by a
   ``TodoState`` the caller can inspect after the run.
 - Subagent dispatch: ``SubAgentDef`` + ``task(...)`` for one-shot
-  delegated investigations whose trajectories never reach the parent's
+  delegated reviews whose trajectories never reach the parent's
   context window.
 - ``datastores={name: {retriever, description, top_k}}``: auto-wire a
   ``search_<name>`` tool from any ``RAGRetriever`` and prepend a routing
-  block to the system prompt. The Oracle-aware path here is
-  ``OracleVectorStore`` against Autonomous Database 26ai — Part 5
-  exercises it and gracefully skips when Oracle env vars are unset.
+  block to the system prompt. Part 5 wires an in-memory ``QdrantVectorStore`` +
+  ``OpenAIEmbeddings`` retriever over prior incident notes and gracefully
+  skips when no embedding key is set.
 
 Run it:
-    .venv/bin/python examples/notebook_35_deepagent.py
+    python examples/notebook_29_deepagent.py
 
-The default provider is OCI Generative AI. With ``~/.oci/config``
-present the agent talks to a live OCI model (canonical pick:
-``openai.gpt-4.1`` or ``meta.llama-3.3-70b-instruct``). Set
-``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
+The default provider is the bundled mock model; set TULIP_MODEL_PROVIDER
+to openai / anthropic for a live model. Set
+``TULIP_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
-- Notebook 08 (Agent basics).
-- Notebook 16 (typed termination) — the algebra DeepAgent uses internally.
-- For Part 5 only: ``ORACLE_DSN``, ``ORACLE_USER``, ``ORACLE_PASSWORD``,
-  ``ORACLE_WALLET``, and ``OCI_COMPARTMENT`` exported, plus an
-  Autonomous Database 26ai with vector support. Absent these, Part 5
+- Notebook 06 (Agent basics).
+- Notebook 15 (typed termination) — the algebra DeepAgent uses internally.
+- For Part 5 only: ``OPENAI_API_KEY`` for embeddings. Absent it, Part 5
   exits cleanly and the rest still runs.
 """
 
@@ -50,94 +48,81 @@ from __future__ import annotations
 
 import asyncio
 
-from config import get_model
+from config import get_embedder, get_model
 from pydantic import BaseModel, Field
 
-from locus.deepagent import (
+from tulip.deepagent import (
     SubAgentDef,
     TodoState,
     create_deepagent,
     make_todo_tools,
 )
-from locus.observability import get_event_bus, run_context
-from locus.tools import tool
+from tulip.observability import get_event_bus, run_context
+from tulip.tools import tool
 
 
 # =============================================================================
-# Shared domain — a tiny module catalogue the agent will research
+# Shared domain — the service-fleet inventory the agent will review.
+# Scope discipline matters: the agent inspects services inside the deploy
+# window and refuses anything outside that set.
 # =============================================================================
 
-_MODULE_CATALOGUE = {
-    "locus.router": {
-        "description": "Meta-orchestration layer — GoalFrame extraction, protocol registry, policy gate, cognitive compiler.",
-        "public_api": [
-            "Router",
-            "GoalFrame",
-            "TaskType",
-            "ProtocolRegistry",
-            "PolicyGate",
-            "CognitiveCompiler",
+_SERVICE_INVENTORY = {
+    "api-gateway": {
+        "description": "Public edge API gateway — terminates TLS, fans out to upstream services, autoscaled 4-12 replicas.",
+        "active_alerts": [
+            "p99-latency-warn",
+            "upstream-5xx-warn",
         ],
-        "since": "0.2.0",
+        "last_deploy": "2026-06-22",
     },
-    "locus.observability": {
-        "description": "In-process SSE pub/sub bus — EventBus, run_context, canonical EV_* constants.",
-        "public_api": [
-            "EventBus",
-            "EventBusHook",
-            "run_context",
-            "get_event_bus",
-            "emit",
-            "emit_sync",
+    "payments-worker": {
+        "description": "Async payments settlement worker — consumes the ledger queue, idempotent retries, PCI scope.",
+        "active_alerts": [
+            "queue-depth-warn",
         ],
-        "since": "0.2.0",
+        "last_deploy": "2026-06-18",
     },
-    "locus.deepagent": {
-        "description": "Research-shaped agent factory: create_deepagent, filesystem tools, todos, subagents.",
-        "public_api": [
-            "create_deepagent",
-            "SubAgentDef",
-            "TodoState",
-            "make_filesystem_tools",
-            "make_todo_tools",
-        ],
-        "since": "0.2.0",
+    "web-frontend": {
+        "description": "Server-rendered web frontend — behind the CDN, blue/green rollout, no open alerts this week.",
+        "active_alerts": [],
+        "last_deploy": "2026-06-24",
     },
 }
 
 
 @tool
-def list_modules() -> list[str]:
-    """List all modules available in the locus catalogue."""
-    return list(_MODULE_CATALOGUE.keys())
+def list_services() -> list[str]:
+    """List all services in the current deploy-window inventory."""
+    return list(_SERVICE_INVENTORY.keys())
 
 
 @tool
-def inspect_module(name: str) -> dict:
-    """Return description, public API, and version for a module.
+def inspect_service(name: str) -> dict:
+    """Return description, active alerts, and last deploy date for a service.
 
     Args:
-        name: Module dotted name, e.g. ``locus.router``.
+        name: Service name, e.g. ``api-gateway``.
 
     Returns:
-        Dict with ``description``, ``public_api``, and ``since``.
+        Dict with ``description``, ``active_alerts``, and ``last_deploy``.
     """
-    if name not in _MODULE_CATALOGUE:
-        return {"error": f"module '{name}' not found"}
-    return _MODULE_CATALOGUE[name]
+    if name not in _SERVICE_INVENTORY:
+        return {"error": f"service '{name}' is not in the deploy window"}
+    return _SERVICE_INVENTORY[name]
 
 
 @tool
-def count_public_symbols(name: str) -> int:
-    """Return the number of public symbols exported by a module.
+def count_active_alerts(name: str) -> int:
+    """Return the number of firing alerts on a service.
 
     Args:
-        name: Module dotted name.
+        name: Service name.
     """
-    entry = _MODULE_CATALOGUE.get(name)
+    entry = _SERVICE_INVENTORY.get(name)
     if not entry:
         return 0
-    return len(entry["public_api"])
+    return len(entry["active_alerts"])
 
 
 # =============================================================================
@@ -145,22 +130,22 @@ def count_public_symbols(name: str) -> int:
 # =============================================================================
 
 
-class ModuleReport(BaseModel):
-    module: str = Field(description="Dotted module name researched.")
-    summary: str = Field(description="2-3 sentence summary of what the module does.")
-    public_symbols: list[str] = Field(description="All public symbols in the module.")
-    available_since: str = Field(description="Version the module was introduced.")
+class ServiceReport(BaseModel):
+    service: str = Field(description="Name of the service reviewed.")
+    summary: str = Field(description="2-3 sentence summary of the service's reliability posture.")
+    active_alerts: list[str] = Field(description="All currently firing alerts.")
+    last_deploy: str = Field(description="Date of the service's last deploy.")
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence in the report (0–1).")
 
 
 @tool
-def submit_research(report: ModuleReport) -> str:
-    """Submit the completed research report. Call when confidence ≥ 0.85.
+def submit_review(report: ServiceReport) -> str:
+    """Submit the completed reliability review. Call when confidence ≥ 0.85.
 
     Args:
-        report: The completed ``ModuleReport``.
+        report: The completed ``ServiceReport``.
     """
-    return f"submitted: {report.module} ({report.confidence:.0%} confidence)"
+    return f"submitted: {report.service} ({report.confidence:.0%} confidence)"
 
 
 # =============================================================================
@@ -174,24 +159,25 @@ async def part1_basic() -> None:
 
     agent = create_deepagent(
         model=get_model(),
-        tools=[list_modules, inspect_module, count_public_symbols, submit_research],
+        tools=[list_services, inspect_service, count_active_alerts, submit_review],
         system_prompt=(
-            "You are a locus module researcher. "
-            "Use list_modules, inspect_module, and count_public_symbols to gather facts. "
-            "Submit a complete ModuleReport via submit_research once you reach ≥ 0.85 confidence."
+            "You are a site-reliability engineer running a pre-release readiness review. "
+            "Use list_services, inspect_service, and count_active_alerts to gather facts "
+            "about services inside the deploy window only. "
+            "Submit a complete ServiceReport via submit_review once you reach ≥ 0.85 confidence."
         ),
-        output_schema=ModuleReport,
-        submit_tool="submit_research",
+        output_schema=ServiceReport,
+        submit_tool="submit_review",
         min_confidence=0.85,
         max_iterations=12,
     )
 
-    result = agent.run_sync("Research the locus.observability module.")
+    result = await agent.arun("Review the reliability posture of api-gateway.")
     print("protocol terminated:", result.stop_reason)
     if result.parsed:
-        rpt: ModuleReport = result.parsed  # type: ignore[assignment]
-        print(f"module:    {rpt.module}")
-        print(f"symbols:   {', '.join(rpt.public_symbols[:4])} …")
+        rpt: ServiceReport = result.parsed  # type: ignore[assignment]
+        print(f"service:   {rpt.service}")
+        print(f"alerts:    {', '.join(rpt.active_alerts[:4])} …")
         print(f"confidence:{rpt.confidence:.0%}")
 
 
@@ -208,15 +194,15 @@ async def part2_filesystem_and_todos() -> None:
 
     agent = create_deepagent(
         model=get_model(),
-        tools=[list_modules, inspect_module, count_public_symbols, submit_research],
+        tools=[list_services, inspect_service, count_active_alerts, submit_review],
         system_prompt=(
-            "You are a locus module researcher. "
-            "Use write_file to take scratchpad notes as you gather facts. "
-            "Use write_todos to track which modules you've checked. "
+            "You are a site-reliability engineer running a pre-release readiness review. "
+            "Use write_file to keep scratchpad notes as you review each service. "
+            "Use write_todos to track which services you've covered. "
             "Submit when you have a complete report with ≥ 0.85 confidence."
         ),
-        output_schema=ModuleReport,
-        submit_tool="submit_research",
+        output_schema=ServiceReport,
+        submit_tool="submit_review",
         min_confidence=0.85,
         max_iterations=16,
         enable_filesystem=True,
@@ -224,7 +210,7 @@ async def part2_filesystem_and_todos() -> None:
         todo_state=todo_state,
     )
 
-    result = agent.run_sync("Research all three modules in the catalogue.")
+    result = await agent.arun("Review all three services in the deploy window.")
     print("terminated:", result.stop_reason)
     print("todos after run:")
     for todo in todo_state.snapshot():
@@ -241,34 +227,34 @@ async def part3_subagents() -> None:
     print("\n--- Part 3: subagent dispatch ---")
 
     # The subagent only carries one tool — focused, cheap, easy to test.
-    symbol_analyst = SubAgentDef(
-        name="symbol_analyst",
-        description="Deep-dives on a single module's public API.",
-        system_prompt="Inspect the given module and return a plain list of its public symbols.",
-        tools=[inspect_module],
+    alert_analyst = SubAgentDef(
+        name="alert_analyst",
+        description="Deep-dives on a single service's firing alerts.",
+        system_prompt="Inspect the given service and return a plain list of its active alerts.",
+        tools=[inspect_service],
         max_iterations=4,
     )
 
     agent = create_deepagent(
         model=get_model(),
-        tools=[list_modules, submit_research],
+        tools=[list_services, submit_review],
         system_prompt=(
-            "Use list_modules to discover modules, then delegate symbol analysis "
-            "to the symbol_analyst subagent via the task() tool. "
-            "Submit a ModuleReport for locus.router once you have the symbol list."
+            "Use list_services to discover services in the deploy window, then delegate "
+            "alert analysis to the alert_analyst subagent via the task() tool. "
+            "Submit a ServiceReport for api-gateway once you have the alert list."
         ),
-        output_schema=ModuleReport,
-        submit_tool="submit_research",
+        output_schema=ServiceReport,
+        submit_tool="submit_review",
         min_confidence=0.8,
         max_iterations=12,
-        subagents=[symbol_analyst],
+        subagents=[alert_analyst],
     )
 
-    result = agent.run_sync("Research locus.router using the symbol_analyst subagent.")
+    result = await agent.arun("Review api-gateway using the alert_analyst subagent.")
     print("terminated:", result.stop_reason)
     if result.parsed:
-        rpt: ModuleReport = result.parsed  # type: ignore[assignment]
-        print(f"symbols from subagent: {rpt.public_symbols}")
+        rpt: ServiceReport = result.parsed  # type: ignore[assignment]
+        print(f"alerts from subagent: {rpt.active_alerts}")
 
 
 # =============================================================================
@@ -281,30 +267,30 @@ async def part4_observability() -> None:
     print("\n--- Part 4: deepagent.* SSE events ---")
 
     todo_state = TodoState()
-    symbol_analyst = SubAgentDef(
-        name="symbol_analyst",
-        description="Inspect one module.",
-        system_prompt="Inspect the given module and list its public symbols.",
-        tools=[inspect_module],
+    alert_analyst = SubAgentDef(
+        name="alert_analyst",
+        description="Inspect one service.",
+        system_prompt="Inspect the given service and list its active alerts.",
+        tools=[inspect_service],
         max_iterations=4,
     )
 
     agent = create_deepagent(
         model=get_model(),
-        tools=[list_modules, submit_research],
+        tools=[list_services, submit_review],
         system_prompt=(
-            "Use list_modules, delegate symbol analysis via task(), "
+            "Use list_services, delegate alert analysis via task(), "
             "write scratchpad notes, track progress with todos. "
-            "Submit a report for locus.deepagent."
+            "Submit a report for payments-worker."
         ),
-        output_schema=ModuleReport,
-        submit_tool="submit_research",
+        output_schema=ServiceReport,
+        submit_tool="submit_review",
         min_confidence=0.8,
         max_iterations=14,
         enable_filesystem=True,
         enable_todos=True,
         todo_state=todo_state,
-        subagents=[symbol_analyst],
+        subagents=[alert_analyst],
     )
 
     deepagent_events: list[str] = []
@@ -316,7 +302,7 @@ async def part4_observability() -> None:
 
     async with run_context() as rid:
         collector = asyncio.create_task(_collect(rid))
-        result = agent.run_sync("Research locus.deepagent module.")
+        result = await agent.arun("Review the payments-worker service.")
         await asyncio.sleep(0.1)
         collector.cancel()
 
@@ -329,55 +315,58 @@ async def part4_observability() -> None:
 
 
 # =============================================================================
-# Part 5 — auto-wired `search_<name>` tools against OracleVectorStore
+# Part 5 — auto-wired `search_<name>` tools against a vector store
 # =============================================================================
 
 
 async def part5_datastores() -> None:
     """Pass ``datastores={name: {retriever, description, top_k}}`` and the
     factory appends a ``search_<name>`` tool plus a per-store routing block
-    in the system prompt. The agent then picks the right store per query.
+    in the system prompt. The agent then grounds its answers in the prior
+    incident notes instead of guessing.
 
-    This Part requires an Autonomous Database 26ai with vector support
-    (``OracleVectorStore``). Without the Oracle env vars below, it
-    exits cleanly and the earlier parts still run.
+    This Part requires an embedding key (``OPENAI_API_KEY``). Without it,
+    Part 5 exits cleanly and the earlier parts still run.
     """
     import os
 
-    required = ("ORACLE_DSN", "ORACLE_USER", "ORACLE_PASSWORD", "ORACLE_WALLET", "OCI_COMPARTMENT")
+    required = ("OPENAI_API_KEY",)
     missing = [n for n in required if not os.environ.get(n)]
     if missing:
-        print("\n[multi_datastore_routing] skipped — missing env vars:")
+        print("\n[incident_notes_datastore] skipped — missing env vars:")
         for n in missing:
             print(f"  - {n}")
         return
 
-    from locus.rag import OCIEmbeddings, OracleVectorStore, RAGRetriever
+    from tulip.rag import OpenAIEmbeddings, QdrantVectorStore, RAGRetriever
 
-    embedder = OCIEmbeddings(
-        model_id="cohere.embed-v4.0",
-        compartment_id=os.environ["OCI_COMPARTMENT"],
-        profile_name=os.environ.get("OCI_PROFILE", "DEFAULT"),
-        auth_type=os.environ.get("OCI_AUTH_TYPE", "api_key"),
-    )
+    embedder = get_embedder()
     probe = await embedder.embed_query("probe")
-    store = OracleVectorStore(
-        dsn=os.environ["ORACLE_DSN"],
-        user=os.environ["ORACLE_USER"],
-        password=os.environ["ORACLE_PASSWORD"],
-        wallet_location=os.path.expanduser(os.environ["ORACLE_WALLET"]),
-        wallet_password=os.environ.get("ORACLE_WALLET_PASSWORD", ""),
-        table_name="locus_notebook_35_medical",
-        dimension=len(probe.embedding),
-        distance_metric="COSINE",
-    )
+    try:
+        store = QdrantVectorStore(
+            dimension=len(probe.embedding),
+            location=":memory:",
+            distance_metric="cosine",
+        )
+    except ImportError:
+        # qdrant-client is an optional extra, and `pip install -e .` (the
+        # install these notebooks document) does not pull it. Say so and skip
+        # rather than ending the notebook on a traceback.
+        print(
+            "\n[incident_notes_datastore] skipped — this part needs the qdrant "
+            'extra: pip install "tulip-agents[qdrant]"'
+        )
+        return
     retriever = RAGRetriever(embedder=embedder, store=store)
     await retriever.add_documents(
         [
-            "Hepcidin is the master regulator of iron homeostasis.",
-            "Ferritin is the primary iron storage protein.",
-            "Transferrin saturation below 16% suggests iron deficiency.",
-            "Phlebotomy is first-line treatment for hereditary hemochromatosis.",
+            "api-gateway: p99 latency regressed after the 2026-05 connection-pool change; "
+            "fixed by raising the upstream keep-alive limit, alert auto-resolved 2026-06-01.",
+            "payments-worker: queue-depth alert fired during the 2026-04 ledger backfill; "
+            "scaling consumers to 8 drained it; idempotency kept retries safe.",
+            "web-frontend: blue/green rollout has had zero rollbacks since the 2026-03 "
+            "CDN cache-key fix.",
+            "billing-cron was decommissioned 2026-01 — any new alert from it is a finding.",
         ]
     )
 
@@ -385,14 +374,15 @@ async def part5_datastores() -> None:
         model=get_model(),
         tools=[],
         system_prompt=(
-            "You are a medical research assistant. When asked a hematology "
-            "question, call search_medical first, then answer briefly with "
-            "(doc-NN) citations."
+            "You are a site-reliability engineer. When asked about a service's "
+            "incident history, call search_incident_notes first, then answer briefly "
+            "with (doc-NN) citations."
         ),
         datastores={
-            "medical": {
+            "incident_notes": {
                 "retriever": retriever,
-                "description": "iron metabolism, anemia, hemochromatosis",
+                "description": "prior incident notes: alert history, remediations, "
+                "decommissioned services",
                 "top_k": 3,
             }
         },
@@ -401,7 +391,9 @@ async def part5_datastores() -> None:
         max_iterations=4,
     )
 
-    result = agent.run_sync("What regulates iron homeostasis? Cite the retrieved doc.")
+    result = await agent.arun(
+        "What do prior incident notes say about api-gateway? Cite the retrieved doc."
+    )
     print("part 5 response:", (result.text or "")[:300])
     print("part 5 tool calls:", len(result.tool_executions or ()))
 

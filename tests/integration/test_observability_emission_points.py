@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Verify newly-instrumented modules publish their canonical event
 sequences on the bus when run under an active ``run_context``.
@@ -30,13 +29,13 @@ from typing import Any
 
 import pytest
 
-from locus.agent.composition import LoopAgent, ParallelPipeline, SequentialPipeline
-from locus.agent.result import AgentResult
-from locus.core.state import AgentState
-from locus.multiagent.handoff import Handoff, HandoffAgent, HandoffReason, HandoffResult
-from locus.multiagent.orchestrator import Orchestrator
-from locus.multiagent.specialist import Specialist, SpecialistResult
-from locus.observability import (
+from tulip.agent.composition import LoopAgent, ParallelPipeline, SequentialPipeline
+from tulip.agent.result import AgentResult
+from tulip.core.state import AgentState
+from tulip.multiagent.handoff import Handoff, HandoffAgent, HandoffReason, HandoffResult
+from tulip.multiagent.orchestrator import Orchestrator
+from tulip.multiagent.specialist import Specialist, SpecialistResult
+from tulip.observability import (
     StreamEvent,
     get_event_bus,
     reset_event_bus,
@@ -155,7 +154,7 @@ class _StubModel:
         self._payload = payload
 
     async def complete(self, *_args, **_kwargs):  # noqa: ANN001, ANN202
-        from locus.core.messages import Message  # noqa: PLC0415
+        from tulip.core.messages import Message  # noqa: PLC0415
 
         class _Resp:
             def __init__(self, content: str) -> None:
@@ -265,7 +264,7 @@ class TestHandoff:
 
 class TestNoContextNoBus:
     async def test_pipelines_outside_run_context_do_not_create_bus(self):
-        bus_mod = sys.modules["locus.observability.event_bus"]
+        bus_mod = sys.modules["tulip.observability.event_bus"]
         # Force a clean state.
         reset_event_bus()
         bus_mod._event_bus = None  # type: ignore[attr-defined]

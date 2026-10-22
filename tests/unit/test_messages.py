@@ -1,13 +1,12 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Tests for message types."""
 
 import pytest
 from pydantic import ValidationError
 
-from locus.core.messages import Message, Role, ToolCall, ToolResult
+from tulip.core.messages import Message, Role, ToolCall, ToolResult
 
 
 class TestRole:
@@ -119,6 +118,31 @@ class TestMessage:
         assert msg.content == "Found results"
         assert msg.tool_call_id == "call_123"
         assert msg.name == "search"
+
+    def test_a_failed_tool_message_carries_its_error(self):
+        """A raising tool used to show the model an empty string —
+        ``error`` lives only on ToolResult and never crossed the wire, so
+        the model retried or answered as if the call had succeeded."""
+        result = ToolResult(
+            tool_call_id="call_123",
+            name="search",
+            content="",
+            error="TypeError: search() missing 1 required argument: 'q'",
+        )
+        msg = Message.tool(result)
+
+        assert msg.content == ("Error: TypeError: search() missing 1 required argument: 'q'")
+
+    def test_a_failed_tool_with_content_keeps_its_content(self):
+        """A tool that wrote something before failing keeps its words —
+        the error prefix is only the empty-content fallback."""
+        result = ToolResult(
+            tool_call_id="call_123",
+            name="search",
+            content='{"error": "rate limited, retry in 60s"}',
+            error="RateLimited",
+        )
+        assert Message.tool(result).content == '{"error": "rate limited, retry in 60s"}'
 
     def test_message_is_frozen(self):
         """Messages are immutable."""

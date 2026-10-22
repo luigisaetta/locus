@@ -1,37 +1,39 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
-"""Locus Agent — Quick Start.
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
+"""Tulip Agent — IOC verdict in 15 lines.
 
-Uses ``OCIChatCompletionsModel`` against OCI GenAI's OpenAI-compatible
-``/openai/v1`` endpoint — real SSE streaming, day-0 model support, no
-GenAI Project OCID required. The compartment is auto-derived from the
-profile's tenancy.
+A one-call triage agent: hand it an indicator of compromise, get back a
+benign / suspicious / malicious verdict with the single strongest reason.
+This is the smallest useful shape of the SOC's tier-1 triage agent.
 
-Set ``OCI_PROFILE`` to the OCI config profile you want to use (defaults
-to ``DEFAULT``). For Cohere R-series, use ``OCIModel`` instead — see
-``docs/how-to/oci-models.md``.
+Uses the shared ``config.get_model`` helper, so it runs offline against
+the bundled mock model by default and upgrades to a live provider when
+``TULIP_MODEL_PROVIDER`` (plus the matching API key) is set. See
+``examples/config.py`` and ``docs/concepts/models.md``.
 """
 
-import os
+from config import get_model
 
-from locus.agent import Agent
-from locus.models import OCIChatCompletionsModel
+from tulip.agent import Agent
 
 
 def main():
-    model = OCIChatCompletionsModel(
-        model="openai.gpt-5",
-        profile=os.environ.get("OCI_PROFILE", "DEFAULT"),
-    )
-
     agent = Agent(
-        model=model,
-        system_prompt="You are a helpful assistant. Be concise.",
+        model=get_model(),
+        system_prompt=(
+            "You are an IOC triage assistant. Give a one-line verdict for each "
+            "indicator — benign, suspicious, or malicious — with the single "
+            "strongest reason. If the evidence is insufficient, say so rather "
+            "than guessing: an unproven verdict is a false positive."
+        ),
     )
 
-    result = agent.run_sync("What is the capital of France?")
-    print(f"Response: {result.message}")
+    # 198.51.100.0/24 is RFC 5737 documentation space — a safe stand-in IOC.
+    result = agent.run_sync(
+        "A quarantined email links to http://phish.example.net/reset, served "
+        "from 198.51.100.23. VerificationResult?"
+    )
+    print(f"VerificationResult: {result.message}")
     print(f"Iterations: {result.metrics.iterations}")
 
 

@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """End-to-end test: ``on_after_tool_call`` receives ``tool_call_id`` + ``arguments``.
 
@@ -17,16 +16,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from locus.agent import Agent
-from locus.core.messages import Message, ToolCall
-from locus.hooks.provider import (
+from tulip.agent import Agent
+from tulip.core.messages import Message, ToolCall
+from tulip.hooks.provider import (
     AfterToolCallEvent,
     BeforeToolCallEvent,
     HookPriority,
     HookProvider,
 )
-from locus.models.base import ModelResponse
-from locus.tools.decorator import tool
+from tulip.models.base import ModelResponse
+from tulip.tools.decorator import tool
 
 
 class _ScriptedModel:
@@ -173,3 +172,97 @@ def test_existing_event_construction_still_works() -> None:
     event = AfterToolCallEvent(tool_name="t", result="r", error=None)
     assert event.tool_call_id == ""
     assert event.arguments == {}
+
+
+class _ResultRewriteHook(HookProvider):
+    """Replace the tool result with a slimmed form (reel-shaped use case)."""
+
+    def __init__(self, replacement: Any) -> None:
+        self.replacement = replacement
+        self.saw: list[Any] = []
+
+    @property
+    def priority(self) -> int:
+        return HookPriority.BUSINESS_DEFAULT
+
+    async def on_after_tool_call(self, event: AfterToolCallEvent) -> None:
+        self.saw.append(event.result)
+        event.result = self.replacement
+
+
+def _tool_call() -> ToolCall:
+    return ToolCall(
+        id="call_rw1",
+        name="set_block",
+        arguments={"x": 1, "y": 2, "z": 3, "block_type": "minecraft:stone"},
+    )
+
+
+def test_after_tool_hook_result_replacement_reaches_the_model() -> None:
+    """``event.result`` replacement lands in the tool message the model
+    reads, in ``state.tool_executions``, and in the run's final state — as
+    the AfterToolCallEvent docs promise. It used to be silently discarded
+    on the run() path: the hook ran after the fold, so only ``retry`` had
+    any effect."""
+    model = _ScriptedModel(
+        [
+            _assistant(None, tool_calls=[_tool_call()]),
+            _assistant("Done."),
+        ]
+    )
+    hook = _ResultRewriteHook("SLIMMED")
+    agent = Agent(model=model, tools=[set_block], hooks=[hook], max_iterations=4)
+
+    result = agent.run_sync("Place a stone block.")
+
+    assert result.success
+    # The hook saw the raw result, and its replacement is what persisted.
+    assert hook.saw == ["placed minecraft:stone at (1,2,3)"]
+    executions = [e for e in result.state.tool_executions if e.tool_name == "set_block"]
+    assert executions
+    assert executions[0].result == "SLIMMED"
+    tool_msgs = [m for m in result.state.messages if getattr(m.role, "value", m.role) == "tool"]
+    assert tool_msgs
+    assert tool_msgs[0].content == "SLIMMED"
+
+
+def test_after_tool_hook_result_replacement_serializes_a_dict() -> None:
+    """A hook may hand back a dict; it is serialized like a tool return."""
+    model = _ScriptedModel(
+        [
+            _assistant(None, tool_calls=[_tool_call()]),
+            _assistant("Done."),
+        ]
+    )
+    hook = _ResultRewriteHook({"found": True, "slim": True})
+    agent = Agent(model=model, tools=[set_block], hooks=[hook], max_iterations=4)
+
+    result = agent.run_sync("Place a stone block.")
+
+    assert result.success
+    tool_msgs = [m for m in result.state.messages if getattr(m.role, "value", m.role) == "tool"]
+    assert tool_msgs
+    assert tool_msgs[0].content == '{"found": true, "slim": true}'
+
+
+def test_tool_complete_event_carries_the_replaced_result() -> None:
+    """In the default (sequential) event order the after-hook now runs
+    BEFORE the ToolCompleteEvent, so consumers see the hook's version."""
+    import asyncio
+
+    model = _ScriptedModel(
+        [
+            _assistant(None, tool_calls=[_tool_call()]),
+            _assistant("Done."),
+        ]
+    )
+    hook = _ResultRewriteHook("SLIMMED")
+    agent = Agent(model=model, tools=[set_block], hooks=[hook], max_iterations=4)
+
+    async def _events() -> list[Any]:
+        return [ev async for ev in agent.run("Place a stone block.")]
+
+    events = asyncio.run(_events())
+    completes = [ev for ev in events if getattr(ev, "event_type", "") == "tool_complete"]
+    assert completes
+    assert completes[0].result == "SLIMMED"

@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """End-to-end coverage of every layer instrumented in the SSE retrofit.
 
@@ -41,7 +40,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from locus.observability import (
+from tulip.observability import (
     StreamEvent,
     get_event_bus,
     reset_event_bus,
@@ -82,8 +81,8 @@ class TestAgentLoopBridge:
         generator decorated with ``_bus_bridge``. Yields a fake
         ``TerminateEvent`` and asserts ``agent.terminate`` lands on
         the bus."""
-        from locus.agent.runtime_loop import _bus_bridge
-        from locus.core.events import TerminateEvent
+        from tulip.agent.runtime_loop import _bus_bridge
+        from tulip.core.events import TerminateEvent
 
         @_bus_bridge
         async def fake_run(_self):
@@ -107,8 +106,8 @@ class TestAgentLoopBridge:
         assert data["reason"] == "complete"
 
     async def test_tokens_used_emitted_with_model_complete(self):
-        from locus.agent.runtime_loop import _bus_bridge
-        from locus.core.events import ModelCompleteEvent
+        from tulip.agent.runtime_loop import _bus_bridge
+        from tulip.core.events import ModelCompleteEvent
 
         @_bus_bridge
         async def fake_run(_self):
@@ -138,7 +137,7 @@ class TestStateGraphNodes:
     async def test_node_started_completed_emitted(self):
         from pydantic import BaseModel
 
-        from locus.multiagent.graph import END, START, GraphConfig, StateGraph
+        from tulip.multiagent.graph import END, START, GraphConfig, StateGraph
 
         class _State(BaseModel):
             greeting: str = ""
@@ -170,9 +169,9 @@ class TestStateGraphNodes:
 
 class TestRagRetriever:
     async def test_query_started_completed_pair(self):
-        from locus.rag.embeddings.base import EmbeddingResult
-        from locus.rag.retriever import RAGRetriever
-        from locus.rag.stores.base import Document, SearchResult
+        from tulip.rag.embeddings.base import EmbeddingResult
+        from tulip.rag.retriever import RAGRetriever
+        from tulip.rag.stores.base import Document, SearchResult
 
         embedder = AsyncMock()
         embedder.embed_query.return_value = EmbeddingResult(
@@ -207,8 +206,8 @@ class TestRagRetriever:
 
 class TestMemoryConversation:
     async def test_sliding_window_prune_emits(self):
-        from locus.core.messages import Message, Role
-        from locus.memory.conversation import SlidingWindowManager
+        from tulip.core.messages import Message, Role
+        from tulip.memory.conversation import SlidingWindowManager
 
         mgr = SlidingWindowManager(window_size=3, preserve_system=True)
         # 6 non-system messages → 3 should be pruned.
@@ -238,8 +237,8 @@ class TestMemoryConversation:
 
 class TestDeepAgentFilesystem:
     async def test_fs_write_emits(self):
-        from locus.deepagent.backends.state import StateBackend
-        from locus.deepagent.tools.filesystem import make_filesystem_tools
+        from tulip.deepagent.backends.state import StateBackend
+        from tulip.deepagent.tools.filesystem import make_filesystem_tools
 
         backend = StateBackend()
         tools = make_filesystem_tools(backend)
@@ -257,7 +256,7 @@ class TestDeepAgentFilesystem:
         assert d["byte_count"] == len("hello world")
 
     async def test_todo_added_emits(self):
-        from locus.deepagent.todos import make_todo_tools
+        from tulip.deepagent.todos import make_todo_tools
 
         tools = make_todo_tools()
         write_todos = next(t for t in tools if t.name == "write_todos")
@@ -285,8 +284,8 @@ class TestDeepAgentFilesystem:
 
 class TestGuardrailsBridge:
     async def test_blocked_tool_emits_guardrail_triggered(self):
-        from locus.core.events import BeforeToolCallEvent
-        from locus.hooks.builtin.guardrails import GuardrailConfig, GuardrailsHook
+        from tulip.core.events import BeforeToolCallEvent
+        from tulip.hooks.builtin.guardrails import GuardrailConfig, GuardrailsHook
 
         hook = GuardrailsHook(GuardrailConfig(block_dangerous_tools={"shell"}))
         ev = BeforeToolCallEvent(tool_name="shell", arguments={"cmd": "ls"})
@@ -312,14 +311,14 @@ class TestGuardrailsBridge:
 class TestEventConstantsAreReachable:
     async def test_every_new_event_constant_is_a_string(self):
         """Smoke-check: each new EV_* constant exposed in
-        ``locus.observability.emit`` is a non-empty string. Catches typos
-        in the event-name registry before the workbench renderer trips on
+        ``tulip.observability.emit`` is a non-empty string. Catches typos
+        in the event-name registry before a renderer trips on
         them."""
-        # ``locus.observability.emit`` resolves to the *function* via the
+        # ``tulip.observability.emit`` resolves to the *function* via the
         # package's re-export — fetch the module from sys.modules.
         import sys as _sys
 
-        emit_mod = _sys.modules["locus.observability.emit"]
+        emit_mod = _sys.modules["tulip.observability.emit"]
 
         new_constants = [
             "EV_AGENT_THINK",
@@ -370,7 +369,7 @@ class TestEventConstantsAreReachable:
         """Belt + braces: a StreamEvent built from each new constant
         round-trips through ``to_dict()`` cleanly. Makes sure no payload
         we ship is JSON-unfriendly."""
-        from locus.observability.emit import EV_AGENT_TOKENS_USED
+        from tulip.observability.emit import EV_AGENT_TOKENS_USED
 
         ev = StreamEvent(
             run_id="r",

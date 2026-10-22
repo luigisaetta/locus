@@ -1,13 +1,12 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Coverage tests for the public facade in ``locus.agent.agent``.
+"""Coverage tests for the public facade in ``tulip.agent.agent``.
 
 The end-to-end agent loop is exercised by other test files. This file
 targets the small public/utility surface that the loop tests don't hit:
 
-- ``_normalize_stop_reason`` (the copy in ``locus.agent.agent``)
+- ``_normalize_stop_reason`` (the copy in ``tulip.agent.agent``)
 - ``Agent.cancel`` initialising the signal lazily
 - ``Agent.is_cancelled`` reflecting the signal
 - ``Agent.resume`` raising when no interrupt is pending
@@ -20,8 +19,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from locus.agent.agent import Agent, _normalize_stop_reason
-from locus.agent.config import AgentConfig
+from tulip.agent.agent import Agent, _normalize_stop_reason
+from tulip.agent.config import AgentConfig
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +56,7 @@ class TestAgentNormalizeStopReason:
 
 def _make_agent() -> Agent:
     """Build an Agent with a mocked model (skip real provider construction)."""
-    cfg = AgentConfig(model="anthropic:claude-sonnet-4-20250514")
+    cfg = AgentConfig(model="anthropic:claude-sonnet-4-6")
     agent = Agent(config=cfg)
     # Avoid touching the real Anthropic SDK during attribute access.
     agent._model = MagicMock()  # type: ignore[assignment]

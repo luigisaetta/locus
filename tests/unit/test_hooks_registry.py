@@ -1,14 +1,13 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for hooks registry."""
 
 import pytest
 
-from locus.core.state import AgentState
-from locus.hooks.provider import HookProvider
-from locus.hooks.registry import HookRegistry, create_registry
+from tulip.core.state import AgentState
+from tulip.hooks.provider import HookProvider
+from tulip.hooks.registry import HookRegistry, create_registry
 
 
 class MockHookProvider(HookProvider):

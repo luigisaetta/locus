@@ -1,17 +1,16 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Coverage tests for ``locus.integrations.fastmcp``.
+"""Coverage tests for ``tulip.integrations.fastmcp``.
 
 The existing ``test_fastmcp.py`` covers the helper-function paths.
 This file targets the remaining gaps:
 
 - ``_create_tool_wrapper`` for required vs optional vs zero-arg
   branches plus the unsafe-name guards
-- ``LocusMCPServer.handle_request`` for tools/list, tools/call
+- ``TulipMCPServer.handle_request`` for tools/list, tools/call
   (run_agent, registry tool, unknown tool), unknown method
-- ``LocusMCPServer.run`` invokes FastMCP with the chosen transport
+- ``TulipMCPServer.run`` invokes FastMCP with the chosen transport
 - ``MCPClient.connect`` rejects when neither URL nor command is set
 - ``MCPClient.list_tools`` / ``call_tool`` raise when not connected
 - ``MCPClient.close`` is idempotent and silently swallows teardown
@@ -27,13 +26,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from locus.integrations.fastmcp import (
-    LocusMCPServer,
+from tulip.integrations.fastmcp import (
     MCPClient,
+    TulipMCPServer,
     _create_tool_wrapper,
     create_mcp_server,
 )
-from locus.tools.decorator import tool
+from tulip.tools.decorator import tool
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +125,7 @@ class TestCreateToolWrapper:
 
 
 # ---------------------------------------------------------------------------
-# LocusMCPServer.handle_request
+# TulipMCPServer.handle_request
 # ---------------------------------------------------------------------------
 
 
@@ -164,7 +163,7 @@ class _StubAgent:
 class TestServerHandleRequest:
     @pytest.mark.asyncio
     async def test_tools_list(self) -> None:
-        server = LocusMCPServer(agent=_StubAgent())
+        server = TulipMCPServer(agent=_StubAgent())
         server._mcp = MagicMock()  # avoid FastMCP construction
         result = await server.handle_request({"method": "tools/list"})
         names = {t["name"] for t in result["tools"]}
@@ -172,7 +171,7 @@ class TestServerHandleRequest:
 
     @pytest.mark.asyncio
     async def test_tools_call_run_agent(self) -> None:
-        server = LocusMCPServer(agent=_StubAgent())
+        server = TulipMCPServer(agent=_StubAgent())
         server._mcp = MagicMock()
         result = await server.handle_request(
             {
@@ -184,7 +183,7 @@ class TestServerHandleRequest:
 
     @pytest.mark.asyncio
     async def test_tools_call_registry_tool(self) -> None:
-        server = LocusMCPServer(agent=_StubAgent())
+        server = TulipMCPServer(agent=_StubAgent())
         server._mcp = MagicMock()
         result = await server.handle_request(
             {
@@ -196,7 +195,7 @@ class TestServerHandleRequest:
 
     @pytest.mark.asyncio
     async def test_tools_call_unknown_tool(self) -> None:
-        server = LocusMCPServer(agent=_StubAgent())
+        server = TulipMCPServer(agent=_StubAgent())
         server._mcp = MagicMock()
         result = await server.handle_request(
             {
@@ -208,7 +207,7 @@ class TestServerHandleRequest:
 
     @pytest.mark.asyncio
     async def test_unknown_method(self) -> None:
-        server = LocusMCPServer(agent=_StubAgent())
+        server = TulipMCPServer(agent=_StubAgent())
         server._mcp = MagicMock()
         result = await server.handle_request({"method": "weird/op"})
         assert "Unknown method" in result["error"]["message"]
@@ -216,7 +215,7 @@ class TestServerHandleRequest:
 
 class TestServerRun:
     def test_run_calls_fastmcp_with_transport(self) -> None:
-        server = LocusMCPServer(agent=_StubAgent())
+        server = TulipMCPServer(agent=_StubAgent())
         fake_mcp = MagicMock()
         server._mcp = fake_mcp
         server.run(transport="stdio")
@@ -227,7 +226,7 @@ class TestCreateMcpServer:
     def test_returns_server_instance(self) -> None:
         agent = _StubAgent()
         server = create_mcp_server(agent, name="my-agent", version="2.0.0")
-        assert isinstance(server, LocusMCPServer)
+        assert isinstance(server, TulipMCPServer)
         assert server.name == "my-agent"
         assert server.version == "2.0.0"
 

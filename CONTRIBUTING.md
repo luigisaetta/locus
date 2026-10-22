@@ -1,19 +1,18 @@
 # Contributing
 
-The Oracle Generative AI – Multi-Agent Locus SDK — formally
-*Oracle Generative AI Multi-Agent Reasoning Orchestrator SDK* —
-is built inside Oracle, used in production, and open to everyone.
+Tulip is open to everyone. The bar everywhere: *a result ships on evidence or
+it abstains; a side effect runs only gated and audited.* New probes prove their
+success with an observable effect, and new actions go through `admit()`.
+
 This document covers how to set up a development environment, the
 review and sign-off process, the coding standards we hold the codebase
-to, and how to verify your change against the workbench end-to-end
-before opening a pull request.
+to, and how to verify your change before opening a pull request.
 
 Quick links for the most common drops:
 
 - **Adding a notebook?** Jump to [Notebook authoring](#notebook-authoring).
 - **Touching the README?** Jump to [README updates](#readme-updates).
-- **Adding a model provider?** Jump to [Notebook authoring](#notebook-authoring) for the multi-model demo conventions, then [Coding Standards](#coding-standards) for the `BaseModel` interface.
-- **Verifying against real OCI / OpenAI / Anthropic?** Jump to [Workbench end-to-end sweeps](#workbench-end-to-end-sweeps).
+- **Adding a model provider?** Jump to [Notebook authoring](#notebook-authoring) for the multi-model demo conventions, then [Coding Standards](#coding-standards) for the `ModelProtocol` interface.
 
 ## Table of Contents
 
@@ -30,13 +29,13 @@ Quick links for the most common drops:
 
 ## Code of Conduct
 
-This project follows the [Contributor Covenant Code of Conduct](https://www.contributor-covenant.org/version/2/1/code_of_conduct/). By participating, you agree to uphold this code.
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold this code.
 
 ## Getting Started
 
-### Oracle Contributor Agreement (OCA)
+### Developer Certificate of Origin (DCO)
 
-Before contributing code, you must sign the [Oracle Contributor Agreement (OCA)](https://oca.opensource.oracle.com). This is required for all contributions.
+Contributions are accepted under the [Developer Certificate of Origin](https://developercertificate.org/). You certify the DCO by signing off every commit — no separate agreement to file.
 
 All commits must include a sign-off line:
 
@@ -68,8 +67,8 @@ We welcome:
 
 ```bash
 # Clone the repository
-git clone https://github.com/oracle-samples/locus.git
-cd locus
+git clone https://github.com/tuliplabs-ai/tulip-agents.git
+cd tulip-agents
 
 # Install Hatch if needed
 pip install hatch
@@ -89,30 +88,14 @@ hatch run test
 For integration tests, configure these environment variables:
 
 ```bash
-# OCI GenAI (required for most integration tests). The transport is
-# picked automatically per model id — cohere.command-r-* uses OCIModel
-# (SDK), everything else uses OCIChatCompletionsModel (/openai/v1). Set
-# LOCUS_OCI_TRANSPORT=v1|sdk to override. See docs/how-to/oci-models.md.
-export OCI_PROFILE="DEFAULT"
-export OCI_REGION="us-chicago-1"
-export OCI_MODEL_ID="openai.gpt-5.5"   # → OCIChatCompletionsModel (V1)
-
-# Only needed when OCI_MODEL_ID is a Cohere R-series model — OCIModel
-# (SDK transport) reads OCI_AUTH_TYPE / OCI_ENDPOINT / OCI_COMPARTMENT:
-# export OCI_MODEL_ID="cohere.command-r-plus-08-2024"
-# export OCI_AUTH_TYPE="api_key"
-# export OCI_ENDPOINT="https://inference.generativeai.us-chicago-1.oci.oraclecloud.com"
-# export OCI_COMPARTMENT="ocid1.compartment.oc1..your-compartment-id"
-
-# OpenAI (optional, for OpenAI provider tests)
+# OpenAI (required for most integration tests)
 export OPENAI_API_KEY="sk-..."
+
+# Cohere (optional, for the Cohere reranker / embeddings tests)
+export COHERE_API_KEY="..."
 
 # Anthropic (optional, for Anthropic provider tests)
 export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Ollama (optional, for local LLM tests)
-export OLLAMA_AVAILABLE="1"
-export OLLAMA_MODEL="llama3.2"
 
 # Docker services (for checkpoint/vector store tests)
 export REDIS_URL="redis://localhost:6379"
@@ -120,13 +103,13 @@ export POSTGRES_HOST="localhost"
 export POSTGRES_PORT="5432"
 export POSTGRES_USER="postgres"
 export POSTGRES_PASSWORD="postgres"
-export POSTGRES_DB="locus"
+export POSTGRES_DB="tulip"
 ```
 
 ## Notebook authoring
 
 `examples/notebook_NN_*.py` is the primary teaching surface — every
-notebook is also a workbench-runnable demo, a docs page, an
+notebook is also a docs page, an
 integration-test target, and a regression target for the matrix CI.
 Treat them as production code, not throwaways.
 
@@ -137,8 +120,6 @@ then take the next free number at the end of that range:
 
 | Track | Range |
 |---|---|
-| OCI Generative AI | 01–05 |
-| Oracle Database 26ai | 06–12 |
 | Agent Foundations | 13–20 |
 | Graphs & composition | 21–28 |
 | Multi-agent | 29–39 |
@@ -148,42 +129,37 @@ then take the next free number at the end of that range:
 | Production | 51–56 |
 | Cognitive router & observability | 57–61 |
 | Real-world workflows | 62–66 |
-| Server & full pipelines | 67–68 |
-
-`workbench/backend/runner.py` `NOTEBOOK_CATEGORIES` is the source of
-truth — update it when you add a notebook so the workbench sidebar
-groups the new entry correctly.
+| Server & full pipelines | 67–69 |
 
 ### File requirements
 
 1. **Naming**: `examples/notebook_NN_short_topic.py` — two-digit
    number, snake_case slug.
-2. **Header docstring**: first line is the title the workbench
-   sidebar will show. Strip the leading `Notebook NN:` prefix if you
-   include one — the runner cleans it. Follow with one short
+2. **Header docstring**: first line is the title. Strip the leading `Notebook NN:` prefix
+   if you include one — the runner cleans it. Follow with one short
    paragraph explaining what the reader gets.
 3. **Multi-model demos**: if the notebook fits as a multi-model
    demonstration (orchestrator, handoff, debate, supervisor-critic),
    use `get_model_b()` and `get_model_c()` for the lighter roles —
-   each falls back to slot A when the workbench's "Model B / C"
-   dropdowns are empty, so plain CLI runs stay correct.
+   each falls back to slot A when `TULIP_MODEL_ID_B` / `TULIP_MODEL_ID_C`
+   are unset, so plain CLI runs stay correct.
 4. **Graceful skip**: if the notebook needs credentials the harness
-   may not have (ORACLE_DSN, OCI_COMPARTMENT, etc.), check the env
+   may not have (OPENAI_API_KEY, COHERE_API_KEY, etc.), check the env
    vars at the top of `main()` and print a skip banner with a one-line
    wiring snippet instead of crashing. The CI runs every notebook —
    nothing is allowed to traceback on a missing optional env.
-5. **`locus.core.interrupt()`**: notebooks that call `interrupt()`
-   for human approval (Notebooks 24, 38, 62, 63, 64 today) get a
-   `needs_stdin: true` badge in the workbench. Add the notebook
-   number to `NOTEBOOK_NEEDS_STDIN` in `workbench/backend/runner.py`
-   when you add another one.
-6. **Docs stub**: add a matching markdown stub at
-   `docs/notebooks/notebook_NN_short_topic.md`. The docs tooling
-   generates one page per `examples/notebook_*.py`.
-7. **Real-provider check**: run it through the workbench against the
-   provider your audience cares about before opening the PR — the
-   Playwright sweeps catch regressions, but a manual click-through
-   catches the unloved corner cases (prompt phrasing, output
+5. **`tulip.core.interrupt()`**: notebooks that call `interrupt()`
+   for human approval (Notebooks 24, 38, 62, 63, 64 today) need a
+   terminal; say so in the header docstring so nobody runs them
+   unattended.
+6. **Docs page**: the docs repo
+   ([tuliplabs-ai/docs](https://github.com/tuliplabs-ai/docs)) carries
+   one page per `examples/notebook_*.py` — run its
+   `scripts/gen_notebook_pages.py` against your SDK checkout to
+   scaffold the new page, edit the prose, and open a companion PR.
+7. **Real-provider check**: run it against the provider your audience
+   cares about before opening the PR — CI catches regressions, but a
+   manual run catches the unloved corner cases (prompt phrasing, output
    readability).
 
 ## Making Changes
@@ -228,7 +204,7 @@ Examples:
 ```bash
 git commit -s -m "feat(rag): add OpenSearch vector store support"
 git commit -s -m "fix(memory): resolve checkpoint corruption on concurrent writes"
-git commit -s -m "docs(notebooks): add RAG with Oracle 26ai example"
+git commit -s -m "docs(notebooks): add RAG with Qdrant example"
 ```
 
 ### Code Changes
@@ -244,10 +220,10 @@ git commit -s -m "docs(notebooks): add RAG with Oracle 26ai example"
 3. **Run checks** before committing:
 
    ```bash
-   hatch run check          # ruff format-check + ruff lint + mypy strict (all-in-one)
+   hatch run check          # ruff format-check + ruff lint + mypy strict + unit tests with the 95% coverage gate
    hatch run format         # auto-format with ruff format
    hatch run test           # unit tests on the active Python
-   hatch run test-all       # unit tests across the 3.11 / 3.12 / 3.13 / 3.14 matrix
+   hatch run test-all       # full suite (unit + integration) on the active Python
    hatch run test-cov       # unit tests with coverage report
    hatch run test-integration  # integration tests (gated on credentials)
    ```
@@ -277,31 +253,8 @@ git commit -s -m "docs(notebooks): add RAG with Oracle 26ai example"
    - Link to related issue
    - Test results
 
-3. **PR Template**:
-
-   ```markdown
-   ## Summary
-   Brief description of changes.
-
-   ## Related Issue
-   Fixes #123
-
-   ## Changes
-   - Added X
-   - Fixed Y
-   - Updated Z
-
-   ## Testing
-   - [ ] Unit tests pass
-   - [ ] Integration tests pass (if applicable)
-   - [ ] Manual testing performed
-
-   ## Checklist
-   - [ ] Code follows project style
-   - [ ] Tests added/updated
-   - [ ] Documentation updated
-   - [ ] Commits are signed off
-   ```
+3. **PR Template** — applied automatically from
+   [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
 
 4. **Review process**:
    - Maintainers will review within 1 week
@@ -323,7 +276,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from locus.core.state import AgentState
+    from tulip.core.state import AgentState
 
 
 class MyConfig(BaseModel):
@@ -369,7 +322,7 @@ async def process_state(state: "AgentState", config: MyConfig) -> "AgentState":
 ### File Organization
 
 ```
-src/locus/
+src/tulip/
 ├── __init__.py          # Public exports
 ├── module/
 │   ├── __init__.py      # Module exports
@@ -403,8 +356,8 @@ hatch run pytest -m "requires_oci" -v
 
 ```python
 import pytest
-from locus import Agent
-from locus.core.messages import Message
+from tulip import Agent
+from tulip.core.messages import Message
 
 
 class TestAgent:
@@ -440,34 +393,6 @@ class TestAgent:
 - `tests/integration/` - Integration tests (require services)
 - Markers: `@pytest.mark.requires_oci`, `@pytest.mark.requires_redis`, etc.
 
-### Workbench end-to-end sweeps
-
-The workbench app (`workbench/`) ships three Playwright specs that drive
-every non-stdin notebook through the UI against a single provider:
-
-```bash
-# Bring up the three workbench tiers (terminal 1).
-hatch run python -m uvicorn --app-dir workbench/backend runner:app --port 8100
-( cd workbench/bff && npm install && npm run dev )    # terminal 2 — :3101
-( cd workbench/web && npm install && npm run dev )    # terminal 3 — :5173
-( cd workbench/e2e && npm install && npx playwright install chromium )
-
-# Run a sweep against your provider of choice (terminal 4).
-ANTHROPIC_API_KEY=sk-ant-... \
-  npx --prefix workbench/e2e playwright test tests/all-anthropic.spec.ts --workers=3
-
-OPENAI_API_KEY=sk-... \
-  npx --prefix workbench/e2e playwright test tests/all-openai.spec.ts --workers=3
-
-OCI_PROFILE=YOUR_PROFILE OCI_AUTH=session OCI_REGION=us-chicago-1 \
-OCI_COMPARTMENT=ocid1.compartment.oc1.... \
-  npx --prefix workbench/e2e playwright test tests/all-oci.spec.ts --workers=2
-```
-
-The OCI sweep also honours `OCI_MODEL` (slot A) and `OCI_MODEL_B` /
-`OCI_MODEL_C` so you can validate multi-model notebooks end-to-end.
-Headless by default; pass `--headed` to watch the run.
-
 ## Documentation
 
 ### Code Documentation
@@ -481,26 +406,25 @@ Headless by default; pass `--headed` to watch the run.
 
 See [Notebook authoring](#notebook-authoring) above for the full
 authoring guide — numbering, naming, multi-model demo conventions,
-graceful-skip checklist, and how to wire a new notebook into the
-workbench sidebar.
+and the graceful-skip checklist.
 
 ### README updates
 
 For significant features, update:
 
-- **Capability matrix** in `docs/FEATURES.md` and `docs/capabilities.md`
-  (these are the source of truth — `README.md` mirrors them).
-- **`README.md` hero** — the *"OCI Generative AI · OpenAI · Anthropic · Ollama"*
-  transport strip and the *"Talk to any provider"* table only need updates
-  when you add a new provider or transport.
-- **`README.md` "Backed by Oracle Database 26ai" block** — keep the
-  seven-primitive table in sync with `locus.rag.stores` and
-  `locus.memory.backends`. Bump when you add a new Oracle 26ai surface.
+- **Capability matrix** in the docs repo's `docs/FEATURES.md` and
+  `docs/capabilities.md` (these are the source of truth — `README.md`
+  mirrors them).
+- **`README.md` hero** — the *"OpenAI · Anthropic"* provider
+  strip and the *"Talk to any provider"* table only need updates when
+  you add a new provider.
+- **`README.md` "Vendor-neutral backends" block** — keep the backend
+  table in sync with `tulip.rag.stores`, `tulip.rag.reranker`, and
+  `tulip.memory.backends`. Bump when you add a new backend.
 - **`README.md` notebook track table** — the ranges must match
-  `workbench/backend/runner.py` `NOTEBOOK_CATEGORIES` and
-  `docs/notebooks/index.md`.
+  the docs repo's `docs/notebooks/index.md`.
 - **`README.md` Quick Start examples** — only when the feature changes
-  the *five-things-that-make-locus-different* shape.
+  the *five-things-that-make-tulip-different* shape.
 - **`README.md` Repo layout** — only when a new top-level module lands.
 
 ## Release checklist
@@ -512,13 +436,14 @@ Every release follows this checklist. Do not skip steps.
    `YYYY-MM-DD`. Add `### Removed` / `### Changed` notes for anything
    breaking, with a migration snippet.
 2. **Deprecation sweep.** For every item in `[Unreleased] > Removed`,
-   confirm a `LocusDeprecationWarning` has been in place for at least
+   confirm a `TulipDeprecationWarning` has been in place for at least
    one prior minor release, or document the single-release migration
    path in the CHANGELOG entry.
-3. **Version bump.** Update `__version__` in `src/locus/__init__.py`
+3. **Version bump.** Update `__version__` in `src/tulip/__init__.py`
    and the `version` field in `pyproject.toml`.
-4. **Run the full matrix.** `hatch run all` locally plus
-   `pytest tests/integration/ -v` with live services available.
+4. **Run the full suite.** `hatch run check` locally (plus
+   `hatch run test-integration` with live services available); CI runs
+   the 3.11–3.14 matrix on the release PR.
 5. **Tag.** `git tag -a v<version> -m 'Release v<version>'` and push
    the tag.
 6. **Publish.** Build the wheel (`hatch build`), verify the wheel
@@ -528,11 +453,11 @@ Every release follows this checklist. Do not skip steps.
    deprecations are called out again in the release announcement.
 
 See [`DEPRECATION.md`](DEPRECATION.md) for the full deprecation policy
-and how `LocusDeprecationWarning` works.
+and how `TulipDeprecationWarning` works.
 
 ## Questions?
 
-- Open a [GitHub Discussion](https://github.com/oracle-samples/locus/discussions)
-- Check existing [Issues](https://github.com/oracle-samples/locus/issues)
+- Open a [GitHub Discussion](https://github.com/tuliplabs-ai/tulip-agents/discussions)
+- Check existing [Issues](https://github.com/tuliplabs-ai/tulip-agents/issues)
 
 Thank you for contributing to the SDK!

@@ -1,14 +1,13 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Comprehensive tests for reasoning modules: Reflexion, Grounding, and Causal."""
 
 import pytest
 from pydantic import ValidationError
 
-from locus.core.state import AgentState, ToolExecution
-from locus.reasoning import (
+from tulip.core.state import AgentState, ToolExecution
+from tulip.reasoning import (
     AssessmentCategory,
     CausalChain,
     CausalConflict,
@@ -206,8 +205,8 @@ class TestReflector:
 
     def test_detect_single_tool_loop(self):
         """Detect repeated single tool calls across iterations."""
-        from locus.core.messages import ToolCall
-        from locus.core.state import ReasoningStep
+        from tulip.core.messages import ToolCall
+        from tulip.core.state import ReasoningStep
 
         reflector = Reflector(loop_threshold=3)
 
@@ -235,8 +234,8 @@ class TestReflector:
 
     def test_detect_alternating_loop(self):
         """Detect alternating tool pattern across iterations."""
-        from locus.core.messages import ToolCall
-        from locus.core.state import ReasoningStep
+        from tulip.core.messages import ToolCall
+        from tulip.core.state import ReasoningStep
 
         reflector = Reflector(loop_threshold=4)
 

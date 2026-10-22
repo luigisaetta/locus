@@ -1,14 +1,15 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
-"""Notebook 71: Run a Locus agent behind the LiteLLM AI Gateway.
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
+"""Notebook 71: Routing cloud-ops agent traffic through the LiteLLM AI Gateway.
 
 This notebook is the runnable companion to
-``docs/how-to/litellm-gateway.md``. It does **not** add a new Locus
-model class — it uses Locus's existing :class:`OpenAIModel` pointed at
-a LiteLLM AI Gateway URL. The gateway is what fronts Oracle Generative
-AI Infrastructure (and optionally other providers); Locus only ever
-sees the OpenAI-shaped HTTP contract the gateway exposes.
+``docs/how-to/litellm-gateway.md``. It does **not** add a new Tulip
+model class — it uses Tulip's existing :class:`OpenAIModel` pointed at
+a LiteLLM AI Gateway URL. For an always-on cloud-operations fleet this
+is an operational win, not just plumbing: the gateway fronts your
+upstream providers (OpenAI, Anthropic, and any other LiteLLM-supported
+backend), so cloud-ops agents never hold provider credentials and every
+model call crosses one auditable choke point.
 
 Key concepts:
 
@@ -17,29 +18,26 @@ Key concepts:
   scaffolding. The gateway is what carries the platform-grade pieces:
   virtual keys, per-team budgets, fallback chains, centralised
   observability, cost tracking, caching, guardrails.
-- Locus consumes the gateway through ``OpenAIModel(base_url=...)``.
-  No new Locus class is needed; the gateway is OpenAI-shaped by design.
-- The gateway holds the OCI signing credentials. Locus only holds the
-  gateway-issued virtual key. On OKE, the gateway pod can use Workload
-  Identity so the OCI signing key never lands on disk at all.
+- Tulip consumes the gateway through ``OpenAIModel(base_url=...)``.
+  No new Tulip class is needed; the gateway is OpenAI-shaped by design.
+- The gateway holds the upstream provider credentials. Tulip only holds
+  the gateway-issued virtual key, so provider API keys never land on
+  the cloud-ops agent host at all — one less secret to leak when an
+  agent workload is compromised.
 
 Run it::
 
     # 1. Start the gateway. The sample ships at examples/litellm-gateway/.
     cd examples/litellm-gateway/
-    export OCI_REGION="us-chicago-1"
-    export OCI_USER="ocid1.user.oc1..xxx"
-    export OCI_FINGERPRINT="aa:bb:cc:..."
-    export OCI_TENANCY="ocid1.tenancy.oc1..xxx"
-    export OCI_KEY_FILE="$HOME/.oci/keys/your_api_key.pem"
-    export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..xxx"
+    export OPENAI_API_KEY="sk-..."          # upstream provider key
+    export ANTHROPIC_API_KEY="sk-ant-..."   # optional second provider
     export LITELLM_MASTER_KEY="$(openssl rand -hex 32)"
     docker compose up -d
 
     # 2. Point this notebook at the gateway:
     export LITELLM_GATEWAY_URL="http://localhost:4000"
     export LITELLM_GATEWAY_KEY="$LITELLM_MASTER_KEY"   # or any virtual key issued by /key/generate
-    export LITELLM_GATEWAY_MODEL="oci-cohere-command"  # alias from config.yaml
+    export LITELLM_GATEWAY_MODEL="gpt-4o"  # alias from config.yaml
 
     python examples/notebook_71_litellm_gateway.py
 
@@ -72,25 +70,22 @@ _OPTIONAL_ENV = ("LITELLM_GATEWAY_MODEL",)
 
 def _print_skip_banner(missing: list[str]) -> None:
     print("=" * 72)
-    print(" LiteLLM AI Gateway not configured — skipping the live demo.")
+    print(" LiteLLM AI Gateway not configured — skipping the live cloud-ops demo.")
     print("=" * 72)
     print(
         f"\n Missing environment variables: {', '.join(missing)}\n\n"
-        " This notebook expects a LiteLLM AI Gateway running in front of OCI\n"
-        " Generative AI. Start the sample gateway in another terminal:\n\n"
+        " This notebook expects a LiteLLM AI Gateway running in front of\n"
+        " your upstream providers. Start the sample gateway in another\n"
+        " terminal:\n\n"
         "     cd examples/litellm-gateway/\n"
-        '     export OCI_REGION="us-chicago-1"\n'
-        '     export OCI_USER="ocid1.user.oc1..xxx"\n'
-        '     export OCI_FINGERPRINT="aa:bb:cc:..."\n'
-        '     export OCI_TENANCY="ocid1.tenancy.oc1..xxx"\n'
-        '     export OCI_KEY_FILE="$HOME/.oci/keys/your_api_key.pem"\n'
-        '     export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..xxx"\n'
+        '     export OPENAI_API_KEY="sk-..."\n'
+        '     export ANTHROPIC_API_KEY="sk-ant-..."\n'
         '     export LITELLM_MASTER_KEY="$(openssl rand -hex 32)"\n'
         "     docker compose up -d\n\n"
         " Then export the gateway URL and key in this shell:\n\n"
         '     export LITELLM_GATEWAY_URL="http://localhost:4000"\n'
         '     export LITELLM_GATEWAY_KEY="$LITELLM_MASTER_KEY"\n'
-        '     export LITELLM_GATEWAY_MODEL="oci-cohere-command"\n\n'
+        '     export LITELLM_GATEWAY_MODEL="gpt-4o"\n\n'
         " Full how-to: docs/how-to/litellm-gateway.md\n"
     )
 
@@ -103,8 +98,8 @@ def _check_prerequisites() -> tuple[str, str, str]:
 
     url = os.environ["LITELLM_GATEWAY_URL"].rstrip("/")
     key = os.environ["LITELLM_GATEWAY_KEY"]
-    # Default to a Cohere alias because the sample config.yaml ships it.
-    model = os.environ.get("LITELLM_GATEWAY_MODEL", "oci-cohere-command")
+    # Default to a gpt-4o alias because the sample config.yaml ships it.
+    model = os.environ.get("LITELLM_GATEWAY_MODEL", "gpt-4o")
     return url, key, model
 
 
@@ -145,35 +140,35 @@ def _print_gateway_health(url: str, key: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Part 2 — A Locus agent talking to the gateway via OpenAIModel
+# Part 2 — A cloud-ops agent talking to the gateway via OpenAIModel
 # ---------------------------------------------------------------------------
 
 
 async def _run_agent(url: str, key: str, model_alias: str) -> None:
-    """Build a Locus Agent pointed at the gateway and run a basic prompt."""
-    from locus.agent import Agent
-    from locus.models.native.openai import OpenAIModel
+    """Build a Tulip cloud-ops agent pointed at the gateway and run basic prompts."""
+    from tulip.agent import Agent
+    from tulip.models.native.openai import OpenAIModel
 
-    print(f"=== Agent vs. {model_alias} (via gateway) ===\n")
+    print(f"=== Cloud-ops agent vs. {model_alias} (via gateway) ===\n")
 
     # The OPENAI-COMPATIBLE client. ``base_url`` is the gateway endpoint;
-    # ``api_key`` is a gateway-issued virtual key. Locus carries NO OCI
-    # credentials here — the gateway does the OCI signing internally.
+    # ``api_key`` is a gateway-issued virtual key. Tulip carries NO provider
+    # credentials here — the gateway holds the upstream provider keys.
     model = OpenAIModel(
         model=model_alias,
         api_key=key,
         base_url=url,
     )
 
-    agent = Agent(model=model, system_prompt="You are concise.")
+    agent = Agent(model=model, system_prompt="You are a concise cloud operations assistant.")
 
     prompts = [
-        "What is the capital of Japan? One word.",
-        "What is 7 times 8?",
+        "In cloud infrastructure, what does IaC stand for? One sentence.",
+        "An EC2 instance is failing its health checks. Name the first triage step. One sentence.",
     ]
     for prompt in prompts:
         print(f"  > {prompt}")
-        result = await asyncio.to_thread(agent.run_sync, prompt)
+        result = await agent.arun(prompt)
         print(f"  < {result.message.strip()}")
         print(f"    [{result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]")
         print()
@@ -185,18 +180,24 @@ async def _run_agent(url: str, key: str, model_alias: str) -> None:
 
 
 async def _run_streaming(url: str, key: str, model_alias: str) -> None:
-    from locus.agent import Agent
-    from locus.core.events import ModelChunkEvent
-    from locus.models.native.openai import OpenAIModel
+    from tulip.agent import Agent
+    from tulip.core.events import ModelChunkEvent
+    from tulip.models.native.openai import OpenAIModel
 
     print(f"=== Streaming vs. {model_alias} (via gateway) ===\n")
 
     model = OpenAIModel(model=model_alias, api_key=key, base_url=url)
     agent = Agent(model=model, system_prompt="Reply concisely.")
 
-    print("  > List three primary colors, comma-separated.\n  < ", end="", flush=True)
+    print(
+        "  > List three common causes of a surprise cloud bill, comma-separated.\n  < ",
+        end="",
+        flush=True,
+    )
     full: list[str] = []
-    async for ev in agent.run("List three primary colors, comma-separated."):
+    async for ev in agent.run(
+        "List three common causes of a surprise cloud bill, comma-separated."
+    ):
         if isinstance(ev, ModelChunkEvent) and ev.content:
             print(ev.content, end="", flush=True)
             full.append(ev.content)
@@ -208,7 +209,7 @@ async def _run_streaming(url: str, key: str, model_alias: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
+async def main() -> None:
     url, key, model_alias = _check_prerequisites()
 
     print(
@@ -218,15 +219,16 @@ def main() -> None:
     )
 
     _print_gateway_health(url, key)
-    asyncio.run(_run_agent(url, key, model_alias))
-    asyncio.run(_run_streaming(url, key, model_alias))
+    await _run_agent(url, key, model_alias)
+    await _run_streaming(url, key, model_alias)
 
     print("=" * 72)
-    print(" Done. The gateway handled OCI signing, vendor adaptation, and any")
-    print(" configured fallback / cache / callbacks transparently. Locus saw")
-    print(" only an OpenAI-shaped HTTP contract.")
+    print(" Done. The gateway handled provider auth, vendor adaptation, and any")
+    print(" configured fallback / cache / callbacks transparently. The cloud-ops")
+    print(" agent saw only an OpenAI-shaped HTTP contract — and no upstream")
+    print(" provider key ever touched the agent host.")
     print("=" * 72)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

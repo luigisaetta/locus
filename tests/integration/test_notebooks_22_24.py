@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Integration tests for RAG notebooks 22-24.
 
@@ -20,33 +19,15 @@ pytestmark = pytest.mark.integration
 
 def has_embedder_available() -> bool:
     """Check if an embedding provider is available."""
-    if os.environ.get("OPENAI_API_KEY"):
-        return True
-    if os.path.exists(os.path.expanduser("~/.oci/config")):
-        return True
-    return False
+    return bool(os.environ.get("OPENAI_API_KEY"))
 
 
 def get_embedder():
     """Get embedder based on available credentials."""
     if os.environ.get("OPENAI_API_KEY"):
-        from locus.rag.embeddings import OpenAIEmbeddings
+        from tulip.rag.embeddings import OpenAIEmbeddings
 
         return OpenAIEmbeddings(model="text-embedding-3-small")
-
-    if os.path.exists(os.path.expanduser("~/.oci/config")):
-        try:
-            from locus.rag.embeddings import OCIEmbeddings
-
-            return OCIEmbeddings(
-                model_id=os.getenv("OCI_EMBED_MODEL", "cohere.embed-english-v3.0"),
-                profile_name=os.getenv("OCI_PROFILE", "DEFAULT"),
-                auth_type=os.getenv("OCI_AUTH_TYPE", "api_key"),
-                compartment_id=os.getenv("OCI_COMPARTMENT", ""),
-                service_endpoint=os.getenv("OCI_ENDPOINT", ""),
-            )
-        except Exception:
-            pass
 
     return None
 
@@ -54,28 +35,14 @@ def get_embedder():
 def get_model():
     """Get LLM model based on available credentials.
 
-    OCI GenAI preferred (OCI_PROFILE + OCI_ENDPOINT), OpenAI fallback.
-    Model ID from OCI_MODEL_ID env var.
+    OpenAI when ``OPENAI_API_KEY`` is set; otherwise ``None``.
     """
-    if os.environ.get("OCI_PROFILE") and os.environ.get("OCI_ENDPOINT"):
-        try:
-            from locus.models.providers.oci import OCIModel
-
-            return OCIModel(
-                model_id=os.getenv("OCI_MODEL_ID", "openai.gpt-5.4"),
-                profile_name=os.environ["OCI_PROFILE"],
-                auth_type=os.getenv("OCI_AUTH_TYPE", "api_key"),
-                service_endpoint=os.environ["OCI_ENDPOINT"],
-                compartment_id=os.getenv("OCI_COMPARTMENT", ""),
-                max_tokens=256,
-            )
-        except Exception:
-            pass
-
     if os.environ.get("OPENAI_API_KEY"):
-        from locus.models.native.openai import OpenAIModel
+        from tulip.models.native.openai import OpenAIModel
 
-        return OpenAIModel(model="gpt-4o-mini", max_tokens=256)
+        return OpenAIModel(
+            model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=256
+        )
 
     return None
 
@@ -147,8 +114,8 @@ class TestNotebook22RAGBasics:
     @pytest.mark.asyncio
     async def test_inmemory_vector_store(self):
         """Test InMemoryVectorStore operations."""
-        from locus.rag.stores.base import Document
-        from locus.rag.stores.memory import InMemoryVectorStore
+        from tulip.rag.stores.base import Document
+        from tulip.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -192,8 +159,8 @@ class TestNotebook22RAGBasics:
     @pytest.mark.asyncio
     async def test_rag_retriever(self):
         """Test RAGRetriever end-to-end."""
-        from locus.rag import RAGRetriever
-        from locus.rag.stores.memory import InMemoryVectorStore
+        from tulip.rag import RAGRetriever
+        from tulip.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -226,8 +193,8 @@ class TestNotebook22RAGBasics:
     @pytest.mark.asyncio
     async def test_rag_retriever_with_metadata(self):
         """Test RAGRetriever with metadata."""
-        from locus.rag import RAGRetriever
-        from locus.rag.stores.memory import InMemoryVectorStore
+        from tulip.rag import RAGRetriever
+        from tulip.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -260,7 +227,7 @@ class TestNotebook23RAGProviders:
     @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="OpenAI not configured")
     async def test_openai_embeddings(self):
         """Test OpenAI embeddings."""
-        from locus.rag.embeddings import OpenAIEmbeddings
+        from tulip.rag.embeddings import OpenAIEmbeddings
 
         embedder = OpenAIEmbeddings(model="text-embedding-3-small")
 
@@ -271,30 +238,6 @@ class TestNotebook23RAGProviders:
         assert result.model == "text-embedding-3-small"
 
         await embedder.close()
-
-    @pytest.mark.asyncio
-    @pytest.mark.skipif(
-        not os.path.exists(os.path.expanduser("~/.oci/config")), reason="OCI not configured"
-    )
-    async def test_oci_cohere_embeddings(self):
-        """Test OCI Cohere embeddings."""
-        try:
-            from locus.rag.embeddings import OCIEmbeddings
-
-            embedder = OCIEmbeddings(
-                model_id=os.getenv("OCI_EMBED_MODEL", "cohere.embed-english-v3.0"),
-                profile_name=os.getenv("OCI_PROFILE", "DEFAULT"),
-                auth_type=os.getenv("OCI_AUTH_TYPE", "api_key"),
-                compartment_id=os.getenv("OCI_COMPARTMENT", ""),
-                service_endpoint=os.getenv("OCI_ENDPOINT", ""),
-            )
-
-            result = await embedder.embed("Test text")
-
-            assert result.embedding is not None
-            assert len(result.embedding) == 1024  # Cohere embed-v3 dimension
-        except Exception as e:
-            pytest.skip(f"OCI embeddings not available: {e}")
 
     @pytest.mark.asyncio
     async def test_embedder_config(self):
@@ -321,8 +264,8 @@ class TestNotebook24RAGAgents:
     @pytest.mark.asyncio
     async def test_rag_as_tool(self):
         """Test converting RAG retriever to a tool."""
-        from locus.rag import RAGRetriever
-        from locus.rag.stores.memory import InMemoryVectorStore
+        from tulip.rag import RAGRetriever
+        from tulip.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -333,8 +276,8 @@ class TestNotebook24RAGAgents:
 
         await retriever.add_documents(
             [
-                "Locus is a Python framework for AI agents.",
-                "Locus supports multiple LLM providers.",
+                "Tulip is a Python framework for AI agents.",
+                "Tulip supports multiple LLM providers.",
             ]
         )
 
@@ -348,7 +291,7 @@ class TestNotebook24RAGAgents:
         assert "Search documentation" in tool.description
 
         # Test tool execution
-        result = await tool("What is Locus?")
+        result = await tool("What is Tulip?")
 
         assert "results" in result
         assert "total" in result
@@ -357,9 +300,9 @@ class TestNotebook24RAGAgents:
     @pytest.mark.asyncio
     async def test_create_rag_tool(self):
         """Test create_rag_tool function."""
-        from locus.rag import RAGRetriever
-        from locus.rag.stores.memory import InMemoryVectorStore
-        from locus.rag.tools import create_rag_tool
+        from tulip.rag import RAGRetriever
+        from tulip.rag.stores.memory import InMemoryVectorStore
+        from tulip.rag.tools import create_rag_tool
 
         embedder = get_embedder()
         if not embedder:
@@ -381,9 +324,9 @@ class TestNotebook24RAGAgents:
     @pytest.mark.asyncio
     async def test_rag_agent_simple(self):
         """Test simple RAG agent."""
-        from locus.agent import Agent
-        from locus.rag import RAGRetriever
-        from locus.rag.stores.memory import InMemoryVectorStore
+        from tulip.agent import Agent
+        from tulip.rag import RAGRetriever
+        from tulip.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         model = get_model()
@@ -420,8 +363,8 @@ class TestNotebook24RAGAgents:
     @pytest.mark.asyncio
     async def test_retrieve_text(self):
         """Test retrieve_text convenience method."""
-        from locus.rag import RAGRetriever
-        from locus.rag.stores.memory import InMemoryVectorStore
+        from tulip.rag import RAGRetriever
+        from tulip.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -456,8 +399,8 @@ class TestRAGFullPipeline:
     @pytest.mark.asyncio
     async def test_document_chunking(self):
         """Test that long documents are chunked correctly."""
-        from locus.rag import RAGRetriever
-        from locus.rag.stores.memory import InMemoryVectorStore
+        from tulip.rag import RAGRetriever
+        from tulip.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -481,8 +424,8 @@ class TestRAGFullPipeline:
     @pytest.mark.asyncio
     async def test_similarity_ordering(self):
         """Test that results are ordered by similarity."""
-        from locus.rag import RAGRetriever
-        from locus.rag.stores.memory import InMemoryVectorStore
+        from tulip.rag import RAGRetriever
+        from tulip.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -508,8 +451,8 @@ class TestRAGFullPipeline:
     @pytest.mark.asyncio
     async def test_empty_retrieval(self):
         """Test retrieval from empty store."""
-        from locus.rag import RAGRetriever
-        from locus.rag.stores.memory import InMemoryVectorStore
+        from tulip.rag import RAGRetriever
+        from tulip.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:

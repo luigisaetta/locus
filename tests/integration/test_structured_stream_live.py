@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Live: ``StructuredStream`` produces incrementally-validated partials.
 
@@ -12,34 +11,26 @@ before the final fully-valid instance.
 
 Activation:
 
-* ``OCI_PROFILE=<profile>`` OR ``OPENAI_API_KEY=<key>`` — runs against
-  whichever provider is available.
+* ``OPENAI_API_KEY=<key>`` — runs against OpenAI when available.
 """
 
 from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
-from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, Field
 
-from locus.core.events import LocusEvent, ModelChunkEvent, TerminateEvent
-from locus.core.messages import Message
-from locus.streaming.structured import StructuredStream
+from tulip.core.events import ModelChunkEvent, TerminateEvent, TulipEvent
+from tulip.core.messages import Message
+from tulip.streaming.structured import StructuredStream
 
 
 pytestmark = [pytest.mark.integration]
 
 
-_PROFILE = os.environ.get("OCI_PROFILE")
-_REGION = os.environ.get("OCI_REGION", "us-chicago-1")
 _OPENAI = bool(os.environ.get("OPENAI_API_KEY"))
-
-
-def _has_oci_config() -> bool:
-    return Path("~/.oci/config").expanduser().exists()
 
 
 class Vendor(BaseModel):
@@ -51,30 +42,21 @@ class VendorList(BaseModel):
     vendors: list[Vendor] = Field(description="Exactly 3 vendor records")
 
 
-def _build_oci_v1():
-    if not (_PROFILE and _has_oci_config()):
-        return None
-    from locus.models.providers.oci import OCIChatCompletionsModel
-
-    return OCIChatCompletionsModel(model="openai.gpt-4o-mini", profile=_PROFILE, region=_REGION)
-
-
 def _build_openai_native():
     if not _OPENAI:
         return None
     pytest.importorskip("openai")
-    from locus.models.native.openai import OpenAIModel
+    from tulip.models.native.openai import OpenAIModel
 
-    return OpenAIModel(model=os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini"))
+    return OpenAIModel(model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"))
 
 
 _FACTORIES = [
-    pytest.param(_build_oci_v1, id="oci-v1-gpt-4o-mini"),
     pytest.param(_build_openai_native, id="openai-native-gpt-4o-mini"),
 ]
 
 
-async def _events_from_model_stream(model, messages, response_format) -> AsyncIterator[LocusEvent]:
+async def _events_from_model_stream(model, messages, response_format) -> AsyncIterator[TulipEvent]:
     """Drive ``model.stream(...)`` and re-yield only the events
     ``StructuredStream`` cares about (``ModelChunkEvent`` + a synthetic
     ``TerminateEvent`` at the end).
@@ -102,7 +84,7 @@ async def test_structured_stream_emits_partial_then_final(factory):
     if model is None:
         pytest.skip("provider credentials missing")
 
-    from locus.core.structured import build_response_format
+    from tulip.core.structured import build_response_format
 
     response_format = build_response_format(VendorList, strict=True)
     messages = [

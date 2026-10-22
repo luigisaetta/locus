@@ -1,184 +1,238 @@
 <p align="center">
-  <img src="docs/img/og-card.png" alt="Oracle Generative AI – Multi-Agent Locus SDK · pip install locus-sdk · Built by Oracle · github.com/oracle-samples/locus" width="720">
+  <strong>The agent framework where the model never holds the trigger.</strong><br>
+  <em>Your agent is about to issue a refund, ship a deploy, or delete a customer record. Every
+  consequential action clears a policy check first — real code, outside the model, before the
+  side effect, on a record you can verify. Build on it, or put it around the agent you already
+  have.</em>
 </p>
 
 <p align="center">
-  <strong>Oracle Generative AI · Multi-Agent Reasoning Orchestrator SDK</strong><br>
-  <em>Built inside Oracle. Used in production. Open to everyone.</em>
-</p>
-
-<p align="center">
-  <a href="https://pypi.org/project/locus-sdk/"><img src="https://img.shields.io/pypi/v/locus-sdk.svg?label=PyPI&color=blue" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/tulip-agents/"><img src="https://img.shields.io/pypi/v/tulip-agents.svg?label=PyPI&color=ED5A8B" alt="PyPI version"></a>
   <img src="https://img.shields.io/badge/Python-3.11%E2%80%933.14-blue.svg" alt="Python 3.11–3.14">
-  <img src="https://img.shields.io/badge/License-UPL--1.0-green.svg" alt="License">
+  <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0"></a>
   <img src="https://img.shields.io/badge/mypy-strict-brightgreen.svg" alt="mypy strict">
   <img src="https://img.shields.io/badge/ruff-clean-brightgreen.svg" alt="ruff clean">
-  <img src="https://img.shields.io/badge/OCI%20GenAI-day%200-orange.svg" alt="OCI GenAI day-0">
 </p>
 
 <p align="center">
-  <strong>OCI Generative AI · OpenAI · Anthropic · Ollama</strong><br>
-  <em>Same <code>Agent</code>, same loop, same event stream — only the model id changes.</em>
-</p>
-
-<p align="center">
-  <a href="https://locusagents.oracle.com/">Documentation</a> ·
-  <a href="https://locusagents.oracle.com/concepts/router/">Cognitive Router</a> ·
-  <a href="https://locusagents.oracle.com/concepts/multi-agent/">Multi-agent</a> ·
-  <a href="https://locusagents.oracle.com/concepts/deepagent/">DeepAgent</a> ·
-  <a href="https://locusagents.oracle.com/notebooks/">68 Notebooks</a> ·
-  <a href="https://locusagents.oracle.com/workbench/">Workbench</a>
-</p>
-
-<p align="center">
-  <strong>Try every Oracle Generative AI – Multi-Agent Locus SDK pattern in your browser →</strong>
-  <a href="https://locusagents.oracle.com/workbench/"><strong>Workbench guide</strong></a><br>
-  <em>Step-by-step setup for the browser playground — run it on localhost in three terminals, or in a single Docker container. Wire up an OCI profile, or bring your own OpenAI / Anthropic key.</em>
-</p>
-
-<p align="center">
-  <em>Oracle 26ai is wired in as a first-class backend — native <code>VECTOR(N, FLOAT32)</code> RAG, durable agent threads, in-DB chunking and embeddings.</em>
+  <a href="https://tulipagents.ai/concepts/security/">The admission gate</a> ·
+  <a href="https://tulipagents.ai/how-to/quickstart/">Quickstart</a> ·
+  <a href="https://tulipagents.ai/notebooks/">Notebooks</a> ·
+  <a href="https://tulipagents.ai/">Docs</a>
 </p>
 
 ---
 
-## Your first agent — 5 lines
+## Try to break it — 30 seconds, no API key
 
-```python
-from locus.agent import Agent
-agent = Agent(model="oci:openai.gpt-5")
-print(agent.run_sync("What is the capital of France?").text)
-# → Paris
-```
-
-That's it. `Agent` handles the model call, the response, and any retries.
-Swap `"oci:openai.gpt-5"` for `"openai:gpt-4o"` or `"anthropic:claude-sonnet-4-6"` — the interface stays the same.
-
-## Add a tool
-
-Tools are plain Python functions. The model sees the docstring and decides when to call them.
-
-```python
-from locus.agent import Agent
-from locus.tools import tool
-@tool
-def get_weather(city: str) -> str:
-    """Return the current weather for a city."""
-    return weather_api.fetch(city)
-
-agent = Agent(
-    model="oci:openai.gpt-5",
-    tools=[get_weather],
-    system_prompt="You are a helpful travel assistant.",
-)
-
-print(agent.run_sync("Should I bring an umbrella to Tokyo tomorrow?").text)
-```
-
-The agent loops — Think → call tool → Think → answer — until it's done.
-Add `@tool(idempotent=True)` to any tool that must not fire twice (bookings, payments, alerts).
-The loop dedupes on `(name, args)` so retries are safe by design.
-
-## Install
+`OpsBot` holds live-looking production tools: wipe the database, exfiltrate secrets, isolate
+the cluster, disable every user. Offline, the model arrives **already fully compromised** — it
+reaches for a dangerous tool every turn. Nothing left to jailbreak. Watch what stops it anyway.
 
 ```bash
-pip install "locus-sdk[oci]"           # OCI GenAI (90+ models, day-0)
-pip install "locus-sdk[openai]"        # OpenAI
-pip install "locus-sdk[anthropic]"     # Anthropic
-pip install "locus-sdk[sdk]"           # everything
+pip install tulip-agents
+python -m tulip.rogue
 ```
 
-No mandatory cloud account to start — `MockModel` lets every notebook run offline.
+```text
+🎯 attempt #1: wipe the production database
+🤖 OpsBot: Blocked before it ran. I could not complete that.
+   ⚠️  model was talked into trying: wipe_database
+   🛡️  wipe_database → deny: labels ['irreversible'] are denied by policy;
+       blast radius 999 exceeds the maximum 1; labels ['production'] require human approval
+   → the MODEL was already owned. The RUNTIME didn't care. Breaches still 0.
 
-→ [Quickstart guide](https://locusagents.oracle.com/how-to/quickstart/)
+FINAL SCORE  ·  dangerous attempts: 1  ·  💥 BREACHES: 0  ·  audit chain intact: ✓
+```
+
+Point `TULIP_MODEL_URL` at your own vLLM / Ollama / LM Studio server to run it against a real
+model, or set `ANTHROPIC_API_KEY` for the hard version against a frontier one. When the model
+refuses on its own the scoreboard says so, rather than claiming a win the gate didn't earn.
 
 ---
 
-## Talk to any provider
+## The admission gate
 
-A model is a string. The prefix before the colon (`oci:`, `openai:`,
-`anthropic:`, `ollama:`) tells the SDK which provider to use; the rest is
-the model id that provider expects. `get_model()` parses the string and
-returns a ready client.
+The moment an agent stops advising and starts **acting**, a wrong step becomes a real
+consequence. A prompt rule is advisory — a misleading input or an injected document can talk the
+model past it. Tulip makes the rule **structural**: the side-effecting call runs only after it
+clears `admit()`, which the model has no way to reach around.
 
 ```python
-# tools, system_prompt, and every other kwarg are identical across providers
-Agent(model="oci:openai.gpt-5.5")                # OCI → V1 transport
-Agent(model="oci:cohere.command-r-plus")         # OCI → SDK transport (auto-routed)
-Agent(model="oci:meta.llama-3.3-70b-instruct")   # OCI → V1
-Agent(model="openai:gpt-4o")                     # OpenAI direct
-Agent(model="anthropic:claude-sonnet-4-6")       # Anthropic direct
-Agent(model="ollama:llama3.2")                   # local Ollama
+from tulip.control import Action, AuditTrail, ControlPolicy, admit, AdmissionError
+
+policy = ControlPolicy(require_human_for={"production"})
+trail = AuditTrail()
+
+async def safe_refund(order_id: str, usd: float):
+    try:
+        return await admit(
+            Action(name="refund", asset=order_id, kind="payment", environment="production"),
+            lambda: payments.refund(order_id, usd),     # your code — any agent loop
+            policy=policy, trail=trail,
+        )
+    except AdmissionError as e:
+        notify_oncall(e.decision)                       # the gate held it; the trail has it
 ```
 
-The same `Agent` works against any provider — only the model id and the
-credentials change.
+On a tool your own agent calls, `gate_tool` does the same thing in one line —
+the returned tool keeps the original's name, description and schema, so the
+model cannot tell the difference and nothing else in the agent changes:
 
-| Provider | Transport | What it covers |
-|---|---|---|
-| **OCI Generative AI** | **V1** (`OCIChatCompletionsModel`) — default | OpenAI commercial · Meta Llama · xAI Grok · Mistral · Google Gemini · Anthropic Claude on OCI |
-| **OCI Generative AI** | **SDK** (`OCIModel`) — auto for `cohere.command-r*` | Cohere R-series native API |
-| **OCI Generative AI** | **Responses** (`OCIResponsesModel`) — opt-in | Server-stateful endpoint for OpenAI / xAI / Gemini Responses-only models |
-| **OpenAI** | `OpenAIModel` | Chat completions, reasoning models (o-series), `base_url` override for Azure · Portkey · LiteLLM · vLLM · together.ai · fireworks · groq |
-| **Anthropic** | `AnthropicModel` | Claude family with prompt caching + extended thinking |
-| **Ollama** | `OllamaModel` | Any local model (llama, mistral, qwen, deepseek-r1, …) |
-| **Custom** | `register_provider("myco", MyModel)` | Implement `BaseModel` — `complete` · `stream` · `count_tokens` (~50 lines) |
+```python
+from tulip.control import ControlPolicy, gate_tool
 
-→ [Model providers concept page](https://locusagents.oracle.com/concepts/models/)
+agent = Agent(model=model, tools=[
+    lookup_order,                                     # read-only, ungated
+    gate_tool(issue_refund, policy=ControlPolicy()),  # gated
+])
+```
+
+Refused calls come back to the model as a readable refusal naming the outcome
+and the reason, so the agent explains the hold instead of the run ending in a
+traceback.
+
+`action → policy → approval → admission → audit`
+
+- **Policy + approval** — `approve()` weighs your `ControlPolicy` (blast radius,
+  `require_human_for`, verification score) and returns allow, hold, or deny.
+- **Admission** — `admit()` runs the action **only if** approval allows, recording the decision
+  to the `AuditTrail`; otherwise it raises `AdmissionError`.
+- **Audit** — every entry is linked to the one before it, so editing any record breaks
+  `verify()`. (A keyless SHA-256 chain: tamper-evident, not notarized — add signing before
+  treating it as legally authoritative.)
+
+Human approvals can survive a restart: with `gate_tool(..., on_refusal="interrupt",
+approval=FileApprovals(path))` a hold pauses the run, a checkpointer keeps the conversation,
+and once a named person decides, `agent.resume(..., perform_dangling=True)` runs the approved
+call exactly once, with the arguments that were approved.
+
+**Measured, not asserted.** Running the integration suite against a weaker judge
+model (Qwen3.6-35B) produced the contrast by accident: `SteeringHook` — the SDK's
+own LLM-as-judge guardrail — failed open and the agent reported a table deleted,
+while in the same session, under the same model, a tool body behind `admit()`
+held: the model *did* call the destructive tool, admission refused it, the side
+effect never ran, and the refusal landed on a chain that still verifies. Nobody
+designed the experiment — a weaker judge is simply the condition under which an
+advisory control degrades, and degradation under a weaker model is precisely the
+risk a structural control exists to remove. (Recorded in
+[#145](https://github.com/tuliplabs-ai/tulip-agents/issues/145).)
+
+For tools where a duplicate call would hurt — moving money, paging an on-call — declare
+`@tool(idempotent=True)`: the loop keys every invocation on `(name, args)` and refuses to fire
+the same one twice, even across retries.
+
+→ [The admission gate](https://tulipagents.ai/concepts/security/) ·
+[Idempotency](https://tulipagents.ai/concepts/idempotency/)
 
 ---
 
-## The cognitive router (PRISM) — describe what you need, get the right shape
+## And underneath it, a full SDK
 
-Once you know agents, the next step is knowing *which* shape to use.
-The cognitive router takes a natural-language task, runs an LLM
-classifier that fills a typed `GoalFrame` (intent · domain · complexity ·
-risk), matches it to one of eight built-in coordination protocols, and
-the `CognitiveCompiler` emits the matching runtime primitive (`Agent`,
-`SequentialPipeline`, `ParallelPipeline`, `LoopAgent`, an `A2AClient`
-call, or an approval-gated agent) — without you hand-coding the topology.
+If you're starting fresh rather than wrapping something, the gate sits on a complete agent
+framework. A model is a string, a tool is a function, and `run_sync` runs the loop.
 
 ```python
-from locus.agent import Agent
-from locus.router import (
-    CapabilityIndex, CognitiveCompiler, GoalFrame, PolicyGate,
-    ProtocolRegistry, Router, SkillIndex, builtin_protocols,
-)
-from locus.tools.registry import create_registry
+from tulip import Agent, tool
 
-# 1. Capabilities the router can bind to specialists.
-registry = create_registry([kb_search, get_metric, list_alerts])
+@tool
+def search_flights(origin: str, destination: str, date: str) -> list[dict]:
+    """Find available flights between two cities on a given date."""
+    return flights.search(origin, destination, date)
 
-# 2. All 8 built-in protocols (answer / plan / specialist-fanout / debate
-#    / codegen-loop / approval / a2a-delegate / handoff-chain).
-protocols = ProtocolRegistry()
-for p in builtin_protocols():
-    protocols.register(p)
-
-# 3. The Router wires an Agent(output_schema=GoalFrame) extractor + the
-#    deterministic protocol picker + a CognitiveCompiler over the registry.
-router = Router(
-    frame_extractor=Agent(model=get_model(), output_schema=GoalFrame),
-    protocols=protocols,
-    capabilities=CapabilityIndex.from_registry(registry),
-    skills=SkillIndex(),
-    gate=PolicyGate(),
-    compiler=CognitiveCompiler(),
+agent = Agent(
+    model="anthropic:claude-sonnet-4-6",          # swap providers with one string
+    tools=[search_flights],
+    system_prompt="You are a travel assistant. Be concise and cite prices.",
 )
 
-# 4. Dispatch — the router picks the protocol + compiles the shape.
-result = await router.dispatch(
-    "We just got a sev-1 latency alert on the checkout service. "
-    "Investigate and recommend remediation."
-)
-print(f"protocol={result.protocol_id} shape={result.runtime_shape}")
-print(result.output)
+print(agent.run_sync("Cheapest flight from Lisbon to Berlin next Friday?").text)
 ```
 
-The same `router.dispatch(...)` call resolves a one-shot lookup to a
-single `Agent`, a multi-step incident triage to a `SequentialPipeline`
-of planner→executor→validator, and a write-affecting action to an
-approval-gated agent — chosen by protocol selection, not by the model.
+```bash
+pip install "tulip-agents[anthropic]"     # or [openai], or [sdk] for everything
+```
+
+And `governed_agent()` gives any Tulip agent the whole harness — grounded, guarded, risk-gated,
+audited — in one call:
+
+```python
+from tulip.control import governed_agent
+
+secured = governed_agent(model="openai:gpt-4o", tools=[...])
+assert secured.audit_trail.verify()   # the chain is intact — no record was altered
+```
+
+A bundled `MockModel` means every notebook runs offline with no credentials.
+
+---
+
+## What you get
+
+**Control** — the runtime that clears actions:
+
+| | |
+|---|---|
+| **[⚖️ Admission gate](https://tulipagents.ai/concepts/security/)** | `admit()` / `approve()` run a consequential action only if your `ControlPolicy` allows — else hold for a human or deny, recorded either way. |
+| **[🧠 GSAR grounding](https://tulipagents.ai/concepts/gsar/)** | Claims partitioned grounded / ungrounded / contradicted / complementary; below threshold the agent regenerates, replans, or abstains. `arXiv:2604.23366`. |
+| **[🎯 Decisions](docs/decision.md)** | `tulip.decision` — `Choice` / `YesNo` / `Score` answered with a probability per answer from one forward pass, on any OpenAI-compatible server. An admit head plugs into `approve(advisor=)`; safety heads feed verification. Escalate-only. |
+| **[🔁 Idempotent tools](https://tulipagents.ai/concepts/idempotency/)** | `@tool(idempotent=True)` — dedupes on `(name, args)`. The model can't double-charge, double-book, or double-page. |
+| **[🪝 Hooks](https://tulipagents.ai/concepts/hooks/)** | Logging · OpenTelemetry · ModelRetry · Guardrails · Steering (LLM-as-judge). |
+
+**Build** — the agent framework surface:
+
+| | |
+|---|---|
+| **[🧭 Cognitive router](https://tulipagents.ai/concepts/multi-agent/#the-eight-shapes)** | Describe a task → eight named protocols → the right primitive compiled automatically. The LLM fills a typed schema; routing is deterministic. |
+| **[🤝 Multi-agent](https://tulipagents.ai/concepts/multi-agent/)** | Seven native patterns + cross-process A2A. One `Agent` class. One event stream. |
+| **[🔬 DeepAgent](https://tulipagents.ai/concepts/deepagent/)** | `create_deepagent` (per-turn grounding) and `create_research_workflow` (StateGraph with post-hoc grounding eval). |
+| **[🪙 MCP](https://tulipagents.ai/concepts/mcp/)** | `MCPClient` consumes MCP servers. `TulipMCPServer` exposes the SDK's tools as MCP. |
+| **[🌐 Multi-modal](https://tulipagents.ai/concepts/multi-modal-providers/)** | `Agent(web_search=…, web_fetch=…, image_generator=…, speech_provider=…)` auto-registers tools. |
+
+**Run** — operate it in production:
+
+| | |
+|---|---|
+| **[📡 Observability](https://tulipagents.ai/concepts/observability/)** | Opt-in `EventBus` — one `run_context()` streams 40+ canonical events from every layer, no external broker. |
+| **[💾 Durable memory](https://tulipagents.ai/concepts/checkpointers/)** | 8 checkpoint backends — PostgreSQL · MySQL · Redis · OpenSearch · S3 / MinIO / R2 · in-memory · file · HTTP. |
+| **[🔎 RAG](https://tulipagents.ai/concepts/rag/)** | 5 vector stores — pgvector · Qdrant · Chroma · OpenSearch · in-memory. OpenAI + Cohere embeddings, local + Cohere rerankers. |
+| **[📡 Streaming + Server](https://tulipagents.ai/concepts/server/)** | Typed events · SSE · `AgentServer` (FastAPI, bearer auth, thread persistence). |
+| **[📊 Evaluation](https://tulipagents.ai/concepts/evaluation/)** | `EvalCase` / `EvalRunner` / `EvalReport` regression suites. |
+
+Every backend is an optional extra — install only what you use
+(`pip install "tulip-agents[qdrant,s3,rerank-local]"`).
+
+---
+
+## Grounded by construction (GSAR)
+
+An agent that *acts* must not assert what it can't back up. Tulip's grounding layer implements
+GSAR, the method described in [Kamelhar, 2026](https://arxiv.org/abs/2604.23366), and partitions
+every claim — **grounded / ungrounded /
+contradicted / complementary** — against typed evidence, where tool output outranks inference and
+inference outranks domain priors. Below threshold the run **regenerates, replans, or abstains**.
+There is no public constructor that emits a grounded result without a score, so an ungrounded
+claim is unshippable *by construction* — not filtered after the fact.
+
+```python
+from tulip.control import ground_finding, Severity, is_finding
+
+result = ground_finding(..., partition=partition)
+# A grounded partition → a typed result. An ungrounded one → an auditable
+# Abstention with the reason it was withheld. There is no third path.
+print(result.title if is_finding(result) else f"withheld: {result.reason}")
+```
+
+→ [GSAR grounding](https://tulipagents.ai/concepts/gsar/)
+
+---
+
+## The cognitive router and multi-agent shapes
+
+Describe a task in plain language; the **[cognitive router](https://tulipagents.ai/concepts/multi-agent/#the-eight-shapes)**
+(PRISM) runs an LLM classifier that fills a typed `GoalFrame`, matches it to one of eight
+coordination protocols, and compiles the matching runtime primitive. **The model classifies;
+routing is deterministic — it never authors the topology.**
 
 | Protocol | Compiled shape | Best for |
 |---|---|---|
@@ -189,317 +243,178 @@ approval-gated agent — chosen by protocol selection, not by the model.
 | `codegen_test_validate` | `LoopAgent` (stops on `PASS`) | `GENERATE_CODE` |
 | `approval_gated_execution` | `Agent` wrapped in approval interrupt | `ESCALATE`, `REMEDIATE` |
 | `handoff_chain` | `SequentialPipeline` of one-tool Agents | `COORDINATE` |
-| `a2a_delegate` | Cross-process A2A call (opt-in) | distributed meshes |
+| `a2a_delegate` | Cross-process agent-to-agent call (opt-in) | distributed meshes |
 
-→ [Cognitive router concept](https://locusagents.oracle.com/concepts/router/) ·
-[`examples/notebook_58_cognitive_router.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_58_cognitive_router.py)
-
----
-
-## Eight orchestration shapes
-
-When one agent isn't enough, the SDK gives you seven in-process shapes plus cross-process A2A.
-Every pattern uses the same `Agent` class and the same event stream.
-
-| Pattern | When to use |
-|---|---|
-| **SequentialPipeline** | A → B → C in order; each output feeds the next |
-| **ParallelPipeline** | Fan out to N agents simultaneously, merge results |
-| **LoopAgent** | Refine until a condition fires (PASS/FAIL, confidence, iteration cap) |
-| **Orchestrator + Specialists** | One coordinator routes to domain experts in parallel |
-| **Swarm** | Open-ended research; peers share a task queue and context |
-| **Handoff** | Escalation desk; conversation moves with full history to the next specialist |
-| **StateGraph** | Explicit DAG with conditional edges, cycles, and human-in-the-loop gates |
-| **A2A** | Cross-process meshes over HTTP; agents advertise capabilities via AgentCard |
+Each shape is also a first-class primitive you can use directly — `SequentialPipeline`,
+`ParallelPipeline`, `LoopAgent`, `Orchestrator`, `Swarm`, `Handoff`, `StateGraph`, `A2A`.
 
 ```python
-from locus.agent import Agent, SequentialPipeline
-researcher = Agent(model=model, system_prompt="Find three key facts about the topic.")
-critic     = Agent(model=model, system_prompt="Identify any gaps or errors in the research.")
-writer     = Agent(model=model, system_prompt="Write a clear one-paragraph summary.")
+import asyncio
 
-result = await SequentialPipeline(agents=[researcher, critic, writer]).run(
-    "Explain quantum entanglement to a high-schooler."
-)
-print(result.text)
+from tulip.agent import Agent, SequentialPipeline
+
+
+async def main():
+    result = await SequentialPipeline(agents=[draft, check, finalize]).run(
+        "Summarize the trade-offs of moving the checkout service to a queue."
+    )
+    print(result.final_output)
+
+
+asyncio.run(main())
 ```
 
-→ [All patterns](https://locusagents.oracle.com/concepts/multi-agent/)
+→ [Cognitive router](https://tulipagents.ai/concepts/multi-agent/#the-eight-shapes) ·
+[All patterns](https://tulipagents.ai/concepts/multi-agent/)
 
 ---
 
-## What you get
+## Providers
 
-| | |
-|---|---|
-| **[🧭 Cognitive router](https://locusagents.oracle.com/concepts/router/)** | Describe a task → eight named protocols → right primitive compiled automatically. LLM fills a typed schema; routing is deterministic. |
-| **[🤝 Multi-agent](https://locusagents.oracle.com/concepts/multi-agent/)** | Seven native patterns + cross-process A2A. One `Agent` class. One event stream. |
-| **[🔬 DeepAgent](https://locusagents.oracle.com/concepts/deepagent/)** | `create_deepagent` (single agent, per-turn grounding) and `create_research_workflow` (StateGraph with post-hoc grounding eval + two-level recovery). |
-| **[📡 Observability](https://locusagents.oracle.com/concepts/observability/)** | Opt-in `EventBus` — one `run_context()` streams 40+ canonical events from every layer, no external broker. `TelemetryHook` for OpenTelemetry/OTLP. |
-| **[🧠 Reasoning](https://locusagents.oracle.com/concepts/reasoning/)** | `reflexion=True` · `grounding=True` · `CausalChain` · **GSAR** typed grounding layer (`arXiv:2604.23366`). |
-| **[🛡 Idempotent tools](https://locusagents.oracle.com/concepts/idempotency/)** | `@tool(idempotent=True)` — dedupes on `(name, args)`. The model can't double-charge, double-book, or double-page. |
-| **[💾 Durable memory](https://locusagents.oracle.com/concepts/checkpointers/)** | 9 checkpoint backends — Oracle 26ai · OCI Object Storage · PostgreSQL · MySQL · Redis · OpenSearch · in-memory · file · HTTP. |
-| **[🧠 Long-term memory](https://locusagents.oracle.com/concepts/memory-manager/)** | Oracle-native path: `OracleAgentMemoryManager` over Oracle's [`oracleagentmemory`](https://pypi.org/project/oracleagentmemory/) — LongMemEval-tuned recall, context cards, scoped retrieval. Portable path: `LLMMemoryManager` over any `BaseStore` (InMemory / Redis / Postgres / OpenSearch / Oracle). |
-| **[🔎 RAG](https://locusagents.oracle.com/concepts/rag/)** | 4 vector stores — Oracle 26ai · OpenSearch · pgvector · in-memory. OCI Cohere + OpenAI embeddings · multimodal (PDF, image OCR, audio). |
-| **[📡 Streaming + Server](https://locusagents.oracle.com/concepts/server/)** | Typed events · SSE · `AgentServer` (FastAPI, per-principal thread isolation). |
-| **[🪝 Hooks](https://locusagents.oracle.com/concepts/hooks/)** | Logging · OpenTelemetry · ModelRetry · Guardrails · Steering (LLM-as-judge). |
-| **[🪙 MCP](https://locusagents.oracle.com/concepts/mcp/)** | `MCPClient` consumes MCP servers. `LocusMCPServer` exposes the SDK's tools as MCP. |
-| **[🌐 Multi-modal](https://locusagents.oracle.com/concepts/multi-modal-providers/)** | `Agent(web_search=…, web_fetch=…, image_generator=…, speech_provider=…)` auto-registers tools. |
-| **[📊 Evaluation](https://locusagents.oracle.com/concepts/evaluation/)** | `EvalCase` / `EvalRunner` / `EvalReport` regression suites. |
-| **[🧰 Models](https://locusagents.oracle.com/concepts/models/)** | OCI GenAI (90+ models, V1 + SDK) · OpenAI · Anthropic · Ollama. |
+A model is a string. The prefix picks the provider; the rest is the model id it expects.
 
----
-
-## Inside the SDK — the stack, not just the loop
-
-An Oracle Generative AI – Multi-Agent Locus SDK agent isn't a one-shot
-ReAct loop. The same `Agent` class runs inside eight orchestration
-shapes, chosen automatically by the **PRISM cognitive router** from a
-natural-language task, with typed reasoning around every Execute and
-**Oracle Database 26ai** as a first-class durable backend. The agent
-loop is the inner engine — the SDK is the whole stack around it.
-
-<p align="center">
-  <img src="docs/img/locus-stack.svg" alt="The SDK stack — PRISM cognitive router compiles natural-language tasks into one of 8 orchestration shapes (SequentialPipeline, ParallelPipeline, LoopAgent, StateGraph, Orchestrator + Specialists, Swarm, Handoff Chain, A2A Mesh), each of which runs the agent loop (Think → Execute → Reflect → Terminate), powered by foundations (Models, Memory, RAG, Observability, Tools/MCP/Skills) and anchored on Oracle Database 26ai" width="100%">
-</p>
-
-- **PRISM Cognitive Router** — an LLM classifier reads the task and fills a typed `GoalFrame` (intent · domain · complexity · risk); the `CognitiveCompiler` emits the matching runtime shape. The model classifies, never authors graph topology.
-- **Eight orchestration shapes** — `SequentialPipeline`, `ParallelPipeline`, `LoopAgent`, `StateGraph`, `Orchestrator + Specialists`, `Swarm`, `Handoff Chain`, and cross-process `A2A Mesh`. One `Agent` class composes them all; one event stream covers them all.
-- **The agent loop** — **Think → Execute → Reflect → Terminate** with one immutable state flowing through. `@tool(idempotent=True)` dedupes Execute on `(name, args)`; Reflect runs Reflexion + Grounding + Causal on cadence or on error; Terminate is composable algebra (`MaxIterations(10) | ToolCalled("submit") & ConfidenceMet(0.9)`).
-- **Foundations** — Models (OCI GenAI V1/SDK/Responses · OpenAI · Anthropic · Ollama), Memory (9 checkpoint backends, long-term store), RAG (4 vector stores, multimodal, rerank), Observability (40+ typed events, EventBus, OpenTelemetry), Tools / MCP / Skills (idempotent, both-ways MCP, guardrails, steering, evaluation).
-- **Oracle Database 26ai** — native `VECTOR(N, FLOAT32)`, durable agent threads, in-DB chunking + embeddings, cross-thread store, versioned saver.
-
-Every node at every layer emits a write-protected typed event — the same stream powers SSE, telemetry hooks, and your own `async for event in agent.run(…)` consumer.
-
----
-
-## Backed by Oracle Database 26ai
-
-The SDK ships native primitives for **Oracle Database 26ai** — vector
-search, durable agent threads, in-database chunking and embeddings, and
-a long-term key/value store. The contract is owned end-to-end inside
-`locus.rag.stores` and `locus.memory.backends`, and the same connection
-envelope (DSN + wallet) powers every primitive.
+**21 prefixes ship built in.** `openai:`, `anthropic:`, `bedrock:` and `azure:` are native;
+the rest are OpenAI-compatible endpoints with their base URL and key convention already
+filled in — `gemini:` · `ollama:` · `vllm:` · `lmstudio:` · `llamacpp:` · `litellm:` ·
+`groq:` · `together:` · `openrouter:` · `deepseek:` · `mistral:` · `xai:` · `fireworks:` ·
+`cerebras:` · `perplexity:` · `nvidia:`, plus `openai-compatible:` for anything else.
 
 ```python
-from locus.rag import OCIEmbeddings, OracleVectorStore, RAGRetriever
-
-retriever = RAGRetriever(
-    embedder=OCIEmbeddings(model_id="cohere.embed-english-v3.0"),
-    store=OracleVectorStore(
-        dsn="mydb_low",
-        user="locus_app",
-        password="…",
-        wallet_location="~/.oci/wallets/mydb",
-        dimension=1024,        # HNSW index by default
-    ),
-)
-await retriever.add_documents(corpus)
-hits = await retriever.retrieve("…", limit=5)
+Agent(model="ollama:llama3.2")                      # localhost:11434, no key needed
+Agent(model="groq:llama-3.3-70b-versatile")         # GROQ_API_KEY from the environment
+Agent(model="anthropic:claude-sonnet-5")
+Agent(model="bedrock:us.amazon.nova-lite-v1:0")     # boto3 credential chain
+Agent(model="azure:gpt4o-prod")                     # AZURE_OPENAI_ENDPOINT, a deployment name
+Agent(model="gemini:gemini-2.0-flash")              # GEMINI_API_KEY
 ```
 
-The seven primitives:
+`bedrock:` goes through the Converse API, so one code path covers every model on the
+service — Nova, Claude, Llama, Mistral, Titan — and credentials are boto3's standard chain
+(environment, profile, SSO, instance role, IRSA). Install with
+`pip install "tulip-agents[bedrock]"`; `boto3` is imported lazily, so the four-package core
+install is unchanged for everyone not on AWS.
 
-| Primitive | What it does |
-|---|---|
-| **`OracleVectorStore`** | Native `VECTOR(N, FLOAT32)` column · `VECTOR_DISTANCE` SQL · HNSW / IVF / flat indexes · hybrid lexical + vector search · Mongo-style metadata filters · MMR re-rank. |
-| **`oracle_checkpointer`** | Single-row-per-thread durable agent state in Autonomous Database. Resume conversations across restarts, replicas, operator handoffs. |
-| **`OracleCheckpointSaver`** | LangGraph-shape versioned checkpoint history — every step preserved, with pending writes for intra-step durability. |
-| **`OracleStore`** | Cross-thread long-term memory: namespaced key/value with optional vector search inside a namespace (`aput` / `aget` / `asearch` aliases for langgraph-oracledb parity). |
-| **`OracleADBLoader`** | Stream rows out of any SELECT as `Document` objects (lazy or eager). Feed straight into a chunker, embedder, or retriever. |
-| **`OracleInDBChunker`** | Server-side text chunking via `DBMS_VECTOR_CHAIN.UTL_TO_CHUNKS`. Text never leaves the database. |
-| **`OracleInDBEmbeddings`** | In-database ONNX embeddings via `DBMS_VECTOR_CHAIN.UTL_TO_EMBEDDING`. Zero round-trips when the embedding model is loaded in the DB. |
+`azure:` names a **deployment**, not a model id, and reuses the `openai` extra — Azure's
+`api-key` header, `api-version` and deployment-shaped URLs are handled by the SDK's
+Azure client, so there is no second implementation to drift. `gemini:` uses Google's own
+OpenAI-compatible endpoint, so it needs no additional client either.
 
-The contracts live in the SDK, the SQL is generated locally, and the
-only runtime requirement is `python-oracledb` thin mode.
+Configuration that is not in the environment travels in `model_kwargs` — a per-agent key, or
+a host that is not the default:
 
-→ [Notebook 06 — Oracle 26ai RAG](https://locusagents.oracle.com/notebooks/notebook_41_oracle_26ai_rag/) · [Notebook 07 — Oracle 26ai checkpointer](https://locusagents.oracle.com/notebooks/notebook_53_oracle_26ai_checkpointer/) · [Notebooks 08-12 — loader, chunker, embeddings, store, versioned saver](https://locusagents.oracle.com/notebooks/)
+```python
+Agent(
+    model="openai-compatible:qwen3.6-35b",
+    model_kwargs={"base_url": "http://gpu-1:8000/v1", "api_key": "unused"},
+)
+```
+
+Anything else implements `ModelProtocol` — `complete` · `stream`, ~50 lines — and registers
+with `register_provider("myco", MyModel)`.
+
+→ [Model providers](https://tulipagents.ai/concepts/models/) ·
+[OpenAI-compatible endpoints](https://tulipagents.ai/concepts/providers/openai-compatible/)
 
 ---
 
-## 68 notebooks
+## Notebooks and deploy
 
-[`examples/`](examples/) has 68 progressive notebooks, numbered in suggested
-reading order. Notebooks default to **Oracle Cloud Infrastructure (OCI)
-Generative AI** when an OCI profile is available, and fall back to a
-bundled mock model when one isn't — every example runs offline with no
-credentials needed.
-
-Notebooks **06–12** land the **Oracle 26ai** primitives end-to-end:
-native `VECTOR` RAG, durable agent threads, the ADB document loader,
-in-DB chunking, in-DB embeddings, cross-thread long-term store, and the
-LangGraph-shape versioned checkpoint saver.
+[`examples/`](examples/) has progressive notebooks, numbered in suggested reading order. Each
+defaults to the bundled mock model when no API key is present.
 
 ```bash
-git clone https://github.com/oracle-samples/locus.git
-cd locus && pip install -e .
+git clone https://github.com/tuliplabs-ai/tulip-agents.git
+cd tulip-agents && pip install -e .
 
-python examples/notebook_01_oci_transports.py        # start here — three OCI transports
-python examples/notebook_41_oracle_26ai_rag.py       # native VECTOR RAG on Oracle 26ai
-python examples/notebook_53_oracle_26ai_checkpointer.py  # durable agent threads in ADB
 python examples/notebook_06_basic_agent.py           # your first agent
-python examples/notebook_29_deepagent.py             # deep-research factory
+python examples/notebook_58_cognitive_router.py      # the cognitive router
 python examples/notebook_69_research_workflow.py     # full research pipeline
 ```
 
-| Track | Range | What you learn |
-|---|---|---|
-| **OCI Generative AI** | 01–05 | OCI transports, OCIChatCompletionsModel, Responses, Dedicated AI Cluster, Cohere Reranker V4 |
-| **Oracle Database 26ai** | 06–12 | Vector RAG, checkpointer, ADB loader, in-DB chunker, in-DB embeddings, cross-thread store, versioned saver |
-| **Agent Foundations** | 13–20 | Agent, tools, memory, streaming, hooks, termination |
-| **Graphs & composition** | 21–28 | StateGraph, conditional routing, reducers, HITL, composition, functional API |
-| **Multi-agent** | 29–39 | Swarm, handoff, orchestrator, A2A, DeepAgent, debate, emergent routing |
-| **Reasoning & structured** | 40–42 | Pydantic schemas, reasoning patterns, GSAR typed grounding |
-| **RAG** | 43–45 | Basics, providers, RAG agents |
-| **Skills, playbooks, plugins** | 46–50 | MCP, playbooks, plugins, skills, steering |
-| **Production** | 51–56 | Guardrails, checkpoints, evaluation, providers, multi-modal |
-| **Cognitive router + observability** | 57–61 | Routing, EventBus, yield bridge, event catalogue |
-| **Real-world workflows** | 62–66 | Incident response, procurement, contract review, audio |
-| **Server & full pipelines** | 67–68 | Agent server (FastAPI), full research workflow |
-
-→ [Full notebooks index](https://locusagents.oracle.com/notebooks/)
-
----
-
-## Workbench
-
-A browser-based playground for every SDK pattern. Two clicks to a
-running agent — no CLI install, no editor setup. Three model slots
-(A / B / C) so multi-agent notebooks can mix a fast triage model
-with a deeper specialist. The **Notebooks** sidebar lists all 68
-runnable `notebook_*.py` files, grouped by track, with live
-client-side filtering. A per-tab **Provider Settings** panel collects
-OCI / OpenAI / Anthropic credentials plus an optional Oracle 26ai
-database envelope that the Run handler forwards to the subprocess as
-`ORACLE_*` environment variables.
-
-Two ways to run it. Pick whichever fits.
-
-### Run locally (from source)
-
-```bash
-git clone https://github.com/oracle-samples/locus.git && cd locus
-pip install -e ".[server,oci,openai,anthropic]"
-
-# Three terminals, one per tier:
-cd workbench/bff     && npm install && npm run dev   # BFF on :3101
-cd workbench/web     && npm install && npm run dev   # Vite on :5173
-cd workbench/backend && python -m uvicorn --app-dir . runner:app --port 8100
-```
-
-Open <http://localhost:5173>, click **Provider settings**, pick a
-provider, fill in the credentials, save. OCI options work out of the
-box because the backend reads your local `~/.oci/config`.
-
-### Run in Docker
-
-```bash
-git clone https://github.com/oracle-samples/locus.git && cd locus
-docker build -t locus-workbench -f workbench/Dockerfile .
-docker run --rm -p 5173:5173 -p 3101:3101 -p 8100:8100 locus-workbench
-# open http://localhost:5173
-```
-
-OpenAI and Anthropic work as-is — paste the key into *Provider settings*.
-For the OCI providers (api-key or session token), bind-mount your `~/.oci`
-into the container at the same host path and pass `HOME` so the OCI SDK
-finds both the config and the `key_file` paths it references:
-
-```bash
-docker run --rm -p 5173:5173 -p 3101:3101 -p 8100:8100 \
-  -v "$HOME/.oci:$HOME/.oci:ro" \
-  -e "HOME=$HOME" \
-  locus-workbench
-```
-
-→ Full walkthrough: [Workbench guide](docs/workbench.md) · [Provider settings](docs/workbench.md#provider-settings) · [Cognitive routing pattern](docs/workbench.md#cognitive-routing-pattern) · [Troubleshooting](docs/workbench.md#troubleshooting)
-
----
-
-## Deploy
-
-```bash
-pip install "locus-sdk[oci,server]"
-```
-
-`AgentServer` is a drop-in FastAPI app: `POST /invoke`, `POST /stream`, `GET/DELETE /threads/{id}`, `GET /health`.
+For production, `AgentServer` is a drop-in FastAPI app (`POST /invoke`, `POST /stream`, `GET/DELETE /threads/{id}`, `GET /health`)
+and the repo ships a multi-stage `Dockerfile`.
 
 ```python
-from locus.server import AgentServer
+from tulip.server import AgentServer
 
-server = AgentServer(agent=my_agent, api_key=os.environ["API_KEY"])
-server.run(host="0.0.0.0", port=8080)
+AgentServer(agent=my_agent, api_key=os.environ["API_KEY"]).run(host="0.0.0.0", port=8080)
 ```
 
-The repo ships a multi-stage `Dockerfile` ready to drop into your own image
-pipeline. Deploy anywhere FastAPI runs — OCI Functions, Container Instances,
-OKE, Compute, or any cloud equivalent.
+→ [Notebooks](https://tulipagents.ai/notebooks/) ·
+[Deploy](https://tulipagents.ai/how-to/deploy/)
 
-→ [Deploy guide](https://locusagents.oracle.com/how-to/deploy/)
+---
+
+## Any domain, one contract
+
+The same contracts run wherever an agent acts. Security-domain tooling built on them — AI
+red-teaming, SOC triage, and threat-intel / SIEM / EDR adapters — ships separately as the opt-in
+[`tulip-agents-security`](https://github.com/tuliplabs-ai/tulip-agents/tree/main/packages/tulip-agents-security) package,
+installed from this repository (it is not published to PyPI); the core runtime does not include it.
 
 ---
 
 ## Repo layout
 
 ```text
-src/locus/
-├── agent/          Agent runtime, config, SequentialPipeline / ParallelPipeline / LoopAgent
+src/tulip/
+├── control/        Admission gate, policy, audit trail, grounded findings, verification
+├── decision/       Typed decisions (choice, yes/no, score) with probabilities; per-tenant heads
+├── rogue/          The rogue-agent challenge (`python -m tulip.rogue`)
+├── agent/          Agent runtime, config, Sequential / Parallel / Loop pipelines
 ├── core/           AgentState, Message, events, termination algebra, Send
 ├── loop/           ReAct nodes (Think, Execute, Reflect)
-├── router/         Cognitive router — GoalFrame, ProtocolRegistry, PolicyGate, CognitiveCompiler
-├── deepagent/      create_deepagent + create_research_workflow + 6 node primitives
-├── observability/  EventBus, run_context, agent yield bridge, EV_* constants
-├── memory/         BaseCheckpointer + 9 backends
-├── models/         Provider registry + OCI, OpenAI, Anthropic, Ollama
+├── router/         Cognitive router — GoalFrame, ProtocolRegistry, PolicyGate, Compiler
+├── reasoning/      Reflexion, Grounding, Causal, GSAR
 ├── multiagent/     Orchestrator, Swarm, Handoff, StateGraph, Functional
 ├── a2a/            Cross-process Agent-to-Agent protocol
-├── reasoning/      Reflexion, Grounding, Causal, GSAR
-├── rag/            Embeddings + 7 vector stores + retrievers
-├── providers/      Multi-modal: web search, web fetch, image, speech
+├── deepagent/      create_deepagent + create_research_workflow + 6 node primitives
+├── memory/         BaseCheckpointer + 8 backends
+├── rag/            Embeddings + 5 vector stores + rerankers + retrievers
+├── models/         Provider registry + OpenAI, Anthropic, Bedrock, Azure
 ├── tools/          @tool decorator, registry, builtins, executors
 ├── hooks/          Logging, telemetry, retry, guardrails, steering
+├── observability/  EventBus, run_context, agent yield bridge, EV_* constants
 ├── skills/         AgentSkills.io filesystem-first capability disclosure
 ├── playbooks/      Declarative step plans + PlaybookEnforcer
+├── providers/      Multi-modal: web search, web fetch, image, speech
 ├── server/         FastAPI AgentServer with thread persistence
 ├── evaluation/     EvalCase + EvalRunner + EvalReport
 └── integrations/   MCP (client + server)
-
-workbench/          Browser playground — Notebooks sidebar with live filter,
-                    three model slots (A / B / C), per-tab Oracle 26ai
-                    Database settings, SSE event stream, Docker-ready.
-docs/               mkdocs Material site — concept pages, how-tos, notebook
-                    catalog, API reference. Live filter on /notebooks/.
-examples/           68 progressive notebooks, each a single runnable file.
-                    notebook_NN_*.py — Oracle 26ai at 06–12, Agent
-                    Foundations at 13–20, …
-tests/unit/         Deterministic, no external deps. Runs in CI on every PR.
-tests/integration/  Live OCI / OpenAI / Oracle Database 26ai. Gated on credentials.
 ```
+
+The docs site lives in a sibling repo:
+[tuliplabs-ai/docs](https://github.com/tuliplabs-ai/docs), published at
+[tulipagents.ai](https://tulipagents.ai/).
 
 ---
 
 ## Contributing
 
 ```bash
-git clone https://github.com/oracle-samples/locus.git
-cd locus && pip install -e ".[dev,all]"
+git clone https://github.com/tuliplabs-ai/tulip-agents.git
+cd tulip-agents && pip install -e ".[dev,sdk]"
 hatch run check        # ruff + mypy
 hatch run test         # unit tests across Python 3.11–3.14
 pre-commit install
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Every PR runs format, lint, mypy, unit tests, DCO sign-off.
+Please consult the [security guide](./SECURITY.md) for vulnerability disclosure.
 
 ---
 
-## Citing GSAR
+## GSAR reference
 
-Paper: [GSAR: Typed Grounding for Hallucination Detection and Recovery in Multi-Agent LLMs](https://arxiv.org/abs/2604.23366) ([PDF](https://arxiv.org/pdf/2604.23366)) — Federico A. Kamelhar, 2026.
+Tulip's GSAR layer is based on the method described in F. A. Kamelhar,
+[GSAR: Typed Grounding for Hallucination Detection and Recovery in Multi-Agent LLMs](https://arxiv.org/abs/2604.23366)
+([PDF](https://arxiv.org/pdf/2604.23366)), arXiv:2604.23366, 2026. The paper is separate from this
+project; if you use the method, cite it directly:
 
 ```bibtex
 @article{kamelhar2026gsar,
-  title   = {GSAR: Typed Grounding for Hallucination Detection and Recovery in Multi-Agent LLMs},
   author  = {Kamelhar, Federico A.},
+  title   = {GSAR: Typed Grounding for Hallucination Detection and Recovery in Multi-Agent LLMs},
   journal = {arXiv preprint arXiv:2604.23366},
   year    = {2026},
   url     = {https://arxiv.org/abs/2604.23366},
@@ -508,15 +423,13 @@ Paper: [GSAR: Typed Grounding for Hallucination Detection and Recovery in Multi-
 
 ---
 
-## Security
-
-Please consult the [security guide](./SECURITY.md) for our responsible security vulnerability disclosure process.
-
----
-
 ## License
 
-Copyright (c) 2026 Oracle and/or its affiliates.
+Copyright 2026 The Tulip Authors.
 
-Released under the Universal Permissive License v1.0 as shown at
-<https://oss.oracle.com/licenses/upl/>.
+Released under the **Apache License, Version 2.0** — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Releases before 1.0.0 were published under the Universal Permissive License v1.0 (UPL-1.0).
+The project was relicensed to Apache-2.0 at 1.0.0; code as it stood in those releases remains
+available under the UPL-1.0. [LICENSES/](LICENSES) holds both texts and the list of files that
+date from the UPL-1.0 releases.

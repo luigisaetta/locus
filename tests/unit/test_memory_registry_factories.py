@@ -1,9 +1,8 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Coverage tests that exercise the *real* factory closures in
-``locus.memory.registry``.
+``tulip.memory.registry``.
 
 The existing ``test_memory_registry.py`` swaps each closure for a stub
 inside ``_CHECKPOINTERS``. That measures the public API but bypasses the
@@ -19,18 +18,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from locus.memory.registry import get_checkpointer, list_checkpointers
+from tulip.memory.registry import get_checkpointer, list_checkpointers
 
 
 def _patch_adapter(monkeypatch: pytest.MonkeyPatch, name: str) -> dict[str, Any]:
-    """Replace ``locus.memory.backends.adapters.<name>`` with a captor."""
+    """Replace ``tulip.memory.backends.adapters.<name>`` with a captor."""
     captured: dict[str, Any] = {}
 
     def _captor(**kwargs: Any) -> MagicMock:
         captured["kwargs"] = kwargs
         return MagicMock()
 
-    from locus.memory.backends import adapters
+    from tulip.memory.backends import adapters
 
     monkeypatch.setattr(adapters, name, _captor, raising=True)
     return captured
@@ -106,33 +105,3 @@ class TestRealFactoryClosures:
         captured = _patch_adapter(monkeypatch, "opensearch_checkpointer")
         get_checkpointer("opensearch")
         assert "hosts" not in captured["kwargs"]
-
-    def test_oci_factory_splits_bucket_namespace(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        if "oci" not in list_checkpointers():
-            pytest.skip("oci backend not registered")
-        captured = _patch_adapter(monkeypatch, "oci_bucket_checkpointer")
-        get_checkpointer("oci:my-bucket/my-namespace")
-        assert captured["kwargs"]["bucket_name"] == "my-bucket"
-        assert captured["kwargs"]["namespace"] == "my-namespace"
-
-    def test_oci_factory_skips_when_no_slash(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        if "oci" not in list_checkpointers():
-            pytest.skip("oci backend not registered")
-        captured = _patch_adapter(monkeypatch, "oci_bucket_checkpointer")
-        get_checkpointer("oci:bucket-only")
-        # No slash → factory's ``"/" in config_hint`` is False → kwargs stays empty
-        assert "bucket_name" not in captured["kwargs"]
-
-    def test_oracle_factory_passes_database(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        if "oracle" not in list_checkpointers():
-            pytest.skip("oracle backend not registered")
-        captured = _patch_adapter(monkeypatch, "oracle_checkpointer")
-        get_checkpointer("oracle:mydb_high")
-        assert captured["kwargs"]["database"] == "mydb_high"
-
-    def test_oracle_factory_no_hint(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        if "oracle" not in list_checkpointers():
-            pytest.skip("oracle backend not registered")
-        captured = _patch_adapter(monkeypatch, "oracle_checkpointer")
-        get_checkpointer("oracle")
-        assert "database" not in captured["kwargs"]

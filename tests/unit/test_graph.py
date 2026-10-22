@@ -1,20 +1,19 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for StateGraph and graph execution."""
 
 import pytest
 
-from locus.core import (
+from tulip.core import (
     Command,
     Send,
     goto,
     interrupt,
     scatter,
 )
-from locus.core.interrupt import NodeExecutionContext
-from locus.multiagent.graph import (
+from tulip.core.interrupt import NodeExecutionContext
+from tulip.multiagent.graph import (
     END,
     START,
     ConditionalEdge,
@@ -146,72 +145,6 @@ class TestNode:
 
         assert result.status == NodeStatus.INTERRUPTED
         assert result.output.payload == {"question": "Continue?"}
-
-
-class TestEdge:
-    """Tests for Edge class."""
-
-    def test_default_apply(self):
-        """Test default edge behavior."""
-        edge = Edge(source_id="node1", target_id="node2")
-        result = edge.apply({"x": 1, "y": 2})
-        assert result == {"node1": {"x": 1, "y": 2}}
-
-    def test_key_mapping(self):
-        """Test edge with key mapping."""
-        edge = Edge(
-            source_id="node1",
-            target_id="node2",
-            key_mapping={"output": "input", "result": "data"},
-        )
-        result = edge.apply({"output": "value1", "result": "value2", "other": "ignored"})
-        assert result == {"input": "value1", "data": "value2"}
-
-    def test_transform(self):
-        """Test edge with transform function."""
-        edge = Edge(
-            source_id="node1",
-            target_id="node2",
-            transform=lambda x: {"transformed": x["value"] * 2},
-        )
-        result = edge.apply({"value": 5})
-        assert result == {"node1": {"transformed": 10}}
-
-
-class TestConditionalEdge:
-    """Tests for ConditionalEdge class."""
-
-    def test_single_target(self):
-        """Test conditional edge with single target."""
-        edge = ConditionalEdge(
-            source_id="router",
-            router=lambda s: s.get("type", "default"),
-            targets={"error": "error_handler", "success": "success_handler"},
-        )
-        result = edge.resolve_target({"type": "error"})
-        assert result == ["error_handler"]
-
-    def test_multiple_targets(self):
-        """Test conditional edge with multiple targets."""
-        edge = ConditionalEdge(
-            source_id="router",
-            router=lambda s: ["process", "validate"],
-            targets={"process": "processor", "validate": "validator"},
-        )
-        result = edge.resolve_target({})
-        assert result == ["processor", "validator"]
-
-    def test_default_target(self):
-        """Test conditional edge falls back to default."""
-        edge = ConditionalEdge(
-            source_id="router",
-            router=lambda s: "unknown",
-            targets={},
-            default_target="fallback",
-        )
-        # When router returns unmapped value and no direct match, use default_target
-        result = edge.resolve_target({})
-        assert result == ["fallback"]
 
 
 class TestStateGraph:
@@ -544,6 +477,24 @@ class TestEdge:
         )
         result = edge.apply({"input_value": 42})
         assert result == {"output_value": 42}
+
+    def test_key_mapping_drops_unmapped_keys(self):
+        """Only the mapped keys travel; anything else is left behind.
+
+        Recovered from a second ``TestEdge`` in this file that Python had been
+        silently shadowing since it was added — the surviving mapping test
+        passes a single key, so nothing else asserted that an unmapped one
+        does not leak through to the target node.
+        """
+        edge = Edge(
+            source_id="node1",
+            target_id="node2",
+            key_mapping={"output": "input", "result": "data"},
+        )
+
+        result = edge.apply({"output": "value1", "result": "value2", "other": "ignored"})
+
+        assert result == {"input": "value1", "data": "value2"}
 
     def test_edge_apply_key_mapping_with_non_dict(self):
         """Test edge apply key mapping when source output is not a dict."""
@@ -1065,7 +1016,7 @@ class TestStateGraphInterruptBefore:
         """When a checkpointer is configured, the interrupt_before pause
         boundary writes through to it — durable resume needs the paused
         state on disk, not just on the returned ``GraphResult``."""
-        from locus.memory.backends.memory import MemoryCheckpointer
+        from tulip.memory.backends.memory import MemoryCheckpointer
 
         graph = StateGraph()
 
@@ -1102,7 +1053,7 @@ class TestStateGraphInterruptBefore:
         previous behaviour re-paused on every resume, so durable
         human-in-the-loop flows needed application-side bookkeeping to
         rewrite ``__resume_node__``."""
-        from locus.memory.backends.memory import MemoryCheckpointer
+        from tulip.memory.backends.memory import MemoryCheckpointer
 
         graph = StateGraph()
 
@@ -1165,7 +1116,7 @@ class TestStateGraphInterruptBefore:
         FileCheckpointer exercises JSON serialization on disk — proves
         ``AgentState.metadata`` survives ``to_checkpoint()`` →
         ``from_checkpoint()`` for the non-memory path too."""
-        from locus.memory.backends.file import FileCheckpointer
+        from tulip.memory.backends.file import FileCheckpointer
 
         graph = StateGraph()
 
@@ -1210,7 +1161,7 @@ class TestInlineInterruptCheckpointerSave:
 
     @pytest.mark.asyncio
     async def test_inline_interrupt_persists_to_memory_checkpointer(self):
-        from locus.memory.backends.memory import MemoryCheckpointer
+        from tulip.memory.backends.memory import MemoryCheckpointer
 
         graph = StateGraph()
 
@@ -1245,7 +1196,7 @@ class TestInlineInterruptCheckpointerSave:
 
     @pytest.mark.asyncio
     async def test_inline_interrupt_persists_to_file_checkpointer(self, tmp_path):
-        from locus.memory.backends.file import FileCheckpointer
+        from tulip.memory.backends.file import FileCheckpointer
 
         graph = StateGraph()
 
@@ -1312,7 +1263,7 @@ class TestStateGraphResumeExecution:
     @pytest.mark.asyncio
     async def test_resume_with_command(self):
         """Test resuming execution with Command."""
-        from locus.core.command import Command
+        from tulip.core.command import Command
 
         graph = StateGraph()
 
@@ -1463,7 +1414,7 @@ class TestGraphResult:
 
     def test_graph_result_with_interrupt(self):
         """Test GraphResult with interrupt."""
-        from locus.core.interrupt import InterruptValue
+        from tulip.core.interrupt import InterruptValue
 
         interrupt = InterruptValue(
             payload={"question": "Continue?"},
@@ -1558,7 +1509,7 @@ class TestLangGraphParityShims:
     """
 
     def _trivial(self) -> StateGraph:
-        from locus.multiagent.graph import END, START
+        from tulip.multiagent.graph import END, START
 
         g = StateGraph()
 

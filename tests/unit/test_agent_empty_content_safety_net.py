@@ -1,6 +1,5 @@
-# Copyright (c) 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for issue #280 — the empty-content safety net in
 ``runtime_loop``.
@@ -24,10 +23,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from locus.agent import Agent
-from locus.core.messages import Message, ToolCall
-from locus.models.base import ModelResponse
-from locus.tools.decorator import tool
+from tulip.agent import Agent
+from tulip.core.messages import Message, ToolCall
+from tulip.models.base import ModelResponse
+from tulip.tools.decorator import tool
 
 
 class _ScriptedModel:
@@ -323,7 +322,7 @@ def test_deepagent_with_empty_content_iteration() -> None:
     """``create_deepagent`` builds an Agent with the same runtime_loop
     underneath — the safety net must work there too. This is the
     actual production path for #280."""
-    from locus.deepagent import create_deepagent
+    from tulip.deepagent import create_deepagent
 
     @tool
     def search_kb(query: str) -> str:

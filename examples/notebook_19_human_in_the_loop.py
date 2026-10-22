@@ -1,33 +1,35 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 """
-Pause a graph mid-execution, ask a human, then resume with their answer.
+Notebook 19: Human approval gates for production changes.
 
-`interrupt(payload)` pauses the running node and returns control to the
-caller with `result.is_interrupted = True`. The caller inspects the
-payload, gets a response (web form, CLI prompt, Slack reply — whatever
-makes sense), then calls `graph.execute(Command(update=..., resume=...))`
-to continue. The same node restarts; its `interrupt()` call now
-returns the supplied response.
+Rolling out a change to production infrastructure is not something an
+agent should do on its own authority — the approval gate is the control
+against excessive agency (OWASP LLM06). `interrupt(payload)` pauses the
+running node and returns control to the caller with
+`result.is_interrupted = True`. The caller inspects the payload, gets a
+response (ops console, CLI prompt, Slack reply — whatever makes sense),
+then calls `graph.execute(Command(update=..., resume=...))` to continue.
+The same node restarts; its `interrupt()` call now returns the supplied
+response.
 
 - `interrupt(payload)` — pause and surface a payload to the caller.
 - `Command(update=..., resume=...)` — resume execution with a response.
 - Multiple interrupts in one workflow.
-- Conditional interrupts (only ask for higher-risk cases).
+- Conditional interrupts (only ask for higher-risk rollouts).
 - `graph.config.interrupt_before = [...]` — pause before specific nodes.
 
 Run it:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_25_human_in_the_loop.py
+    TULIP_MODEL_PROVIDER=mock python examples/notebook_19_human_in_the_loop.py
 
 This notebook doesn't call any LLM, so the model provider doesn't
-matter. The default is still OCI GenAI when ~/.oci/config exists.
+matter. The default is the bundled mock model unless TULIP_MODEL_PROVIDER is set.
 """
 
 import asyncio
 
-from locus.core import Command, interrupt
-from locus.multiagent import END, START, StateGraph
+from tulip.core import Command, interrupt
+from tulip.multiagent import END, START, StateGraph
 
 
 # =============================================================================
@@ -36,13 +38,13 @@ from locus.multiagent import END, START, StateGraph
 
 
 async def example_basic_interrupt():
-    """Pause before a destructive action and wait for a yes/no response."""
+    """Pause before a disruptive deploy and wait for a yes/no response."""
     print("=== Part 1: One interrupt ===\n")
 
     graph = StateGraph()
 
     async def prepare(inputs):
-        return {"action": "delete", "target": inputs.get("file", "data.txt")}
+        return {"action": "deploy", "target": inputs.get("service", "checkout-api")}
 
     async def request_approval(inputs):
         # interrupt() pauses the node, surfaces `payload` to the caller via
@@ -50,7 +52,7 @@ async def example_basic_interrupt():
         # graph is re-executed.
         response = interrupt(
             {
-                "question": f"Approve {inputs['action']} on {inputs['target']}?",
+                "question": f"Approve {inputs['action']} to {inputs['target']}?",
                 "options": ["yes", "no"],
             }
         )
@@ -58,8 +60,8 @@ async def example_basic_interrupt():
 
     async def execute_action(inputs):
         if inputs.get("approved"):
-            return {"result": f"Executed {inputs['action']} on {inputs['target']}"}
-        return {"result": "Action cancelled"}
+            return {"result": f"Executed {inputs['action']} to {inputs['target']}"}
+        return {"result": "Rollout cancelled"}
 
     graph.add_node("prepare", prepare)
     graph.add_node("approval", request_approval)
@@ -70,14 +72,14 @@ async def example_basic_interrupt():
     graph.add_edge("approval", "execute")
     graph.add_edge("execute", END)
 
-    print("Starting workflow...")
-    result = await graph.execute({"file": "important.txt"})
+    print("Starting deploy workflow...")
+    result = await graph.execute({"service": "checkout-api-prod"})
 
     if result.is_interrupted:
         print(f"PAUSED at: {result.interrupt.node_id}")
         print(f"Question: {result.interrupt.interrupt.payload['question']}")
 
-        print("User responds: 'yes'")
+        print("Release manager responds: 'yes'")
         result = await graph.execute(Command(update=result.final_state, resume="yes"))
 
         print(f"Result: {result.final_state.get('result')}")
@@ -90,23 +92,23 @@ async def example_basic_interrupt():
 
 
 async def example_multi_step():
-    """A multi-question form modelled as one interrupt per question."""
+    """A change-request intake form modelled as one interrupt per question."""
     print("=== Part 2: Several interrupts in a row ===\n")
 
     graph = StateGraph()
 
-    async def ask_name(inputs):
-        name = interrupt({"question": "What is your name?", "type": "text"})
-        return {"name": name}
+    async def ask_service(inputs):
+        service = interrupt({"question": "Which service are you changing?", "type": "text"})
+        return {"service": service}
 
-    async def ask_email(inputs):
-        email = interrupt({"question": f"Hi {inputs['name']}, what's your email?"})
-        return {"email": email}
+    async def ask_action(inputs):
+        action = interrupt({"question": f"What change for {inputs['service']}?"})
+        return {"action": action}
 
     async def confirm(inputs):
         confirmed = interrupt(
             {
-                "question": f"Confirm: {inputs['name']} <{inputs['email']}>?",
+                "question": f"Confirm: {inputs['action']} on {inputs['service']}?",
                 "options": ["confirm", "cancel"],
             }
         )
@@ -114,23 +116,23 @@ async def example_multi_step():
 
     async def complete(inputs):
         if inputs.get("confirmed"):
-            return {"status": "Account created", "user": inputs["name"]}
+            return {"status": "Change ticket created", "target": inputs["service"]}
         return {"status": "Cancelled"}
 
-    graph.add_node("name", ask_name)
-    graph.add_node("email", ask_email)
+    graph.add_node("service", ask_service)
+    graph.add_node("action", ask_action)
     graph.add_node("confirm", confirm)
     graph.add_node("complete", complete)
 
-    graph.add_edge(START, "name")
-    graph.add_edge("name", "email")
-    graph.add_edge("email", "confirm")
+    graph.add_edge(START, "service")
+    graph.add_edge("service", "action")
+    graph.add_edge("action", "confirm")
     graph.add_edge("confirm", "complete")
     graph.add_edge("complete", END)
 
-    responses = ["Alice", "alice@example.com", "confirm"]
+    responses = ["checkout-api", "rollback", "confirm"]
 
-    print("Registration flow:")
+    print("Change-request intake flow:")
     result = await graph.execute({})
 
     for response in responses:
@@ -151,61 +153,61 @@ async def example_multi_step():
 
 
 async def example_conditional_interrupt():
-    """Auto-approve low-risk cases; pause only for medium and high risk."""
+    """Auto-approve small rollouts; pause only for medium and large blast radius."""
     print("=== Part 3: Interrupt only when it matters ===\n")
 
     graph = StateGraph()
 
-    async def assess_risk(inputs):
-        amount = inputs.get("amount", 0)
-        if amount < 100:
-            risk = "low"
-        elif amount < 1000:
-            risk = "medium"
+    async def assess_blast_radius(inputs):
+        pods = inputs.get("pods", 0)
+        if pods < 5:
+            radius = "small"
+        elif pods < 50:
+            radius = "medium"
         else:
-            risk = "high"
-        return {"amount": amount, "risk": risk}
+            radius = "large"
+        return {"pods": pods, "radius": radius}
 
     async def maybe_approve(inputs):
-        risk = inputs.get("risk")
-        if risk == "low":
+        radius = inputs.get("radius")
+        if radius == "small":
             return {"approved": True, "approver": "auto"}
 
-        required = "manager" if risk == "medium" else "executive"
+        required = "SRE on-call" if radius == "medium" else "release manager"
         response = interrupt(
             {
-                "message": f"${inputs['amount']} requires {required} approval",
-                "risk": risk,
+                "message": f"Rolling out to {inputs['pods']} pods requires {required} approval",
+                "radius": radius,
             }
         )
         return {"approved": response == "approve", "approver": required}
 
-    async def process(inputs):
+    async def rollout(inputs):
         if inputs.get("approved"):
-            return {"result": f"Transaction approved by {inputs['approver']}"}
-        return {"result": "Transaction rejected"}
+            return {"result": f"Rollout approved by {inputs['approver']}"}
+        return {"result": "Rollout rejected"}
 
-    graph.add_node("assess", assess_risk)
+    graph.add_node("assess", assess_blast_radius)
     graph.add_node("approve", maybe_approve)
-    graph.add_node("process", process)
+    graph.add_node("rollout", rollout)
 
     graph.add_edge(START, "assess")
     graph.add_edge("assess", "approve")
-    graph.add_edge("approve", "process")
-    graph.add_edge("process", END)
+    graph.add_edge("approve", "rollout")
+    graph.add_edge("rollout", END)
 
     test_cases = [
-        (50, None),
-        (500, "approve"),
-        (5000, "approve"),
+        (2, None),
+        (20, "approve"),
+        (200, "approve"),
     ]
 
-    for amount, user_response in test_cases:
-        print(f"Processing ${amount}...")
-        result = await graph.execute({"amount": amount})
+    for pods, user_response in test_cases:
+        print(f"Rolling out to {pods} pods...")
+        result = await graph.execute({"pods": pods})
 
         if result.is_interrupted:
-            print(f"  Needs approval: {result.interrupt.interrupt.payload['risk']} risk")
+            print(f"  Needs approval: {result.interrupt.interrupt.payload['radius']} blast radius")
             result = await graph.execute(Command(update=result.final_state, resume=user_response))
 
         print(f"  -> {result.final_state.get('result')}")
@@ -223,34 +225,34 @@ async def example_interrupt_before():
 
     graph = StateGraph()
 
-    async def prepare(inputs):
-        return {"data": inputs.get("data", "sample"), "prepared": True}
+    async def backup(inputs):
+        return {"snapshot": inputs.get("snapshot", "db-backup"), "backed_up": True}
 
-    async def deploy(inputs):
-        return {"deployed": True, "target": inputs.get("environment")}
+    async def migrate(inputs):
+        return {"migrated": True, "target": inputs.get("service")}
 
     async def verify(inputs):
         return {"verified": True}
 
-    graph.add_node("prepare", prepare)
-    graph.add_node("deploy", deploy)
+    graph.add_node("backup", backup)
+    graph.add_node("migrate", migrate)
     graph.add_node("verify", verify)
 
-    graph.add_edge(START, "prepare")
-    graph.add_edge("prepare", "deploy")
-    graph.add_edge("deploy", "verify")
+    graph.add_edge(START, "backup")
+    graph.add_edge("backup", "migrate")
+    graph.add_edge("migrate", "verify")
     graph.add_edge("verify", END)
 
     # Pause before any node in this list. Useful when the sensitive step
     # is third-party code you can't edit to call interrupt() directly.
-    graph.config.interrupt_before = ["deploy"]
+    graph.config.interrupt_before = ["migrate"]
 
-    print("Deploying to production...")
-    result = await graph.execute({"environment": "production", "data": "v2.0"})
+    print("Running a production schema migration...")
+    result = await graph.execute({"service": "orders-db-prod", "snapshot": "db-backup"})
 
     if result.is_interrupted:
         print(f"PAUSED before: {result.interrupt.node_id}")
-        print(f"Current state: prepared={result.final_state.get('prepared')}")
+        print(f"Current state: backed_up={result.final_state.get('backed_up')}")
         print("\nResume with graph.execute(Command(update=..., resume=...)).")
     print()
 
@@ -261,42 +263,42 @@ async def example_interrupt_before():
 
 
 async def example_complete_workflow():
-    """Technical review then manager sign-off, each its own interrupt."""
+    """SRE review then release manager sign-off, each its own interrupt."""
     print("=== Part 5: A two-stage approval workflow ===\n")
 
     graph = StateGraph()
 
     async def create_request(inputs):
         return {
-            "request_id": "REQ-001",
-            "type": inputs.get("type", "change"),
+            "request_id": "CHG-001",
+            "type": inputs.get("type", "deploy"),
             "description": inputs.get("description", ""),
             "status": "pending",
         }
 
-    async def technical_review(inputs):
+    async def sre_review(inputs):
         approval = interrupt(
             {
-                "step": "Technical Review",
+                "step": "SRE Review",
                 "request": inputs["request_id"],
                 "description": inputs["description"],
-                "question": "Is this technically feasible?",
+                "question": "Is this rollout safe to ship now?",
             }
         )
         return {
-            "tech_approved": approval == "approve",
-            "tech_comments": "Reviewed by engineering",
+            "sre_approved": approval == "approve",
+            "sre_comments": "Reviewed by SRE on-call",
         }
 
     async def manager_approval(inputs):
-        if not inputs.get("tech_approved"):
-            return {"status": "rejected", "reason": "Technical review failed"}
+        if not inputs.get("sre_approved"):
+            return {"status": "rejected", "reason": "SRE review failed"}
 
         approval = interrupt(
             {
-                "step": "Manager Approval",
+                "step": "Release Manager Approval",
                 "request": inputs["request_id"],
-                "question": "Approve this change request?",
+                "question": "Approve deploying this change to production?",
             }
         )
         return {
@@ -312,13 +314,13 @@ async def example_complete_workflow():
         }
 
     graph.add_node("create", create_request)
-    graph.add_node("tech", technical_review)
+    graph.add_node("sre", sre_review)
     graph.add_node("manager", manager_approval)
     graph.add_node("finalize", finalize)
 
     graph.add_edge(START, "create")
-    graph.add_edge("create", "tech")
-    graph.add_edge("tech", "manager")
+    graph.add_edge("create", "sre")
+    graph.add_edge("sre", "manager")
     graph.add_edge("manager", "finalize")
     graph.add_edge("finalize", END)
 
@@ -327,8 +329,8 @@ async def example_complete_workflow():
 
     result = await graph.execute(
         {
-            "type": "change",
-            "description": "Update database schema",
+            "type": "deploy",
+            "description": "Deploy orders-api v2.4.0 to production (schema change)",
         }
     )
 
@@ -357,7 +359,7 @@ async def example_complete_workflow():
 
 async def main():
     print("=" * 60)
-    print("Notebook 20: Human-in-the-loop")
+    print("Notebook 19: Human approval gates for production changes")
     print("=" * 60)
     print()
 
@@ -368,7 +370,7 @@ async def main():
     await example_complete_workflow()
 
     print("=" * 60)
-    print("Next: Notebook 21 — Advanced patterns")
+    print("Next: Notebook 20 — Advanced graph patterns")
     print("=" * 60)
 
 

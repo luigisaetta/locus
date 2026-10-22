@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for base checkpointer module."""
 
@@ -8,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from locus.core.protocols import CheckpointerCapabilities
-from locus.memory.checkpointer import BaseCheckpointer
+from tulip.core.protocols import CheckpointerCapabilities
+from tulip.memory.checkpointer import BaseCheckpointer
 
 
 class MinimalCheckpointer(BaseCheckpointer):

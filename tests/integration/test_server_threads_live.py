@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """End-to-end: AgentServer's ``/threads/{id}`` round-trips real agent state.
 
@@ -9,9 +8,8 @@ Stands up an in-process FastAPI server backed by a real Agent +
 verifies ``GET /threads/{tid}`` returns the persisted state and
 ``DELETE`` removes it.
 
-Runs against three providers:
+Runs against two providers:
 
-* OCI ``/openai/v1`` (gpt-4o-mini) — needs ``OCI_PROFILE``
 * OpenAI direct (gpt-4o-mini) — needs ``OPENAI_API_KEY``
 * Anthropic direct (claude-haiku-4.5) — needs ``ANTHROPIC_API_KEY``
 
@@ -21,7 +19,6 @@ Each provider that's unavailable is silently skipped.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import pytest
 
@@ -29,55 +26,40 @@ import pytest
 pytestmark = [pytest.mark.integration]
 
 
-_PROFILE = os.environ.get("OCI_PROFILE")
-_REGION = os.environ.get("OCI_REGION", "us-chicago-1")
 _OPENAI = bool(os.environ.get("OPENAI_API_KEY"))
 _ANTHROPIC = bool(os.environ.get("ANTHROPIC_API_KEY"))
-
-
-def _has_oci_config() -> bool:
-    return Path("~/.oci/config").expanduser().exists()
-
-
-def _build_oci_v1():
-    if not (_PROFILE and _has_oci_config()):
-        return None
-    from locus.models.providers.oci import OCIChatCompletionsModel
-
-    return OCIChatCompletionsModel(model="openai.gpt-4o-mini", profile=_PROFILE, region=_REGION)
 
 
 def _build_openai_native():
     if not _OPENAI:
         return None
     pytest.importorskip("openai")
-    from locus.models.native.openai import OpenAIModel
+    from tulip.models.native.openai import OpenAIModel
 
-    return OpenAIModel(model=os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini"))
+    return OpenAIModel(model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"))
 
 
 def _build_anthropic_native():
     if not _ANTHROPIC:
         return None
     pytest.importorskip("anthropic")
-    from locus.models.native.anthropic import AnthropicModel
+    from tulip.models.native.anthropic import AnthropicModel
 
     return AnthropicModel(
-        model=os.environ.get("LOCUS_ANTHROPIC_TEST_MODEL", "claude-haiku-4-5-20251001")
+        model=os.environ.get("TULIP_ANTHROPIC_TEST_MODEL", "claude-haiku-4-5-20251001")
     )
 
 
 _PROVIDER_FACTORIES = [
-    pytest.param(_build_oci_v1, id="oci-v1-gpt-4o-mini"),
     pytest.param(_build_openai_native, id="openai-native-gpt-4o-mini"),
     pytest.param(_build_anthropic_native, id="anthropic-native-claude-haiku"),
 ]
 
 
 def _build_server(model):
-    from locus.agent import Agent
-    from locus.memory.backends.memory import MemoryCheckpointer
-    from locus.server import AgentServer
+    from tulip.agent import Agent
+    from tulip.memory.backends.memory import MemoryCheckpointer
+    from tulip.server import AgentServer
 
     agent = Agent(
         model=model,

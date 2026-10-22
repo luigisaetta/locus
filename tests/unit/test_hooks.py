@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for hooks module."""
 
@@ -8,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from locus.hooks import (
+from tulip.hooks import (
     HookPriority,
     HookProvider,
     HookRegistry,
@@ -167,7 +166,7 @@ class TestHookProvider:
     @pytest.mark.asyncio
     async def test_default_before_tool_call(self):
         """Test default before_tool_call accepts event."""
-        from locus.hooks.provider import BeforeToolCallEvent
+        from tulip.hooks.provider import BeforeToolCallEvent
 
         provider = ConcreteHookProvider()
         event = BeforeToolCallEvent(tool_name="tool", tool_call_id="c1", arguments={"key": "value"})
@@ -178,7 +177,7 @@ class TestHookProvider:
     @pytest.mark.asyncio
     async def test_default_after_tool_call(self):
         """Test default after_tool_call accepts event."""
-        from locus.hooks.provider import AfterToolCallEvent
+        from tulip.hooks.provider import AfterToolCallEvent
 
         provider = ConcreteHookProvider()
         event = AfterToolCallEvent(tool_name="tool", result="result", error=None)

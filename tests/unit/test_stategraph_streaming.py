@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for ``StateGraph.stream()`` real intermediate-event streaming.
 
@@ -15,7 +14,7 @@ import asyncio
 import time
 from typing import Any
 
-from locus.multiagent.graph import (
+from tulip.multiagent.graph import (
     END,
     START,
     Node,

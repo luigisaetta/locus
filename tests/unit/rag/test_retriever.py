@@ -1,15 +1,14 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for RAG retriever."""
 
 import pytest
 
-from locus.rag.embeddings.base import EmbeddingConfig, EmbeddingResult
-from locus.rag.retriever import RAGRetriever, RetrievalResult
-from locus.rag.stores.base import Document, SearchResult
-from locus.rag.stores.memory import InMemoryVectorStore
+from tulip.rag.embeddings.base import EmbeddingConfig, EmbeddingResult
+from tulip.rag.retriever import RAGRetriever, RetrievalResult
+from tulip.rag.stores.base import Document, SearchResult
+from tulip.rag.stores.memory import InMemoryVectorStore
 
 
 class MockEmbedder:

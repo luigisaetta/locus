@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for playbook loader module."""
 
@@ -10,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from locus.playbooks.loader import (
+from tulip.playbooks.loader import (
     PlaybookLoader,
     PlaybookLoadError,
     load_playbook,
 )
-from locus.playbooks.models import Playbook
+from tulip.playbooks.models import Playbook
 
 
 class TestPlaybookLoadError:

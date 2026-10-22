@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Tests for ``locus.memory.compactor.LLMCompactor``."""
+"""Tests for ``tulip.memory.compactor.LLMCompactor``."""
 
 from __future__ import annotations
 
@@ -10,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from locus.core.messages import Message, Role, ToolResult
-from locus.memory.compactor import LLMCompactor
+from tulip.core.messages import Message, Role, ToolResult
+from tulip.memory.compactor import LLMCompactor
 
 
 def _asst(content: str) -> Message:

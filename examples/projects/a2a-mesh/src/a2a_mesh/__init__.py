@@ -1,4 +1,3 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
-"""Multi-process Locus agents talking over A2A (HTTP + SSE)."""
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
+"""Multi-process Tulip agents talking over A2A (HTTP + SSE)."""

@@ -1,12 +1,11 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Integration test for path safety (A.4) wired through a real file tool.
 
 Builds a tiny ``@tool`` that opens a model-supplied path under a
 fixed base directory and demonstrates that
-:func:`~locus.tools.path_safety.safe_resolve` blocks every escape
+:func:`~tulip.tools.path_safety.safe_resolve` blocks every escape
 vector against real filesystem state (symlinks, traversal, absolute
 paths, non-existent siblings).
 """
@@ -17,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from locus.core.errors import ValidationError
-from locus.tools.path_safety import safe_resolve
+from tulip.core.errors import ValidationError
+from tulip.tools.path_safety import safe_resolve
 
 
 @pytest.fixture

@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for playbook models."""
 
@@ -8,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from locus.playbooks.models import (
+from tulip.playbooks.models import (
     Playbook,
     PlaybookPlan,
     PlaybookStep,

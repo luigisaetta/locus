@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for ``locus.memory.backends.mysql`` (MySQLBackend).
+"""Unit tests for ``tulip.memory.backends.mysql`` (MySQLBackend).
 
 Stubs ``mysql.connector.aio`` so we never need a real MySQL instance.
 Coverage mirrors the PostgreSQL backend tests:
@@ -28,7 +27,7 @@ from typing import Any
 
 import pytest
 
-from locus.memory.backends.mysql import (
+from tulip.memory.backends.mysql import (
     MySQLBackend,
     MySQLConfig,
     _decode_json,
@@ -133,7 +132,7 @@ class TestConfig:
         cfg = MySQLConfig()
         assert cfg.host == "localhost"
         assert cfg.port == 3306
-        assert cfg.database == "locus"
+        assert cfg.database == "tulip"
         assert cfg.table_name == "checkpoints"
 
     def test_invalid_table_name_rejected(self) -> None:

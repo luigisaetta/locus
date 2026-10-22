@@ -1,6 +1,5 @@
-# Copyright (c) 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for ``create_research_workflow(datastores=...)``.
 
@@ -15,8 +14,8 @@ from typing import Any
 
 import pytest
 
-from locus.deepagent.factory import wire_datastores
-from locus.deepagent.workflow import create_research_workflow
+from tulip.deepagent.factory import wire_datastores
+from tulip.deepagent.workflow import create_research_workflow
 
 
 class _StubRetriever:
@@ -30,7 +29,7 @@ class _StubRetriever:
 
     async def retrieve(self, *args: Any, **kwargs: Any) -> Any:  # pragma: no cover
         self.calls.append({"args": args, "kwargs": kwargs})
-        from locus.rag.retriever import RetrievalResult
+        from tulip.rag.retriever import RetrievalResult
 
         return RetrievalResult(query="", documents=[], scores=[])
 
@@ -40,13 +39,38 @@ def _make_retriever() -> Any:
     `wire_datastores`'s isinstance check passes and `create_rag_tool` can
     bind it. The store is irrelevant — we only exercise the wiring path.
     """
-    from locus.rag import OCIEmbeddings, RAGRetriever
-    from locus.rag.stores.memory import InMemoryVectorStore
+    from tulip.rag import RAGRetriever
+    from tulip.rag.embeddings.base import (
+        BaseEmbedding,
+        EmbeddingCapabilities,
+        EmbeddingConfig,
+        EmbeddingResult,
+    )
+    from tulip.rag.stores.memory import InMemoryVectorStore
 
-    # OCIEmbeddings is lazy — never calls OCI unless we run embed_query.
-    embedder = OCIEmbeddings(model_id="cohere.embed-english-v3.0")
+    class StubEmbedder(BaseEmbedding):
+        @property
+        def config(self) -> EmbeddingConfig:
+            return EmbeddingConfig(dimension=1024, max_tokens=1, batch_size=1)
+
+        @property
+        def capabilities(self) -> EmbeddingCapabilities:  # type: ignore[override]
+            return EmbeddingCapabilities()
+
+        async def embed(self, text: str) -> EmbeddingResult:
+            return EmbeddingResult(embedding=[0.0] * 1024, text=text, model="stub")
+
+        async def embed_batch(self, texts: list[str]) -> list[EmbeddingResult]:
+            return [await self.embed(t) for t in texts]
+
+        async def embed_query(self, query: str) -> EmbeddingResult:
+            return await self.embed(query)
+
+        async def embed_documents(self, documents: list[str]) -> list[EmbeddingResult]:
+            return await self.embed_batch(documents)
+
     store = InMemoryVectorStore(dimension=1024)
-    return RAGRetriever(embedder=embedder, store=store)
+    return RAGRetriever(embedder=StubEmbedder(), store=store)
 
 
 def test_wire_datastores_none_returns_empty() -> None:

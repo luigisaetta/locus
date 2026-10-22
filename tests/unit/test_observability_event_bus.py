@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for ``locus.observability.event_bus``.
+"""Unit tests for ``tulip.observability.event_bus``.
 
 Covers the load-bearing behaviours: per-run filtering, history replay
 on late connect, sentinel close, global subscription, drop accounting
@@ -15,7 +14,7 @@ import asyncio
 
 import pytest
 
-from locus.observability.event_bus import (
+from tulip.observability.event_bus import (
     EventBus,
     StreamEvent,
     get_event_bus,

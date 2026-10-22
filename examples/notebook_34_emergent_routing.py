@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Notebook 35: emergent routing — let the model pick the protocol when it's ambiguous.
+"""Notebook 34: emergent incident routing — the model picks the specialist protocol.
 
-The default router (Notebook 53) is deterministic: the LLM fills a
+The default router (Notebook 58) is deterministic: the LLM fills a
 ``GoalFrame``, then ``_rank_key`` picks a protocol via tuple
-comparison. Reproducible, auditable, rule-based.
+comparison. Reproducible, auditable, rule-based — exactly what an
+on-call lead wants from an incident router.
 
 This notebook covers the opt-in second mode. When multiple protocols
-pass the filter, an ``LLMProtocolPicker`` asks the model to make the
-last-mile choice and records its rationale on the
-``router.protocol.selected`` event.
+pass the filter — say a latency regression that could go to the
+service-mesh specialist or the capacity-planning specialist — an
+``LLMProtocolPicker`` asks the model to make the last-mile choice and
+records its rationale on the ``router.protocol.selected`` event. Moving
+*only* the disambiguation step to the model keeps the routing audit
+trail intact, which matters when the router itself can fan work out to
+agents that touch production infrastructure.
 
 - Filtering, policy gating, capability binding, and builder dispatch
   stay rule-based. Only the disambiguation step moves to the model.
@@ -22,31 +26,31 @@ last-mile choice and records its rationale on the
   falls back to ``_rank_key`` and emits
   ``router.protocol.picker_fallback`` so the degradation is
   observable.
-- The same five prompts run through both routers side by side. Rows
-  marked ``≠`` are where the two modes disagreed.
+- The same five on-call requests run through both routers side by
+  side. Rows marked ``≠`` are where the two modes disagreed.
 
 Run it:
-    .venv/bin/python examples/notebook_40_emergent_routing.py
+    .venv/bin/python examples/notebook_34_emergent_routing.py
 
-The default provider is OCI Generative AI. With ``~/.oci/config``
-present both routers talk to a live OCI model (canonical pick:
-``openai.gpt-4.1`` or ``meta.llama-3.3-70b-instruct``). Set
-``LOCUS_MODEL_PROVIDER=mock`` for offline runs — the picker will
+The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+(or anthropic) and the matching credentials to use a live model. Set
+``TULIP_MODEL_PROVIDER=mock`` for offline runs — the picker will
 emerge with its mock rationale.
 
 Prerequisites:
-- Notebook 14 (structured output).
-- Notebook 53 (cognitive router — the default rule-based path).
+- Notebook 35 (structured output).
+- Notebook 58 (cognitive router — the default rule-based path).
 """
 
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from config import get_model
 
-from locus.agent import Agent
-from locus.router import (
+from tulip.agent import Agent
+from tulip.router import (
     CapabilityIndex,
     CognitiveCompiler,
     GoalFrame,
@@ -56,40 +60,45 @@ from locus.router import (
     Router,
     builtin_protocols,
 )
-from locus.tools import tool
-from locus.tools.registry import create_registry
+from tulip.tools import tool
+from tulip.tools.registry import create_registry
 
 
 # ---------------------------------------------------------------------------
-# Three small tools shared by both routers
+# Three small SRE tools shared by both routers
 # ---------------------------------------------------------------------------
 
 
 @tool
-def kb_search(query: str) -> str:
-    """Search the knowledge base for a topic."""
+def runbook_search(query: str) -> str:
+    """Search the on-call runbook knowledge base for an incident family."""
     canned = {
-        "swarm": "Swarm = self-organizing pool claiming tasks from a shared queue.",
-        "orchestrator": "Orchestrator = one coordinator picks specialists per sub-task.",
+        "latency": (
+            "Latency regression (RED method) = elevated p99 on a request path; "
+            "route to the service-mesh specialist."
+        ),
+        "saturation": (
+            "Saturation (USE method) = resource exhaustion on a node; route to capacity planning."
+        ),
     }
-    return canned.get(query.lower(), f"No KB entry for {query!r}.")
+    return canned.get(query.lower(), f"No runbook entry for {query!r}.")
 
 
 @tool
-def get_metric(name: str) -> str:
-    """Return the latest value of a named metric."""
+def get_slo_metric(name: str) -> str:
+    """Return the latest value of a named SLO / telemetry metric."""
     return {
-        "latency_p99": "latency_p99=420ms (slo 300ms — breach)",
-        "cpu": "cpu=87% (warn 80%)",
+        "error_rate": "error_rate=4.2%/min (baseline 0.3%/min — spike)",
+        "cpu_throttle": "cpu_throttle=17 pods (warn 10)",
     }.get(name.lower(), f"no metric {name!r}")
 
 
 @tool
-def list_alerts(window_minutes: int = 30) -> str:
-    """List recent alerts."""
+def list_incidents(window_minutes: int = 30) -> str:
+    """List recent on-call incidents."""
     return (
-        "alert_id=A-101 sev=high svc=checkout latency_p99 breach\n"
-        "alert_id=A-102 sev=medium svc=catalog cpu_warn"
+        "inc_id=I-101 sev=high family=latency service=checkout p99 spike on /charge\n"
+        "inc_id=I-102 sev=medium family=saturation host=node-0231 memory pressure"
     )
 
 
@@ -107,36 +116,36 @@ def _build_extractor(model) -> Agent:
     return Agent(
         model=model,
         system_prompt=(
-            "Fill the GoalFrame schema based on the user's verb and intent. "
-            "required_capabilities may include: kb_search, metric_probe, alert_list."
+            "Fill the GoalFrame schema based on the engineer's verb and intent. "
+            "required_capabilities may include: runbook_search, metric_probe, incident_list."
         ),
         output_schema=GoalFrame,
     )
 
 
-def build_routers() -> tuple[Router, Router]:
+def build_routers() -> tuple[Router, Router, Any]:
     """Return (default, emergent) — same registry, only the picker differs."""
     model = get_model()
 
-    tools = create_registry(kb_search, get_metric, list_alerts)
+    tools = create_registry(runbook_search, get_slo_metric, list_incidents)
     capabilities = CapabilityIndex(tools)
     capabilities.annotate(
-        "kb_search",
-        tool_name="kb_search",
-        description="Knowledge-base lookup.",
-        domain="research",
+        "runbook_search",
+        tool_name="runbook_search",
+        description="On-call runbook knowledge-base lookup.",
+        domain="runbook",
     )
     capabilities.annotate(
         "metric_probe",
-        tool_name="get_metric",
-        description="Latest value of a named metric.",
+        tool_name="get_slo_metric",
+        description="Latest value of a named SLO / telemetry metric.",
         domain="observability",
     )
     capabilities.annotate(
-        "alert_list",
-        tool_name="list_alerts",
-        description="Recent alerts in a window.",
-        domain="observability",
+        "incident_list",
+        tool_name="list_incidents",
+        description="Recent on-call incidents in a window.",
+        domain="sre",
     )
 
     protocols = ProtocolRegistry()
@@ -155,31 +164,31 @@ def build_routers() -> tuple[Router, Router]:
             picker=LLMProtocolPicker(model=model),
         ),
     )
-    return default, emergent
+    return default, emergent, model
 
 
 # ---------------------------------------------------------------------------
-# Five prompts. Most route the same way under both modes. The COMPARE
-# one is where the picker earns its keep — debate vs specialist_fanout
-# both qualify, and the picker can decide with intent-level reasoning
-# that _rank_key can't see.
+# Five on-call requests. Most route the same way under both modes. The
+# COMPARE one is where the picker earns its keep — debate vs
+# specialist_fanout both qualify, and the picker can decide with
+# intent-level reasoning that _rank_key can't see.
 # ---------------------------------------------------------------------------
 
 
 PROMPTS = [
-    "What does the locus router do in the context of this SDK?",
-    "Diagnose the checkout API latency spike: pull metrics, list alerts, correlate findings.",
-    "Outline a three-step refactor plan for our agent test suite. Read-only — no production changes.",
-    "Compare swarm vs orchestrator patterns for open-ended research.",
-    "Generate a Python function that returns the nth Fibonacci number, with tests.",
+    "What does the runbook KB say about saturation as an incident family?",
+    "Triage the error-rate spike: pull SLO metrics, list recent incidents, correlate.",
+    "Outline a three-step hardening plan for our autoscaling policies. Read-only — no prod changes.",
+    "Compare connection draining vs pod eviction for shedding load during a latency incident.",
+    "Generate a Python function that counts 5xx responses per upstream host, with tests.",
 ]
 
 
 async def main() -> None:
-    default, emergent = build_routers()
+    default, emergent, model = build_routers()
 
     print(f"{'─' * 90}")
-    print(f"  PROMPT                                          | DEFAULT             | EMERGENT")
+    print(f"  REQUEST                                         | DEFAULT             | EMERGENT")
     print(f"{'─' * 90}")
 
     for prompt in PROMPTS:
@@ -200,12 +209,16 @@ async def main() -> None:
 
     print(f"{'─' * 90}")
     print(
-        "Read each row left-to-right: prompt → default protocol → emergent protocol.\n"
-        "When the two columns differ (≠), the picker's rationale field on the\n"
-        "router.protocol.selected event tells you why it chose differently. The\n"
+        "Read each row left-to-right: on-call request → default protocol → emergent\n"
+        "protocol. When the two columns differ (≠), the picker's rationale field on\n"
+        "the router.protocol.selected event tells you why it chose differently. The\n"
         "filter, policy gate, and builder dispatch are identical in both modes —\n"
         "only the disambiguation step changed."
     )
+
+    close = getattr(model, "close", None)
+    if close is not None:
+        await close()
 
 
 if __name__ == "__main__":

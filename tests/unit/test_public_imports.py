@@ -1,16 +1,15 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Guard the documented public import surface.
 
 Past regressions:
 
-- ``from locus import Reflexion`` raised ``ImportError`` because the
+- ``from tulip import Reflexion`` raised ``ImportError`` because the
   package's lazy-import map pointed at a class name (``Reflexion``) that
   doesn't exist in source — the real class is ``Reflector``. Both names are
   now valid imports (``Reflexion`` is an alias).
-- ``from locus.hooks.builtin import ModelRetryHook`` and
+- ``from tulip.hooks.builtin import ModelRetryHook`` and
   ``SteeringHook`` failed because the submodule's ``__init__`` only
   re-exported logging / telemetry / guardrails, even though the README
   hook table named both.
@@ -25,54 +24,54 @@ from __future__ import annotations
 import importlib
 
 
-class TestTopLevelLocus:
+class TestTopLevelTulip:
     def test_reflexion_alias(self):
-        import locus
+        import tulip
 
         # ``Reflexion`` should resolve via the lazy importer to the real
         # ``Reflector`` class — not raise ImportError.
-        cls = locus.Reflexion
+        cls = tulip.Reflexion
         assert cls.__name__ == "Reflector"
 
     def test_reflector_direct(self):
-        import locus
+        import tulip
 
-        cls = locus.Reflector
+        cls = tulip.Reflector
         assert cls.__name__ == "Reflector"
 
     def test_reflexion_and_reflector_are_same_class(self):
-        import locus
+        import tulip
 
-        assert locus.Reflexion is locus.Reflector
+        assert tulip.Reflexion is tulip.Reflector
 
     def test_reflexion_in_dunder_all(self):
-        import locus
+        import tulip
 
-        # ``__all__`` must list both spellings so ``from locus import *``
+        # ``__all__`` must list both spellings so ``from tulip import *``
         # exposes them and tooling (pyright, sphinx) doesn't drop them.
-        assert "Reflexion" in locus.__all__
-        assert "Reflector" in locus.__all__
+        assert "Reflexion" in tulip.__all__
+        assert "Reflector" in tulip.__all__
 
 
 class TestHookBuiltinExports:
     """Every hook the README's hook-table names must be importable from
-    ``locus.hooks.builtin`` directly.
+    ``tulip.hooks.builtin`` directly.
     """
 
     def test_logging_hooks(self):
-        from locus.hooks.builtin import LoggingHook, StructuredLoggingHook
+        from tulip.hooks.builtin import LoggingHook, StructuredLoggingHook
 
         assert LoggingHook is not None
         assert StructuredLoggingHook is not None
 
     def test_telemetry_hooks(self):
-        from locus.hooks.builtin import NoOpTelemetryHook, TelemetryHook
+        from tulip.hooks.builtin import NoOpTelemetryHook, TelemetryHook
 
         assert TelemetryHook is not None
         assert NoOpTelemetryHook is not None
 
     def test_guardrails_hooks(self):
-        from locus.hooks.builtin import ContentFilterHook, GuardrailsHook
+        from tulip.hooks.builtin import ContentFilterHook, GuardrailsHook
 
         assert GuardrailsHook is not None
         assert ContentFilterHook is not None
@@ -80,12 +79,12 @@ class TestHookBuiltinExports:
     def test_model_retry_hook_exported(self):
         # The README hook table names ``ModelRetryHook`` but earlier versions
         # only re-exported logging / telemetry / guardrails.
-        from locus.hooks.builtin import ModelRetryHook
+        from tulip.hooks.builtin import ModelRetryHook
 
         assert ModelRetryHook is not None
 
     def test_steering_hook_exported(self):
-        from locus.hooks.builtin import (
+        from tulip.hooks.builtin import (
             SteeringAction,
             SteeringContext,
             SteeringDecision,
@@ -99,7 +98,7 @@ class TestHookBuiltinExports:
         assert SteeringDecision is not None
 
     def test_dunder_all_lists_new_exports(self):
-        mod = importlib.import_module("locus.hooks.builtin")
+        mod = importlib.import_module("tulip.hooks.builtin")
         for name in (
             "ModelRetryHook",
             "SteeringHook",
@@ -107,4 +106,27 @@ class TestHookBuiltinExports:
             "SteeringContext",
             "SteeringDecision",
         ):
-            assert name in mod.__all__, f"{name} missing from locus.hooks.builtin.__all__"
+            assert name in mod.__all__, f"{name} missing from tulip.hooks.builtin.__all__"
+
+
+class TestHarnessExports:
+    """The coding harness's documented surface (docs/harness.md)."""
+
+    def test_harness_names_import(self):
+        harness = importlib.import_module("tulip.harness")
+        for name in (
+            "build_harness",
+            "Harness",
+            "HarnessConfig",
+            "WorkspaceBackend",
+            "LocalBackend",
+            "MemoryBackend",
+            "SessionBackend",
+            "SessionLike",
+            "OpenShellBackend",
+            "ExecRecord",
+            "classify_command",
+            "action_spec",
+        ):
+            assert hasattr(harness, name), name
+            assert name in harness.__all__, name

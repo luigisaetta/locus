@@ -1,30 +1,32 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Notebook 56: EventBus subscriber patterns.
+"""Notebook 61: Shipping agent events to a cloud telemetry platform.
 
-The bus has three subscribe shapes, each suited to a different consumer:
+The bus has three subscribe shapes, each suited to a different consumer
+in a cloud-ops pipeline:
 
-- bus.subscribe(run_id): events for one dispatch, with history replay
-  on connect then live events, terminated by a sentinel on stream close.
+- bus.subscribe(run_id): events for one deployment, with history
+  replay on connect then live events, terminated by a sentinel on
+  stream close. The shape a rollout console uses for a single release.
 - bus.subscribe_global(): every event from every run, no history
-  replay. Good fit for a monitoring dashboard that spans concurrent runs.
+  replay. The shape a telemetry forwarder uses — one tap covering all
+  concurrent deployments.
 - bus._history.get(run_id, ()): direct read of the per-run history
   deque (test helper; capped at 500 events x 200 runs LRU).
 
-- Per-run subscriber alongside a global subscriber on two concurrent
-  dispatches.
+- Per-deployment subscriber alongside an observability-style global
+  subscriber on two concurrent rollouts.
 - bus.stats() snapshot — queue sizes, history depth, drop counter,
-  retained-run count.
+  retained-run count: the health metrics of your event pipeline.
 
 Run it
-    # Default: OCI Generative AI auto-detected from ~/.oci/config
+    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
     python examples/notebook_61_eventbus_subscribers.py
 
     # Offline / no credentials:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_61_eventbus_subscribers.py
+    TULIP_MODEL_PROVIDER=mock python examples/notebook_61_eventbus_subscribers.py
 """
 
 from __future__ import annotations
@@ -33,62 +35,67 @@ import asyncio
 
 from config import get_model
 
-from locus.agent import Agent
-from locus.observability import get_event_bus, run_context
+from tulip.agent import Agent
+from tulip.observability import get_event_bus, run_context
 
 
-# Part 1: a global subscriber sees both dispatches; a per-run
-# subscriber sees only its own.
+# Part 1: the telemetry forwarder (global subscriber) sees both
+# deployments; a per-deployment subscriber sees only its own.
 
 
 async def part1_global_vs_per_run() -> None:
-    print("\n--- Part 1: global vs per-run subscribers ---")
+    print("\n--- Part 1: telemetry forwarder vs per-deployment subscriber ---")
 
     bus = get_event_bus()
-    global_kinds: list[str] = []
-    run_a_kinds: list[str] = []
+    telemetry_kinds: list[str] = []
+    deploy_a_kinds: list[str] = []
 
-    async def global_sub() -> None:
+    async def telemetry_forwarder() -> None:
+        # In production this loop would POST each event to your
+        # observability platform's intake API; here it just records
+        # what it would ship.
         async for ev in bus.subscribe_global():
-            global_kinds.append(f"{ev.run_id[:6]}/{ev.event_type}")
-            if ev.event_type == "agent.terminate" and len(global_kinds) >= 4:
+            telemetry_kinds.append(f"{ev.run_id[:6]}/{ev.event_type}")
+            if ev.event_type == "agent.terminate" and len(telemetry_kinds) >= 4:
                 return
 
-    async def run_a_sub(rid: str) -> None:
+    async def deploy_a_sub(rid: str) -> None:
         async for ev in bus.subscribe(rid):
-            run_a_kinds.append(ev.event_type)
+            deploy_a_kinds.append(ev.event_type)
             if ev.event_type == "agent.terminate":
                 return
 
     async def dispatch(rid: str, prompt: str) -> None:
         async with run_context(rid):
             agent = Agent(model=get_model(), max_iterations=2)
-            await asyncio.to_thread(agent.run_sync, prompt)
+            await agent.arun(prompt)
             await bus.close_stream(rid)
 
-    g_task = asyncio.create_task(global_sub())
-    a_task = asyncio.create_task(run_a_sub("run-A"))
+    g_task = asyncio.create_task(telemetry_forwarder())
+    a_task = asyncio.create_task(deploy_a_sub("deploy-A"))
     await asyncio.sleep(0)
 
     await asyncio.gather(
-        dispatch("run-A", "Reply: hi from A"),
-        dispatch("run-B", "Reply: hi from B"),
+        dispatch("deploy-A", "Reply: rollout recorded for deployment A"),
+        dispatch("deploy-B", "Reply: rollout recorded for deployment B"),
     )
     # Both subscribers exit on their close-stream sentinels.
     await asyncio.wait_for(asyncio.gather(g_task, a_task), timeout=15.0)
 
-    print(f"global saw {len(global_kinds)} events across both runs:")
-    for k in global_kinds[:6]:
+    print(f"telemetry forwarder saw {len(telemetry_kinds)} events across both deployments:")
+    for k in telemetry_kinds[:6]:
         print(f"  - {k}")
-    if len(global_kinds) > 6:
-        print(f"  ... +{len(global_kinds) - 6} more")
+    if len(telemetry_kinds) > 6:
+        print(f"  ... +{len(telemetry_kinds) - 6} more")
 
-    print(f"run-A subscriber saw {len(run_a_kinds)} events (only its own run):")
-    for k in run_a_kinds[:6]:
+    print(f"deploy-A subscriber saw {len(deploy_a_kinds)} events (only its own rollout):")
+    for k in deploy_a_kinds[:6]:
         print(f"  - {k}")
 
 
-# Part 2: bus.stats() snapshot. Pipe these into a monitoring dashboard.
+# Part 2: bus.stats() snapshot. Pipe these into the same dashboard that
+# watches your telemetry-shipping pipeline — dropped events are missing
+# metrics.
 
 
 async def part2_stats() -> None:

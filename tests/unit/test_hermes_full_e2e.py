@@ -1,10 +1,9 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Full end-to-end integration of every Hermes-port primitive.
 
-Drives a real :class:`~locus.agent.Agent` through a multi-iteration
+Drives a real :class:`~tulip.agent.Agent` through a multi-iteration
 run that exercises:
 
 * **A.1 redaction** — a tool raises with an embedded API key; the
@@ -38,24 +37,24 @@ from typing import Any
 import pytest
 from pydantic import SecretStr
 
-from locus.agent.agent import Agent
-from locus.agent.config import AgentConfig
-from locus.core.messages import Message, Role, ToolCall
-from locus.memory.backends.memory import MemoryCheckpointer
-from locus.memory.compactor import LLMCompactor
-from locus.models import ModelResponse
-from locus.models.auxiliary import resolve_auxiliary
-from locus.models.caching import is_cache_breakpoint, mark_cache_breakpoint
-from locus.models.credentials import Credential, CredentialPool
-from locus.models.failover import classify
-from locus.models.metadata import metadata_for
-from locus.tools.decorator import tool
-from locus.tools.path_safety import safe_resolve
-from locus.tools.result_storage import (
+from tulip.agent.agent import Agent
+from tulip.agent.config import AgentConfig
+from tulip.core.messages import Message, Role, ToolCall
+from tulip.memory.backends.memory import MemoryCheckpointer
+from tulip.memory.compactor import LLMCompactor
+from tulip.models import ModelResponse
+from tulip.models.auxiliary import resolve_auxiliary
+from tulip.models.caching import is_cache_breakpoint, mark_cache_breakpoint
+from tulip.models.credentials import Credential, CredentialPool
+from tulip.models.failover import classify
+from tulip.models.metadata import metadata_for
+from tulip.tools.decorator import tool
+from tulip.tools.path_safety import safe_resolve
+from tulip.tools.result_storage import (
     ToolResultStore,
     extract_reference_key,
 )
-from locus.tools.url_safety import validate_url
+from tulip.tools.url_safety import validate_url
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +129,7 @@ def fetch_logs(run_id: str = "demo-run", iteration: int = 0) -> str:
     assert RESULT_STORE is not None
 
     # Construct a ToolResult so the storage helper can offload it.
-    from locus.core.messages import ToolResult
+    from tulip.core.messages import ToolResult
 
     raw = ToolResult(tool_call_id="call-fetch", name="fetch_logs", content=big)
     offloaded = RESULT_STORE.maybe_offload(raw, run_id=run_id, iteration=iteration)

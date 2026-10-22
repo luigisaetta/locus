@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Tests for ``locus.models.credentials``."""
+"""Tests for ``tulip.models.credentials``."""
 
 from __future__ import annotations
 
@@ -11,8 +10,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from locus.core.errors import ModelAuthError
-from locus.models.credentials import Credential, CredentialPool
+from tulip.core.errors import ModelAuthError
+from tulip.models.credentials import Credential, CredentialPool
 
 
 _FIXED_NOW = datetime(2026, 4, 24, 12, 0, 0, tzinfo=UTC)

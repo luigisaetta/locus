@@ -1,14 +1,13 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 """
-Notebook 14: stream agent events to a browser with Server-Sent Events.
+Notebook 13: stream a payment review to an ops dashboard with SSE.
 
-SSE is the simplest way to push live updates from a Python backend to a
-web client — one HTTP response, one event per line. Locus ships two
-handlers that turn the agent event stream into SSE wire format: a
-buffered ``SSEHandler`` and a queue-based ``AsyncSSEHandler`` for true
-streaming.
+SSE is the simplest way to push live payment-review updates from a
+Python backend to a payments operations dashboard — one HTTP response,
+one event per line. Tulip ships two handlers that turn the agent event
+stream into SSE wire format: a buffered ``SSEHandler`` and a queue-based
+``AsyncSSEHandler`` for true streaming.
 
 Key ideas:
 - An ``SSEMessage`` is a small dataclass with ``event``, ``data``, and
@@ -20,26 +19,26 @@ Key ideas:
 - ``create_sse_response_headers()`` returns the correct
   ``text/event-stream`` headers and disables proxy buffering.
 - Pass ``custom_serializer=...`` to either handler to shape what the
-  client sees.
+  dashboard sees.
 
 Run it:
-    .venv/bin/python examples/notebook_19_sse_streaming.py
+    .venv/bin/python examples/notebook_13_sse_streaming.py
 
 This notebook does not call an LLM — it only exercises the SSE
 plumbing, so no provider configuration is needed. The mock provider is
-still a fine default if you set ``LOCUS_MODEL_PROVIDER=mock``.
+still a fine default if you set ``TULIP_MODEL_PROVIDER=mock``.
 """
 
 import asyncio
 from datetime import UTC, datetime
 
-from locus.core.events import (
-    LocusEvent,
+from tulip.core.events import (
     ThinkEvent,
     ToolCompleteEvent,
     ToolStartEvent,
+    TulipEvent,
 )
-from locus.streaming.sse import (
+from tulip.streaming.sse import (
     AsyncSSEHandler,
     SSEHandler,
     SSEMessage,
@@ -49,7 +48,7 @@ from locus.streaming.sse import (
 
 async def main():
     print("=" * 60)
-    print("Notebook 14: SSE Streaming")
+    print("Notebook 13: Payments Dashboard SSE Streaming")
     print("=" * 60)
 
     # =========================================================================
@@ -59,7 +58,7 @@ async def main():
 
     message = SSEMessage(
         event="thinking",
-        data='{"content": "Analyzing the request..."}',
+        data='{"content": "Reviewing payment PAY-1042 against velocity limits..."}',
         id="1",
     )
 
@@ -80,9 +79,9 @@ async def main():
     print("\n=== Part 2: Creating SSE Messages ===\n")
 
     messages = [
-        SSEMessage(event="start", data='{"session_id": "abc123"}'),
-        SSEMessage(event="chunk", data="Hello"),
-        SSEMessage(event="chunk", data=" World!"),
+        SSEMessage(event="start", data='{"payment_id": "PAY-1042"}'),
+        SSEMessage(event="chunk", data="Card issued in a different"),
+        SSEMessage(event="chunk", data=" country than billing — review."),
         SSEMessage(event="done", data='{"status": "complete"}'),
     ]
 
@@ -91,9 +90,10 @@ async def main():
         print(f"  [{msg.event}] {msg.data}")
 
     # Multi-line payloads are valid; format() emits one data: line per line.
+    # A simple decline rule for high-velocity card usage.
     multiline_msg = SSEMessage(
-        event="code",
-        data="def hello():\n    print('Hello!')\n    return True",
+        event="decline_rule",
+        data="rule: rapid_repeat_charges\n  when: charges_per_minute > 5\n  then: hold for review",
     )
     print("\nMulti-line message format:")
     print(multiline_msg.format())
@@ -114,11 +114,18 @@ async def main():
     print(f"  Include ID: {handler.include_id}")
     print(f"  ID prefix: {handler.id_prefix}")
 
-    # Stand-in events; in a real app these come from agent.run(...).
+    # Stand-in events; in a real app these come from the payment-review
+    # agent's agent.run(...).
     events = [
-        ThinkEvent(iteration=1, reasoning="Analyzing user request"),
-        ToolStartEvent(tool_name="search", tool_call_id="call_001", arguments={"query": "test"}),
-        ToolCompleteEvent(tool_name="search", tool_call_id="call_001", result="Found 5 results"),
+        ThinkEvent(iteration=1, reasoning="Reviewing payment PAY-1042"),
+        ToolStartEvent(
+            tool_name="lookup_card", tool_call_id="call_001", arguments={"bin": "411111"}
+        ),
+        ToolCompleteEvent(
+            tool_name="lookup_card",
+            tool_call_id="call_001",
+            result="BIN 411111: 3 chargebacks in the last 30 days",
+        ),
     ]
 
     for event in events:
@@ -145,20 +152,20 @@ async def main():
 
     # pop_messages drains and returns — get_messages copies and keeps.
     handler.clear()
-    await handler.on_event(ThinkEvent(iteration=1, reasoning="New thought"))
+    await handler.on_event(ThinkEvent(iteration=1, reasoning="New check: verify billing address"))
     popped = handler.pop_messages()
     remaining = handler.get_messages()
     print(f"\nAfter pop: got {len(popped)}, remaining {len(remaining)}")
 
     # =========================================================================
-    # Part 5: report errors to the client
+    # Part 5: report errors to the dashboard
     # =========================================================================
     print("\n=== Part 5: Error Handling ===\n")
 
     handler.clear()
 
-    await handler.on_event(ThinkEvent(iteration=1, reasoning="Starting..."))
-    await handler.on_error(ValueError("Something went wrong"))
+    await handler.on_event(ThinkEvent(iteration=1, reasoning="Starting enrichment..."))
+    await handler.on_error(ValueError("Processor gateway unavailable"))
 
     print(f"Has error: {handler.has_error}")
     print(f"Is complete: {handler.is_complete}")
@@ -172,17 +179,20 @@ async def main():
     print("\n=== Part 6: Async SSE Handler ===\n")
 
     # AsyncSSEHandler backs the stream with an asyncio.Queue, so producer
-    # and consumer can run concurrently — the pattern web frameworks need.
+    # and consumer run concurrently — the pattern a live payments
+    # dashboard needs.
     async_handler = AsyncSSEHandler(
         include_timestamp=True,
         include_id=True,
     )
 
     async def produce_events():
-        await async_handler.on_event(ThinkEvent(iteration=1, reasoning="Processing..."))
+        await async_handler.on_event(
+            ThinkEvent(iteration=1, reasoning="Scoring transaction risk...")
+        )
         await asyncio.sleep(0.1)
         await async_handler.on_event(
-            ToolStartEvent(tool_name="analyze", tool_call_id="call_002", arguments={})
+            ToolStartEvent(tool_name="check_velocity", tool_call_id="call_002", arguments={})
         )
         await asyncio.sleep(0.1)
         await async_handler.on_complete()
@@ -216,7 +226,7 @@ async def main():
     # =========================================================================
     print("\n=== Part 8: Custom Serialization ===\n")
 
-    def custom_serializer(event: LocusEvent) -> dict:
+    def custom_serializer(event: TulipEvent) -> dict:
         """Trim the payload to type, timestamp, and one content field."""
         return {
             "type": event.event_type,
@@ -226,7 +236,9 @@ async def main():
 
     custom_handler = SSEHandler(custom_serializer=custom_serializer)
 
-    await custom_handler.on_event(ThinkEvent(iteration=1, reasoning="Custom serialization"))
+    await custom_handler.on_event(
+        ThinkEvent(iteration=1, reasoning="Custom serialization for the dashboard")
+    )
     msg = custom_handler.get_messages()[0]
 
     print("Custom serialized event:")
@@ -242,19 +254,19 @@ async def main():
     print("""
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
-from locus.streaming.sse import AsyncSSEHandler, create_sse_response_headers
+from tulip.streaming.sse import AsyncSSEHandler, create_sse_response_headers
 
 app = FastAPI()
 
-@app.get("/stream")
+@app.get("/payments/stream")
 async def stream_events():
     handler = AsyncSSEHandler()
 
     async def generate():
-        # Start agent in background
+        # Start the payment-review agent in the background
         task = asyncio.create_task(run_agent(handler))
 
-        # Stream events
+        # Stream events to the dashboard
         async for sse_text in handler.stream():
             yield sse_text
 
@@ -267,14 +279,14 @@ async def stream_events():
     )
 
 async def run_agent(handler):
-    # Your agent logic
-    await handler.on_event(ThinkEvent(iteration=1, reasoning="Working..."))
+    # Your payment-review logic
+    await handler.on_event(ThinkEvent(iteration=1, reasoning="Reviewing..."))
     await handler.on_complete()
 """)
     print("-" * 40)
 
     # =========================================================================
-    # Part 10: every Locus event type the handlers know how to render
+    # Part 10: every Tulip event type the handlers know how to render
     # =========================================================================
     print("\n=== Part 10: Supported Event Types ===\n")
 
@@ -298,7 +310,7 @@ async def run_agent(handler):
         ("after_invocation", "After agent invocation"),
     ]
 
-    print("Event types for SSE streaming:")
+    print("Event types a payments dashboard can subscribe to:")
     for event_type, description in supported_events:
         print(f"  {event_type}: {description}")
 
@@ -308,19 +320,19 @@ async def run_agent(handler):
     print("\n=== Part 11: Best Practices ===\n")
 
     print("1. Always set proper SSE headers")
-    print("2. Include event IDs so clients can reconnect with Last-Event-ID")
-    print("3. Send a 'done' event when the agent terminates")
-    print("4. Send error events on failure — never leave the stream hanging")
+    print("2. Include event IDs so dashboards can reconnect with Last-Event-ID")
+    print("3. Send a 'done' event when the payment review terminates")
+    print("4. Send error events on failure — never leave the reviewer's stream hanging")
     print("5. Use AsyncSSEHandler for real streaming, not the buffered one")
     print("6. Keep individual event payloads small (< 65KB)")
     print("7. Implement client-side reconnection")
-    print("8. Send periodic heartbeats during long tool calls")
+    print("8. Send periodic heartbeats during long-running batch settlements")
 
     heartbeat = SSEMessage(event="heartbeat", data='{"status": "alive"}')
     print(f"\nHeartbeat message:\n{heartbeat.format()}")
 
     print("\n" + "=" * 60)
-    print("Notebook 14 complete.")
+    print("Notebook 13 complete.")
     print("=" * 60)
 
 

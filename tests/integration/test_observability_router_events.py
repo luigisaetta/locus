@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """End-to-end test that the router emits the canonical event sequence
 on the :class:`EventBus` for one cognitive dispatch.
@@ -16,8 +15,8 @@ import asyncio
 
 import pytest
 
-from locus.observability import StreamEvent, get_event_bus, reset_event_bus
-from locus.router import (
+from tulip.observability import StreamEvent, get_event_bus, reset_event_bus
+from tulip.router import (
     CapabilityIndex,
     CognitiveCompiler,
     Complexity,
@@ -28,9 +27,9 @@ from locus.router import (
     TaskType,
     builtin_protocols,
 )
-from locus.router.protocol import NoMatchingProtocolError
-from locus.tools.decorator import tool
-from locus.tools.registry import create_registry
+from tulip.router.protocol import NoMatchingProtocolError
+from tulip.tools.decorator import tool
+from tulip.tools.registry import create_registry
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
@@ -120,8 +119,8 @@ class TestCompileEventSequence:
         assert verdict.data["allow"] is True
         assert verdict.data["require_approval"] is False
 
-        # Runnable compiled identifies the adapter type — drives the
-        # workbench's "this protocol compiled to {AgentRunnable}" badge.
+        # Runnable compiled identifies the adapter type — drives a UI's
+        # "this protocol compiled to {AgentRunnable}" badge.
         compiled = next(e for e in received if e.event_type == "router.runnable.compiled")
         assert compiled.data["protocol_id"] == "direct_response"
         assert compiled.data["runnable_type"] == "AgentRunnable"
@@ -168,7 +167,7 @@ class TestCompileEventSequence:
 
 
 class TestEventDataShape:
-    """The wire format must match what SSE consumers (workbench,
+    """The wire format must match what SSE consumers (browser renderers,
     third-party monitors) expect to parse."""
 
     async def test_protocol_selected_carries_metadata(self):

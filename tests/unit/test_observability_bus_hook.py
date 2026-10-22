@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for locus.observability.bus_hook — EventBusHook."""
+"""Unit tests for tulip.observability.bus_hook — EventBusHook."""
 
 from __future__ import annotations
 
@@ -10,10 +9,10 @@ import asyncio
 
 import pytest
 
-from locus.core.state import AgentState
-from locus.observability.bus_hook import EventBusHook
-from locus.observability.context import set_run_id
-from locus.observability.event_bus import StreamEvent, get_event_bus, reset_event_bus
+from tulip.core.state import AgentState
+from tulip.observability.bus_hook import EventBusHook
+from tulip.observability.context import set_run_id
+from tulip.observability.event_bus import StreamEvent, get_event_bus, reset_event_bus
 
 
 @pytest.fixture(autouse=True)
@@ -152,7 +151,7 @@ class TestEventBusHook:
 
     @pytest.mark.asyncio
     async def test_before_tool_call_emits_event(self) -> None:
-        from locus.hooks.provider import BeforeToolCallEvent
+        from tulip.hooks.provider import BeforeToolCallEvent
 
         rid = "hook-tool-before"
         set_run_id(rid)
@@ -174,7 +173,7 @@ class TestEventBusHook:
 
     @pytest.mark.asyncio
     async def test_after_tool_call_str_result(self) -> None:
-        from locus.hooks.provider import AfterToolCallEvent
+        from tulip.hooks.provider import AfterToolCallEvent
 
         rid = "hook-tool-after-str"
         set_run_id(rid)
@@ -197,7 +196,7 @@ class TestEventBusHook:
     @pytest.mark.asyncio
     async def test_after_tool_call_non_str_result(self) -> None:
         """Cover repr() branch: result is non-string, non-None."""
-        from locus.hooks.provider import AfterToolCallEvent
+        from tulip.hooks.provider import AfterToolCallEvent
 
         rid = "hook-tool-after-obj"
         set_run_id(rid)
@@ -220,7 +219,7 @@ class TestEventBusHook:
     @pytest.mark.asyncio
     async def test_after_tool_call_null_result(self) -> None:
         """Cover 145->147 branch: result is None — skips both if/elif."""
-        from locus.hooks.provider import AfterToolCallEvent
+        from tulip.hooks.provider import AfterToolCallEvent
 
         rid = "hook-tool-null"
         set_run_id(rid)
@@ -242,7 +241,7 @@ class TestEventBusHook:
 
     @pytest.mark.asyncio
     async def test_before_model_call_emits_event(self) -> None:
-        from locus.hooks.provider import BeforeModelCallEvent
+        from tulip.hooks.provider import BeforeModelCallEvent
 
         rid = "hook-model-before"
         set_run_id(rid)
@@ -266,7 +265,7 @@ class TestEventBusHook:
     async def test_after_model_call_emits_event(self) -> None:
         from unittest.mock import MagicMock
 
-        from locus.hooks.provider import AfterModelCallEvent
+        from tulip.hooks.provider import AfterModelCallEvent
 
         rid = "hook-model-after"
         set_run_id(rid)

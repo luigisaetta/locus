@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for tools executor module."""
 
@@ -9,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from locus.core.messages import ToolCall
-from locus.tools.executor import (
+from tulip.core.messages import ToolCall
+from tulip.tools.executor import (
     CircuitBreakerExecutor,
     ConcurrentExecutor,
     SequentialExecutor,
@@ -429,8 +428,8 @@ class TestToolExecutorAbstractStreaming:
 
     @pytest.mark.asyncio
     async def test_default_streaming_falls_back_to_execute(self) -> None:
-        from locus.core.messages import ToolResult
-        from locus.tools.executor import ToolExecutor
+        from tulip.core.messages import ToolResult
+        from tulip.tools.executor import ToolExecutor
 
         class _Stub(ToolExecutor):
             async def execute(
@@ -591,3 +590,34 @@ class TestConcurrentExecutorStreaming:
         # Give the event loop one tick to settle cancellations.
         await _asyncio.sleep(0.05)
         assert executed == ["fast"], f"expected siblings cancelled; got {executed}"
+
+
+class TestMalformedArguments:
+    @pytest.mark.asyncio
+    async def test_malformed_arguments_are_not_run_and_the_model_is_told(self) -> None:
+        mock_tool = MagicMock()
+        mock_tool.execute = AsyncMock(return_value="result")
+        registry = MagicMock()
+        registry.get = MagicMock(return_value=mock_tool)
+        call = ToolCall(id="call1", name="test_tool", malformed_arguments='{"path": "a')
+
+        results = await SequentialExecutor().execute([call], registry)
+
+        mock_tool.execute.assert_not_called()
+        assert results[0].tool_call_id == "call1"
+        assert results[0].error is not None
+        assert "not valid JSON" in results[0].error
+        assert "valid JSON object" in results[0].error
+
+    @pytest.mark.asyncio
+    async def test_malformed_arguments_are_not_run_by_the_concurrent_executor(self) -> None:
+        mock_tool = MagicMock()
+        mock_tool.execute = AsyncMock(return_value="result")
+        registry = MagicMock()
+        registry.get = MagicMock(return_value=mock_tool)
+        call = ToolCall(id="call1", name="test_tool", malformed_arguments="[1, 2")
+
+        results = await ConcurrentExecutor().execute([call], registry)
+
+        mock_tool.execute.assert_not_called()
+        assert "not valid JSON" in (results[0].error or "")

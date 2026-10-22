@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""End-to-end integration tests for the cognitive router (`locus.router`).
+"""End-to-end integration tests for the cognitive router (`tulip.router`).
 
 Four scenarios, each one a load-bearing claim from the design:
 
@@ -27,7 +26,7 @@ D. **Capability binding** — when a frame requires a tool-backed
    capability, the underlying ``Tool`` actually fires during
    execution. We use a recording tool to count invocations.
 
-All tests use the session-scoped ``model`` fixture (OCI / OpenAI
+All tests use the session-scoped ``model`` fixture (OpenAI / Anthropic
 auto-detected) and are marked ``requires_model`` so they skip
 cleanly when no provider is configured.
 """
@@ -38,8 +37,8 @@ from typing import Any
 
 import pytest
 
-from locus import Agent, tool
-from locus.router import (
+from tulip import Agent, tool
+from tulip.router import (
     CapabilityIndex,
     CognitiveCompiler,
     Complexity,
@@ -51,13 +50,13 @@ from locus.router import (
     TaskType,
     builtin_protocols,
 )
-from locus.router.protocol import NoMatchingProtocolError
-from locus.router.runnable import (
+from tulip.router.protocol import NoMatchingProtocolError
+from tulip.router.runnable import (
     PipelineRunnable,
     RunnableResult,
 )
-from locus.router.runtime import FrameExtractionError
-from locus.tools.registry import create_registry
+from tulip.router.runtime import FrameExtractionError
+from tulip.tools.registry import create_registry
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_model]
@@ -74,7 +73,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.requires_model]
 LABELLED_CORPUS: tuple[tuple[str, TaskType, str], ...] = (
     # --- direct_response (single-call) ---
     (
-        "What does the locus.router module do in the locus SDK?",
+        "What does the tulip.router module do in the tulip SDK?",
         TaskType.ANSWER,
         "direct_response",
     ),
@@ -168,7 +167,7 @@ def kb_search(query: str) -> str:
     _RECORDER.record("kb_search", query=query)
     canned = {
         "rag": "RAG = retrieve documents from a vector store and condition the LLM on them.",
-        "router": "locus.router compiles a typed GoalFrame onto bounded orchestration shapes.",
+        "router": "tulip.router compiles a typed GoalFrame onto bounded orchestration shapes.",
         "goal frame": "A GoalFrame is a typed Pydantic schema the LLM extracts; "
         "it never authors orchestration topology.",
     }
@@ -376,7 +375,7 @@ class TestRoutingAccuracy:
 EXECUTION_FIXTURES: tuple[tuple[str, str, GoalFrame], ...] = (
     (
         "direct_response",
-        "What does the locus.router module do in the locus SDK?",
+        "What does the tulip.router module do in the tulip SDK?",
         GoalFrame(
             primary_goal=TaskType.ANSWER,
             domain="research",
@@ -521,7 +520,7 @@ def _runnable_protocol_id(runnable: Any) -> str:
 @pytest.fixture
 def router_with_picker(model) -> Router:
     """Variant of ``router_under_test`` with the LLM picker enabled."""
-    from locus.router import LLMProtocolPicker
+    from tulip.router import LLMProtocolPicker
 
     _RECORDER.reset()
     tools = create_registry(kb_search, get_metric, list_alerts)

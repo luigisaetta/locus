@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for ``@tool(idempotent=True)`` dedup in ``Agent.run()``.
 
@@ -14,11 +13,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from locus.agent import Agent
-from locus.core.messages import Message, ToolCall
-from locus.core.termination import MaxIterations
-from locus.models.base import ModelResponse
-from locus.tools.decorator import tool
+from tulip.agent import Agent
+from tulip.core.messages import Message, ToolCall
+from tulip.core.termination import MaxIterations
+from tulip.models.base import ModelResponse
+from tulip.tools.decorator import tool
 
 
 class _ScriptedModel:

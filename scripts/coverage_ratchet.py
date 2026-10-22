@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Per-file coverage ratchet.
 
@@ -49,7 +48,7 @@ def _load_current_coverage() -> dict[str, float]:
     if not COVERAGE_JSON.exists():
         sys.exit(
             f"error: {COVERAGE_JSON} not found. Run "
-            f"`pytest --cov=src/locus --cov-report=json tests/unit` first."
+            f"`pytest --cov=src/tulip --cov-report=json tests/unit` first."
         )
     data: dict[str, Any] = json.loads(COVERAGE_JSON.read_text())
     files: dict[str, dict[str, Any]] = data.get("files", {})

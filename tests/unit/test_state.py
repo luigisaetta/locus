@@ -1,14 +1,13 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Tests for agent state."""
 
 import pytest
 from pydantic import ValidationError
 
-from locus.core.messages import Message, ToolCall
-from locus.core.state import AgentState, ReasoningStep, ToolExecution
+from tulip.core.messages import Message, ToolCall
+from tulip.core.state import AgentState, ReasoningStep, ToolExecution
 
 
 class TestAgentState:
@@ -187,7 +186,7 @@ class TestAgentState:
         """
         state = AgentState(tool_loop_threshold=3)
 
-        for i, regex in enumerate(["fusion:database_.*", "fusion:db_.*", "fusion:dbnode_.*"]):
+        for i, regex in enumerate(["acme:database_.*", "acme:db_.*", "acme:dbnode_.*"]):
             step = ReasoningStep(
                 iteration=i + 1,
                 thought=f"Discovery batch {i}",
@@ -441,7 +440,7 @@ class TestConfigBudgets:
 
     def test_max_iterations_raised_to_500(self):
         """max_iterations cap is now 500."""
-        from locus.agent.config import AgentConfig
+        from tulip.agent.config import AgentConfig
 
         config = AgentConfig(model="openai:gpt-4o", max_iterations=200)
         assert config.max_iterations == 200
@@ -454,7 +453,7 @@ class TestConfigBudgets:
 
     def test_token_budget(self):
         """token_budget accepts positive int or None."""
-        from locus.agent.config import AgentConfig
+        from tulip.agent.config import AgentConfig
 
         config = AgentConfig(model="openai:gpt-4o", token_budget=50000)
         assert config.token_budget == 50000
@@ -464,7 +463,7 @@ class TestConfigBudgets:
 
     def test_time_budget(self):
         """time_budget_seconds accepts positive float or None."""
-        from locus.agent.config import AgentConfig
+        from tulip.agent.config import AgentConfig
 
         config = AgentConfig(model="openai:gpt-4o", time_budget_seconds=30.0)
         assert config.time_budget_seconds == 30.0
@@ -474,7 +473,7 @@ class TestConfigBudgets:
 
     def test_stop_reason_includes_budgets(self):
         """StopReason literal includes budget reasons."""
-        from locus.agent.result import StopReason
+        from tulip.agent.result import StopReason
 
         # These should be valid StopReason values
         reasons: list[StopReason] = ["token_budget", "time_budget"]

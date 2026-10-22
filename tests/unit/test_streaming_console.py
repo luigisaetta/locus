@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for console streaming handler."""
 
@@ -10,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from locus.core.events import (
+from tulip.core.events import (
     CausalEdgeEvent,
     CausalNodeEvent,
     GroundingEvent,
@@ -24,8 +23,8 @@ from locus.core.events import (
     ToolCompleteEvent,
     ToolStartEvent,
 )
-from locus.core.messages import ToolCall
-from locus.streaming.console import ConsoleHandler, MinimalConsoleHandler
+from tulip.core.messages import ToolCall
+from tulip.streaming.console import ConsoleHandler, MinimalConsoleHandler
 
 
 class TestConsoleHandlerInit:

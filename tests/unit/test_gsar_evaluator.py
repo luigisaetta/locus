@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for the GSAR Algorithm-1 outer loop.
 
@@ -25,13 +24,13 @@ from typing import Any
 
 import pytest
 
-from locus.reasoning.gsar import (
+from tulip.reasoning.gsar import (
     Claim,
     Decision,
     EvidenceType,
 )
-from locus.reasoning.gsar_evaluator import GSAREvaluator
-from locus.reasoning.gsar_judge import JudgeOutput, safe_default_judge_output
+from tulip.reasoning.gsar_evaluator import GSAREvaluator
+from tulip.reasoning.gsar_judge import JudgeOutput, safe_default_judge_output
 
 
 # ---------------------------------------------------------------------------
@@ -305,7 +304,7 @@ class TestThresholdAndPenaltyOverrides:
     async def test_strict_thresholds_force_replan_on_appendix_e(self) -> None:
         # With proceed=0.9, the Appendix-E partition (~0.757) lands in
         # neither proceed nor regenerate — it falls into replan.
-        from locus.reasoning.gsar import GSARThresholds
+        from tulip.reasoning.gsar import GSARThresholds
 
         async def regen(syn: str, jo: JudgeOutput) -> str:  # pragma: no cover
             return syn

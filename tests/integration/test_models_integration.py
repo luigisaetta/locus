@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Integration tests for model providers - requires API keys."""
 
@@ -12,7 +11,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from locus.core.messages import Message, ToolResult
+from tulip.core.messages import Message, ToolResult
 
 
 # Skip all integration tests if not explicitly enabled
@@ -69,7 +68,7 @@ class TestOpenAIIntegration:
     @pytest.fixture
     async def model(self):
         """Create OpenAI model with proper cleanup."""
-        from locus.models.native.openai import OpenAIModel
+        from tulip.models.native.openai import OpenAIModel
 
         model = OpenAIModel(
             model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
@@ -146,81 +145,6 @@ class TestOpenAIIntegration:
 
 
 # =============================================================================
-# OCI GenAI Integration Tests
-# =============================================================================
-
-
-def _get_oci_config() -> dict:
-    """Get OCI config from environment variables only."""
-    return {
-        "profile_name": os.getenv("OCI_PROFILE"),
-        "auth_type": os.getenv("OCI_AUTH_TYPE"),
-        "endpoint": os.getenv("OCI_ENDPOINT"),
-        "compartment": os.getenv("OCI_COMPARTMENT"),
-        "gpt_model": os.getenv("OCI_GPT_MODEL") or os.getenv("OCI_MODEL_ID"),
-    }
-
-
-@pytest.mark.requires_oci
-class TestOCIIntegration:
-    """Integration tests for OCI GenAI."""
-
-    @pytest.fixture
-    def oci_config(self):
-        """Get OCI config."""
-        config = _get_oci_config()
-        # Check required env vars
-        if not config["profile_name"]:
-            pytest.skip("OCI_PROFILE not set")
-        if not config["endpoint"]:
-            pytest.skip("OCI_ENDPOINT not set")
-        return config
-
-    @pytest.fixture
-    def gpt_model(self, oci_config):
-        """Create OCI model with GPT."""
-        if not oci_config["gpt_model"]:
-            pytest.skip("OCI_GPT_MODEL not set")
-
-        from locus.models.providers.oci import OCIModel
-
-        return OCIModel(
-            model_id=oci_config["gpt_model"],
-            profile_name=oci_config["profile_name"],
-            auth_type=oci_config["auth_type"],
-            service_endpoint=oci_config["endpoint"],
-            compartment_id=oci_config["compartment"],
-            max_tokens=256,
-        )
-
-    @pytest.mark.asyncio
-    async def test_gpt_completion(self, gpt_model):
-        """Test GPT completion."""
-        messages = [
-            Message.user("What is 2 + 2? Just the number."),
-        ]
-
-        response = await gpt_model.complete(messages)
-
-        assert response.content is not None
-        assert "4" in response.content
-
-    @pytest.mark.asyncio
-    async def test_gpt_streaming(self, gpt_model):
-        """Test GPT streaming response."""
-        messages = [
-            Message.user("Say hello."),
-        ]
-
-        chunks = []
-        async for chunk in gpt_model.stream(messages):
-            chunks.append(chunk)
-
-        assert len(chunks) > 0
-        assert any(c.done for c in chunks)
-
-
-# =============================================================================
 # Cross-Provider Tests
 # =============================================================================
 
@@ -232,7 +156,7 @@ class TestModelRegistry:
     @pytest.mark.asyncio
     async def test_get_openai_model(self):
         """Get OpenAI model from registry."""
-        from locus.models import get_model
+        from tulip.models import get_model
 
         model = get_model(f"openai:{os.getenv('OPENAI_MODEL', 'gpt-4o-mini')}", max_tokens=256)
         try:

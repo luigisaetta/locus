@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for models module init (lazy imports)."""
 
@@ -12,7 +11,7 @@ class TestModelsLazyImports:
 
     def test_import_base_classes(self):
         """Test importing base classes."""
-        from locus.models import (
+        from tulip.models import (
             ModelConfig,
             ModelProtocol,
             ModelResponse,
@@ -28,7 +27,7 @@ class TestModelsLazyImports:
 
     def test_import_registry_functions(self):
         """Test importing registry functions."""
-        from locus.models import get_model, list_providers, register_provider
+        from tulip.models import get_model, list_providers, register_provider
 
         assert callable(get_model)
         assert callable(list_providers)
@@ -36,44 +35,26 @@ class TestModelsLazyImports:
 
     def test_lazy_import_openai_model(self):
         """Test lazy import of OpenAIModel."""
-        from locus.models import OpenAIModel
+        from tulip.models import OpenAIModel
 
         assert OpenAIModel is not None
 
     def test_lazy_import_openai_config(self):
         """Test lazy import of OpenAIConfig."""
-        from locus.models import OpenAIConfig
+        from tulip.models import OpenAIConfig
 
         assert OpenAIConfig is not None
 
-    def test_lazy_import_oci_model(self):
-        """Test lazy import of OCIModel."""
-        from locus.models import OCIModel
-
-        assert OCIModel is not None
-
-    def test_lazy_import_oci_config(self):
-        """Test lazy import of OCIConfig."""
-        from locus.models import OCIConfig
-
-        assert OCIConfig is not None
-
-    def test_lazy_import_oci_auth_type(self):
-        """Test lazy import of OCIAuthType."""
-        from locus.models import OCIAuthType
-
-        assert OCIAuthType is not None
-
     def test_lazy_import_unknown_raises(self):
         """Test that unknown attribute raises AttributeError."""
-        from locus import models
+        from tulip import models
 
         with pytest.raises(AttributeError, match="has no attribute"):
             _ = models.NonExistentClass
 
 
-from locus.core.messages import Message
-from locus.models import ModelConfig, ModelResponse
+from tulip.core.messages import Message
+from tulip.models import ModelConfig, ModelResponse
 
 
 class TestModelResponse:
@@ -107,7 +88,7 @@ class TestModelResponse:
 
     def test_tool_calls_property(self):
         """Test tool_calls property returns message tool calls."""
-        from locus.core.messages import ToolCall
+        from tulip.core.messages import ToolCall
 
         tool_call = ToolCall(id="tc1", name="search", arguments={"q": "test"})
         message = Message.assistant("", tool_calls=[tool_call])

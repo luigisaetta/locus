@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Tests for auxiliary-model plumbing: AgentConfig slot + resolver."""
 
@@ -8,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from locus.agent.config import AgentConfig
-from locus.models.auxiliary import resolve_auxiliary
+from tulip.agent.config import AgentConfig
+from tulip.models.auxiliary import resolve_auxiliary
 
 
 class TestConfigSlot:

@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """End-to-end integration test for the A2A spec transport.
 
@@ -28,7 +27,7 @@ from typing import Any
 import httpx
 import pytest
 
-from locus.a2a import (
+from tulip.a2a import (
     A2AClient,
     A2AServer,
     AgentSkill,
@@ -55,7 +54,7 @@ class _StubAgent:
         self._final_reason = final_reason
 
     async def run(self, prompt: str) -> AsyncIterator[Any]:
-        from locus.core.events import TerminateEvent, ThinkEvent
+        from tulip.core.events import TerminateEvent, ThinkEvent
 
         yield ThinkEvent(iteration=0, reasoning=f"reasoning about {prompt!r}", tool_calls=[])
         yield TerminateEvent(

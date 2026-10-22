@@ -1,52 +1,51 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Notebook 61: Voice output — turn an agent's reply into speech.
+"""Notebook 66: Spoken cloud status advisory — voice output.
 
-A real agent often needs to talk, not just type. This notebook pairs a
-regular chat-completions agent (text in, text out) with an audio-capable
-model on OCI Generative AI so the response can be spoken aloud.
+A cloud platform team often needs to talk, not just type — recorded
+advisories for the on-call hotline, status-page audio, IVR announcements
+about a region degradation. This notebook pairs a regular
+chat-completions agent (text in, text out) with OpenAI's audio.speech
+endpoint so an incident advisory can be spoken aloud. A regional
+degradation — say an availability zone losing capacity while autoscaling
+backs off — is exactly the kind of fast-moving event a recorded spoken
+advisory is meant to keep on-call engineers ahead of.
 
 Pipeline::
 
-    user prompt ──▶ Agent (OCIChatCompletionsModel · chat model)
-                       │
-                       │  reply text
-                       ▼
-                 OCI /openai/v1/audio/speech
-                 (openai.gpt-4o-mini-tts)
-                       │
-                       │  mp3 bytes
-                       ▼
-                 ./notebook_66_response.mp3
+    advisory request ──▶ Agent (chat model)
+                            │
+                            │  advisory text
+                            ▼
+                      OpenAI /v1/audio/speech
+                      (gpt-4o-mini-tts)
+                            │
+                            │  mp3 bytes
+                            ▼
+                      ./notebook_66_response.mp3
 
-- Same OCI v1 transport as the rest of the notebooks — one signer, one
-  base URL, one set of credentials. No separate audio service to
-  configure.
 - Bring-your-own-voice via the voice= parameter (alloy, ash, ballad,
   coral, echo, sage, shimmer, verse).
 - Output is a normal MP3 you can pipe into a frontend <audio> element,
-  an IVR system, or a podcast feed.
+  the on-call IVR, or a status-page audio feed.
 
-Prerequisites: an audio-capable model on OCI Generative AI. The
-notebook uses openai.gpt-4o-mini-tts for synthesis.
+Prerequisites for live speech: an OpenAI API key with access to a TTS
+model. The notebook uses gpt-4o-mini-tts for synthesis.
 
 Run it
-    LOCUS_MODEL_PROVIDER=oci \\
-    LOCUS_OCI_PROFILE=MY_PROFILE \\
-    LOCUS_OCI_REGION=us-chicago-1 \\
-    LOCUS_OCI_AUTH_TYPE=security_token \\
-    LOCUS_OCI_COMPARTMENT=ocid1.compartment.oc1..…  \\
+    TULIP_MODEL_PROVIDER=openai \\
+    OPENAI_API_KEY=sk-... \\
     python examples/notebook_66_audio_response.py
 
     afplay notebook_66_response.mp3   # macOS
     # or open it in any media player
 
-Note: this notebook does not run under LOCUS_MODEL_PROVIDER=mock —
-it builds an OCI signer directly, so it needs real OCI credentials.
-The smoke test for mock environments is `python -m py_compile <file>`.
+Offline: under TULIP_MODEL_PROVIDER=mock (or with no OPENAI_API_KEY) the
+agent still drafts the advisory text against the mock model, and the
+notebook prints the synthesis step it *would* run instead of calling the
+real TTS endpoint — so it runs end-to-end with zero credentials.
 """
 
 from __future__ import annotations
@@ -57,88 +56,75 @@ from pathlib import Path
 
 from config import get_model
 
-from locus.agent import Agent, AgentConfig
+from tulip.agent import Agent, AgentConfig
 
 
 PROMPT = (
-    "Give me a 25-word elevator pitch for the locus SDK aimed at a senior "
-    "platform engineer. Speak it in the second person."
+    "Write a 60-word spoken cloud status advisory for on-call engineers about "
+    "an ongoing degradation in the us-east-1 region: one availability zone is "
+    "losing compute capacity and autoscaling is backing off, so new instance "
+    "launches are failing. Tell them to fail workloads over to us-west-2 and "
+    "to watch the status page for the next update."
 )
-TTS_MODEL = "openai.gpt-4o-mini-tts"
+TTS_MODEL = "gpt-4o-mini-tts"
 TTS_VOICE = "alloy"
 OUT_PATH = Path(__file__).resolve().parent / "notebook_66_response.mp3"
 
 
-def _build_oci_audio_client():
-    """Reuse the OCI v1 signer to talk to /openai/v1/audio/speech.
+def _audio_client():
+    """An OpenAI async client for /v1/audio/speech, or None if offline.
 
-    OCIChatCompletionsModel wraps chat completions; for audio.speech.create we
-    attach the same signer to a fresh openai.AsyncOpenAI so the audio
-    endpoint goes through the same authenticated transport.
+    Tulip's chat model wraps chat completions; for audio.speech.create
+    we use a plain ``openai.AsyncOpenAI`` against the same key. When no
+    ``OPENAI_API_KEY`` is set (e.g. the mock-model walkthrough) we return
+    None so the caller can describe the synthesis step without a network
+    call.
     """
-    import httpx
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
     import openai
 
-    from locus.models.providers.oci._signing import OCIRequestSigner
-    from locus.models.providers.oci.openai_compat import build_oci_openai_base_url
-
-    profile = os.environ.get("LOCUS_OCI_PROFILE", "DEFAULT")
-    region = os.environ.get("LOCUS_OCI_REGION", "us-chicago-1")
-    compartment_id = os.environ.get("LOCUS_OCI_COMPARTMENT")
-
-    # Build the signer the same way OCIChatCompletionsModel does internally.
-    import oci  # noqa: PLC0415 — optional dep, lives behind the [oci] extra
-
-    cfg = oci.config.from_file(profile_name=profile)
-    auth_type = os.environ.get("LOCUS_OCI_AUTH_TYPE", "api_key")
-    if auth_type == "security_token":
-        token_file = os.path.expanduser(cfg["security_token_file"])
-        key_file = os.path.expanduser(cfg["key_file"])
-        with open(token_file, encoding="utf-8") as fh:
-            token = fh.read().strip()
-        private_key = oci.signer.load_private_key_from_file(key_file)
-        signer = oci.auth.signers.SecurityTokenSigner(token, private_key)
-    else:
-        signer = oci.signer.Signer.from_config(cfg)
-
-    http_client = httpx.AsyncClient(
-        auth=OCIRequestSigner(signer, compartment_id=compartment_id),
-        timeout=httpx.Timeout(60.0, connect=10.0),
-    )
-    return openai.AsyncOpenAI(
-        api_key="not-used",
-        base_url=build_oci_openai_base_url(region),
-        http_client=http_client,
-    )
+    return openai.AsyncOpenAI(api_key=api_key)
 
 
 async def main() -> None:
-    print("Notebook 61: Voice output via OCI Generative AI text-to-speech")
+    print("Notebook 66: Spoken cloud status advisory via OpenAI text-to-speech")
     print("=" * 60)
 
-    # Step 1: a regular Locus Agent answers the prompt as text.
+    # Step 1: a regular Tulip Agent drafts the advisory as text.
     agent = Agent(
         config=AgentConfig(
-            agent_id="elevator-pitch",
+            agent_id="cloud-status-advisory",
             model=get_model(max_tokens=600),
             system_prompt=(
-                "You are a senior developer-relations engineer. Reply in "
-                "natural spoken English, no markdown, no bullet points."
+                "You are a cloud platform on-call lead recording a short voice "
+                "advisory. Reply in natural spoken English, no markdown, no "
+                "bullet points. Calm, clear, and specific."
             ),
             max_iterations=2,
         )
     )
     print(f"\n→ asking the agent: {PROMPT!r}")
-    result = agent.run_sync(PROMPT)
+    result = await agent.arun(PROMPT)
     reply = (result.message or "").strip()
     if not reply:
         msg = "Agent returned no text — check provider creds + max_tokens"
         raise RuntimeError(msg)
-    print(f"\n← agent reply ({len(reply)} chars):\n{reply}\n")
+    print(f"\n← advisory text ({len(reply)} chars):\n{reply}\n")
 
-    # Step 2: synthesise speech through the OCI v1 audio.speech endpoint.
+    # Step 2: synthesise speech through the audio.speech endpoint.
+    client = _audio_client()
+    if client is None:
+        print(
+            "→ offline: skipping synthesis (no OPENAI_API_KEY). Would call "
+            f"audio.speech.create model={TTS_MODEL!r} voice={TTS_VOICE!r}"
+        )
+        print("  Set OPENAI_API_KEY to write a real mp3 to", OUT_PATH)
+        return
+
     print(f"→ synthesising speech with model={TTS_MODEL!r} voice={TTS_VOICE!r}")
-    client = _build_oci_audio_client()
     speech = await client.audio.speech.create(
         model=TTS_MODEL,
         voice=TTS_VOICE,

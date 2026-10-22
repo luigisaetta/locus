@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for Agent's ``output_schema`` structured-output coercion."""
 
@@ -11,10 +10,10 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, Field
 
-from locus.agent import Agent
-from locus.core.messages import Message
-from locus.core.structured import build_response_format, format_validation_errors
-from locus.models.base import ModelResponse
+from tulip.agent import Agent
+from tulip.core.messages import Message
+from tulip.core.structured import build_response_format, format_validation_errors
+from tulip.models.base import ModelResponse
 
 
 class Vendor(BaseModel):

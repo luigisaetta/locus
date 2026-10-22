@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Live: ``Agent(playbook=...)`` enforces step compliance across providers.
 
@@ -11,7 +10,6 @@ Drives a real model through a 3-step playbook and checks that:
 - The plan auto-advances; ``is_complete`` flips when all steps are done.
 
 Runs against:
-* OCI v1 (gpt-4o-mini) — `OCI_PROFILE`
 * OpenAI direct (gpt-4o-mini) — `OPENAI_API_KEY`
 * Anthropic direct (claude-haiku-4.5) — `ANTHROPIC_API_KEY`
 """
@@ -19,59 +17,43 @@ Runs against:
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import pytest
 
-from locus.core.termination import MaxIterations
-from locus.playbooks.hook import PlaybookEnforcerHook
-from locus.playbooks.models import Playbook, PlaybookStep
-from locus.tools.decorator import tool
+from tulip.core.termination import MaxIterations
+from tulip.playbooks.hook import PlaybookEnforcerHook
+from tulip.playbooks.models import Playbook, PlaybookStep
+from tulip.tools.decorator import tool
 
 
 pytestmark = [pytest.mark.integration]
 
 
-_PROFILE = os.environ.get("OCI_PROFILE")
-_REGION = os.environ.get("OCI_REGION", "us-chicago-1")
 _OPENAI = bool(os.environ.get("OPENAI_API_KEY"))
 _ANTHROPIC = bool(os.environ.get("ANTHROPIC_API_KEY"))
-
-
-def _has_oci_config() -> bool:
-    return Path("~/.oci/config").expanduser().exists()
-
-
-def _build_oci_v1():
-    if not (_PROFILE and _has_oci_config()):
-        return None
-    from locus.models.providers.oci import OCIChatCompletionsModel
-
-    return OCIChatCompletionsModel(model="openai.gpt-4o-mini", profile=_PROFILE, region=_REGION)
 
 
 def _build_openai():
     if not _OPENAI:
         return None
     pytest.importorskip("openai")
-    from locus.models.native.openai import OpenAIModel
+    from tulip.models.native.openai import OpenAIModel
 
-    return OpenAIModel(model=os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini"))
+    return OpenAIModel(model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"))
 
 
 def _build_anthropic():
     if not _ANTHROPIC:
         return None
     pytest.importorskip("anthropic")
-    from locus.models.native.anthropic import AnthropicModel
+    from tulip.models.native.anthropic import AnthropicModel
 
     return AnthropicModel(
-        model=os.environ.get("LOCUS_ANTHROPIC_TEST_MODEL", "claude-haiku-4-5-20251001")
+        model=os.environ.get("TULIP_ANTHROPIC_TEST_MODEL", "claude-haiku-4-5-20251001")
     )
 
 
 _FACTORIES = [
-    pytest.param(_build_oci_v1, id="oci-v1-gpt-4o-mini"),
     pytest.param(_build_openai, id="openai-native-gpt-4o-mini"),
     pytest.param(_build_anthropic, id="anthropic-native-claude-haiku"),
 ]
@@ -132,7 +114,7 @@ def test_playbook_enforces_step_sequence_live(factory):
     if model is None:
         pytest.skip("provider credentials missing")
 
-    from locus.agent import Agent
+    from tulip.agent import Agent
 
     playbook = _build_playbook()
     hook = PlaybookEnforcerHook(playbook)

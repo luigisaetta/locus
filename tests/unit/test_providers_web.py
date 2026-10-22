@@ -1,9 +1,8 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Coverage tests for web providers (``locus.providers.web_fetch`` and
-``locus.providers.web_search``).
+"""Coverage tests for web providers (``tulip.providers.web_fetch`` and
+``tulip.providers.web_search``).
 
 The fetch provider is HTTP-bound, so we use ``respx`` to mock httpx.
 The search provider drives an OpenAI-style model — we mock that with
@@ -19,13 +18,13 @@ import httpx
 import pytest
 import respx
 
-from locus.providers.types import WebPage
-from locus.providers.web_fetch import (
+from tulip.providers.types import WebPage
+from tulip.providers.web_fetch import (
     BaseWebFetchProvider,
     HTTPXWebFetcher,
     _HTMLToText,
 )
-from locus.providers.web_search import (
+from tulip.providers.web_search import (
     BaseWebSearchProvider,
     OpenAISearchPreviewProvider,
 )
@@ -185,7 +184,7 @@ class TestHTTPXWebFetcher:
             def title(self) -> str:  # pragma: no cover — unreachable
                 return ""
 
-        from locus.providers import web_fetch as web_fetch_mod
+        from tulip.providers import web_fetch as web_fetch_mod
 
         monkeypatch.setattr(web_fetch_mod, "_HTMLToText", _BoomParser)
 

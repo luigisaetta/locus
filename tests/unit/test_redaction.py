@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Tests for secret redaction patterns in ``locus.tools.executor``.
+"""Tests for secret redaction patterns in ``tulip.tools.executor``.
 
 Covers both the existing ``_sanitize_error`` surface (tool-execution errors)
 and the broader ``redact_sensitive_text`` helper introduced alongside the
@@ -13,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from locus.tools.executor import (
+from tulip.tools.executor import (
     _sanitize_error,
     redact_sensitive_text,
 )
@@ -38,10 +37,6 @@ class TestExistingPatterns:
 
     def test_home_path_redacted(self) -> None:
         assert "[REDACTED]" in redact_sensitive_text("no such file: /Users/alice/secrets.txt")
-
-    def test_ocid_redacted(self) -> None:
-        out = redact_sensitive_text("tenancy ocid1.tenancy.oc1..aaaaaaaaabcdef is bad")
-        assert "ocid1.tenancy" not in out
 
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for locus.deepagent.workflow — research workflow primitives."""
+"""Unit tests for tulip.deepagent.workflow — research workflow primitives."""
 
 from __future__ import annotations
 
@@ -17,7 +16,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "examples"))
 from config import MockModel  # noqa: E402
 
-from locus.deepagent.workflow import (
+from tulip.deepagent.workflow import (
     KEY_CAUSAL_CHAIN,
     KEY_CAUSAL_CONFIDENCE,
     KEY_CAUSAL_HYPOTHESIS,
@@ -101,13 +100,13 @@ class TestStateKeys:
 
 class TestRouteAfterGrounding:
     def test_passes_on_high_score(self) -> None:
-        from locus.multiagent.graph import END
+        from tulip.multiagent.graph import END
 
         r = route_after_grounding(threshold=0.65)
         assert r({KEY_GROUNDING_SCORE: 0.9}) == END
 
     def test_passes_at_threshold(self) -> None:
-        from locus.multiagent.graph import END
+        from tulip.multiagent.graph import END
 
         r = route_after_grounding(threshold=0.65)
         assert r({KEY_GROUNDING_SCORE: 0.65}) == END
@@ -127,7 +126,7 @@ class TestRouteAfterGrounding:
         )
 
     def test_ends_when_all_limits_hit(self) -> None:
-        from locus.multiagent.graph import END
+        from tulip.multiagent.graph import END
 
         r = route_after_grounding(threshold=0.65, max_replans=1, max_regenerations=1)
         assert r({KEY_GROUNDING_SCORE: 0.2, KEY_REPLAN_COUNT: 1, KEY_REGENERATION_COUNT: 1}) == END
@@ -137,7 +136,7 @@ class TestRouteAfterGrounding:
         assert r({}) == "regenerate"
 
     def test_custom_threshold(self) -> None:
-        from locus.multiagent.graph import END
+        from tulip.multiagent.graph import END
 
         r = route_after_grounding(threshold=0.9)
         assert r({KEY_GROUNDING_SCORE: 0.85}) != END
@@ -155,7 +154,7 @@ class TestMakeReplanNode:
         node = make_replan_node()
         result = await node(
             {
-                KEY_PROMPT: "Research locus",
+                KEY_PROMPT: "Research tulip",
                 KEY_UNGROUNDED_CLAIMS: ["claim A", "claim B"],
                 KEY_REPLAN_COUNT: 0,
             }
@@ -230,8 +229,8 @@ class TestMakeSummarizeNode:
         node = make_summarize_node(_model())
         result = await node(
             {
-                KEY_PROMPT: "What is locus?",
-                KEY_EVIDENCE: ["locus is an agent SDK", "it handles tool calls"],
+                KEY_PROMPT: "What is tulip?",
+                KEY_EVIDENCE: ["tulip is an agent SDK", "it handles tool calls"],
                 KEY_CAUSAL_HYPOTHESIS: "",
             }
         )
@@ -271,7 +270,7 @@ class TestMakeGroundingEvalNode:
         mock_result.ungrounded_claims = ["unverified"]
 
         with patch(
-            "locus.reasoning.grounding.GroundingEvaluator.evaluate_with_llm",
+            "tulip.reasoning.grounding.GroundingEvaluator.evaluate_with_llm",
             new_callable=AsyncMock,
             return_value=mock_result,
         ):
@@ -411,8 +410,8 @@ class TestWorkflowSSEEmission:
     async def test_execute_node_emits_sse_events(self) -> None:
         import asyncio
 
-        from locus.observability import get_event_bus, run_context
-        from locus.observability.event_bus import reset_event_bus
+        from tulip.observability import get_event_bus, run_context
+        from tulip.observability.event_bus import reset_event_bus
 
         reset_event_bus()
         node = make_execute_node(_model(), [], max_iterations=1)
@@ -439,8 +438,8 @@ class TestWorkflowSSEEmission:
     async def test_replan_node_emits_sse_event(self) -> None:
         import asyncio
 
-        from locus.observability import get_event_bus, run_context
-        from locus.observability.event_bus import reset_event_bus
+        from tulip.observability import get_event_bus, run_context
+        from tulip.observability.event_bus import reset_event_bus
 
         reset_event_bus()
         node = make_replan_node()
@@ -466,8 +465,8 @@ class TestWorkflowSSEEmission:
     async def test_summarize_node_emits_sse_event(self) -> None:
         import asyncio
 
-        from locus.observability import get_event_bus, run_context
-        from locus.observability.event_bus import reset_event_bus
+        from tulip.observability import get_event_bus, run_context
+        from tulip.observability.event_bus import reset_event_bus
 
         reset_event_bus()
         node = make_summarize_node(_model())
@@ -493,8 +492,8 @@ class TestWorkflowSSEEmission:
     async def test_regenerate_node_emits_sse_events(self) -> None:
         import asyncio
 
-        from locus.observability import get_event_bus, run_context
-        from locus.observability.event_bus import reset_event_bus
+        from tulip.observability import get_event_bus, run_context
+        from tulip.observability.event_bus import reset_event_bus
 
         reset_event_bus()
         node = make_regenerate_summary_node(_model())
@@ -529,8 +528,8 @@ class TestWorkflowSSEEmission:
         import asyncio
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from locus.observability import get_event_bus, run_context
-        from locus.observability.event_bus import reset_event_bus
+        from tulip.observability import get_event_bus, run_context
+        from tulip.observability.event_bus import reset_event_bus
 
         reset_event_bus()
         mock_result = MagicMock()
@@ -539,7 +538,7 @@ class TestWorkflowSSEEmission:
         mock_result.requires_replan = False
 
         with patch(
-            "locus.reasoning.grounding.GroundingEvaluator.evaluate_with_llm",
+            "tulip.reasoning.grounding.GroundingEvaluator.evaluate_with_llm",
             new_callable=AsyncMock,
             return_value=mock_result,
         ):
@@ -569,8 +568,8 @@ class TestWorkflowEdgeCases:
         """Cover lines 164-173: ToolCompleteEvent handling in the async for loop."""
         from unittest.mock import patch
 
-        from locus.agent.agent import Agent
-        from locus.core.events import TerminateEvent, ToolCompleteEvent
+        from tulip.agent.agent import Agent
+        from tulip.core.events import TerminateEvent, ToolCompleteEvent
 
         # Patch Agent.run to yield a ToolCompleteEvent then TerminateEvent
         async def _mock_run(self_agent, prompt, **kw):
@@ -603,7 +602,7 @@ class TestWorkflowEdgeCases:
 
         from pydantic import BaseModel
 
-        from locus.agent.agent import Agent
+        from tulip.agent.agent import Agent
 
         class Report(BaseModel):
             summary: str
@@ -631,7 +630,7 @@ class TestWorkflowEdgeCases:
 
     def test_create_research_workflow_with_checkpointer(self) -> None:
         """Cover line 640: checkpointer kwarg path."""
-        from locus.memory.backends import MemoryCheckpointer
+        from tulip.memory.backends import MemoryCheckpointer
 
         checkpointer = MemoryCheckpointer()
         wf = create_research_workflow(model=_model(), tools=[], checkpointer=checkpointer)

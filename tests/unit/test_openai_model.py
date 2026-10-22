@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for OpenAI model provider."""
 
@@ -8,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from locus.core.messages import Message
-from locus.models.native.openai import OpenAIConfig, OpenAIModel
+from tulip.core.messages import Message
+from tulip.models.native.openai import OpenAIConfig, OpenAIModel
 
 
 class TestOpenAIConfig:
@@ -455,7 +454,7 @@ class TestOpenAIModelToolMessage:
         """Test converting tool message to OpenAI format."""
         model = OpenAIModel()
 
-        from locus.tools.executor import ToolResult
+        from tulip.tools.executor import ToolResult
 
         tool_msg = Message.tool(
             ToolResult(
@@ -469,7 +468,10 @@ class TestOpenAIModelToolMessage:
 
         messages = model._convert_messages([tool_msg])
 
-        assert len(messages) == 1
-        assert messages[0]["role"] == "tool"
-        assert messages[0]["tool_call_id"] == "call_123"
-        assert messages[0]["content"] == "Search results here"
+        # A tool-only list carries no user turn, so the portability guard
+        # prepends one (Qwen templates raise 'No user query found in messages.'
+        # otherwise). The tool entry itself must convert unchanged.
+        tool_entries = [m for m in messages if m["role"] == "tool"]
+        assert len(tool_entries) == 1
+        assert tool_entries[0]["tool_call_id"] == "call_123"
+        assert tool_entries[0]["content"] == "Search results here"

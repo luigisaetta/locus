@@ -1,11 +1,10 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Tests for the AgentConfig.tool_result_store wiring.
 
 Covers the agent.py integration that replaces the lossy
-head-truncation path with a checkpointer-backed offload when the
+head-and-tail cut with a checkpointer-backed offload when the
 config slot is set, and confirms the legacy truncation path still
 works when the slot is left ``None``.
 """
@@ -17,12 +16,12 @@ from typing import Any
 
 import pytest
 
-from locus.agent.agent import Agent
-from locus.agent.config import AgentConfig
-from locus.core.messages import Message, Role, ToolCall
-from locus.models import ModelResponse
-from locus.tools.decorator import tool
-from locus.tools.result_storage import (
+from tulip.agent.agent import Agent
+from tulip.agent.config import AgentConfig
+from tulip.core.messages import Message, Role, ToolCall
+from tulip.models import ModelResponse
+from tulip.tools.decorator import tool
+from tulip.tools.result_storage import (
     REFERENCE_MARKER,
     ToolResultStore,
     extract_reference_key,
@@ -74,7 +73,7 @@ def _build_agent(*, store: ToolResultStore | None) -> Agent:
 
 
 # ---------------------------------------------------------------------------
-# Legacy path: no store → head truncation as before.
+# Legacy path: no store → the head-and-tail cut.
 # ---------------------------------------------------------------------------
 
 

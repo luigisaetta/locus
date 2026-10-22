@@ -1,20 +1,19 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for MCP integration utilities."""
 
 import pytest
 from pydantic import BaseModel
 
-from locus.integrations.fastmcp import (
+from tulip.integrations.fastmcp import (
     _json_schema_type_to_python,
     _ToolArgsBase,
     build_args_model,
-    locus_tool_to_mcp,
-    mcp_tool_to_locus,
+    mcp_tool_to_tulip,
+    tulip_tool_to_mcp,
 )
-from locus.tools.decorator import tool
+from tulip.tools.decorator import tool
 
 
 class TestJsonSchemaTypeToPython:
@@ -144,24 +143,24 @@ class TestBuildArgsModel:
         assert "_" in model.__name__  # Dashes/spaces replaced
 
 
-class TestMcpToolToLocus:
-    """Tests for mcp_tool_to_locus."""
+class TestMcpToolToTulip:
+    """Tests for mcp_tool_to_tulip."""
 
     @pytest.mark.asyncio
     async def test_convert_basic_tool(self):
-        """Convert basic MCP tool to Locus."""
+        """Convert basic MCP tool to Tulip."""
 
         async def my_func(x: int) -> str:
             return f"result: {x}"
 
-        locus_tool = mcp_tool_to_locus(
+        tulip_tool = mcp_tool_to_tulip(
             name="my_tool",
             description="A test tool",
             func=my_func,
         )
 
-        assert locus_tool.name == "my_tool"
-        assert locus_tool.description == "A test tool"
+        assert tulip_tool.name == "my_tool"
+        assert tulip_tool.description == "A test tool"
 
     @pytest.mark.asyncio
     async def test_execute_converted_tool_string_result(self):
@@ -170,13 +169,13 @@ class TestMcpToolToLocus:
         async def my_func(x: int) -> str:
             return f"result: {x}"
 
-        locus_tool = mcp_tool_to_locus(
+        tulip_tool = mcp_tool_to_tulip(
             name="my_tool",
             description="Test",
             func=my_func,
         )
 
-        result = await locus_tool.execute(x=42)
+        result = await tulip_tool.execute(x=42)
         assert "result: 42" in result
 
     @pytest.mark.asyncio
@@ -186,13 +185,13 @@ class TestMcpToolToLocus:
         async def my_func(x: int) -> dict:
             return {"value": x}
 
-        locus_tool = mcp_tool_to_locus(
+        tulip_tool = mcp_tool_to_tulip(
             name="my_tool",
             description="Test",
             func=my_func,
         )
 
-        result = await locus_tool.execute(x=42)
+        result = await tulip_tool.execute(x=42)
         assert '"value": 42' in result or '"value":42' in result
 
     def test_parameters_arg_propagates_to_tool(self):
@@ -221,7 +220,7 @@ class TestMcpToolToLocus:
             "additionalProperties": False,
         }
 
-        locus_tool = mcp_tool_to_locus(
+        tulip_tool = mcp_tool_to_tulip(
             name="search_metrics",
             description="Search metric names by regex.",
             func=my_func,
@@ -230,10 +229,10 @@ class TestMcpToolToLocus:
 
         # The Tool's parameters must equal the supplied schema verbatim
         # — not a kwargs-derived placeholder.
-        assert locus_tool.parameters == schema
-        assert "tenant_id" in locus_tool.parameters["properties"]
-        assert "regex" in locus_tool.parameters["properties"]
-        assert "limit" in locus_tool.parameters["properties"]
+        assert tulip_tool.parameters == schema
+        assert "tenant_id" in tulip_tool.parameters["properties"]
+        assert "regex" in tulip_tool.parameters["properties"]
+        assert "limit" in tulip_tool.parameters["properties"]
         # And invocation forwards the flat fields to the source func.
 
     @pytest.mark.asyncio
@@ -243,7 +242,7 @@ class TestMcpToolToLocus:
         async def my_func(tenant_id: str, regex: str, limit: int = 50) -> dict:
             return {"tenant": tenant_id, "regex": regex, "limit": limit}
 
-        locus_tool = mcp_tool_to_locus(
+        tulip_tool = mcp_tool_to_tulip(
             name="search_metrics",
             description="Search metric names by regex.",
             func=my_func,
@@ -259,23 +258,23 @@ class TestMcpToolToLocus:
             },
         )
 
-        result = await locus_tool.execute(tenant_id="fa", regex=".*pdb.*", limit=10)
+        result = await tulip_tool.execute(tenant_id="fa", regex=".*pdb.*", limit=10)
         assert '"tenant": "fa"' in result or '"tenant":"fa"' in result
         assert '"regex": ".*pdb.*"' in result or '"regex":".*pdb.*"' in result
 
 
-class TestLocusToolToMcp:
-    """Tests for locus_tool_to_mcp."""
+class TestTulipToolToMcp:
+    """Tests for tulip_tool_to_mcp."""
 
     def test_convert_basic_tool(self):
-        """Convert Locus tool to MCP schema."""
+        """Convert Tulip tool to MCP schema."""
 
         @tool
         def my_tool(x: int) -> str:
             """A test tool."""
             return str(x)
 
-        mcp_schema = locus_tool_to_mcp(my_tool)
+        mcp_schema = tulip_tool_to_mcp(my_tool)
 
         assert mcp_schema["name"] == "my_tool"
         assert mcp_schema["description"] == "A test tool."
@@ -291,7 +290,7 @@ class TestLocusToolToMcp:
         # Force no description
         bare_tool.description = None
 
-        mcp_schema = locus_tool_to_mcp(bare_tool)
+        mcp_schema = tulip_tool_to_mcp(bare_tool)
         assert mcp_schema["description"] == ""
 
     def test_convert_tool_without_parameters(self):
@@ -305,7 +304,7 @@ class TestLocusToolToMcp:
         # Force no parameters
         no_params_tool.parameters = None
 
-        mcp_schema = locus_tool_to_mcp(no_params_tool)
+        mcp_schema = tulip_tool_to_mcp(no_params_tool)
         assert mcp_schema["inputSchema"] == {"type": "object", "properties": {}}
 
 

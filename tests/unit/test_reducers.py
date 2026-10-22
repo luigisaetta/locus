@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for state reducers."""
 
@@ -8,8 +7,8 @@ from typing import Annotated
 
 from pydantic import BaseModel
 
-from locus.core.messages import Message
-from locus.core.reducers import (
+from tulip.core.messages import Message
+from tulip.core.reducers import (
     # Reducer classes
     AddMessages,
     add_messages,
@@ -78,7 +77,7 @@ class TestAddMessages:
     def test_replace_by_id(self):
         """Test that messages with same ID are replaced."""
         # Create messages with explicit IDs
-        from locus.core.messages import ToolCall
+        from tulip.core.messages import ToolCall
 
         tc = ToolCall(id="call_123", name="search", arguments={"q": "test"})
         current = [

@@ -1,23 +1,22 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Integration test for prompt-cache breakpoint helpers (D.2).
 
 Verifies that the cache-control marker survives the round-trip
-through Locus's message-handling layer alongside the model metadata
+through Tulip's message-handling layer alongside the model metadata
 registry — the typical end-to-end path a user adopts.
 """
 
 from __future__ import annotations
 
-from locus.core.messages import Message
-from locus.models.caching import (
+from tulip.core.messages import Message
+from tulip.models.caching import (
     CACHE_CONTROL_KEY,
     is_cache_breakpoint,
     mark_cache_breakpoint,
 )
-from locus.models.metadata import metadata_for
+from tulip.models.metadata import metadata_for
 
 
 class TestCacheGatedOnMetadata:
@@ -30,7 +29,7 @@ class TestCacheGatedOnMetadata:
         # Idiomatic user code: only mark when the metadata registry
         # confirms the model supports caching. When it doesn't, the
         # message is left unmarked.
-        meta = metadata_for("meta.llama-3.3-70b-instruct")
+        meta = metadata_for("o1")
         assert meta is not None
         assert meta.supports_prompt_caching is False
 
@@ -61,7 +60,7 @@ class TestRoundTripThroughSerialization:
 
 class TestPreservesOtherMessageFields:
     def test_assistant_with_tool_calls(self) -> None:
-        from locus.core.messages import ToolCall
+        from tulip.core.messages import ToolCall
 
         original = Message.assistant(
             content="calling tool",

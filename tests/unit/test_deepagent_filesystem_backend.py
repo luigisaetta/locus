@@ -1,6 +1,5 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for deepagent filesystem and state backends."""
 
@@ -10,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from locus.deepagent.backends.filesystem import FilesystemBackend
-from locus.deepagent.backends.protocol import BackendError
-from locus.deepagent.backends.state import StateBackend
+from tulip.deepagent.backends.filesystem import FilesystemBackend
+from tulip.deepagent.backends.protocol import BackendError
+from tulip.deepagent.backends.state import StateBackend
 
 
 # ---------------------------------------------------------------------------

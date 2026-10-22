@@ -1,8 +1,7 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
+# Copyright 2026 The Tulip Authors
+# SPDX-License-Identifier: Apache-2.0
 
-"""Coverage tests for the *helpers* in ``locus.agent.runtime_loop``.
+"""Coverage tests for the *helpers* in ``tulip.agent.runtime_loop``.
 
 The runtime loop methods themselves require a fully-initialised ``Agent``
 to drive — those are exercised by the agent end-to-end tests. This file
@@ -15,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from locus.agent.runtime_loop import _normalize_stop_reason
+from tulip.agent.runtime_loop import _normalize_stop_reason
 
 
 class TestNormalizeStopReason:
