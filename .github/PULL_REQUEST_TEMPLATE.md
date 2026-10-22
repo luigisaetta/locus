@@ -23,4 +23,4 @@ Fixes #123
 - [ ] `hatch run check` is clean (format, lint, mypy strict, coverage gate)
 - [ ] Tests added/updated
 - [ ] Documentation updated
-- [ ] Commits are signed off (DCO)
+- [ ] Commits are signed off and the author has signed the [Oracle Contributor Agreement](https://oca.opensource.oracle.com)
