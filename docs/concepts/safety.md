@@ -117,7 +117,6 @@ behind the same `Policy.check(text) -> str | None` shape.
     [`gate_tool`](../api/control.md) — or `interrupt_tools` below, which is a
     set-membership check that never consults the judge and so cannot fail open.
 
-
 ```python
 from locus.models import AnthropicModel
 from locus.hooks.builtin.steering import SteeringHook

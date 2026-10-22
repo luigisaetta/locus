@@ -4,5 +4,10 @@
   "MD040": false,
   "MD041": false,
   "MD046": false,
-  "MD024": { "siblings_only": true }
+  "MD024": {
+    "siblings_only": true
+  },
+  "MD025": {
+    "front_matter_title": ""
+  }
 }

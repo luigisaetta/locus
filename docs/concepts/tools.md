@@ -153,7 +153,7 @@ def lookup_order(order_id: str) -> dict:
 The model sees `"Error: ValueError: no order with id=ord-4821"` and decides what to do.
 Behind the scenes, the loop captures the exception type plus its sanitized
 first line into `ToolResult.error`, and that string is folded into the tool
-message content (prefixed with `Error: `) when the tool produced no content;
+message content (prefixed with `Error:`) when the tool produced no content;
 the traceback and any later lines of the message never reach the model.
 
 ### Custom names and descriptions

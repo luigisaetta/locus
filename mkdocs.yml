@@ -1,5 +1,5 @@
 site_name: locus
-site_description: "A policy gate, approvals and an audit trail for the actions Python agents take: every consequential action clears a policy you write before the side effect. Build on the full runtime, or put the gate around the agent you already have."
+site_description: 'A policy gate, approvals and an audit trail for the actions Python agents take: every consequential action clears a policy you write before the side effect. Build on the full runtime, or put the gate around the agent you already have.'
 site_url: https://locusagents.oracle.com/
 repo_url: https://github.com/oracle/locus
 repo_name: oracle/locus

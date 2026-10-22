@@ -181,7 +181,7 @@ metrics are the relevant gold-label subset, not all rows.
 | over-hold rate | 1.72% | **4.23%** |
 | hold recall | 99.59% | 99.64% |
 
-*(majority baseline 51.20%)*
+(majority baseline 51.20%)
 
 **The right-hand column is the honest one for most purposes.** Row-weighted
 numbers describe performance against the corpus's own item distribution;

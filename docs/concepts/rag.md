@@ -262,7 +262,7 @@ chunk is about one fact, filter by `metadata_filter` on `retrieve()`,
 and add a reranker (`CrossEncoderReranker` / `CohereReranker`) to rescore
 the over-fetched candidate pool.
 
-## RAG poisoning — GSAR grounding as the backstop
+## RAG poisoning — GSAR grounding as the backstop {#rag-poisoning-gsar-grounding-as-the-backstop}
 
 The tool-description guard stops the model from *executing* injected
 instructions. It does not stop a poisoned corpus from feeding the model

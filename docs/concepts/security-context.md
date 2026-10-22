@@ -167,7 +167,7 @@ convenience wrapper around it.
 `evidence_refs` and `confidence`), so you can verify results that another part of
 your pipeline produced.
 
-## Admission control — the enforcement point
+## Admission control — the enforcement point {#admission-control-the-enforcement-point}
 
 `request_approval()` returns a *decision*; it doesn't run anything. To make the
 decision binding, run the action through the **admission gate** — `admit()`, or

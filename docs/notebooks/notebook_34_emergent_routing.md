@@ -34,6 +34,7 @@ The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
 emerge with its mock rationale.
 
 Prerequisites:
+
 - Notebook 35 (structured output).
 - Notebook 58 (cognitive router — the default rule-based path).
 

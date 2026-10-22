@@ -3,7 +3,7 @@
 `StateGraph.stream(...)` yields events as nodes complete — not buffered
 until the graph finishes. For an order-fulfillment graph that means a
 live replay: you watch *which specialist decided what, when* —
-validation checking the order, pricing computing the totals, fulfilment
+validation checking the order, pricing computing the totals, fulfillment
 dispatching the shipment — instead of seeing only the result at the end.
 
 ## Modes
@@ -90,7 +90,7 @@ A specialist that raises has its `NodeResult.success` set to `False`
 with the error message; the stream still yields an event for it (no
 consumer deadlock), so the replay records the failed step instead of
 hanging. Breaking out of the iterator early — say the operator already
-saw the fulfilment decision and closed the panel — cancels the
+saw the fulfillment decision and closed the panel — cancels the
 background driver task so no work continues in the background.
 
 ## Source

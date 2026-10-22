@@ -34,6 +34,7 @@ profile, or ``LOCUS_AWS_PROFILE``) are present. With neither, it prints the
 bring-your-own-credentials note and exits cleanly.
 
 Prerequisites:
+
 - The DeepAgent notebook — the core this factory wraps.
 - For the live Part 2 only: a structured-output-capable provider + an AWS
   identity. The agent is strictly read-only; ``use_aws`` refuses writes.
