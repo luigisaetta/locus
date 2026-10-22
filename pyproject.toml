@@ -3,15 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tulip-agents"
-version = "2.28.0"
+name = "locus-sdk"
+version = "3.0.0"
 description = "The agent framework where the model never holds the trigger — every consequential action clears your policy first, waits for a human when it matters, and lands on a record you can verify. Build on it, or put it around the agent you already have."
 readme = "README.md"
-license = "Apache-2.0"
-license-files = ["LICENSE", "NOTICE", "LICENSES/*"]
+license = "UPL-1.0"
+license-files = ["LICENSE", "LICENSE.txt", "THIRD_PARTY_LICENSES.txt"]
 requires-python = ">=3.11"
 authors = [
-    { name = "The Tulip Authors" },
+    { name = "Oracle and/or its affiliates" },
 ]
 # Ordered by the job a searcher is actually trying to do. The gate terms come
 # first on purpose: people arrive looking for "how do I stop my agent doing X
@@ -46,7 +46,7 @@ keywords = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: Universal Permissive License (UPL)",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -69,15 +69,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Model providers — every provider class under src/tulip/models/native/
+# Model providers — every provider class under src/locus/models/native/
 # has a matching extra here. Keep this list in sync when adding a provider.
 openai = ["openai>=1.50"]
 anthropic = ["anthropic>=0.40"]
+# OCI Generative AI speaks the OpenAI Chat Completions wire protocol;
+# locus.models.providers.oci.openai_compat lazy-imports the `openai`
+# client at request time (`client` property). Without it in the extra,
+# `pip install "locus-sdk[oci]"` boots fine but every .complete() call
+# raises ModuleNotFoundError. Pin alongside the [openai] extra.
+oci = ["oci>=2.173.0", "openai>=1.50"]
 
 # All LLM / model providers — short alias for pip discoverability.
 llm = [
     "openai>=1.50",
     "anthropic>=0.40",
+    "oci>=2.173.0",
 ]
 
 # Observability
@@ -91,74 +98,87 @@ telemetry = [
 mcp = ["mcp>=1.0"]
 
 # Drop-in HTTP server (FastAPI app for AgentServer + SSE streaming).
-# Pulled in production deployments via ``pip install "tulip-agents[server]"``.
+# Pulled in production deployments via ``pip install "locus-sdk[server]"``.
 server = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
 ]
 
 # Checkpoint backends — one extra per backend under
-# src/tulip/memory/backends/ that needs a runtime dep. Keep in sync.
+# src/locus/memory/backends/ that needs a runtime dep. Keep in sync.
 redis = ["redis>=5.0"]
 postgresql = ["asyncpg>=0.29"]
 mysql = ["mysql-connector-python>=9.0"]
 opensearch = ["opensearch-py>=2.4"]
-# S3 / MinIO / R2 object-storage checkpointer (src/tulip/memory/backends/s3.py).
+# S3 / MinIO / R2 object-storage checkpointer (src/locus/memory/backends/s3.py).
 s3 = ["boto3>=1.34"]
 
 # boto3 alone. The AWS cloud-posture tools that used it ship in the separate
-# tulip-agents-security package (packages/tulip-agents-security/).
+# locus-sdk-security package (packages/locus-sdk-security/).
 aws = ["boto3>=1.34"]
 
-# Amazon Bedrock models (src/tulip/models/native/bedrock.py). Same single
+# Amazon Bedrock models (src/locus/models/native/bedrock.py). Same single
 # dependency as the other AWS extras: credentials come from boto3's standard
 # chain, so there is nothing else to install or configure.
 bedrock = ["boto3>=1.34"]
 
 # Security-domain tooling — red-team probes, SOC triage, intel / SIEM / EDR /
 # scanner / fingerprint / AWS posture adapters — is a separate, opt-in package
-# in this repo (packages/tulip-agents-security/, imported as ``tulip_security``).
+# in this repo (packages/locus-sdk-security/, imported as ``locus_security``).
 # It is not published to PyPI, so there is no extra for it: install it from
 # the repository.
 
-# Browser tools (src/tulip/tools/browser.py). After installing, fetch a browser
+# Browser tools (src/locus/tools/browser.py). After installing, fetch a browser
 # with `playwright install chromium`.
 browser = ["playwright>=1.45"]
 
-# Signed audit trails (src/tulip/control/audit.py) — Ed25519 signatures over
+# Signed audit trails (src/locus/control/audit.py) — Ed25519 signatures over
 # each record so an export verifies from public keys alone. Unsigned trails
 # need nothing.
 audit = ["cryptography>=42"]
 
-# Durable agent runs on Temporal (src/tulip/durable/temporal.py).
+# Durable agent runs on Temporal (src/locus/durable/temporal.py).
 temporal = ["temporalio>=1.7"]
 
-# Gemini Live realtime voice sessions (src/tulip/voice/gemini.py).
+# Gemini Live realtime voice sessions (src/locus/voice/gemini.py).
 gemini = ["google-genai>=1.30"]
 
-# Durable agent runs on DBOS (src/tulip/durable/dbos.py).
+# Durable agent runs on DBOS (src/locus/durable/dbos.py).
 dbos = ["dbos>=2.0"]
 
 # NVIDIA OpenShell sandboxes as a coding-harness workspace
-# (src/tulip/harness/openshell.py). Only the client constructors import it; a
+# (src/locus/harness/openshell.py). Only the client constructors import it; a
 # caller that passes its own client needs nothing from it.
 openshell = ["openshell>=0.1.2,<0.2"]
 
-# Mem0 agent-memory manager (src/tulip/memory/managers/mem0.py) — the
+# Mem0 agent-memory manager (src/locus/memory/managers/mem0.py) — the
 # portable, self-hostable long-term memory backend.
 mem0 = ["mem0ai>=0.1"]
 
-# All checkpoint backends. `pip install tulip-agents[checkpoints]` is the
+# All checkpoint backends. `pip install locus-sdk[checkpoints]` is the
 # one-shot install for durable thread state across every backend.
+# Oracle Database 26ai: checkpointers, versioned saver, store, vector store,
+# in-DB chunker/embeddings and the ADB loader all ride the thin driver.
+oracledb = ["oracledb>=2.2.0"]
+
+# Oracle's official agent-memory client. Used by the
+# `OracleAgentMemoryManager` adapter in src/locus/memory/managers/.
+# Alpha-grade upstream (Dev Status 3 as of 26.4.0) — pinned to the
+# 26.x line so a breaking 27.0 doesn't auto-upgrade through pip.
+agentmemory = ["oracleagentmemory>=26.4.0,<27"]
+
 checkpoints = [
     "redis>=5.0",
     "asyncpg>=0.29",
     "mysql-connector-python>=9.0",
     "opensearch-py>=2.4",
     "boto3>=1.34",
+    "oracledb>=2.2.0",
+    "oci>=2.173.0",
+    "oracleagentmemory>=26.4.0,<27",
 ]
 
-# RAG vector stores — one extra per store under src/tulip/rag/stores/
+# RAG vector stores — one extra per store under src/locus/rag/stores/
 # that needs a runtime dep. Keep in sync.
 # numpy is PgMemory's HRR encoding: without it rows are stored with no vector
 # and recall degrades to a substring match.
@@ -172,11 +192,13 @@ cohere = ["cohere>=5.0"]
 rerank-local = ["sentence-transformers>=3.0"]
 rerank = ["cohere>=5.0", "sentence-transformers>=3.0"]
 
-# Full RAG stack — every vector store + embedder + reranker Tulip ships.
+# Full RAG stack — every vector store + embedder + reranker Locus ships.
 # Use this if you want to pick a store at runtime rather than up front.
 rag = [
     "asyncpg>=0.29",
     "opensearch-py>=2.4",
+    "oracledb>=2.2.0",
+    "oci>=2.173.0",
     "qdrant-client>=1.9",
     "chromadb>=0.5",
     "openai>=1.50",
@@ -204,6 +226,17 @@ sdk = [
     "qdrant-client>=1.9",
     "chromadb>=0.5",
     "mem0ai>=0.1",
+    "oci>=2.173.0",
+    "oracledb>=2.2.0",
+    "oracleagentmemory>=26.4.0,<27",
+]
+
+# Documentation site (mkdocs + Material + mkdocstrings). The API reference
+# imports the package, so install the SDK alongside: ``pip install -e ".[docs]"``.
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.27",
 ]
 
 # Development
@@ -247,21 +280,21 @@ dev = [
 ]
 
 [project.scripts]
-tulip = "tulip.cli:main"
-tulip-runner = "tulip.runner.main:main"
+locus = "locus.cli:main"
+locus-runner = "locus.runner.main:main"
 
 [project.urls]
-Homepage = "https://github.com/tuliplabs-ai/tulip-agents"
-Documentation = "https://tulipagents.ai/"
-Repository = "https://github.com/tuliplabs-ai/tulip-agents"
-Issues = "https://github.com/tuliplabs-ai/tulip-agents/issues"
+Homepage = "https://github.com/oracle/locus"
+Documentation = "https://locusagents.oracle.com/"
+Repository = "https://github.com/oracle/locus"
+Issues = "https://github.com/oracle/locus/issues"
 
 # =============================================================================
 # Hatch Configuration
 # =============================================================================
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/tulip"]
+packages = ["src/locus"]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -278,22 +311,22 @@ include = [
 [tool.hatch.envs.default]
 # Pull in ``server`` (fastapi) and ``mcp`` so the strict mypy pass
 # under ``hatch run check`` has the right type stubs available for
-# ``tulip.server.*``, ``tulip.a2a.*``, and ``tulip.integrations.*``.
+# ``locus.server.*``, ``locus.a2a.*``, and ``locus.integrations.*``.
 # Without these, mypy reports "Untyped decorator makes function ..."
 # on every FastAPI ``@app.get/.post`` and on MCP imports.
-features = ["dev", "server", "mcp", "openai", "anthropic", "rag", "s3", "mem0"]
+features = ["dev", "server", "mcp", "openai", "anthropic", "oci", "oracledb", "rag", "s3", "mem0"]
 
 # The security-domain tooling is its own distribution in this repo. Install it
 # into the dev environment (editable) so one ``hatch run check`` lints, types
 # and tests both.
 [tool.hatch.envs.default.workspace]
-members = ["packages/tulip-agents-security"]
+members = ["packages/locus-sdk-security"]
 
 [tool.hatch.envs.default.scripts]
 # Default test target = unit tests only (deterministic, no external deps).
 # Integration tests need credentials / live services and are run via
 # `test-integration` or `test-all` when those are available.
-test = "pytest {args:tests/unit packages/tulip-agents-security/tests/unit}"
+test = "pytest {args:tests/unit packages/locus-sdk-security/tests/unit}"
 # Check every Python snippet in README.md / examples/README.md against the
 # installed SDK. Also runs as a unit test, so CI gates it either way; this
 # is the fast local loop when editing docs.
@@ -301,21 +334,21 @@ snippets = "python scripts/check_doc_snippets.py {args}"
 # The version is asserted in four documents no tool keeps in agreement.
 # Run this before tagging — CI runs it too, in the lint job.
 release-check = "python scripts/check_release_consistency.py {args}"
-test-integration = "pytest {args:tests/integration packages/tulip-agents-security/tests/integration}"
-test-all = "pytest {args:tests packages/tulip-agents-security/tests}"
-test-cov = "pytest --cov=src/tulip --cov=packages/tulip-agents-security/src/tulip_security --cov-report=term-missing --cov-report=html --cov-report=json {args:tests/unit packages/tulip-agents-security/tests/unit}"
+test-integration = "pytest {args:tests/integration packages/locus-sdk-security/tests/integration}"
+test-all = "pytest {args:tests packages/locus-sdk-security/tests}"
+test-cov = "pytest --cov=src/locus --cov=packages/locus-sdk-security/src/locus_security --cov-report=term-missing --cov-report=html --cov-report=json {args:tests/unit packages/locus-sdk-security/tests/unit}"
 # Refresh the per-file coverage baseline (commit the resulting
 # ``scripts/coverage_baseline.json``).
 cov-baseline-update = [
-    "pytest --cov=src/tulip --cov=packages/tulip-agents-security/src/tulip_security --cov-report=json {args:tests/unit packages/tulip-agents-security/tests/unit}",
+    "pytest --cov=src/locus --cov=packages/locus-sdk-security/src/locus_security --cov-report=json {args:tests/unit packages/locus-sdk-security/tests/unit}",
     "python scripts/coverage_ratchet.py --update",
 ]
-test-fast = "pytest -n auto {args:tests/unit packages/tulip-agents-security/tests/unit}"
+test-fast = "pytest -n auto {args:tests/unit packages/locus-sdk-security/tests/unit}"
 lint = "ruff check src tests examples packages"
 lint-fix = "ruff check --fix src tests examples packages"
 format = "ruff format src tests examples packages"
 format-check = "ruff format --check src tests examples packages"
-typecheck = "mypy src/tulip packages/tulip-agents-security/src/tulip_security"
+typecheck = "mypy src/locus packages/locus-sdk-security/src/locus_security"
 # CI gate: every check the project enforces, in one command. A clean run
 # of `hatch run check` is what `_lint.yml` runs. The trailing ``test-cov``
 # runs the deterministic unit suite under coverage and FAILS the whole
@@ -334,6 +367,16 @@ all = [
     "typecheck",
     "test",
 ]
+
+[tool.hatch.envs.docs]
+features = ["docs", "openai"]
+[tool.hatch.envs.docs.scripts]
+serve = "mkdocs serve {args}"
+build = "mkdocs build --strict {args}"
+# Validates every ```python block on the site against the installed SDK.
+snippets = "python scripts/check_snippets.py {args:docs}"
+# The captured output on the notebook pages, re-run against this checkout.
+outputs = "python scripts/notebook_output.py {args:--check}"
 
 [tool.hatch.envs.test]
 features = [
@@ -354,7 +397,7 @@ python = ["3.11", "3.12", "3.13", "3.14"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-src = ["src", "tests", "packages/tulip-agents-security/src"]
+src = ["src", "tests", "packages/locus-sdk-security/src"]
 
 [tool.ruff.lint]
 select = [
@@ -459,7 +502,7 @@ ignore = [
     "S110",    # try-except-pass
     "S112",    # try-except-continue
     "UP041",   # use PEP 585 instead of typing
-    # GSAR (tulip.reasoning.gsar*) reproduces math notation from
+    # GSAR (locus.reasoning.gsar*) reproduces math notation from
     # arXiv:2604.23366 — Greek letters (ρ, τ), set operators (∪, ⊔),
     # and section markers (§) appear in docstrings and comments. The
     # ambiguous-confusable lints would force us to translate them
@@ -470,14 +513,14 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# The grounding benchmark is a `python -m tulip.reasoning.grounding_eval` CLI —
+# The grounding benchmark is a `python -m locus.reasoning.grounding_eval` CLI —
 # printing its report is the point.
-"src/tulip/reasoning/grounding_eval.py" = ["T201"]
-# Same for the rogue challenge (`python -m tulip.rogue`): it is a terminal
+"src/locus/reasoning/grounding_eval.py" = ["T201"]
+# Same for the rogue challenge (`python -m locus.rogue`): it is a terminal
 # demo whose whole output — banner, per-attempt verdict, scoreboard, audit
 # dump — is printed. It ships inside the package so it runs from an install
 # rather than a clone.
-"src/tulip/rogue/*.py" = ["T201"]
+"src/locus/rogue/*.py" = ["T201"]
 # The overhead benchmark is a CLI whose entire output is the report it
 # prints, and it shells out to `sys.executable` to time a cold import — the
 # only way to measure a cost that is paid once per process.
@@ -546,38 +589,38 @@ ignore = [
     "S603",    # subprocess call — runner intentionally execs notebooks
     "BLE001",  # blind except — runner reports failures generically
 ]
-"src/tulip/cli.py" = [
-    "T201",    # print — the tulip command's output is its interface
+"src/locus/cli.py" = [
+    "T201",    # print — the locus command's output is its interface
 ]
-"src/tulip/memory/backends/**/*.py" = [
+"src/locus/memory/backends/**/*.py" = [
     "S608",    # SQL built from validated identifiers (regex-checked at init)
     "PYI063",  # PEP 570 positional-only — `__context` is Pydantic's spelling
 ]
-"src/tulip/rag/stores/**/*.py" = [
+"src/locus/rag/stores/**/*.py" = [
     "S608",    # SQL built from validated identifiers
     "PYI063",  # PEP 570 positional-only — `__context` is Pydantic's spelling
 ]
-"src/tulip/memory/store_backends/**/*.py" = [
+"src/locus/memory/store_backends/**/*.py" = [
     "S608",    # SQL built from validated identifiers (regex-checked at init)
     "PYI063",  # PEP 570 positional-only — `__context` is Pydantic's spelling
 ]
 "tests/integration/test_pg_memory.py" = [
     "S608",    # SQL built from a constant test table name, not user input
 ]
-"src/tulip/agent/agent.py" = [
+"src/locus/agent/agent.py" = [
     "SLF001",  # Private attr access for internal state (_has_unverified_writes)
 ]
-"src/tulip/agent/initializer.py" = [
+"src/locus/agent/initializer.py" = [
     "SLF001",  # Extracted constructor body — its job is to populate
                # ``Agent._*`` private attrs in place.
 ]
-"src/tulip/integrations/fastmcp.py" = [
+"src/locus/integrations/fastmcp.py" = [
     # S102 (exec) was formerly required for the MCP tool wrapper; the
     # closure-based implementation in _create_tool_wrapper no longer uses
     # exec, so the rule stays enforced.
     "SLF001",  # Private member access for agent integration
 ]
-"src/tulip/rag/**/*.py" = [
+"src/locus/rag/**/*.py" = [
     "ASYNC230", # Blocking I/O in async — some client SDKs are sync, wrapped in executor
     "ASYNC240", # Path methods in async — local file reads are fast/local
     "F841",     # Unused vars in multimodal processing pipelines
@@ -587,29 +630,45 @@ ignore = [
     "S608",     # SQL built from validated identifiers (pgvector store)
     "UP042",    # str+Enum — needed for serialization compat
 ]
-"src/tulip/core/interrupt.py" = [
+"src/locus/core/interrupt.py" = [
     "N818",    # Exception names without Error suffix — public API, can't rename
 ]
-"src/tulip/hooks/provider.py" = [
+"src/locus/hooks/provider.py" = [
     "FBT003",  # Boolean positional in _init() — internal event construction
 ]
-"src/tulip/hooks/plugin.py" = [
+"src/locus/hooks/plugin.py" = [
     "SLF001",  # Private attr _is_hook for decorator marker
 ]
-"src/tulip/skills/plugin.py" = [
+"src/locus/skills/plugin.py" = [
     "SLF001",  # Closure accessing parent plugin's private members
 ]
-"src/tulip/multiagent/graph.py" = [
+"src/locus/multiagent/graph.py" = [
     "PYI063",  # PEP 570 positional-only — compat with older Python
     "PGH003",  # Blanket type: ignore — pydantic internal typing
 ]
-"src/tulip/memory/backends/postgresql.py" = [
+"src/locus/memory/backends/postgresql.py" = [
     "S608",    # SQL from validated identifiers
     "PYI063",  # PEP 570 positional-only
 ]
 
+# Docs-site tooling (mkdocs hooks + their tests), ported from the former docs
+# repository with its own, lighter lint profile.
+"hooks/*.py" = [
+    "B023",    # closures over the loop variable are consumed inside the same iteration
+]
+"tests/docs/*.py" = [
+    "PT018",   # compound asserts read better in these table-driven checks
+    "RUF043",  # literal regex patterns in pytest.raises(match=...)
+]
+"src/locus/_oracle_pool_cache.py" = [
+    "SLF001",  # this helper IS the private-state plumbing — by design
+]
+"src/locus/memory/backends/oci_bucket.py" = [
+    "FURB162", # Timezone replacement — OCI API returns specific format
+]
+
 [tool.ruff.lint.isort]
-known-first-party = ["tulip", "tulip_security"]
+known-first-party = ["locus", "locus_security"]
 force-single-line = false
 lines-after-imports = 2
 
@@ -661,6 +720,9 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = [
     "openai.*",
+    "oci.*",
+    "oracledb.*",
+    "oracleagentmemory.*",
     "google.*",
     "requests.*",
     "portkey_ai.*",
@@ -682,14 +744,14 @@ module = [
     "sentence_transformers.*",
     "mem0.*",
     "moto.*",
-    # Optional deps for ``tulip.rag.multimodal`` — only loaded inside
+    # Optional deps for ``locus.rag.multimodal`` — only loaded inside
     # try/except for users who want OCR / PDF / image / audio extraction.
     "pytesseract.*",
     "PIL.*",
     "pypdf.*",
     "PyPDF2.*",
     "pdf2image.*",
-    # Browser tools (``tulip.tools.browser``) import Playwright lazily.
+    # Browser tools (``locus.tools.browser``) import Playwright lazily.
     "playwright.*",
     "google.genai",
     "google.genai.*",
@@ -703,7 +765,7 @@ ignore_missing_imports = true
 # with a stub parse error ("errors prevented further checking" in
 # numpy/__init__.pyi) — seen on the 3.13/3.14 CI runners. numpy is only a
 # transitive dependency (chromadb / torch / scikit-learn), never part of
-# Tulip's typed surface, so skip analyzing it entirely.
+# Locus's typed surface, so skip analyzing it entirely.
 [[tool.mypy.overrides]]
 module = ["numpy", "numpy.*"]
 follow_imports = "skip"
@@ -717,7 +779,7 @@ ignore_missing_imports = true
 # ``# type: ignore[code]`` for genuine SDK-stub gaps, or (b) retained here
 # until its module-level migration PR lands. The lifted set is enforced by
 # the strict block above.
-# All ``tulip.*`` modules are now type-checked under the strict block
+# All ``locus.*`` modules are now type-checked under the strict block
 # above. The ``[[tool.mypy.overrides]]`` ``ignore_errors`` block has been
 # removed — see #34 for the migration history.
 
@@ -732,8 +794,8 @@ warn_required_dynamic_aliases = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-testpaths = ["tests", "packages/tulip-agents-security/tests"]
-pythonpath = ["src", "packages/tulip-agents-security/src"]
+testpaths = ["tests", "packages/locus-sdk-security/tests"]
+pythonpath = ["src", "packages/locus-sdk-security/src"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = [
@@ -758,22 +820,22 @@ filterwarnings = [
 # =============================================================================
 
 [tool.coverage.run]
-source = ["src/tulip", "packages/tulip-agents-security/src/tulip_security"]
+source = ["src/locus", "packages/locus-sdk-security/src/locus_security"]
 branch = true
 parallel = true
 omit = [
-    "src/tulip/__about__.py",
+    "src/locus/__about__.py",
     # External integrations requiring database/API connections
-    "src/tulip/rag/stores/opensearch.py",
-    "src/tulip/rag/stores/pgvector.py",
-    "src/tulip/rag/embeddings/openai.py",
-    "src/tulip/memory/backends/opensearch.py",
-    "src/tulip/memory/backends/oci_bucket.py",
+    "src/locus/rag/stores/opensearch.py",
+    "src/locus/rag/stores/pgvector.py",
+    "src/locus/rag/embeddings/openai.py",
+    "src/locus/memory/backends/opensearch.py",
+    "src/locus/memory/backends/oci_bucket.py",
     # PgMemory needs a live Postgres+pgvector; covered by integration tests.
-    "src/tulip/memory/store_backends/postgresql.py",
+    "src/locus/memory/store_backends/postgresql.py",
     # PgCheckpointer likewise: its unit tests pin the statements it sends, and
     # tests/integration/test_pg_checkpointer.py covers it on a real Postgres.
-    "src/tulip/memory/backends/pg_checkpointer.py",
+    "src/locus/memory/backends/pg_checkpointer.py",
 ]
 
 [tool.coverage.report]
@@ -804,10 +866,24 @@ show_missing = true
 # =============================================================================
 
 # The security-domain tooling ships as its own distribution from this repo
-# (``packages/tulip-agents-security/``). It depends on tulip-agents; resolve
+# (``packages/locus-sdk-security/``). It depends on locus-sdk; resolve
 # both sides locally.
+[tool.uv]
+# Security overrides for transitive deps whose upstreams pin them below the
+# patched version: the `oci` SDK caps `cryptography` < 48 and
+# `oracleagentmemory` (alpha, pinned < 27) caps `litellm`/`aiohttp`. Force the
+# patched versions to clear the advisories; drop each entry once its upstream
+# relaxes the cap. NOTE: oci uses cryptography for request signing — unit tests
+# mock OCI, so live signing against cryptography 48+ is verified by the
+# integration suite, not CI.
+override-dependencies = [
+    "litellm>=1.84.0",
+    "cryptography>=48.0.1",
+    "aiohttp>=3.14.1",
+]
+
 [tool.uv.workspace]
-members = ["packages/tulip-agents-security"]
+members = ["packages/locus-sdk-security"]
 
 [tool.uv.sources]
-tulip-agents-security = { workspace = true }
+locus-sdk-security = { workspace = true }

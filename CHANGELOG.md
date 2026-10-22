@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Tulip are documented here. The format follows
+All notable changes to Locus are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and — from 1.0
 onward — [Semantic Versioning](https://semver.org). See
 [`DEPRECATION.md`](DEPRECATION.md) for the deprecation and breaking-change
@@ -8,12 +8,73 @@ policy.
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-22
+
+Locus is back at Oracle. The project continued from 2026-06-08 to
+2026-10-10 as `tulip-agents` under the tuliplabs-ai GitHub organisation
+(releases 1.0.0 → 2.28.0); this release brings that development line home
+to [oracle/locus](https://github.com/oracle/locus) with its full history and
+restores the Oracle Cloud and Oracle Database integrations that were removed
+on the way out. `tulip-agents` is retired.
+
+### Changed
+
+- **Renamed back to Locus.** Distribution `tulip-agents` → `locus-sdk`,
+  import root `tulip` → `locus`, security add-on `tulip-agents-security` →
+  `locus-sdk-security` (import `locus_security`), CLI `tulip` / `tulip-runner`
+  → `locus` / `locus-runner`, environment variables `TULIP_*` → `LOCUS_*`,
+  `TulipEvent` / `TulipError` / `TulipSettings` / `TulipDeprecationWarning` /
+  `TulipMCPServer` → the `Locus*` names. A search-and-replace of `tulip` →
+  `locus` in your code and shell is the whole migration.
+- **Licence.** Returned to the Universal Permissive License v1.0, the licence
+  the project carried before 1.0.0, under Oracle copyright. See
+  [`PROVENANCE.md`](PROVENANCE.md).
+- **Docs site moved in-repo.** `docs/`, `mkdocs.yml`, the theme overrides and
+  build hooks live here again and publish to
+  <https://locusagents.oracle.com/>; the API reference imports this checkout.
+- `CohereReranker` is Cohere's direct rerank API; the OCI-served reranker is
+  now `OCICohereReranker` (`locus.rag.reranker.cohere_oci`).
+
+### Added
+
+- **OCI Generative AI** — `oci:` model prefix with automatic transport
+  routing: `OCIChatCompletionsModel` (OpenAI-compatible `/openai/v1`, SSE
+  streaming, day-0 OpenAI / Meta / xAI / Mistral / Gemini models),
+  `OCIModel` (OCI SDK transport for Cohere R-series and Dedicated AI Cluster
+  endpoints) and the opt-in `OCIResponsesModel`. API-key, session-token,
+  instance-principal and resource-principal auth with signer refresh.
+- **Oracle Database 26ai** — `OracleVectorStore` / `OracleSyncVectorStore`
+  (native `VECTOR(N, FLOAT32)`, `VECTOR_DISTANCE`, HNSW / IVF indexes,
+  hybrid search, metadata filters), `OracleInDBEmbeddings`,
+  `OracleInDBChunker`, `OracleADBLoader`, the `oracle_checkpointer()` /
+  `OracleBackend` checkpointer, the versioned `OracleCheckpointSaver`,
+  the `OracleStore` long-term memory store and `OracleAgentMemoryManager`
+  over Oracle's official `oracleagentmemory` client, plus sync companions.
+- **OCI Object Storage** checkpointer (`OCIBucketBackend`,
+  `oci_bucket_checkpointer()`), **OCI embeddings** (`OCIEmbeddings`), the
+  **`use_oci` / `describe_oci`** built-in tools, and the
+  `sanitize_oci_tool_schema` helper.
+- Extras: `oci`, `oracledb`, `agentmemory`; `checkpoints`, `rag`, `llm` and
+  `sdk` include the Oracle dependencies again.
+- Notebooks 01-05, 10, 41-44, 53-54, 88 and 89 (OCI transports, DAC, Cohere
+  reranker on OCI, Oracle 26ai RAG / loader / chunker / embeddings /
+  checkpointers / store / agent memory, OCI tools) and their docs pages.
+- `examples/config.py` auto-detects OCI when `~/.oci/config` has a usable
+  profile (`LOCUS_OCI_*` with `OCI_*` fallbacks); set
+  `LOCUS_MODEL_PROVIDER=mock` to opt out.
+
+### Removed
+
+- The Apache-2.0 `NOTICE` and `LICENSES/` files that documented the
+  tulip-agents relicensing; superseded by `LICENSE` (UPL-1.0) and
+  `PROVENANCE.md`.
+
 ## [2.28.0] - 2026-10-10
 
 ### Added
 
 - **Playbooks v2: task steps a person completes.** A step with `kind: task` is a person's,
-  not the model's (`tulip.playbooks.v2.tasks`):
+  not the model's (`locus.playbooks.v2.tasks`):
 
   ```yaml
   - id: confirm_by_phone
@@ -67,7 +128,7 @@ policy.
 
 - **Playbooks v2: a step's approval rules, picked from the process data and the call.** A
   step's `approval` grows `rules` -- first match wins, the default rule (no `when`) last --
-  and `only_these_approvers`, the registry's `StepApprovalRule` (`tulip.playbooks.v2.approvals`):
+  and `only_these_approvers`, the registry's `StepApprovalRule` (`locus.playbooks.v2.approvals`):
 
   ```yaml
   approval:
@@ -182,7 +243,7 @@ policy.
 ### Added
 
 - **Playbooks v2: typed process data.** A v2 playbook declares its data as typed fields,
-  the registry's `PlaybookField` (`tulip.playbooks.v2.fields.Field`): `name`, `label`,
+  the registry's `PlaybookField` (`locus.playbooks.v2.fields.Field`): `name`, `label`,
   `type` (`text | number | money | date | boolean | choice | email | url | file`),
   `choices`, `required`, `sensitive` (default `true`) and `description`.
   - `inputs` are fields (`PlaybookV2.input_fields`); an old `{name, description,
@@ -265,7 +326,7 @@ policy.
   pods resumes in the step it was in, so a step's approval still holds the calls made in it;
   the gateway did this by writing the runtime's private fields and now has an API for it.
   `RestoreError`, `RestoreResult`, `STATUSES` and `RESTORED_CALL` are exported from
-  `tulip.playbooks.v2`. Playbook events are unchanged.
+  `locus.playbooks.v2`. Playbook events are unchanged.
 
 ## [2.24.1] - 2026-10-09
 
@@ -275,7 +336,7 @@ policy.
   process, and it numbered its events from 0 again; the gateway drops a batch whose numbers
   it has seen, so the first events after a resume (the approved call's start, its result and
   its `harness.exec` record) never reached the run's record. The runner now leaves its next
-  event number in `/sandbox/.tulip/events.seq` and the next runner of the run starts from it.
+  event number in `/sandbox/.locus/events.seq` and the next runner of the run starts from it.
 - **The box runner keeps no connection alive.** NVIDIA OpenShell closes a kept-alive tunnel
   once the box's policy generation moves on, and a command resolving a new host is enough
   (`L7 tunnel closed before inspection because policy changed: policy generation is stale`).
@@ -291,7 +352,7 @@ policy.
 - **A playbook v2 step may name who approves it.** A step takes an optional
   `approval: {by, ask, show}`: `by` is an approvals grant label, `ask` the plain text
   the approver reads, `show` the call's arguments to put in front of them first. The
-  engine parses it into `StepApproval` (exported from `tulip.playbooks.v2`) on
+  engine parses it into `StepApproval` (exported from `locus.playbooks.v2`) on
   `Step.approval`, tolerantly: without a non-empty string `by` it reads as no approval
   (the registry validates the shape strictly at publish). The gateway compiles it into a
   hold on that step's tool calls only. Playbook events are unchanged.
@@ -313,26 +374,26 @@ policy.
   - The runner now stays dumpable and, once its runtime is built and before any
     command can run, wipes the token and every placeholder out of its initial
     environment block (what `/proc/<pid>/environ` shows) and out of `os.environ`
-    (`tulip.runner.harden.protect`, `wipe_initial_environ`). Commands still never
+    (`locus.runner.harden.protect`, `wipe_initial_environ`). Commands still never
     inherit them; reading the runner's memory needs ptrace, which Yama refuses a child.
-  - `TULIP_RUNNER_HARDEN=non-dumpable` keeps the old behaviour for a sandbox that does
+  - `LOCUS_RUNNER_HARDEN=non-dumpable` keeps the old behaviour for a sandbox that does
     not identify processes that way.
-- **The runner keeps a log in the workspace** (`/sandbox/.tulip/runner.log`), so its
+- **The runner keeps a log in the workspace** (`/sandbox/.locus/runner.log`), so its
   gateway can show why a box ended without a report. It holds no values.
 
 ### Changed
 
-- **`tulip-runner.pyz` is no longer attached to GitHub releases.** The release
+- **`locus-runner.pyz` is no longer attached to GitHub releases.** The release
   still builds it (and checks that it starts) for the private
-  `ghcr.io/tuliplabs-ai/tulip-runner` image. Anyone else builds it from the
-  published wheel with `scripts/build_runner_pyz.sh`; a Tulip gateway builds its
+  `ghcr.io/oracle/locus-runner` image. Anyone else builds it from the
+  published wheel with `scripts/build_runner_pyz.sh`; a Locus gateway builds its
   own at image build time.
 
 ## [2.23.0] - 2026-10-08
 
 ### Added
 
-- **The box runner itself: `python -m tulip.runner` (also `tulip-runner`).**
+- **The box runner itself: `python -m locus.runner` (also `locus-runner`).**
   Builds a run's agent from its `RunManifest` and nothing else, runs it inside
   the box, and parks or reports when it stops. See `docs/runner.md`.
   - `build_runtime`: an OpenAI-compatible model on `model.base_url`, keyed by
@@ -345,9 +406,9 @@ policy.
     operation of an API connector. A box tool the runner cannot build refuses
     the run. Every call except the gateway's own goes through `RemoteGate`;
     its decision token reaches only the MCP and API tools, which send it as
-    `x-tulip-decision`. A call still held after `budgets.park_ttl_s` (default
+    `x-locus-decision`. A call still held after `budgets.park_ttl_s` (default
     600 s) pauses the run, checkpointed with the gateway. A v2 playbook is shown
-    in `tulip.playbooks.v2`'s own prose; plan mode adds its rules to the prompt.
+    in `locus.playbooks.v2`'s own prose; plan mode adds its rules to the prompt.
   - `RunManifest` learns API connectors (`api`, `ApiConnector`, `ToolEntry.operation`,
     `runs: api:<id>`), the run's `input`, and `budgets.park_ttl_s`.
     `api_request` maps a call's arguments to exactly one request (path
@@ -367,15 +428,15 @@ policy.
     credential placeholder (`LocalBackend(base_env=...)` is new), and the
     runner marks itself non-dumpable so a command cannot read them back from
     `/proc`.
-  - Shipped as `tulip-runner.pyz` on each GitHub release and as the image
-    `ghcr.io/tuliplabs-ai/tulip-runner` (`runner.Dockerfile`,
+  - Shipped as `locus-runner.pyz` on each GitHub release and as the image
+    `ghcr.io/oracle/locus-runner` (`runner.Dockerfile`,
     `scripts/build_runner_pyz.sh`).
 
 ## [2.22.0] - 2026-10-08
 
 ### Added
 
-- **`tulip.runner`: the protocol a box runner speaks with the Tulip gateway.**
+- **`locus.runner`: the protocol a box runner speaks with the Locus gateway.**
   A box runner is one agent's loop running inside an NVIDIA OpenShell sandbox,
   started by a gateway for one run; the gateway stays the control plane. This
   release adds the runner's side of that contract, with no agent building yet:
@@ -396,7 +457,7 @@ policy.
     `tool_complete`, `tool.sandbox.output`, `harness.exec`, `playbook_step`,
     `playbook_progress` — nothing the gateway alone writes) to
     `POST /internal/v1/runs/{id}/events` in numbered batches, spooled to
-    `/sandbox/.tulip/events.jsonl` while the gateway is unreachable and replayed
+    `/sandbox/.locus/events.jsonl` while the gateway is unreachable and replayed
     in order.
   - `GatewayCheckpointer`: a `BaseCheckpointer` whose checkpoints the gateway
     keeps (`PUT`/`GET /internal/v1/runs/{id}/checkpoint`,
@@ -406,16 +467,16 @@ policy.
   - `next_op` / `fetch_manifest`: the start-up handshake
     (`GET /internal/v1/runner/next`, `GET /internal/v1/runner/manifest`); a
     manifest for another run is refused.
-  - `RunnerConfig.from_env` reads `TULIP_ADMIT_URL`, `TULIP_ADMIT_TOKEN` and
-    `TULIP_RUN_ID`, the values a gateway sets in every box. The workload token
+  - `RunnerConfig.from_env` reads `LOCUS_ADMIT_URL`, `LOCUS_ADMIT_TOKEN` and
+    `LOCUS_RUN_ID`, the values a gateway sets in every box. The workload token
     is sent as a bearer token and never appears in a repr or an error.
-- **`tulip.playbooks.v2`: the v2 playbook engine, moved out of the gateway.** The
+- **`locus.playbooks.v2`: the v2 playbook engine, moved out of the gateway.** The
   step graph a ``playbook.v2`` definition describes (groups, ``after``,
   ``parallel_group`` and ``joins``, branches routed by the ``when`` language, one
   decision policy outcome), the three control tools that drive it
   (``complete_step``, ``select_branches``, ``submit_decision``), its allowlist and
   effort-floor checks, waivers, deviations and the prose the model is shown. It was
-  ``tulip_gateway.playbook_v2`` and ``tulip_gateway.when``; it now lives here so the
+  ``locus_gateway.playbook_v2`` and ``locus_gateway.when``; it now lives here so the
   same code can run next to the agent loop wherever that loop is (the gateway, or a
   runner inside a sandbox box), with the gateway's copy the authoritative one.
   Behaviour is unchanged: ``tests/unit/playbooks_v2/test_golden.py`` replays seven
@@ -429,7 +490,7 @@ policy.
     the fields of the gateway's ``PlaybookStepAudit`` / ``PlaybookDecisionAudit``
     -- and whoever owns the chain makes the record.
   - ``enforcement_mode(playbook, deployment="record")`` takes the deployment's
-    default as an argument instead of reading ``TULIP_GATEWAY_PLAYBOOK_ENFORCEMENT``.
+    default as an argument instead of reading ``LOCUS_GATEWAY_PLAYBOOK_ENFORCEMENT``.
 
 ## [2.21.3] - 2026-10-07
 
@@ -439,8 +500,8 @@ policy.
   read.** `sed -n` is on the read-only list because it prints, but `sed -n -i`,
   `--in-place`, `-i.bak`, the `w` command and GNU's `e` command
   (`sed -n '1e touch pwned' f`) were classified `workspace.read`, so an edit or
-  a shell command cleared the gate as a read. Found by a Tulip harness agent
-  asked to review `tulip.harness.labels`. A script holding `w`, `W` or `e`
+  a shell command cleared the gate as a read. Found by a Locus harness agent
+  asked to review `locus.harness.labels`. A script holding `w`, `W` or `e`
   anywhere, or read from a file (`-f`), is now an exec.
 
 ## [2.21.2] - 2026-10-07
@@ -462,7 +523,7 @@ policy.
 ### Fixed
 
 - **A command that only reads is no longer held as an exec because of `2>&1`.**
-  `tulip.harness.labels` counted any redirection as a write, so `cat x 2>&1`,
+  `locus.harness.labels` counted any redirection as a write, so `cat x 2>&1`,
   `grep y f >&2` and `ls 2>/dev/null` were classified `workspace.exec` and held
   for a person under a blast-radius maximum of 1 (seen live: a subagent's
   `ls -la notes.txt 2>&1; cat notes.txt 2>&1`). Only a redirection that writes a
@@ -474,7 +535,7 @@ policy.
 
 ### Added
 
-- **`tulip.testing.CompromisedModel`: a model an attacker has already won,
+- **`locus.testing.CompromisedModel`: a model an attacker has already won,
   for your own rogue suite.** It calls the attack on every model call that
   offers tools and never refuses, so a test checks what has to hold when the
   model does not: the gate, the offered tools, the audit trail. Name a tool
@@ -484,9 +545,9 @@ policy.
   runs), `after=` is what it says once it stops, and by default it also calls
   tools the agent never offered, which the agent has to refuse
   (`offered_only=True` turns that off). Every call is recorded on
-  `attempts`. It is the offline mode of `python -m tulip.rogue`, made
+  `attempts`. It is the offline mode of `python -m locus.rogue`, made
   reusable against your own agent.
-- **`tulip.testing.MockModel`**, another name for `FunctionModel`, because
+- **`locus.testing.MockModel`**, another name for `FunctionModel`, because
   that is the name people coming from other SDKs look for. A fixed list of
   turns is still a `ScriptedModel`.
 - **`gate_tool(advisor=)`, and a verdict worked out for each call.** A
@@ -502,7 +563,7 @@ policy.
   agent can be verified call by call. A callable that returns `None` is no
   verification; one that raises refuses the call with a `deny`, recorded on the
   trail, so a failed verification never passes for one that was not required.
-- **`tulip.decision`: typed decisions with probabilities.** Ask a model a
+- **`locus.decision`: typed decisions with probabilities.** Ask a model a
   `Choice(name, question, options)`, a `YesNo(name, question)` or a
   `Score(name, question, levels)` about one input and get back an `Answer` per
   field: a probability for every listed answer, the argmax, its margin, and
@@ -574,7 +635,7 @@ policy.
   the same words. `0` turns the cache off.
 - **`PgCheckpointer`: agent threads in Postgres, one tenant's apart from
   another's.** Every row carries its tenant and Row-Level Security admits only
-  the tenant pinned for the transaction (`tulip.tenant`, the setting `PgMemory`
+  the tenant pinned for the transaction (`locus.tenant`, the setting `PgMemory`
   uses), on read and write, `FORCE`d for the owner too; every query also
   filters on it. The tenant comes from a `tenant_scope()` block, a
   `tenant_of(thread_id)` callable, or `tenant=`; a `tenant_of` that cannot place
@@ -587,24 +648,24 @@ policy.
   `purge_messages()` and `forget_tenant()`. See
   [`docs/pg-checkpointer.md`](docs/pg-checkpointer.md).
 - **Per-message retention, so a thread used every day stops growing.**
-  `tulip.memory.retention` stamps each message the first time it is
-  checkpointed (`Message.metadata["tulip_at"]`, never sent to a provider) and
+  `locus.memory.retention` stamps each message the first time it is
+  checkpointed (`Message.metadata["locus_at"]`, never sent to a provider) and
   drops whole exchanges older than a cut-off, keeping system messages and
   anything unstamped. `PgCheckpointer(message_retention=...)` trims at every
   save and `purge_messages(older_than)` rewrites idle threads in place;
   `RetainedCheckpointer(inner, max_age=...)` gives any checkpointer, the local
   `MemoryCheckpointer` and `FileCheckpointer` included, the same trim on save.
-- **Durable `StateGraph` runs on DBOS** (`tulip.durable.dbos`). A graph runs
+- **Durable `StateGraph` runs on DBOS** (`locus.durable.dbos`). A graph runs
   the way an agent already does: in segments, each at most once, with the
   workflow waiting durably at every `interrupt()` for the value to resume
   with — a person's decision, a job's result from another machine — across
   process restarts. `register_graphs`, `start_graph_run`, `pending_interrupt`
-  (the pausing node and its payload), `resume_graph`, the `TulipGraphRun`
-  workflow and the `tulip_run_graph_segment` step; `GraphSegmentOutcome` says
+  (the pausing node and its payload), `resume_graph`, the `LocusGraphRun`
+  workflow and the `locus_run_graph_segment` step; `GraphSegmentOutcome` says
   where a segment left the run (`done`, `paused`, `failed`). Each segment runs
   with its own copy of the graph's config, so one registered graph serves any
   number of runs at once. The engine-independent segment is
-  `tulip.durable.segments.run_graph`. Local default: DBOS on SQLite and a file
+  `locus.durable.segments.run_graph`. Local default: DBOS on SQLite and a file
   checkpointer; in production both in Postgres. DBOS's and the checkpointer's
   tables carry no tenant column, so a multi-tenant caller keeps tenant data
   under its own row-level security, puts only ids in graph state, and keys
@@ -624,7 +685,7 @@ policy.
   install the hook yourself instead of passing `playbook=`:
 
   ```python
-  from tulip.playbooks.hook import PlaybookEnforcerHook
+  from locus.playbooks.hook import PlaybookEnforcerHook
 
   # 2.20: Agent(..., playbook=pb)
   agent = Agent(..., hooks=[PlaybookEnforcerHook(pb, scope="agent")])
@@ -638,12 +699,12 @@ policy.
   `search_many` fails falls back to the per-namespace path. Pruning to
   `max_memories` reads a type with one `search` instead of `list_keys` plus a
   `get` per key.
-- **`tulip-agents[pgvector]` installs numpy.** `PgMemory`'s HRR encoding needs
+- **`locus-sdk[pgvector]` installs numpy.** `PgMemory`'s HRR encoding needs
   numpy. Without it, rows were stored with no vector and recall quietly became
   a substring match. Now `PgMemory` raises a `RuntimeWarning` when it is built
   without numpy and without an embedder, and logs a warning the first time a
   search degrades to `ILIKE`. Its missing-driver error now names
-  `tulip-agents[pgvector]`.
+  `locus-sdk[pgvector]`.
 
 ### Fixed
 
@@ -663,7 +724,7 @@ policy.
 
 ### Added
 
-- **`tulip.harness`: a coding harness written once, run on any workspace.**
+- **`locus.harness`: a coding harness written once, run on any workspace.**
   The tools every coding agent converges on — `read`, `write`, `edit`,
   `multi_edit`, `apply_patch`, `glob`, `grep`, `ls`, `bash` with
   `bash_output` / `write_stdin` / `kill_shell` for background commands,
@@ -676,15 +737,15 @@ policy.
   can run a command and move a file, through a three-method `SessionLike`
   adapter; background commands are process groups the sandbox owns) and
   `OpenShellBackend` (an NVIDIA OpenShell sandbox, files over `exec`, the
-  gateway's `execution_timeout`; `pip install "tulip-agents[openshell]"`).
-  The behaviour is tulip-code's: read-before-edit with a staleness check on
+  gateway's `execution_timeout`; `pip install "locus-sdk[openshell]"`).
+  The behaviour is locus-code's: read-before-edit with a staleness check on
   the content hash, CRLF kept, near-miss edits matched and reported, head and
   tail output with the full text spillable to a `ToolResultStore`, a
   command that outlives its timeout kept under a handle.
 - **The single-gate rule.** Tool bodies never call a gate.
   `build_harness(backend, wrap=...)` applies one `wrap(tool, action_spec)` to
-  every tool — `tulip.control.gate_tool` locally, the gateway's own gate
-  remotely — and `tulip.harness.labels` derives each call's `Action`:
+  every tool — `locus.control.gate_tool` locally, the gateway's own gate
+  remotely — and `locus.harness.labels` derives each call's `Action`:
   `workspace.read` / `workspace.write` / `workspace.exec` / `network`, with
   shell lines classified by `classify_command` into tags such as
   `exec:destructive`, `exec:vcs-push`, `exec:network`, `exec:check` and
@@ -708,7 +769,7 @@ policy.
   The raw text is kept on `ToolCall.malformed_arguments`. Covers the OpenAI
   chat-completions adapter, streaming and not.
 
-- **`tulip.models.profiles.profile_for(model)`** returns a frozen
+- **`locus.models.profiles.profile_for(model)`** returns a frozen
   `ModelProfile`: context window, output cap, native and parallel tool
   calling, how reasoning is requested (`adaptive`, `budget_tokens`,
   `reasoning_effort`, `thinking_budget`, `enable_thinking`), prompt caching,
@@ -717,9 +778,9 @@ policy.
   the model leaks as text (`leaked_tool_call_formats`). Families: claude,
   gpt, gemini, qwen, deepseek, kimi, glm, llama, mistral and a conservative
   default.
-  Window, output cap and caching come from `tulip.models.metadata`; overrides
+  Window, output cap and caching come from `locus.models.metadata`; overrides
   by id or glob come from `overrides=` or a JSON file named by
-  `TULIP_MODEL_PROFILES`, and an unknown field in one is an error. The
+  `LOCUS_MODEL_PROFILES`, and an unknown field in one is an error. The
   profile describes a model; nothing changes behaviour because of it except
   the image routing below and the leaked tool-call recovery under Fixed.
 - **Metadata for current models**: `gpt-5.5`, `gpt-5.5-mini`, `gpt-5.5-nano`,
@@ -741,7 +802,7 @@ policy.
   On chat-completions a tool result's images (which a tool message cannot
   hold) now follow the tool batch in a user message when the model's profile
   says it can see; a text-only model keeps getting the placeholder.
-- **`tulip.tools.structured_output.StructuredOutputTool(schema)`** holds a
+- **`locus.tools.structured_output.StructuredOutputTool(schema)`** holds a
   turn to a final answer that matches a JSON Schema document, for callers
   that have a schema rather than a Pydantic model and drive `run()` (a CLI's
   `--json-schema`, an API taking a schema per request). The model delivers
@@ -754,12 +815,12 @@ policy.
   top-level schema is wrapped as `{"value": ...}` and unwrapped on the way
   out. The tool is deliberately not a terminal tool, because the loop stops on
   a terminal tool even when the call failed.
-- **`tulip.core.json_schema.validate(value, schema)`** — a dependency-free
+- **`locus.core.json_schema.validate(value, schema)`** — a dependency-free
   validator for the JSON Schema keywords structured output uses (types,
   enum/const, object and array constraints, string and number bounds,
   combinators, `if`/`then`/`else`, local `$ref`). It returns path-prefixed
   messages; `check_schema` rejects an unusable schema up front.
-- **`tulip.agent.tasks.task_tool`: delegation as a tool.** The `task` tool
+- **`locus.agent.tasks.task_tool`: delegation as a tool.** The `task` tool
   coding agents converge on (Claude Code's `Agent`, Codex's `spawn_agent`,
   opencode's `task`), built on `run_subagent`'s plumbing. Each call runs a
   subagent of a named type in its own conversation and returns its final
@@ -770,7 +831,7 @@ policy.
   agent's hooks run inside the subagent unless `inherit_hooks=False`; nesting
   stops at `max_depth` (default 2). `TaskRegistry` holds a session's
   resumable subagents, least recently used dropped past 64.
-- **`tulip.agent.subagent.Subagent`**: a child agent that keeps its
+- **`locus.agent.subagent.Subagent`**: a child agent that keeps its
   conversation under a `task_id`, so `send()` is a new turn on it. Each turn
   gets the accounting `run_subagent` gives — usage, cancellation, budgets,
   live events. `SubagentResult.task_id` carries the id.
@@ -778,9 +839,9 @@ policy.
   stream, wrapped (a bare child `TerminateEvent` would read as the parent
   finishing), when the delegating tool declares `emits_progress=True` — as
   `task_tool`'s does. A grandchild's events arrive wrapped twice.
-  `tulip.tools.context.forward_event()` is the general form of
+  `locus.tools.context.forward_event()` is the general form of
   `report_progress()` that carries them.
-- **`AgentSpec` and `load_agent_specs`** (`tulip.agent.specs`): agent
+- **`AgentSpec` and `load_agent_specs`** (`locus.agent.specs`): agent
   definitions as Markdown with frontmatter — name, description, model,
   tools allow/deny, mode (`primary` / `subagent` / `all`), max turns, the
   body as the system prompt. Reads Claude Code `.claude/agents` files and
@@ -791,7 +852,7 @@ policy.
   installed and a built-in subset parser otherwise, so the core install stays
   dependency-free. Later directories override earlier ones; a broken file is
   skipped and reported, not fatal.
-- **`tulip.control.PermissionRules`: allow / ask / deny rules an operator
+- **`locus.control.PermissionRules`: allow / ask / deny rules an operator
   writes as data.** The grammar is the one Claude Code's `settings.json` uses —
   `Bash(git diff:*)`, `Bash(npm test)`, `Edit(src/**)`, `Read(.env)`,
   `WebFetch(domain:example.com)`, `mcp__server`, `*` — and
@@ -804,14 +865,14 @@ policy.
   `$(rm …)`. `verdict_action()` and `VERDICT_POLICY` carry a host gate's
   allow / ask / deny into `admit()`, so the verdict is enforced and recorded by
   the same path as every other side effect.
-- **`tulip.control.parse_command()`** splits a shell line into the simple
+- **`locus.control.parse_command()`** splits a shell line into the simple
   commands it runs — across `;`, `&&`, `||`, pipes and newlines, inside
   `$(...)`, backticks, `<(...)` and expanding heredocs, behind
   `sudo`/`env`/`timeout`-style wrappers, after `find -exec`, `xargs`, `sh -c`
   and `eval` — keeping quoted text a word. For gates that decide about
   commands: `pytest -k shutdown` mentions `shutdown` without running it, and
   `env rm -rf build` runs `rm`.
-- **`tulip.control.admit_sync()`**: `admit()` for a synchronous side effect —
+- **`locus.control.admit_sync()`**: `admit()` for a synchronous side effect —
   a tool body on a worker thread with no event loop. Both share one
   decide-and-record path. Both take `context=`, recorded on the trail under
   `context`: the rule that matched, the mode, who acted.
@@ -821,7 +882,7 @@ policy.
   `check_jsonl()` return an `AuditReport` saying *where* a chain broke
   (`broken_at`) and why, not only whether it did; `verify()` and
   `verify_jsonl()` are unchanged.
-- **`tulip.hooks.ExternalHooks`: command and HTTP hooks configured in a
+- **`locus.hooks.ExternalHooks`: command and HTTP hooks configured in a
   settings file.** The protocol is Claude Code's: the event as JSON on stdin;
   exit 0 (with optional JSON: `decision`, `reason`, `continue`, `systemMessage`,
   `hookSpecificOutput.permissionDecision` / `updatedInput` /
@@ -839,7 +900,7 @@ policy.
   `SessionEnd`, `PreCompact` and `Notification` are fired by the host with
   `ExternalHooks.run()`. Every execution, including one the host's `guard`
   refused, is reported to `on_run` as a `HookRun` for streaming and auditing.
-- **`AgentConfig.context_window`** and the **`TULIP_CONTEXT_WINDOW`**
+- **`AgentConfig.context_window`** and the **`LOCUS_CONTEXT_WINDOW`**
   environment variable name a model's input window, so a model the metadata
   table does not know — a fine-tune or any self-hosted model behind vLLM,
   LiteLLM or another OpenAI-compatible gateway — gets the token-counting
@@ -850,7 +911,7 @@ policy.
   reports. An invalid environment value is ignored with a warning, and
   falling back to the message window now logs, once per model, which knobs
   name the window.
-- **`tulip.models.metadata.discover_context_length(base_url, model)`** reads
+- **`locus.models.metadata.discover_context_length(base_url, model)`** reads
   the window a server lists on `/models` (vLLM's `max_model_len`, or
   `context_length`) and registers it, keeping any registered prices. It is an
   explicit async call: agent construction stays offline.
@@ -896,7 +957,7 @@ policy.
   `stream_tokens=True`, otherwise once the call returns or fails. A streamed
   call is not retried once a chunk has reached the caller, nor is a cancelled
   run. `model_retry=False` restores the old behaviour.
-- **`tulip.tools.text_edit`** — find-and-replace for file-editing tools that
+- **`locus.tools.text_edit`** — find-and-replace for file-editing tools that
   survives a model's near misses. `apply_edit(content, old, new,
   replace_all=False)` tries `exact`, `line_trimmed` (indentation, tabs for
   spaces, trailing whitespace), `whitespace_normalized` (spacing between
@@ -907,7 +968,7 @@ policy.
   CRLF files are matched with CRLF, `new` is re-indented to the file's
   indentation, and a miss raises `EditMatchError` with the closest region of
   the file, numbered. `EditOutcome.strategy` says which reading matched.
-- **Summarising context compaction** (`tulip.memory.compaction.ContextCompactor`),
+- **Summarising context compaction** (`locus.memory.compaction.ContextCompactor`),
   the new default for an agent whose context window is known, so a long
   autonomous run (hours, hundreds of tool calls) keeps working when its
   context fills. Before each model call the loop measures the request (the
@@ -936,7 +997,7 @@ policy.
   threshold, the summary) and `agent.context.compacted` on the observability
   bus; **`on_before_compaction`** hook (`BeforeCompactionEvent`) sees the full
   history before it is compacted and can add summary instructions or skip it.
-- **`tulip.agent.CompletionCheck`**, a `final_answer_verifier` that sends a
+- **`locus.agent.CompletionCheck`**, a `final_answer_verifier` that sends a
   run back to work when it stops before the work is done. Open-weight models
   often end a turn on the announcement of their next step ("Let me first
   check the conftest and the specific test area:") without the tool call, and
@@ -959,12 +1020,12 @@ policy.
   (a rejected answer is turn-only). `FinalAnswerVerificationEvent` gains
   `continuation` and `reason`. A nudged turn is a model call like any other:
   it counts against `max_iterations` and every budget.
-- **`tulip.agent.chain_verifiers(*verifiers)`** runs several final-answer
+- **`locus.agent.chain_verifiers(*verifiers)`** runs several final-answer
   verifiers as one (the first rejection decides; `None` entries are skipped),
   and `max_replans_for(...)` sums their replans, so a completion check, a
   structured-output reminder and a `Stop` hook can all hold one agent.
 
-- **`tulip.core.loops.detect_tool_loop`** and **`ToolLoop`**: the tool-loop
+- **`locus.core.loops.detect_tool_loop`** and **`ToolLoop`**: the tool-loop
   detector as a function over a run's steps, with `AgentState.tool_loop`,
   `AgentConfig.tool_loop_read_only_threshold` and
   `AgentConfig.tool_loop_read_only_tools`. A `tool_loop_warning`
@@ -1004,7 +1065,7 @@ policy.
   `max_tokens`) caps what one delegated task of that type may spend; the
   `task` tool gives it to the subagent, the smaller of it and any
   `token_budget` in `agent_kwargs`.
-- **`tulip.tools.action_fusion`** lets a file-changing tool take an optional
+- **`locus.tools.action_fusion`** lets a file-changing tool take an optional
   `then_run: {command, timeout?}` and run that command once the change has
   landed, returning one result: the change's report, then `[then_run] $ cmd`
   with the command's exit code and output. The command is skipped (marked
@@ -1016,7 +1077,7 @@ policy.
   apply unchanged; `fusable(tool, enabled=)` adds or hides the argument in the
   tool's schema. The mechanism is SoL-Pi's (NVIDIA, arXiv 2609.20519),
   reimplemented.
-- **`tulip.observability.mechanisms.MechanismLedger`**: a per-run record of
+- **`locus.observability.mechanisms.MechanismLedger`**: a per-run record of
   the harness mechanisms that fired — name, whether it triggered, steps and
   tokens or bytes saved (estimates), outcome — in memory and as JSONL, with
   `summary()` counters per mechanism for one-change-at-a-time ablations.
@@ -1091,7 +1152,7 @@ policy.
 
 - **History is append-only between compactions**, so a provider's prefix
   cache keeps serving it (`tests/unit/test_cache_prefix.py` checks every
-  request of scripted sessions against the one before, in Tulip's messages
+  request of scripted sessions against the one before, in Locus's messages
   and on the OpenAI and Anthropic wire). A recalled-memory block now goes
   right after the turn's prompt instead of after the system prompt: it
   changes every turn, and at the front it made every turn resend the whole
@@ -1196,7 +1257,7 @@ policy.
   has called no tool yet.
 - **A subagent stopped by its spend budget reports `cost_budget`**, not
   `complete`: the runtime's copy of the stop-reason list had drifted from the
-  agent's and lacked it. Both now read one list, `tulip.agent.result.STOP_REASONS`,
+  agent's and lacked it. Both now read one list, `locus.agent.result.STOP_REASONS`,
   derived from `StopReason`.
 - **A tool call a model writes in its own markup is made, not taken for the
   answer.** DeepSeek V4 through OpenRouter answered with
@@ -1207,7 +1268,7 @@ policy.
   V3/V3.1 `<｜tool▁calls▁begin｜>` form, Hermes/Qwen `<tool_call>{json}`,
   Qwen3-Coder's `<function=…>` XML, Kimi K2's tool-call section and GLM's
   `<arg_key>`/`<arg_value>` pairs. The loop recognises those even for a
-  model with native tool calling (`tulip.agent.leaked_tool_calls`), but only
+  model with native tool calling (`locus.agent.leaked_tool_calls`), but only
   when the whole message after any leading prose is one such block and every
   call names a registered tool with declared arguments and its required
   ones; one bad call rejects the block. The markup is replaced by the
@@ -1229,7 +1290,7 @@ policy.
   opens one of the model's call blocks and never closes it — a large `write`
   stopped at `max_tokens` — was taken for the final answer. The model is now
   sent back with an automated user-role note to make the call again, smaller
-  if it was cut off (`tulip.agent.leaked_tool_calls.unfinished_leaked_tool_call`),
+  if it was cut off (`locus.agent.leaked_tool_calls.unfinished_leaked_tool_call`),
   up to twice in a row before the reply is taken as it is.
 - **`requests_changes` recognises task prompts it missed.** It read only a
   change verb at the start of a sentence, and sentences ended only at `.!?;`,
@@ -1250,7 +1311,7 @@ policy.
   note.** The summariser pinned the newest user-role message as "the user's
   latest request", and a verifier's feedback or a continuation note is
   user-role, so the real request could be folded into the summary. Messages
-  the loop writes (`tulip_automated_note`, or turn-only) are no longer taken
+  the loop writes (`locus_automated_note`, or turn-only) are no longer taken
   for it.
 - **A `NoToolCalls` termination condition no longer ends a run the verifier
   just sent back.** The reply being sent back counted as the last turn
@@ -1307,17 +1368,17 @@ policy.
 
 ### Removed
 
-- **The `security` extra.** `tulip-agents-security` is not published to PyPI,
-  so `pip install "tulip-agents[security]"` could not resolve. Install the
+- **The `security` extra.** `locus-sdk-security` is not published to PyPI,
+  so `pip install "locus-sdk[security]"` could not resolve. Install the
   package from the repository instead:
-  `pip install "git+https://github.com/tuliplabs-ai/tulip-agents#subdirectory=packages/tulip-agents-security"`.
+  `pip install "git+https://github.com/oracle/locus#subdirectory=packages/locus-sdk-security"`.
   The release workflow still builds it and checks that it installs next to
   the core wheel, but no longer tries to upload it — the upload is what failed
   the 2.17.0 and 2.18.1 release runs after the core package had published.
 
 ### Changed
 
-- The README cites GSAR as the paper Tulip's grounding layer is based on, and
+- The README cites GSAR as the paper Locus's grounding layer is based on, and
   the repository has a `PROVENANCE.md`.
 
 ## [2.18.1] - 2026-09-29
@@ -1388,7 +1449,7 @@ policy.
   `"vllm:qwen3.6-35b"` and every other OpenAI-compatible routing prefix
   missed the table, while the same model passed as a built `OpenAIModel`
   (whose `config.model` carries no prefix) found it. Every prefix in
-  `tulip.models.providers.COMPATIBLE_PROVIDERS` is now stripped, so a string
+  `locus.models.providers.COMPATIBLE_PROVIDERS` is now stripped, so a string
   id and the model object resolve to the same entry.
 - **Structured-output repair no longer lands in the result state, and is
   metered.** `output_schema` repair appended each `[Schema Repair]` prompt and
@@ -1407,7 +1468,7 @@ policy.
   (peak rates, so a budget never under-counts). OpenRouter routes to hosts
   whose prices differ; a cap that must never under-count should register
   the ceiling it accepts.
-- **`tulip.models.metadata.model_id_of(model)`.** The slug a model object is
+- **`locus.models.metadata.model_id_of(model)`.** The slug a model object is
   called with (`config.model`, else `model.model`), resolved through
   proxies — a `FallbackChain`, or a caller's per-turn view that forwards
   `__getattr__`. The agent uses it to find a model object's prices and
@@ -1426,7 +1487,7 @@ policy.
   identity, the prompt, the messages, the tool executions and the attempt.
   The rejected draft and the feedback are turn-only: the model sees them for
   the rest of the turn; checkpoints, `AgentResult.state` and memory
-  extraction never do (`tulip.agent.verification.EPHEMERAL_MESSAGE_KEY`).
+  extraction never do (`locus.agent.verification.EPHEMERAL_MESSAGE_KEY`).
   Off by default.
 - **`hold_final_answer_tokens`.** With `stream_tokens=True` and a verifier,
   each model call's content chunks are held until the call ends: released at
@@ -1589,7 +1650,7 @@ distribution (see Changed).
   with its own background-extraction semaphore (no global bound) and its own
   queue that `Agent.drain_memory()` did not drain. See `namespace_resolver`
   under Added.
-- **`MCPClient` works on mcp 2.x.** `tulip[mcp]` accepts `mcp>=1.0`, so a
+- **`MCPClient` works on mcp 2.x.** `locus[mcp]` accepts `mcp>=1.0`, so a
   fresh install resolves mcp 2.x, whose models renamed `isError`,
   `structuredContent`, `inputSchema`, `outputSchema` and `mimeType` to
   snake_case. The client read the camelCase attributes only, so on mcp 2.x a
@@ -1602,7 +1663,7 @@ distribution (see Changed).
   mcp 2.x removed, so once CI's `pip install` resolved mcp 2.x both modules
   skipped — which is how the defect above shipped unnoticed. The server
   now builds on `MCPServer` (mcp 2.x) or `FastMCP` (mcp 1.x); the full-deps CI
-  jobs set `TULIP_REQUIRE_MCP_SERVER_TESTS=1` so a missing dependency fails
+  jobs set `LOCUS_REQUIRE_MCP_SERVER_TESTS=1` so a missing dependency fails
   instead of skipping; and the 3.13 test job re-runs the MCP client suites
   against mcp 1.x, so both supported majors are exercised against a real
   server.
@@ -1631,7 +1692,7 @@ distribution (see Changed).
   raised into a finished run), and `await manager.drain()` /
   `await agent.drain_memory()` flush them at shutdown. `run_sync` drains
   before closing its loop. The default stays `"inline"`.
-- `ApprovalPendingError` (`tulip`, `tulip.core`, `tulip.core.errors`), with
+- `ApprovalPendingError` (`locus`, `locus.core`, `locus.core.errors`), with
   `thread_id`, `interrupt_id`, `question` and the gate's `metadata`.
 - `Agent.cancel(thread_id=...)` cancels only the in-flight run(s) on that
   thread; `cancel()` keeps its meaning (cancel everything, or the next run if
@@ -1639,11 +1700,11 @@ distribution (see Changed).
 - `Agent.resume(..., metadata=...)` sets the resumed segment's invocation
   metadata; `Agent.pending_interrupts()` lists the threads paused in memory.
 - **Run context on hook events.** Every hook event has a read-only
-  `event.run` (`tulip.RunInfo`: `run_id`, `thread_id`, read-only `metadata`,
+  `event.run` (`locus.RunInfo`: `run_id`, `thread_id`, read-only `metadata`,
   `agent_name`), so a hook on a shared agent can tell users apart without
   context variables.
 - **UI-only side channel from hooks.** `event.emit(CustomEvent(name=..., data=...))`
-  on a tool or model hook event yields a `tulip.CustomEvent` from
+  on a tool or model hook event yields a `locus.CustomEvent` from
   `Agent.run()` right after the hook (after the matching `ToolCompleteEvent`
   for `on_after_tool_call`). It never reaches the model, the conversation or
   the checkpoint, and is stamped with the run's `run_id`, `thread_id` and the
@@ -1661,7 +1722,7 @@ distribution (see Changed).
   returns the server's `structuredContent` on `ToolCompleteEvent.structured_content`
   (the model still reads the text), turns `isError` into the call's error
   (`ToolCompleteEvent.error` is set and the model sees `Error: …`), embeds image
-  content as Tulip image segments and passes every non-text block through on
+  content as Locus image segments and passes every non-text block through on
   `ToolCompleteEvent.content_blocks`. `list_tools()` includes `outputSchema`,
   `title` and `annotations`, and `Tool.output_schema` keeps the schema.
   `MCPClient.call_tool_result()` returns all of it as an `MCPToolResult`;
@@ -1670,7 +1731,7 @@ distribution (see Changed).
   tool_name, progress, total, message)` arrives live between a call's start and
   completion. MCP `notifications/progress` are surfaced automatically; any tool
   declared `@tool(emits_progress=True)` can send them with
-  `tulip.tools.report_progress()`.
+  `locus.tools.report_progress()`.
 - **`ToolOutput`**, a `str` that also carries `structured_content`,
   `content_blocks` and `is_error`, so any tool can return data for the
   application alongside text for the model.
@@ -1683,7 +1744,7 @@ distribution (see Changed).
 - **MCP tool allowlists.** `MCPClient(allowed_tools=[…])` and
   `tool_filter=predicate` decide which tools are listed, attached and callable
   (`MCPToolNotAllowedError` otherwise).
-- **`FallbackChain`** (`tulip.models.fallback`): a `ModelProtocol` over an
+- **`FallbackChain`** (`locus.models.fallback`): a `ModelProtocol` over an
   ordered list of models. Provider failures (429, 5xx, 529/overloaded, timeouts,
   dropped connections, auth/billing, unknown model) move the call to the next
   tier; request errors (context overflow, a 400 no provider would accept) are
@@ -1694,11 +1755,11 @@ distribution (see Changed).
   Tier switches and breaker transitions go to an `on_event` callback, the
   telemetry bus (`model.fallback`, `model.fallback.breaker`) and
   `FallbackChain.metrics`.
-- **`tulip.testing.check_model_conformance(model)`** checks the behaviours the
+- **`locus.testing.check_model_conformance(model)`** checks the behaviours the
   agent loop relies on — text, a schema-conformant tool call, a tool-result
   round trip, streamed text and a streamed tool call — so every fallback tier
   can be verified before it takes traffic.
-- **`ServedTier` / `served_tier()` (`tulip.models.fallback`).** Each
+- **`ServedTier` / `served_tier()` (`locus.models.fallback`).** Each
   `FallbackChain` call reports the tier that served it: `complete()` returns
   the response annotated with `response.metadata["fallback"]`
   (`{"tier", "model", "attempts"}`), and `complete()` and `stream()` publish a
@@ -1715,42 +1776,42 @@ distribution (see Changed).
 
 ### Changed
 
-- **Security-domain tooling is a separate distribution, `tulip-agents-security`.**
-  The core `tulip-agents` wheel ships the control runtime only. The AI red-team
+- **Security-domain tooling is a separate distribution, `locus-sdk-security`.**
+  The core `locus-sdk` wheel ships the control runtime only. The AI red-team
   probes and job verbs (`red_team` / `assure` / `monitor`, `Target`), the
   inference fingerprinting tools, the scanner, the threat-intel / SIEM / EDR /
   AWS-posture adapters, `SecurityContext`, the SOC analyst factory, the IR
   playbooks, the `SecurityAdapter` contract and its conformance kit moved to
-  `packages/tulip-agents-security/` in this repo and import as
-  `tulip_security`. Install with `pip install tulip-agents-security`;
-  `pip install "tulip-agents[security]"` still works and now installs it (with
+  `packages/locus-sdk-security/` in this repo and import as
+  `locus_security`. Install with `pip install locus-sdk-security`;
+  `pip install "locus-sdk[security]"` still works and now installs it (with
   boto3 for the AWS tools). Their notebooks (73-80, 82), the threat scenarios,
   the vendor-integration gists and the playbook YAML moved with them, under
-  `packages/tulip-agents-security/examples/`.
-- **The grounding and verification layer lives in `tulip.control`.** `Evidence`,
+  `packages/locus-sdk-security/examples/`.
+- **The grounding and verification layer lives in `locus.control`.** `Evidence`,
   `Indicator`, `Severity`, the taxonomy enums, `ground_finding` /
   `ground_fingerprint` / `is_finding` / `Abstention`, and `verify` with its
   skeptics now sit next to the admission gate that weighs them, in
-  `tulip.control` (modules `admission`, `audit`, `policy`, `governed`,
+  `locus.control` (modules `admission`, `audit`, `policy`, `governed`,
   `findings`, `grounded`, `taxonomy`, `verification`). The grounding benchmark
-  is `python -m tulip.reasoning.grounding_eval`. The lazy top-level names
-  (`tulip.Evidence`, `tulip.ground_finding`, …) resolve from `tulip.control`.
-- **`tulip.security` is now a compatibility shim** (removal planned for 3.0).
+  is `python -m locus.reasoning.grounding_eval`. The lazy top-level names
+  (`locus.Evidence`, `locus.ground_finding`, …) resolve from `locus.control`.
+- **`locus.security` is now a compatibility shim** (removal planned for 3.0).
   Every name it exported still imports: the grounding / verification names
-  resolve from `tulip.control` and emit `TulipDeprecationWarning`; the domain
-  names resolve lazily from `tulip_security` when it is installed and raise an
-  `ImportError` naming `pip install tulip-agents-security` when it is not.
-  Submodule paths (`tulip.security.policy`, `tulip.security.redteam.probes`, …)
+  resolve from `locus.control` and emit `LocusDeprecationWarning`; the domain
+  names resolve lazily from `locus_security` when it is installed and raise an
+  `ImportError` naming `pip install locus-sdk-security` when it is not.
+  Submodule paths (`locus.security.policy`, `locus.security.redteam.probes`, …)
   alias the same module objects, so `mock.patch` targets keep working.
-  Migrate with `from tulip.control import Evidence, Severity, ground_finding`
-  and `from tulip_security import Target, red_team`.
+  Migrate with `from locus.control import Evidence, Severity, ground_finding`
+  and `from locus_security import Target, red_team`.
 - `LLMMemoryManager`: a `namespace_resolver` returning `None` now skips memory
   for that run (like a resolver that raises) instead of falling back to
   `namespace_prefix`. To keep the old behaviour, return the prefix explicitly
-  (`lambda run: ... or ("tulip_memory",)`). Managers built without a resolver
+  (`lambda run: ... or ("locus_memory",)`). Managers built without a resolver
   are unchanged: they still use the fixed `namespace_prefix`.
 - `Agent.run()` and `Agent.resume()` are annotated as
-  `AsyncGenerator[TulipEvent, None]` (was `AsyncIterator`), so
+  `AsyncGenerator[LocusEvent, None]` (was `AsyncIterator`), so
   `contextlib.aclosing(agent.run(...))` type-checks without a cast.
 - Hook `event.run.metadata` and `ctx.invocation_metadata` no longer contain
   `mcp_headers` (or a client's custom `metadata_headers_key`); read them from
@@ -1793,11 +1854,11 @@ distribution (see Changed).
   judge's number when every check passed, never above the fraction otherwise.
   So `passed=False` always implies `score < 1.0`.
 - `LLMJudge.score` raises `JudgeUnavailableError` (a `RuntimeError` subclass,
-  exported from `tulip.evaluation`) when the model call fails.
+  exported from `locus.evaluation`) when the model call fails.
 - `EvalResult.timed_out` and `EvalReport.timed_out` are new; a timed-out case
   has score 0.0, `within_duration_budget: False`, and shows as `[TIMEOUT]` in
   `EvalReport.summary()`.
-- `FallbackChain.last_tier` is deprecated (`TulipDeprecationWarning`): it is
+- `FallbackChain.last_tier` is deprecated (`LocusDeprecationWarning`): it is
   racy across concurrent calls. Use `response.metadata["fallback"]` or
   `served_tier()`.
 
@@ -1816,7 +1877,7 @@ distribution (see Changed).
   flagged it; a flagged call is refused unless `on_safety_check="proceed"`, and
   its checks are acknowledged only when the action ran. The page is checked
   against `allowed_domains` after every action that can navigate.
-- **Images in tool results.** `tulip.core.media.encode_image` embeds an image in a
+- **Images in tool results.** `locus.core.media.encode_image` embeds an image in a
   tool result string, so it survives checkpoints and durable engines unchanged.
   Anthropic and the Responses API receive real image parts, only the three most
   recent image results are sent as images, other adapters see a placeholder,
@@ -1831,24 +1892,24 @@ distribution (see Changed).
   Gemini Live (audio in and out, both transcripts, tool calls and responses,
   turn ends, and the server's go-away notice). Instructions, tools and voice are
   set when the session opens (`gemini_live_config`). Install with
-  `pip install "tulip-agents[gemini]"`.
+  `pip install "locus-sdk[gemini]"`.
 
-- **Durable agent runs on DBOS.** (#43) `tulip.durable.dbos` runs an agent as a
+- **Durable agent runs on DBOS.** (#43) `locus.durable.dbos` runs an agent as a
   DBOS workflow in your own process, with its state in Postgres (or SQLite for
   development). As on Temporal, the agent runs in segments and a held approval
   is a wait of any length: `start_agent_run`, `pending_decision`,
   `signal_decided`. A process that restarts picks up waiting runs, and a segment
   that was cut off halfway is never run again (`InterruptedSegmentError`), since its
   tool calls may already have happened. Install with
-  `pip install "tulip-agents[dbos]"`. The engine-neutral segment runner is
-  `tulip.durable.segments`.
+  `pip install "locus-sdk[dbos]"`. The engine-neutral segment runner is
+  `locus.durable.segments`.
 
 ## [2.15.0] - 2026-09-15
 
 ### Added
 
 - **Realtime voice sessions whose tool calls go through the gate.** (#18)
-  `tulip.voice.realtime.RealtimeSession` runs a speech-to-speech conversation
+  `locus.voice.realtime.RealtimeSession` runs a speech-to-speech conversation
   over any socket with `send`/`recv`: it declares the tools, forwards microphone
   audio and text, and yields audio, transcripts, `ToolRan`, `ActionHeld`,
   `ResponseDone` and `SessionError`. A tool the model calls by voice runs the
@@ -1865,7 +1926,7 @@ distribution (see Changed).
   `http`/`https` URLs on the listed hosts; a click that navigates elsewhere resets
   the page and fails. Playwright is the new `browser` extra.
 
-- **Durable agent runs on Temporal.** (#15) `tulip.durable.temporal` runs a
+- **Durable agent runs on Temporal.** (#15) `locus.durable.temporal` runs a
   registered agent as a Temporal workflow: the agent works in activity segments
   (the first run, then a resume after each decision) and the workflow waits on a
   `decide` signal between them, for as long as a person takes and across worker
@@ -1906,13 +1967,13 @@ distribution (see Changed).
 
 ### Added
 
-- **A `tulip` command.** (#14) `tulip run AGENT PROMPT --thread ID` streams a run
-  and exits 3 when it pauses, printing the approval id; `tulip approvals --store
+- **A `locus` command.** (#14) `locus run AGENT PROMPT --thread ID` streams a run
+  and exits 3 when it pauses, printing the approval id; `locus approvals --store
   FILE list | show | approve | reject --by NAME` decides held calls, checked
-  against an `--authority` when given; `tulip resume AGENT --thread ID --answer
-  ... --perform` continues and performs the decided call; `tulip audit verify
+  against an `--authority` when given; `locus resume AGENT --thread ID --answer
+  ... --perform` continues and performs the decided call; `locus audit verify
   FILE --key KEY_ID=PEM --head HASH` checks an export from public keys alone;
-  `tulip serve AGENT` runs the HTTP server. `AGENT` is `module:attr` or
+  `locus serve AGENT` runs the HTTP server. `AGENT` is `module:attr` or
   `file.py:attr`, an agent or a function returning one. Standard library only.
 
 - **An approval is bound to its policy and context, and can approve an edited
@@ -1946,13 +2007,13 @@ distribution (see Changed).
   backend.
 
 - **A sandbox that is an actual boundary, in the open SDK.** (#13)
-  `@tool(sandbox="docker")` (or `TULIP_SANDBOX=docker`, or a `DockerSandbox(...)`
+  `@tool(sandbox="docker")` (or `LOCUS_SANDBOX=docker`, or a `DockerSandbox(...)`
   object) runs each call in a fresh container: no network by default, read-only
   root filesystem, every Linux capability dropped, no privilege escalation, the
   caller's uid/gid, and memory, CPU and process limits. Only `LANG` and what the
   manifest grants reach the environment; a timed-out container is killed.
   Needs the `docker` CLI, no Python dependency. Other providers register by name
-  under the `tulip.sandbox_providers` entry-point group; an unknown name raises
+  under the `locus.sandbox_providers` entry-point group; an unknown name raises
   instead of falling back to a weaker box.
 
 - **Who may approve a held call is decided in the SDK.** (#7) Pass
@@ -1997,8 +2058,8 @@ distribution (see Changed).
 
 - **Sandbox provider names resolve through entry points.** (#13) A name other
   than `subprocess`, `local` or `docker` is looked up in the
-  `tulip.sandbox_providers` entry-point group instead of being handed to
-  `tulip_sandbox.build_provider`. `tulip-sandbox` was never published to PyPI,
+  `locus.sandbox_providers` entry-point group instead of being handed to
+  `locus_sandbox.build_provider`. `locus-sandbox` was never published to PyPI,
   so for anyone installing from PyPI an unknown name raises `SandboxError` as
   before, and `docker` now works. A private provider package keeps working by
   registering its providers under that group.
@@ -2015,18 +2076,18 @@ distribution (see Changed).
 
 ### Removed
 
-- **References to `tulip-integrations`, which is not published.** (#10) Docstrings in
-  `tulip.security` (package, `adapter`, `context`, `edr`, `intel`, `siem`, `testing`,
+- **References to `locus-integrations`, which is not published.** (#10) Docstrings in
+  `locus.security` (package, `adapter`, `context`, `edr`, `intel`, `siem`, `testing`,
   `fingerprint`) and `examples/integrations/` pointed readers at it for live
   vendor adapters and the GPU-probe lifecycle. They now say those are
   integrations you write against the same contract. The stray, generated
   `ablation_report.json` is no longer tracked.
 
-- **The SDK stands alone: no more `tulip-frameworks` or `tulip-gateway`.**
+- **The SDK stands alone: no more `locus-frameworks` or `locus-gateway`.**
   (#4) The README no longer sends readers to install either package or to
   reach the gate over `/v1/admit`, and
   `examples/notebook_88_framework_interop.py` (which needed
-  `tulip-frameworks`) is gone with its test. `gate_tool`'s refusal payload
+  `locus-frameworks`) is gone with its test. `gate_tool`'s refusal payload
   keeps its keys: it is now documented as the SDK's own contract rather
   than one shared with the bridges. No code path changes.
 
@@ -2295,7 +2356,7 @@ distribution (see Changed).
   Credentials are boto3's standard chain — environment, profile, SSO, instance
   role, IRSA — because that is what an AWS account already has configured.
 
-  `boto3` is an optional extra (`pip install "tulip-agents[bedrock]"`) imported
+  `boto3` is an optional extra (`pip install "locus-sdk[bedrock]"`) imported
   lazily, so the four-package core install is unchanged.
 
 - **Azure OpenAI** (`azure:` prefix). OpenAI's models, but not at OpenAI's
@@ -2310,7 +2371,7 @@ distribution (see Changed).
 
 - **Google Gemini** (`gemini:` prefix), through Google's own OpenAI-compatible
   endpoint — first-party, not a proxy. It covers chat, tools and streaming,
-  which is the entire surface Tulip drives, so this is a routing-table row
+  which is the entire surface Locus drives, so this is a routing-table row
   rather than a second client to keep current.
 
   Together these close the `Bedrock / Gemini / Azure` row that the capability
@@ -2402,7 +2463,7 @@ One gap closed in `gate_tool`, found by checking a claim rather than repeating i
   that may already have been approved.
 
   This was found by verifying a claim made in 2.8.0's own notes: that
-  `gate_tool`'s refusal matches what the `tulip-frameworks` bridges return. The
+  `gate_tool`'s refusal matches what the `locus-frameworks` bridges return. The
   five core keys did match. The bridges send two more on a hold, and those were
   missing.
 
@@ -2432,10 +2493,10 @@ caller.
   ])
   ```
 
-  `tulip-frameworks` has shipped `gate_langchain_tool` and its siblings for a
+  `locus-frameworks` has shipped `gate_langchain_tool` and its siblings for a
   while, so a LangChain user could put `admit()` in front of a tool trivially
-  while a Tulip user hand-wrote the try/except — on the one feature the project
-  is built around. Everything needed was already in core: `tulip.control.action`
+  while a Locus user hand-wrote the try/except — on the one feature the project
+  is built around. Everything needed was already in core: `locus.control.action`
   was promoted there in 2.3.0 "so the SDK, the gateway, the registry and these
   bridges share one derivation instead of four", and only the bridges used it.
 
@@ -2474,7 +2535,7 @@ caller.
   `rag/embeddings/openai`, `providers/image`, `providers/speech`,
   `memory/backends/http`, `memory/backends/mysql`,
   `memory/store_backends/postgresql`, `rag/stores/opensearch` and
-  `rag/stores/pgvector`, and factored into `tulip.core.loop_bound` — the
+  `rag/stores/pgvector`, and factored into `locus.core.loop_bound` — the
   pattern had already been hand-written three times with three different cache
   keys. A guard now fails on a lazily-cached client with no loop key.
 
@@ -2526,18 +2587,18 @@ matching their own documentation.
 
 ### Deprecated
 
-- **`tulip.loop` is deprecated and will be removed in 3.0.0.** It is a second
+- **`locus.loop` is deprecated and will be removed in 3.0.0.** It is a second
   ReAct implementation, parallel to the one the supported `Agent` runs, and
   `Agent` has never used it — the only reference from the production runtime
   was one private helper, `_find_matching_execution`, now moved to
-  `tulip.tools.executor.find_matching_execution`.
+  `locus.tools.executor.find_matching_execution`.
 
   Two implementations of the same idea is worse than either alone: they drift,
-  and a bug fixed in one stays live in the other. Nothing in `tulip.loop` is a
+  and a bug fixed in one stays live in the other. Nothing in `locus.loop` is a
   capability `Agent` lacks.
 
   Every name still imports and works until 3.0.0, and each access emits
-  `TulipDeprecationWarning`. To find them in your own code:
+  `LocusDeprecationWarning`. To find them in your own code:
 
   ```
   python -W error::DeprecationWarning -m pytest
@@ -2545,15 +2606,15 @@ matching their own documentation.
 
   | Instead of | Use |
   |---|---|
-  | `ReActLoop`, `create_react_loop` | `tulip.agent.Agent` |
-  | `ReActLoopConfig` | `tulip.agent.AgentConfig` |
+  | `ReActLoop`, `create_react_loop` | `locus.agent.Agent` |
+  | `ReActLoopConfig` | `locus.agent.AgentConfig` |
   | `LoopRunner` | `await agent.arun(prompt)` |
-  | `BatchRunner` | `tulip.evaluation.EvalRunner` |
+  | `BatchRunner` | `locus.evaluation.EvalRunner` |
   | `StreamingCollector` | `async for event in agent.run(prompt)` |
-  | `ConditionalRouter` | `StateGraph` conditional edges, or `tulip.router` |
-  | `ThinkNode` / `ExecuteNode` / `ReflectNode` | internal to `Agent`; hook them with `tulip.hooks` |
+  | `ConditionalRouter` | `StateGraph` conditional edges, or `locus.router` |
+  | `ThinkNode` / `ExecuteNode` / `ReflectNode` | internal to `Agent`; hook them with `locus.hooks` |
 
-  This is also the first use of `TulipDeprecationWarning`. The policy in
+  This is also the first use of `LocusDeprecationWarning`. The policy in
   `DEPRECATION.md` had been documented in two files and never exercised, so
   until now nothing proved a deprecation would actually reach a consumer.
 
@@ -2614,7 +2675,7 @@ documentation.
   anything else. Before this, anyone on a self-hosted or gateway endpoint had
   to build the model object by hand.
 
-- **`tulip.testing`** — `ScriptedModel`, `FunctionModel`, `text()`,
+- **`locus.testing`** — `ScriptedModel`, `FunctionModel`, `text()`,
   `tool_call()`. The repo contained thirteen private `_ScriptedModel` classes,
   which is the shape of a missing feature. Includes a recording surface
   (`received_messages`, `offered_tools`, `call_count`, `last_prompt`) so a
@@ -2636,7 +2697,7 @@ documentation.
   `expected_tool_sequence` now match on node ids, which is what a graph
   regression suite is actually for.
 
-- **An LLM judge that exists.** `tulip.evaluation` advertised "LLM-as-judge
+- **An LLM judge that exists.** `locus.evaluation` advertised "LLM-as-judge
   scoring" and shipped 250 lines of boolean checks. `LLMJudge` grades against
   a written rubric and returns a typed `Verdict`; `check_trajectory` asserts
   tool *order*, which `expected_tools` could never express. The judge never
@@ -2648,7 +2709,7 @@ documentation.
   rerankers were real; the pipeline was blocked at its front door.
 
 - **MCP is wired in.** `mcp_servers` on `AgentConfig`, and a helper that works
-  in an async context — `to_tulip_tools()` called `run_until_complete()` from
+  in an async context — `to_locus_tools()` called `run_until_complete()` from
   a sync method and raised inside a running loop.
 
 - A **chat loop** example, and a **framework-interop** example that builds a
@@ -2685,7 +2746,7 @@ documentation.
   is what turns an LLM into an agent.
 
 - **Nineteen pages gave a "live model" command that silently ran the mock**,
-  because `get_model()` read only `TULIP_MODEL_PROVIDER`.
+  because `get_model()` read only `LOCUS_MODEL_PROVIDER`.
 
 - Six documented claims the code did not back, and a further four found on a
   second pass.
@@ -2694,7 +2755,7 @@ documentation.
 
 - **CI runs the documentation.** Every Python block in `README.md` and
   `examples/README.md` is checked against the installed SDK — it must compile,
-  every `from tulip... import X` must resolve, and keyword arguments must
+  every `from locus... import X` must resolve, and keyword arguments must
   exist on the callable. Compile rather than parse, because `ast.parse`
   *accepts* top-level `await` and only `compile()` rejects it — which is
   exactly how a quickstart shipped raising `SyntaxError`.
@@ -2742,9 +2803,9 @@ the SDK against real self-hosted models rather than by reading it.
   rather than by regex so a nested `arguments` object is not truncated.
   Fenced blocks and double-encoded `"arguments": "{...}"` are handled.
 
-- **`tulip.__version__` was a release behind.** `tulip_agents-2.5.0` shipped to
+- **`locus.__version__` was a release behind.** `locus_agents-2.5.0` shipped to
   PyPI with `METADATA Version: 2.5.0` and `__version__ == "2.4.0"` inside it —
-  the literal in `src/tulip/__init__.py` and the one in `pyproject.toml` are
+  the literal in `src/locus/__init__.py` and the one in `pyproject.toml` are
   maintained by hand and had drifted. Anything reading `__version__` for
   telemetry, a bug report, or a compatibility check was told the wrong release
   for the whole of 2.5.0. Corrected, and `tests/unit/test_version_is_consistent.py`
@@ -2831,12 +2892,12 @@ until this went out.
   source into an isolated box and runs it there — the host process never
   executes the body, and direct `tool(...)` calls are sandboxed too, so
   there is no bypass. The zero-infra default is the new
-  `tulip.tools.sandbox.SubprocessSandbox` (fresh working directory,
+  `locus.tools.sandbox.SubprocessSandbox` (fresh working directory,
   `python -I`, environment scrubbed to `PATH`/`LANG` plus what the manifest
   explicitly grants, per-call timeout). Stronger boundaries plug in through
-  the structural `ToolSandbox` protocol: `TULIP_SANDBOX=docker` (or a
+  the structural `ToolSandbox` protocol: `LOCUS_SANDBOX=docker` (or a
   provider name / object / `SandboxSpec`) resolves Docker, Firecracker,
-  SSH and Lambda providers from the optional `tulip-sandbox` package by
+  SSH and Lambda providers from the optional `locus-sandbox` package by
   duck typing — neither package imports the other. Runs emit
   `tool.sandbox.started` / `tool.sandbox.completed` on the event bus (#7).
 - **Policy-required sandboxing.** `ControlPolicy.require_sandbox_for` names
@@ -3031,12 +3092,12 @@ until this went out.
 
 ### Changed
 
-- **Positioning: Tulip leads as a first-class agentic framework — "the safest way to
+- **Positioning: Locus leads as a first-class agentic framework — "the safest way to
   build agentic AI."** The identity is framework-first and safety-led: control is native
   to the core via three points — the **cognitive router** (PRISM) picks the runtime shape,
   **GSAR** grounds every claim (or abstains), and the **admission gate** (`admit()`) gates
   every risky action — packaged as safety. AI security is repositioned from the SDK's
-  identity to its **flagship proof domain**. README, the `tulipagents.ai` landing, package
+  identity to its **flagship proof domain**. README, the `locusagents.oracle.com` landing, package
   description / keywords / classifiers, and `CONTRIBUTING` reflect the framework-first,
   safety-led identity. No API changes.
 
@@ -3044,13 +3105,13 @@ until this went out.
 
 ### Changed
 
-- **Breaking: the domain-neutral control core moves to `tulip.control`.** The new
+- **Breaking: the domain-neutral control core moves to `locus.control`.** The new
   namespace owns `admit()` / `Action` / policy / audit / `governed_agent`;
-  `tulip.security` keeps the security domain and no longer re-exports control.
+  `locus.security` keeps the security domain and no longer re-exports control.
   Renames, with no deprecation shims: `SecurityPolicy` → `ControlPolicy`,
   `Finding` → `Evidence`, `Verdict` → `VerificationResult`,
   `secure_agent` → `governed_agent`, `SecurityProfile` → `GovernanceProfile`.
-  Update imports to `from tulip.control import Action, admit, ControlPolicy, AuditTrail`.
+  Update imports to `from locus.control import Action, admit, ControlPolicy, AuditTrail`.
 
 ## [1.1.0] - 2026-06-24
 
@@ -3073,13 +3134,13 @@ until this went out.
 
 ## [1.0.0] — 2026-06-09
 
-First general-availability release. From 1.0.0 Tulip follows Semantic
+First general-availability release. From 1.0.0 Locus follows Semantic
 Versioning: breaking changes only land in major versions, with the
 deprecation path described in [`DEPRECATION.md`](DEPRECATION.md).
 
 ### Changed
 
-- **Positioning: Tulip is the AI-cybersecurity agent SDK.** The cookbook
+- **Positioning: Locus is the AI-cybersecurity agent SDK.** The cookbook
   (`examples/`) is AI-security-led — prompt injection, jailbreaks, inference
   fingerprinting, RAG/memory poisoning, model extraction, and excessive agency
   as the primary track, with classic SOC/IR (triage, IOC enrichment, phishing,
@@ -3090,23 +3151,23 @@ deprecation path described in [`DEPRECATION.md`](DEPRECATION.md).
 - **License:** relicensed from UPL-1.0 to **Apache-2.0**. Portions
   originally released under UPL-1.0 remain available under those terms —
   see `NOTICE`.
-- **Versioning:** the `0.2.0bN` beta line is retired; Tulip goes GA at
+- **Versioning:** the `0.2.0bN` beta line is retired; Locus goes GA at
   `1.0.0` with no further pre-releases.
-- **Docs:** documentation moves to <https://tulipagents.ai/> with a new
+- **Docs:** documentation moves to <https://locusagents.oracle.com/> with a new
   information architecture (Learn / Cookbook / Workbench / Reference)
   and a redesigned home page.
 - **Repo split:** the documentation site and the browser workbench move
   to dedicated repositories —
-  [tuliplabs-ai/docs](https://github.com/tuliplabs-ai/docs) and
-  [tuliplabs-ai/workbench](https://github.com/tuliplabs-ai/workbench).
+  [oracle/locus](https://github.com/oracle/locus) and
+  [oracle/locus-workbench](https://github.com/oracle/locus-workbench).
   This repository carries the SDK and its cookbook (`examples/`).
 
 ### Added
 
-- Initial public release of **Tulip** (`tulip-agents`), a vendor-neutral
+- Initial public release of **Locus** (`locus-sdk`), a vendor-neutral
   SDK for building auditable agent teams.
-- **`tulip.security` — evidence-grounded findings**, the layer that makes
-  Tulip a cybersecurity SDK rather than a general one: `ground_finding()` /
+- **`locus.security` — evidence-grounded findings**, the layer that makes
+  Locus a cybersecurity SDK rather than a general one: `ground_finding()` /
   `ground_fingerprint()` turn a GSAR evidence partition into a typed `Finding`
   **only** above the grounding threshold, else an auditable `Abstention` — a
   `Finding` has no public constructor without a score, so an ungrounded finding

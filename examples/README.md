@@ -1,23 +1,25 @@
-# tulip examples — build agents with Tulip
+# locus examples — build agents with Locus
 
 Every runnable file in this directory is a self-contained agent you can run.
 They span the domains where agents act — support, payments, infrastructure,
 and data. The snippets below are the smallest possible shapes; the numbered
 `notebook_*.py` files build them out. The security-domain notebooks (red-team,
 SOC triage, fingerprinting, threat scenarios) live with the opt-in
-[`tulip-agents-security`](../packages/tulip-agents-security/examples/) package.
+[`locus-sdk-security`](../packages/locus-sdk-security/examples/) package.
 
 **A note on the numbers.** They are stable identifiers, not a sequence. The
-series runs `06-09 · 11-40 · 45-52 · 55-72 · 81 · 83-87`, and the gaps are
-not missing files — those numbers never existed, or (73-80, 82) belong to the
-security notebooks in `packages/tulip-agents-security/examples/`. Numbers are never reused or reassigned,
+series runs `01-72 · 81 · 83-89`, and the gaps are not missing files —
+those numbers (73-80, 82) belong to the security notebooks in
+`packages/locus-sdk-security/examples/`. Notebooks 01-05 are the OCI Generative
+AI transports; 10, 41-44, 53-54 and 88-89 are the Oracle Database 26ai and OCI
+integrations. Numbers are never reused or reassigned,
 so a link, a bookmark, or a cross-reference from another notebook keeps
 pointing at the same example forever; renumbering to close the gaps would
 break every one of them to fix an appearance.
 
 Nor do the numbers carry difficulty or order: 83 is one of the easiest files
 here, and the gate notebooks (83-87) need no credentials at all. Read in
-whatever order the [documentation](https://tulipagents.ai/notebooks/) puts in
+whatever order the [documentation](https://locusagents.oracle.com/notebooks/) puts in
 front of you — it is ordered by what builds on what.
 
 ## Start here
@@ -26,7 +28,7 @@ front of you — it is ordered by what builds on what.
 call, twelve lines:
 
 ```bash
-export OPENAI_API_KEY=...        # or point TULIP_MODEL at any provider
+export OPENAI_API_KEY=...        # or point LOCUS_MODEL at any provider
 python examples/hello.py
 ```
 
@@ -41,27 +43,27 @@ Every numbered notebook runs **offline by default** — with no API key set,
 suite credential-free:
 
 ```bash
-pip install "tulip-agents[openai,anthropic]"   # or: pip install -e . from the repo root
+pip install "locus-sdk[openai,anthropic]"   # or: pip install -e . from the repo root
 python examples/notebook_06_basic_agent.py     # runs on the mock model, no keys needed
 ```
 
 To run against a real provider, set the provider and its key:
 
 ```bash
-export TULIP_MODEL_PROVIDER=openai   ; export OPENAI_API_KEY=sk-...
+export LOCUS_MODEL_PROVIDER=openai   ; export OPENAI_API_KEY=sk-...
 # or
-export TULIP_MODEL_PROVIDER=anthropic; export ANTHROPIC_API_KEY=sk-ant-...
-export TULIP_MODEL_ID=gpt-4o         # optional — provider-specific model id
+export LOCUS_MODEL_PROVIDER=anthropic; export ANTHROPIC_API_KEY=sk-ant-...
+export LOCUS_MODEL_ID=gpt-4o         # optional — provider-specific model id
 ```
 
-The `tulip.control` gate notebooks (83–87) are fully offline by design and
+The `locus.control` gate notebooks (83–87) are fully offline by design and
 need no provider at all.
 
 ## Quick Start
 
 ```python
-from tulip.agent import Agent
-from tulip.models import get_model
+from locus.agent import Agent
+from locus.models import get_model
 
 model = get_model("openai:gpt-4o")  # or "anthropic:claude-sonnet-4-6"
 
@@ -77,13 +79,13 @@ print(result.text)  # a one-paragraph answer with the evidence that backs it
 
 A model is just a string: the prefix before the colon (`openai:`,
 `anthropic:`) selects the provider; the rest is the model id.
-See [the models guide](https://tulipagents.ai/concepts/models/) for the full
+See [the models guide](https://locusagents.oracle.com/concepts/models/) for the full
 provider story, including any OpenAI-compatible endpoint via `base_url`.
 
 ## With Tools
 
 ```python
-from tulip.tools import tool
+from locus.tools import tool
 
 
 @tool
@@ -134,7 +136,7 @@ asyncio.run(main())
 ```python
 import asyncio
 
-from tulip.multiagent import create_swarm, create_swarm_agent
+from locus.multiagent import create_swarm, create_swarm_agent
 
 analyst = create_swarm_agent(
     name="Analyst",
@@ -164,7 +166,7 @@ asyncio.run(main())
 ## With Hooks
 
 ```python
-from tulip.hooks.builtin import LoggingHook, GuardrailsHook
+from locus.hooks.builtin import LoggingHook, GuardrailsHook
 
 agent = Agent(
     model=model,

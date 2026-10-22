@@ -2,11 +2,11 @@
 
 ## Reporting a Vulnerability
 
-If you believe you have found a security vulnerability in Tulip, please report it to us through coordinated disclosure.
+If you believe you have found a security vulnerability in Locus (the Oracle Generative AI – Multi-Agent Locus SDK), please report it to us through coordinated disclosure.
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, use [GitHub private vulnerability reporting](https://github.com/tuliplabs-ai/tulip-agents/security/advisories/new) on this repository, including:
+Instead, use [GitHub private vulnerability reporting](https://github.com/oracle/locus/security/advisories/new) on this repository, or follow Oracle's [security vulnerability reporting process](https://www.oracle.com/corporate/security-practices/assurance/vulnerability/reporting.html) (`secalert_us@oracle.com`), including:
 
 - A description of the vulnerability
 - Steps to reproduce the issue
@@ -23,11 +23,12 @@ Older minors are not backported — upgrade within the major instead, which
 
 | Version                       | Supported          |
 | ----------------------------- | ------------------ |
-| Latest `2.x` minor            | :white_check_mark: |
-| Earlier `2.x` minors          | :x: — upgrade to the latest `2.x` |
+| Latest `3.x` minor            | :white_check_mark: |
+| Earlier `3.x` minors          | :x: — upgrade to the latest `3.x` |
+| `2.x` (published as `tulip-agents`) | :x: — retired; upgrade to `locus-sdk` `3.x` |
 | `< 2.0`                       | :x:                |
 
-Pin a major, as in `tulip-agents>=2,<3`, and take the newest minor within it.
+Pin a major, as in `locus-sdk>=3,<4`, and take the newest minor within it.
 Minors ship often, so an enumerated list of supported minors would be stale
 faster than it could be maintained; this table is written to stay correct
 without edits.
@@ -42,6 +43,6 @@ When using the SDK in production:
 
 3. **Input Validation**: Always validate and sanitize user inputs before passing them to agents.
 
-4. **Model Access**: Use appropriate IAM policies and scoped API keys to restrict access to your model providers.
+4. **Model Access**: Use appropriate OCI IAM policies and scoped API keys to restrict access to OCI Generative AI and other model providers.
 
-5. **Checkpointing**: When using persistent checkpointing backends (Redis, PostgreSQL, etc.), ensure proper authentication and encryption in transit.
+5. **Checkpointing**: When using persistent checkpointing backends (Oracle Database, OCI Object Storage, Redis, PostgreSQL, etc.), ensure proper authentication and encryption in transit — use wallets (mTLS) for Autonomous Database.

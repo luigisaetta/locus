@@ -1,6 +1,6 @@
 # Contributing
 
-Tulip is open to everyone. The bar everywhere: *a result ships on evidence or
+Locus is open to everyone. The bar everywhere: *a result ships on evidence or
 it abstains; a side effect runs only gated and audited.* New probes prove their
 success with an observable effect, and new actions go through `admit()`.
 
@@ -33,9 +33,9 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 
 ## Getting Started
 
-### Developer Certificate of Origin (DCO)
+### Oracle Contributor Agreement (OCA)
 
-Contributions are accepted under the [Developer Certificate of Origin](https://developercertificate.org/). You certify the DCO by signing off every commit — no separate agreement to file.
+Before contributing code, you must sign the [Oracle Contributor Agreement (OCA)](https://oca.opensource.oracle.com). This is required for all contributions.
 
 All commits must include a sign-off line:
 
@@ -67,8 +67,8 @@ We welcome:
 
 ```bash
 # Clone the repository
-git clone https://github.com/tuliplabs-ai/tulip-agents.git
-cd tulip-agents
+git clone https://github.com/oracle/locus.git
+cd locus-sdk
 
 # Install Hatch if needed
 pip install hatch
@@ -103,7 +103,7 @@ export POSTGRES_HOST="localhost"
 export POSTGRES_PORT="5432"
 export POSTGRES_USER="postgres"
 export POSTGRES_PASSWORD="postgres"
-export POSTGRES_DB="tulip"
+export POSTGRES_DB="locus"
 ```
 
 ## Notebook authoring
@@ -141,19 +141,19 @@ then take the next free number at the end of that range:
 3. **Multi-model demos**: if the notebook fits as a multi-model
    demonstration (orchestrator, handoff, debate, supervisor-critic),
    use `get_model_b()` and `get_model_c()` for the lighter roles —
-   each falls back to slot A when `TULIP_MODEL_ID_B` / `TULIP_MODEL_ID_C`
+   each falls back to slot A when `LOCUS_MODEL_ID_B` / `LOCUS_MODEL_ID_C`
    are unset, so plain CLI runs stay correct.
 4. **Graceful skip**: if the notebook needs credentials the harness
    may not have (OPENAI_API_KEY, COHERE_API_KEY, etc.), check the env
    vars at the top of `main()` and print a skip banner with a one-line
    wiring snippet instead of crashing. The CI runs every notebook —
    nothing is allowed to traceback on a missing optional env.
-5. **`tulip.core.interrupt()`**: notebooks that call `interrupt()`
+5. **`locus.core.interrupt()`**: notebooks that call `interrupt()`
    for human approval (Notebooks 24, 38, 62, 63, 64 today) need a
    terminal; say so in the header docstring so nobody runs them
    unattended.
 6. **Docs page**: the docs repo
-   ([tuliplabs-ai/docs](https://github.com/tuliplabs-ai/docs)) carries
+   ([oracle/locus](https://github.com/oracle/locus)) carries
    one page per `examples/notebook_*.py` — run its
    `scripts/gen_notebook_pages.py` against your SDK checkout to
    scaffold the new page, edit the prose, and open a companion PR.
@@ -276,7 +276,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from tulip.core.state import AgentState
+    from locus.core.state import AgentState
 
 
 class MyConfig(BaseModel):
@@ -322,7 +322,7 @@ async def process_state(state: "AgentState", config: MyConfig) -> "AgentState":
 ### File Organization
 
 ```
-src/tulip/
+src/locus/
 ├── __init__.py          # Public exports
 ├── module/
 │   ├── __init__.py      # Module exports
@@ -356,8 +356,8 @@ hatch run pytest -m "requires_oci" -v
 
 ```python
 import pytest
-from tulip import Agent
-from tulip.core.messages import Message
+from locus import Agent
+from locus.core.messages import Message
 
 
 class TestAgent:
@@ -419,12 +419,12 @@ For significant features, update:
   strip and the *"Talk to any provider"* table only need updates when
   you add a new provider.
 - **`README.md` "Vendor-neutral backends" block** — keep the backend
-  table in sync with `tulip.rag.stores`, `tulip.rag.reranker`, and
-  `tulip.memory.backends`. Bump when you add a new backend.
+  table in sync with `locus.rag.stores`, `locus.rag.reranker`, and
+  `locus.memory.backends`. Bump when you add a new backend.
 - **`README.md` notebook track table** — the ranges must match
   the docs repo's `docs/notebooks/index.md`.
 - **`README.md` Quick Start examples** — only when the feature changes
-  the *five-things-that-make-tulip-different* shape.
+  the *five-things-that-make-locus-different* shape.
 - **`README.md` Repo layout** — only when a new top-level module lands.
 
 ## Release checklist
@@ -436,10 +436,10 @@ Every release follows this checklist. Do not skip steps.
    `YYYY-MM-DD`. Add `### Removed` / `### Changed` notes for anything
    breaking, with a migration snippet.
 2. **Deprecation sweep.** For every item in `[Unreleased] > Removed`,
-   confirm a `TulipDeprecationWarning` has been in place for at least
+   confirm a `LocusDeprecationWarning` has been in place for at least
    one prior minor release, or document the single-release migration
    path in the CHANGELOG entry.
-3. **Version bump.** Update `__version__` in `src/tulip/__init__.py`
+3. **Version bump.** Update `__version__` in `src/locus/__init__.py`
    and the `version` field in `pyproject.toml`.
 4. **Run the full suite.** `hatch run check` locally (plus
    `hatch run test-integration` with live services available); CI runs
@@ -453,11 +453,11 @@ Every release follows this checklist. Do not skip steps.
    deprecations are called out again in the release announcement.
 
 See [`DEPRECATION.md`](DEPRECATION.md) for the full deprecation policy
-and how `TulipDeprecationWarning` works.
+and how `LocusDeprecationWarning` works.
 
 ## Questions?
 
-- Open a [GitHub Discussion](https://github.com/tuliplabs-ai/tulip-agents/discussions)
-- Check existing [Issues](https://github.com/tuliplabs-ai/tulip-agents/issues)
+- Open a [GitHub Discussion](https://github.com/oracle/locus/discussions)
+- Check existing [Issues](https://github.com/oracle/locus/issues)
 
 Thank you for contributing to the SDK!
