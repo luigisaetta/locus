@@ -5,11 +5,9 @@
 """Run an async coroutine from sync code, regardless of loop state.
 
 Single shared helper used by every ``Sync*`` wrapper class shipped
-alongside the async Oracle primitives (checkpointer / store / vector
-store / loader / chunker / embedder). Mirrors the same trick
-``langgraph-oracledb``'s ``OracleSaver`` uses to bridge sync callers
-into an asyncpg-style driver — without taking any langchain or
-langgraph dependency.
+alongside the async primitives (checkpointer / store / vector store /
+embedder). It bridges synchronous callers into the async drivers
+without taking any langchain or langgraph dependency.
 """
 
 from __future__ import annotations
@@ -35,8 +33,8 @@ def run_sync(coro: Coroutine[Any, Any, T]) -> T:
          hosted on a background thread, and block the calling thread
          until that completes.
 
-    This is the same trick ``langgraph-oracledb``'s ``OracleSaver``
-    uses to bridge sync callers into an asyncpg-style driver.
+    Case 2 is what lets the synchronous wrapper classes call into the
+    async drivers from inside an already-running event loop.
     """
     try:
         asyncio.get_running_loop()

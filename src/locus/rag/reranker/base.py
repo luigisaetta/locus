@@ -31,8 +31,8 @@ class Reranker(ABC):
 
         from locus.rag.reranker import CohereReranker
 
-        reranker = CohereReranker(model="cohere.rerank-v3.5", top_n=5)
-        top = await reranker.rerank("hepcidin role in iron", candidates)
+        reranker = CrossEncoderReranker(top_n=5)
+        top = await reranker.rerank("lateral movement over SMB", candidates)
     """
 
     @abstractmethod

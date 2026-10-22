@@ -83,6 +83,12 @@ def mock_hook():
     hook.on_after_tool_call = AsyncMock(side_effect=lambda event: None)
     hook.on_before_model_call = AsyncMock(side_effect=lambda event: None)
     hook.on_after_model_call = AsyncMock(side_effect=lambda event: None)
+    # All eight documented callbacks. The iteration pair used never to fire, so
+    # this double modelled the six that did — and a MagicMock answers hasattr
+    # for everything, so once they started firing the dispatcher got a
+    # MagicMock where it awaited a coroutine.
+    hook.on_iteration_start = AsyncMock(side_effect=lambda iteration, state: None)
+    hook.on_iteration_end = AsyncMock(side_effect=lambda iteration, state: None)
     hook.priority = 100
     return hook
 
@@ -524,6 +530,53 @@ class TestAgentRun:
         assert events[1].reason == "complete"
 
     @pytest.mark.asyncio
+    async def test_think_event_prefers_response_reasoning(self, mock_model, monkeypatch):
+        """Reasoning models: ThinkEvent.reasoning uses the CoT channel."""
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
+
+        mock_model.complete.return_value = ModelResponse(
+            message=Message.assistant("The answer is 42."),
+            usage={},
+            stop_reason="end_turn",
+            reasoning="Let me think step by step...",
+        )
+
+        agent = Agent(model="openai:qwen3.6-35b", tools=[])
+        events = []
+        async for event in agent.run("What is the answer?"):
+            events.append(event)
+
+        think = events[0]
+        assert isinstance(think, ThinkEvent)
+        assert think.reasoning == "Let me think step by step..."
+        assert isinstance(events[1], TerminateEvent)
+        assert events[1].final_message == "The answer is 42."
+
+    @pytest.mark.asyncio
+    async def test_think_event_falls_back_to_content_for_mock_reasoning(
+        self, mock_model, monkeypatch
+    ):
+        """MagicMock reasoning must not leak into ThinkEvent (Pydantic safety)."""
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
+
+        # A MagicMock leaked through ``complete`` (integration-style stubs)
+        # is truthy but not a str — the loop must fall back to content.
+        class _FakeResponse:
+            message = Message.assistant("plain answer")
+            usage = {}
+            stop_reason = "end_turn"
+            reasoning = MagicMock()
+
+        mock_model.complete.return_value = _FakeResponse()
+        agent = Agent(model="openai:gpt-4o", tools=[])
+        events = []
+        async for event in agent.run("Hi"):
+            events.append(event)
+
+        assert isinstance(events[0], ThinkEvent)
+        assert events[0].reasoning == "plain answer"
+
+    @pytest.mark.asyncio
     async def test_tool_execution(self, mock_model, sample_tool, monkeypatch):
         """Test execution with tool call."""
         monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
@@ -703,6 +756,113 @@ class TestAgentRunSync:
 
         assert isinstance(result, AgentResult)
         assert result.success is True
+
+
+# =============================================================================
+# Agent Async Run (arun) Tests
+# =============================================================================
+
+
+class TestAgentArun:
+    """Tests for Agent.arun() — the async, thread-less equivalent of run_sync.
+
+    ``arun`` is the browser-safe (Pyodide/WASM) entry point: it drives the
+    same event loop as ``run_sync`` and builds the same ``AgentResult``, but
+    without spawning a thread or calling ``asyncio.run``. ``run_sync`` now
+    delegates to it, so these mirror the ``TestAgentRunSync`` cases in the
+    async world.
+    """
+
+    @pytest.mark.asyncio
+    async def test_arun_returns_result_with_final_message(self, mock_model, monkeypatch):
+        """await agent.arun(...) returns an AgentResult carrying the final message."""
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
+
+        mock_model.complete.return_value = ModelResponse(
+            message=Message.assistant("Hello from arun!"),
+            usage={"total_tokens": 50},
+        )
+
+        agent = Agent(model="openai:gpt-4o")
+
+        result = await agent.arun("hi")
+
+        assert isinstance(result, AgentResult)
+        assert result.success is True
+        assert result.stop_reason == "complete"
+        assert result.message == "Hello from arun!"
+
+    @pytest.mark.asyncio
+    async def test_arun_matches_run_sync(self, mock_model, monkeypatch):
+        """arun and run_sync produce equivalent results for the same input."""
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
+
+        mock_model.complete.return_value = ModelResponse(
+            message=Message.assistant("Same answer"),
+            usage={"total_tokens": 50},
+        )
+
+        agent = Agent(model="openai:gpt-4o")
+
+        async_result = await agent.arun("hi")
+        sync_result = agent.run_sync("hi")
+
+        assert async_result.message == sync_result.message == "Same answer"
+        assert async_result.stop_reason == sync_result.stop_reason
+        assert async_result.success == sync_result.success
+
+    @pytest.mark.asyncio
+    async def test_arun_records_metrics(self, mock_model, sample_tool, monkeypatch):
+        """arun surfaces ExecutionMetrics — iterations, tool_calls, tokens."""
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
+
+        tool_call = ToolCall(id="call_1", name="calculator", arguments={"expression": "2+2"})
+        first_response = ModelResponse(
+            message=Message.assistant(content="Calculating...", tool_calls=[tool_call]),
+            usage={"total_tokens": 50},
+        )
+        second_response = ModelResponse(
+            message=Message.assistant("The result is 4."),
+            usage={"total_tokens": 30},
+        )
+        mock_model.complete.side_effect = [first_response, second_response]
+
+        agent = Agent(model="openai:gpt-4o", tools=[sample_tool])
+
+        result = await agent.arun("What is 2+2?")
+
+        assert isinstance(result, AgentResult)
+        assert result.message == "The result is 4."
+        assert result.metrics.iterations >= 1
+        assert result.metrics.tool_calls == 1
+        assert result.metrics.tool_errors == 0
+
+    @pytest.mark.asyncio
+    async def test_arun_structured_output(self, mock_model, monkeypatch):
+        """arun runs the structured-output coercion path (output_schema set)."""
+        from pydantic import BaseModel
+
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
+
+        class Answer(BaseModel):
+            value: int
+
+        mock_model.complete.return_value = ModelResponse(
+            message=Message.assistant('{"value": 42}'),
+            usage={"total_tokens": 20},
+        )
+
+        agent = Agent(model="openai:gpt-4o", tools=[], output_schema=Answer)
+
+        result = await agent.arun("Give me the answer.")
+
+        assert result.parsed is not None
+        assert isinstance(result.parsed, Answer)
+        assert result.parsed.value == 42
+        assert result.parse_error is None
+        # message replaced with canonical JSON dump for downstream consumers.
+        assert result.message.startswith("{")
+        assert "value" in result.message
 
 
 # =============================================================================
@@ -1470,12 +1630,17 @@ class TestMalformedToolCallRecovery:
         return agent
 
     def test_parse_simple_tool_call(self, mock_model):
-        """Parse a simple tool call from text."""
+        """A message that is only a call parses."""
         agent = self._make_agent_with_tools(mock_model)
-        result = agent._parse_text_tool_calls('I will search_web(query="python notebooks")')
+        result = agent._parse_text_tool_calls('search_web(query="python notebooks")')
         assert len(result) == 1
         assert result[0].name == "search_web"
         assert result[0].arguments["query"] == "python notebooks"
+
+    def test_call_mentioned_in_prose_is_not_a_call(self, mock_model):
+        """A sentence that names a call is not one."""
+        agent = self._make_agent_with_tools(mock_model)
+        assert agent._parse_text_tool_calls('I will search_web(query="python notebooks")') == []
 
     def test_parse_single_quotes(self, mock_model):
         """Parse tool call with single-quoted arguments."""
@@ -1529,7 +1694,7 @@ class TestMalformedToolCallRecovery:
 
         # First response: model outputs tool call as TEXT (no structured tool_calls)
         first_response = ModelResponse(
-            message=Message.assistant('I need to calculate. calculator(expression="6*7")'),
+            message=Message.assistant('calculator(expression="6*7")'),
         )
         # Second response: after tool execution, model gives final answer
         second_response = ModelResponse(
@@ -1537,7 +1702,7 @@ class TestMalformedToolCallRecovery:
         )
         mock_model.complete = AsyncMock(side_effect=[first_response, second_response])
 
-        agent = Agent(model=mock_model, tools=[calculator])
+        agent = Agent(model=mock_model, tools=[calculator], text_tool_calls="on")
 
         events = []
         async for event in agent.run("What is 6*7?"):
@@ -1555,17 +1720,90 @@ class TestMalformedToolCallRecovery:
         assert term_events[0].reason == "complete"
         assert "42" in term_events[0].final_message
 
+    # =============================================================================
+    # Auto Conversation Manager Tests
+    # =============================================================================
 
-# =============================================================================
-# Auto Conversation Manager Tests
-# =============================================================================
+    # --- JSON-shaped tool calls ------------------------------------------
+    # What small self-hosted models emit (Ollama, the Hermes/Qwen tool
+    # templates) whenever the server does not lift it into a structured
+    # `tool_calls` field. Found by running a real qwen2.5-coder:7b against
+    # the rogue demo: it tried to isolate production, the call was never
+    # parsed, so it was never dispatched, never weighed by the admission
+    # gate, and never reached the audit trail -- and the run reported the
+    # model as having "declined". Nothing executed, which is fail-safe, but
+    # an attempted dangerous action that leaves no record is a governance
+    # gap, not a cosmetic one.
+
+    def test_parse_json_tool_call(self, mock_model):
+        """The exact shape a real Ollama-served qwen emitted."""
+        agent = self._make_agent_with_tools(mock_model)
+        result = agent._parse_text_tool_calls(
+            '{\n  "name": "search_web",\n  "arguments": {"query": "python"}\n}'
+        )
+        assert len(result) == 1
+        assert result[0].name == "search_web"
+        assert result[0].arguments == {"query": "python"}
+
+    def test_parse_json_tool_call_in_a_fence(self, mock_model):
+        agent = self._make_agent_with_tools(mock_model)
+        result = agent._parse_text_tool_calls(
+            'Sure:\n```json\n{"name": "search_web", "arguments": {"query": "x"}}\n```'
+        )
+        assert [c.name for c in result] == ["search_web"]
+
+    def test_parse_json_with_arguments_as_a_string(self, mock_model):
+        """Several servers double-encode the arguments object."""
+        agent = self._make_agent_with_tools(mock_model)
+        result = agent._parse_text_tool_calls(
+            '{"name": "search_web", "arguments": "{\\"query\\": \\"y\\"}"}'
+        )
+        assert result[0].arguments == {"query": "y"}
+
+    def test_parse_json_with_no_arguments(self, mock_model):
+        agent = self._make_agent_with_tools(mock_model)
+        result = agent._parse_text_tool_calls('{"name": "search_web"}')
+        assert [(c.name, c.arguments) for c in result] == [("search_web", {})]
+
+    def test_parse_json_nested_arguments_are_not_truncated(self, mock_model):
+        """Brace balancing, not a regex -- a nested object must survive."""
+        agent = self._make_agent_with_tools(mock_model)
+        result = agent._parse_text_tool_calls(
+            '{"name": "search_web", "arguments": {"query": "a", "opts": {"deep": true}}}'
+        )
+        assert result[0].arguments["opts"] == {"deep": True}
+
+    def test_parse_json_ignores_unknown_tools(self, mock_model):
+        """Name must resolve against the registry, or it is not a call."""
+        agent = self._make_agent_with_tools(mock_model)
+        assert agent._parse_text_tool_calls('{"name": "drop_tables", "arguments": {}}') == []
+
+    def test_parse_json_ignores_unrelated_objects(self, mock_model):
+        agent = self._make_agent_with_tools(mock_model)
+        assert agent._parse_text_tool_calls('{"status": "ok", "count": 3}') == []
+
+    def test_same_call_in_both_shapes_is_not_duplicated(self, mock_model):
+        """A model that prints both must not fire the tool twice."""
+        agent = self._make_agent_with_tools(mock_model)
+        result = agent._parse_text_tool_calls(
+            '{"name": "search_web", "arguments": {"query": "z"}}\nsearch_web(query="z")'
+        )
+        assert len(result) == 1
+
+    def test_json_and_call_syntax_both_still_parse(self, mock_model):
+        """Adding the JSON shape must not cost the original one."""
+        agent = self._make_agent_with_tools(mock_model)
+        result = agent._parse_text_tool_calls(
+            '{"name": "search_web", "arguments": {"query": "a"}}\nget_weather(city="Lisbon")'
+        )
+        assert sorted(c.name for c in result) == ["get_weather", "search_web"]
 
 
 class TestAutoConversationManager:
     """Tests for automatic conversation manager creation."""
 
     def test_auto_created_for_default_config(self, mock_model):
-        """SlidingWindowManager auto-created when max_iterations > 10."""
+        """SlidingWindowManager when the model's context length is unknown."""
         agent = Agent(model=mock_model, tools=[])
         assert agent._conversation_manager is not None
         from locus.memory.conversation import SlidingWindowManager
@@ -1582,10 +1820,13 @@ class TestAutoConversationManager:
         assert isinstance(agent._conversation_manager, SlidingWindowManager)
         assert agent._conversation_manager.window_size == 200  # max(20, 100*2)
 
-    def test_not_created_for_small_iterations(self, mock_model):
-        """No auto-manager when max_iterations <= 10."""
+    def test_created_for_small_iterations_too(self, mock_model):
+        """A short run can still overflow the window on one large tool output."""
         agent = Agent(model=mock_model, tools=[], max_iterations=5)
-        assert agent._conversation_manager is None
+        from locus.memory.conversation import SlidingWindowManager
+
+        assert isinstance(agent._conversation_manager, SlidingWindowManager)
+        assert agent._conversation_manager.window_size == 20  # max(20, 5*2)
 
     def test_explicit_manager_used(self, mock_model):
         """Explicit conversation_manager overrides auto-creation."""
@@ -4716,15 +4957,6 @@ class TestErrorSanitization:
         assert "sk-proj" not in sanitized
         assert "[REDACTED]" in sanitized
 
-    def test_sanitize_oci_ocid(self):
-        """OCI resource IDs are redacted."""
-        from locus.tools.executor import _sanitize_error
-
-        error = "NotFound: ocid1.compartment.oc1..aaaaaaaa00000000000000000000000000000000000000000000000000000000"
-        sanitized = _sanitize_error(error)
-        assert "aaaaaa" not in sanitized
-        assert "[REDACTED]" in sanitized
-
     def test_safe_error_passes_through(self):
         """Normal errors pass through unchanged."""
         from locus.tools.executor import _sanitize_error
@@ -4774,11 +5006,9 @@ class TestTextToolCallValidation:
             'search(query="test", evil_param="DROP TABLE", __import__="os")'
         )
 
-        assert len(parsed) == 1
-        # Only "query" should survive — evil_param and __import__ filtered out
-        assert "query" in parsed[0].arguments
-        assert "evil_param" not in parsed[0].arguments
-        assert "__import__" not in parsed[0].arguments
+        # An undeclared argument means the call is not the one the schema
+        # describes, so none of it runs.
+        assert parsed == []
 
     @pytest.mark.asyncio
     async def test_unregistered_tool_ignored(self):
@@ -4803,11 +5033,13 @@ class TestTextToolCallValidation:
         )
         agent._initialize()
 
-        parsed = agent._parse_text_tool_calls('os.system("rm -rf /") and safe_tool(x="hello")')
+        # Prose around the calls: nothing runs, not even the registered one.
+        assert agent._parse_text_tool_calls('os.system("rm -rf /") and safe_tool(x="hello")') == []
+        # A dotted call is never a tool call, so a block holding one is rejected.
+        assert agent._parse_text_tool_calls('os.system("rm -rf /")\nsafe_tool(x="hello")') == []
 
-        # Only safe_tool should be parsed, os.system ignored
-        assert len(parsed) == 1
-        assert parsed[0].name == "safe_tool"
+        parsed = agent._parse_text_tool_calls('safe_tool(x="hello")')
+        assert [c.name for c in parsed] == ["safe_tool"]
 
 
 # =============================================================================

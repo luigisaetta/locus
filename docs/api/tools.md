@@ -1,5 +1,10 @@
 # Tools
 
+Define the functions an agent can call — the `@tool` decorator,
+execution strategies, and JSON Schema generation.
+
+For the concepts, start with [Tools](../concepts/tools.md).
+
 ## Decorator
 
 The primary entry point — wrap a Python function and you get a `Tool`
@@ -47,3 +52,12 @@ need a schema for an external system (e.g. an MCP server).
 ## Built-in tools
 
 ::: locus.tools.builtins.get_today_date
+
+### OCI tools
+
+Agents that drive Oracle Cloud Infrastructure: `use_oci` runs a read-only
+OCI CLI / SDK operation and `describe_oci` explains a resource. Both need
+the `oci` extra. See the [OCI tools notebook](../notebooks/notebook_89_oci_tools.md).
+
+::: locus.tools.oci.use_oci
+::: locus.tools.oci.describe_oci

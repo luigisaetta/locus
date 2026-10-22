@@ -1,18 +1,25 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
-
 """RAG (Retrieval-Augmented Generation) for Locus.
 
 This module provides components for building RAG pipelines:
 
 Embeddings (convert text to vectors):
-- OCIEmbeddings: OCI GenAI with Cohere models
+- OpenAIEmbeddings: OpenAI ``text-embedding-3-*`` models
+- CohereEmbeddings: Cohere's direct embedding API
+- OCIEmbeddings: OCI Generative AI embeddings (Cohere embed models on OCI)
+- OracleInDBEmbeddings: Oracle 26ai in-database ONNX embeddings
 
 Vector Stores (persist and search vectors):
-- OracleVectorStore: Oracle 26ai with native VECTOR type
+- InMemoryVectorStore: In-memory store (testing / small corpora)
+- PgVectorStore: PostgreSQL + pgvector
 - OpenSearchVectorStore: OpenSearch with k-NN plugin
-- InMemoryVectorStore: In-memory store (testing)
+- QdrantVectorStore: Qdrant (local or server)
+- ChromaVectorStore: Chroma (embedded or server)
+- OracleVectorStore: Oracle Database 26ai with the native VECTOR type
+
+Rerankers (reorder candidates by relevance):
+- CrossEncoderReranker: local sentence-transformers cross-encoder (offline)
+- CohereReranker: Cohere's direct rerank API
+- OCICohereReranker: Cohere rerank models served by OCI Generative AI
 
 Retriever (combines embedding + store):
 - RAGRetriever: Unified interface for document management and retrieval
@@ -23,26 +30,19 @@ Tools (for agent integration):
 - RAGToolkit: Collection of RAG tools
 
 Example:
-    >>> from locus.rag import RAGRetriever, OCIEmbeddings, OracleVectorStore
+    >>> from locus.rag import RAGRetriever, OpenAIEmbeddings, InMemoryVectorStore
     >>>
     >>> # Setup RAG pipeline
     >>> retriever = RAGRetriever(
-    ...     embedder=OCIEmbeddings(
-    ...         model_id="cohere.embed-english-v3.0",
-    ...         profile_name="DEFAULT",
-    ...     ),
-    ...     store=OracleVectorStore(
-    ...         dsn="mydb_high",
-    ...         user="admin",
-    ...         password="secret",
-    ...     ),
+    ...     embedder=OpenAIEmbeddings(model="text-embedding-3-small"),
+    ...     store=InMemoryVectorStore(),
     ... )
     >>>
     >>> # Add documents
     >>> await retriever.add_documents(
     ...     [
     ...         "Python is a programming language.",
-    ...         "Oracle Database supports native vectors.",
+    ...         "Vector search powers retrieval-augmented generation.",
     ...     ]
     ... )
     >>>
@@ -63,12 +63,26 @@ Example with agent:
 
 from typing import Any
 
+# Ingestion — the entrance to the pipeline
+from locus.rag.chunkers import (
+    DEFAULT_SEPARATORS,
+    MARKDOWN_SEPARATORS,
+    recursive_chunks,
+)
+
 # Embeddings
 from locus.rag.embeddings.base import (
     BaseEmbedding,
     EmbeddingConfig,
     EmbeddingProvider,
     EmbeddingResult,
+)
+from locus.rag.loaders import (
+    load_directory,
+    load_html,
+    load_markdown,
+    load_pdf,
+    load_text,
 )
 
 # Multimodal
@@ -79,8 +93,8 @@ from locus.rag.multimodal import (
     process_content,
 )
 
-# Retriever
-from locus.rag.reranker import CohereReranker, Reranker
+# Reranker (base) + retriever
+from locus.rag.reranker import Reranker
 from locus.rag.retriever import RAGRetriever, RetrievalResult
 
 # Stores
@@ -97,14 +111,26 @@ from locus.rag.tools import RAGToolkit, create_rag_context_tool, create_rag_tool
 
 
 __all__ = [
+    # Ingestion — loaders and chunkers
+    "DEFAULT_SEPARATORS",
+    "MARKDOWN_SEPARATORS",
+    "load_directory",
+    "load_html",
+    "load_markdown",
+    "load_pdf",
+    "load_text",
+    "recursive_chunks",
     # Embeddings - Base
     "BaseEmbedding",
     "EmbeddingConfig",
     "EmbeddingProvider",
     "EmbeddingResult",
     # Embeddings - Providers (lazy)
+    "OpenAIEmbeddings",
+    "CohereEmbeddings",
     "OCIEmbeddings",
     "OracleInDBEmbeddings",
+    "OracleSyncInDBEmbeddings",
     # Stores - Base
     "BaseVectorStore",
     "Document",
@@ -112,10 +138,14 @@ __all__ = [
     "VectorStore",
     "VectorStoreConfig",
     # Stores - Implementations (lazy)
-    "OracleVectorStore",
-    "OpenSearchVectorStore",
     "InMemoryVectorStore",
-    # Loaders / chunkers (lazy)
+    "PgVectorStore",
+    "OpenSearchVectorStore",
+    "QdrantVectorStore",
+    "ChromaVectorStore",
+    "OracleVectorStore",
+    "OracleSyncVectorStore",
+    # Oracle ingestion (lazy)
     "OracleADBLoader",
     "OracleInDBChunker",
     # Retriever
@@ -123,7 +153,9 @@ __all__ = [
     "RetrievalResult",
     # Reranker
     "Reranker",
+    "CrossEncoderReranker",
     "CohereReranker",
+    "OCICohereReranker",
     # Multimodal
     "ContentType",
     "MultimodalProcessor",
@@ -139,42 +171,73 @@ __all__ = [
 def __getattr__(name: str) -> Any:
     """Lazy import providers and stores."""
     # Embedding providers
-    if name == "OCIEmbeddings":
-        from locus.rag.embeddings.oci import OCIEmbeddings
+    if name == "OpenAIEmbeddings":
+        from locus.rag.embeddings.openai import OpenAIEmbeddings
 
-        return OCIEmbeddings
+        return OpenAIEmbeddings
+
+    if name == "CohereEmbeddings":
+        from locus.rag.embeddings.cohere import CohereEmbeddings
+
+        return CohereEmbeddings
 
     # Vector stores
-    if name == "OracleVectorStore":
-        from locus.rag.stores.oracle import OracleVectorStore
+    if name == "InMemoryVectorStore":
+        from locus.rag.stores.memory import InMemoryVectorStore
 
-        return OracleVectorStore
+        return InMemoryVectorStore
+
+    if name == "PgVectorStore":
+        from locus.rag.stores.pgvector import PgVectorStore
+
+        return PgVectorStore
 
     if name == "OpenSearchVectorStore":
         from locus.rag.stores.opensearch import OpenSearchVectorStore
 
         return OpenSearchVectorStore
 
-    if name == "InMemoryVectorStore":
-        from locus.rag.stores.memory import InMemoryVectorStore
+    if name == "QdrantVectorStore":
+        from locus.rag.stores.qdrant import QdrantVectorStore
 
-        return InMemoryVectorStore
+        return QdrantVectorStore
 
-    # In-DB primitives (Oracle 23ai/26ai DBMS_VECTOR_CHAIN).
-    if name == "OracleInDBEmbeddings":
-        from locus.rag.embeddings.oracle_indb import OracleInDBEmbeddings
+    if name == "ChromaVectorStore":
+        from locus.rag.stores.chroma import ChromaVectorStore
 
-        return OracleInDBEmbeddings
+        return ChromaVectorStore
 
+    # Rerankers
+    if name == "CrossEncoderReranker":
+        from locus.rag.reranker.cross_encoder import CrossEncoderReranker
+
+        return CrossEncoderReranker
+
+    if name == "CohereReranker":
+        from locus.rag.reranker.cohere import CohereReranker
+
+        return CohereReranker
+    # Oracle Database 26ai + OCI Generative AI (need the ``oracledb`` / ``oci`` extras)
+    if name in ("OCIEmbeddings", "OracleInDBEmbeddings", "OracleSyncInDBEmbeddings"):
+        from locus.rag import embeddings
+
+        return getattr(embeddings, name)
+    if name in ("OracleVectorStore", "OracleSyncVectorStore"):
+        from locus.rag import stores
+
+        return getattr(stores, name)
     if name == "OracleADBLoader":
         from locus.rag.loaders.oracle import OracleADBLoader
 
         return OracleADBLoader
-
     if name == "OracleInDBChunker":
         from locus.rag.chunkers.oracle_indb import OracleInDBChunker
 
         return OracleInDBChunker
+    if name == "OCICohereReranker":
+        from locus.rag.reranker.cohere_oci import OCICohereReranker
+
+        return OCICohereReranker
 
     msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(msg)

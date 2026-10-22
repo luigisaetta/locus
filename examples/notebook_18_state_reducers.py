@@ -2,12 +2,14 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 """
-Control how state updates combine instead of overwriting each other.
+Notebook 18: Merging multi-check payment signals with state reducers.
 
 By default, when two nodes write to the same state field, the second
-one wins. A reducer is a function attached to a field that says how to
-merge an incoming update with the current value — append to a list,
-sum numbers, merge dicts, keep the max, and so on.
+one wins — which means the fraud screen's signals vanish the moment the
+AVS check reports. A reducer is a function attached to a field that says
+how to merge an incoming update with the current value, so every check's
+signals land in one authorization state. The signals here span a
+velocity spike, an AVS mismatch, and a failed 3-D Secure challenge.
 
 - Annotated[type, reducer] on a Pydantic state schema declares the rule.
 - Built-in reducers: add_messages, add_numbers, merge_dict, append_list, last_value.
@@ -15,11 +17,13 @@ sum numbers, merge dicts, keep the max, and so on.
 - Multiple reducers on one schema — each field merges independently.
 
 Run it:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_24_state_reducers.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_18_state_reducers.py
 
-The default provider is OCI GenAI — auto-detected from ~/.oci/config.
-Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick an OCI model with
-LOCUS_MODEL_ID=openai.gpt-4.1 (or meta.llama-3.3-70b-instruct, etc.).
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER for a live provider.
+Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+provider: ollama, vllm, groq, together, openrouter, ...).
 """
 
 import asyncio
@@ -42,13 +46,13 @@ from locus.core.reducers import reducer
 from locus.multiagent import END, START, StateGraph
 
 
-def _llm_call(
+async def _llm_call(
     prompt: str, *, system: str = "Reply in one short sentence.", max_tokens: int = 60
 ) -> str:
     """Run a one-shot Agent and print a timing/token banner. Used by every part."""
     agent = Agent(model=get_model(max_tokens=max_tokens), system_prompt=system)
     t0 = time.perf_counter()
-    res = agent.run_sync(prompt)
+    res = await agent.arun(prompt)
     dt = time.perf_counter() - t0
     print(
         f"  [model call: {dt:.2f}s · {res.metrics.prompt_tokens}→{res.metrics.completion_tokens} tokens]"
@@ -62,70 +66,74 @@ def _llm_call(
 
 
 async def example_without_reducers():
-    """Without a reducer the last write wins — earlier values are lost."""
+    """Without a reducer the last write wins — earlier signals are lost."""
     print("=== Part 1: Why reducers exist ===\n")
-    note = _llm_call("In one sentence, explain why a graph that overwrites state can lose data.")
+    note = await _llm_call(
+        "In one sentence, explain why a payment screening graph that overwrites signals loses evidence."
+    )
     print(f"AI note: {note}")
 
     graph = StateGraph()
 
-    async def node_a(inputs):
-        return {"items": ["apple"]}
+    async def fraud_check(inputs):
+        return {"signals": ["Velocity: 8 charges in 2 minutes"]}
 
-    async def node_b(inputs):
-        # No reducer on "items" — this overwrites ["apple"] entirely.
-        return {"items": ["banana"]}
+    async def avs_check(inputs):
+        # No reducer on "signals" — this overwrites the fraud signal entirely.
+        return {"signals": ["AVS mismatch: billing ZIP does not match"]}
 
-    async def node_c(inputs):
-        return {"items": ["cherry"]}
+    async def threeds_check(inputs):
+        return {"signals": ["3-D Secure authentication failed"]}
 
-    graph.add_node("a", node_a)
-    graph.add_node("b", node_b)
-    graph.add_node("c", node_c)
+    graph.add_node("fraud", fraud_check)
+    graph.add_node("avs", avs_check)
+    graph.add_node("threeds", threeds_check)
 
-    graph.add_edge(START, "a")
-    graph.add_edge("a", "b")
-    graph.add_edge("b", "c")
-    graph.add_edge("c", END)
+    graph.add_edge(START, "fraud")
+    graph.add_edge("fraud", "avs")
+    graph.add_edge("avs", "threeds")
+    graph.add_edge("threeds", END)
 
     result = await graph.execute({})
-    print(f"Without reducers: items = {result.final_state.get('items')}")
-    print("  (Only 'cherry' - we lost 'apple' and 'banana'!)")
+    print(f"Without reducers: signals = {result.final_state.get('signals')}")
+    print("  (Only the 3-D Secure signal - we lost the fraud and AVS signals!)")
     print()
 
 
 async def example_with_reducers():
-    """Same graph, but `items` is annotated with the append_list reducer."""
+    """Same graph, but `signals` is annotated with the append_list reducer."""
     print("=== Part 1b: Same graph, with append_list ===\n")
-    note = _llm_call("In one sentence, explain what a reducer does in a state graph.")
+    note = await _llm_call(
+        "In one sentence, explain what a reducer does in a payment authorization graph."
+    )
     print(f"AI note: {note}")
 
-    class AppState(BaseModel):
-        items: Annotated[list, append_list] = []
+    class ScreenState(BaseModel):
+        signals: Annotated[list, append_list] = []
 
-    graph = StateGraph(state_schema=AppState)
+    graph = StateGraph(state_schema=ScreenState)
 
-    async def node_a(inputs):
-        return {"items": ["apple"]}
+    async def fraud_check(inputs):
+        return {"signals": ["Velocity: 8 charges in 2 minutes"]}
 
-    async def node_b(inputs):
-        return {"items": ["banana"]}
+    async def avs_check(inputs):
+        return {"signals": ["AVS mismatch: billing ZIP does not match"]}
 
-    async def node_c(inputs):
-        return {"items": ["cherry"]}
+    async def threeds_check(inputs):
+        return {"signals": ["3-D Secure authentication failed"]}
 
-    graph.add_node("a", node_a)
-    graph.add_node("b", node_b)
-    graph.add_node("c", node_c)
+    graph.add_node("fraud", fraud_check)
+    graph.add_node("avs", avs_check)
+    graph.add_node("threeds", threeds_check)
 
-    graph.add_edge(START, "a")
-    graph.add_edge("a", "b")
-    graph.add_edge("b", "c")
-    graph.add_edge("c", END)
+    graph.add_edge(START, "fraud")
+    graph.add_edge("fraud", "avs")
+    graph.add_edge("avs", "threeds")
+    graph.add_edge("threeds", END)
 
     result = await graph.execute({})
-    print(f"With append_list reducer: items = {result.final_state.get('items')}")
-    print("  (All three items preserved!)")
+    print(f"With append_list reducer: signals = {result.final_state.get('signals')}")
+    print("  (All three checks' signals preserved!)")
     print()
 
 
@@ -135,36 +143,36 @@ async def example_with_reducers():
 
 
 async def example_builtin_reducers():
-    """add_messages appends conversation turns, add_numbers sums numeric fields."""
+    """add_messages appends case-log turns, add_numbers sums numeric fields."""
     print("=== Part 2: Built-in reducers ===\n")
-    note = _llm_call(
-        "In one sentence, when would you use add_messages vs add_numbers in a Locus graph?"
+    note = await _llm_call(
+        "In one sentence, when would you use add_messages vs add_numbers in a Locus payment graph?"
     )
     print(f"AI note: {note}")
 
-    class ChatState(BaseModel):
+    class CaseLogState(BaseModel):
         messages: Annotated[list, add_messages] = []
-        total_tokens: Annotated[int, add_numbers] = 0
+        flagged_txn_count: Annotated[int, add_numbers] = 0
 
-    graph = StateGraph(state_schema=ChatState)
+    graph = StateGraph(state_schema=CaseLogState)
 
-    async def user_turn(inputs):
+    async def analyst_turn(inputs):
         return {
-            "messages": [Message.user("Hello!")],
-            "total_tokens": 5,
+            "messages": [Message.user("New chargeback on account A-204 — anything related?")],
+            "flagged_txn_count": 2,
         }
 
-    async def assistant_turn(inputs):
+    async def reviewer_turn(inputs):
         return {
-            "messages": [Message.assistant("Hi there!")],
-            "total_tokens": 8,
+            "messages": [Message.assistant("Correlated: same card BIN as case 1042.")],
+            "flagged_txn_count": 3,
         }
 
-    graph.add_node("user", user_turn)
-    graph.add_node("assistant", assistant_turn)
-    graph.add_edge(START, "user")
-    graph.add_edge("user", "assistant")
-    graph.add_edge("assistant", END)
+    graph.add_node("analyst", analyst_turn)
+    graph.add_node("reviewer", reviewer_turn)
+    graph.add_edge(START, "analyst")
+    graph.add_edge("analyst", "reviewer")
+    graph.add_edge("reviewer", END)
 
     result = await graph.execute({})
 
@@ -174,41 +182,41 @@ async def example_builtin_reducers():
         print(f"  [{msg.role.value}] {msg.content}")
 
     print("\nadd_numbers reducer:")
-    print(f"  total_tokens = {result.final_state.get('total_tokens')}")
+    print(f"  flagged_txn_count = {result.final_state.get('flagged_txn_count')}")
     print()
 
 
 async def example_merge_dict():
     """merge_dict shallow-merges incoming keys into the existing dict."""
     print("=== Part 2b: merge_dict ===\n")
-    note = _llm_call("In one sentence, give an example use-case for merge_dict.")
+    note = await _llm_call("In one sentence, give a payments use-case for merge_dict.")
     print(f"AI note: {note}")
 
-    class ConfigState(BaseModel):
-        config: Annotated[dict, merge_dict] = {}
+    class GatewayConfigState(BaseModel):
+        gateway_config: Annotated[dict, merge_dict] = {}
 
-    graph = StateGraph(state_schema=ConfigState)
+    graph = StateGraph(state_schema=GatewayConfigState)
 
     async def set_defaults(inputs):
-        return {"config": {"debug": False, "timeout": 30, "retries": 3}}
+        return {"gateway_config": {"step_up_3ds": False, "timeout": 30, "retries": 3}}
 
-    async def override_debug(inputs):
-        return {"config": {"debug": True}}
+    async def enable_step_up(inputs):
+        return {"gateway_config": {"step_up_3ds": True}}
 
-    async def override_timeout(inputs):
-        return {"config": {"timeout": 60}}
+    async def extend_timeout(inputs):
+        return {"gateway_config": {"timeout": 60}}
 
     graph.add_node("defaults", set_defaults)
-    graph.add_node("debug", override_debug)
-    graph.add_node("timeout", override_timeout)
+    graph.add_node("step_up", enable_step_up)
+    graph.add_node("timeout", extend_timeout)
 
     graph.add_edge(START, "defaults")
-    graph.add_edge("defaults", "debug")
-    graph.add_edge("debug", "timeout")
+    graph.add_edge("defaults", "step_up")
+    graph.add_edge("step_up", "timeout")
     graph.add_edge("timeout", END)
 
     result = await graph.execute({})
-    print(f"Final config: {result.final_state.get('config')}")
+    print(f"Final gateway config: {result.final_state.get('gateway_config')}")
     print("  (All settings merged together)")
     print()
 
@@ -221,7 +229,9 @@ async def example_merge_dict():
 async def example_custom_reducer():
     """The @reducer decorator wraps any (current, new) -> merged function."""
     print("=== Part 3: Custom reducers ===\n")
-    note = _llm_call("In one sentence, name two cases where a custom reducer beats add_messages.")
+    note = await _llm_call(
+        "In one sentence, name two cases where a custom reducer beats append_list."
+    )
     print(f"AI note: {note}")
 
     @reducer
@@ -238,33 +248,33 @@ async def example_custom_reducer():
                 result.append(item)
         return result
 
-    class GameState(BaseModel):
-        high_score: Annotated[int, max_value] = 0
-        achievements: Annotated[list, unique_append] = []
+    class AuthorizationState(BaseModel):
+        peak_fraud_score: Annotated[int, max_value] = 0
+        flagged_cards: Annotated[list, unique_append] = []
 
-    graph = StateGraph(state_schema=GameState)
+    graph = StateGraph(state_schema=AuthorizationState)
 
-    async def level_1(inputs):
-        return {"high_score": 100, "achievements": ["first_step"]}
+    async def fraud_engine(inputs):
+        return {"peak_fraud_score": 70, "flagged_cards": ["411111******1111"]}
 
-    async def level_2(inputs):
-        return {"high_score": 50, "achievements": ["first_step", "speedrun"]}
+    async def device_check(inputs):
+        return {"peak_fraud_score": 45, "flagged_cards": ["411111******1111", "511111******2222"]}
 
-    async def level_3(inputs):
-        return {"high_score": 200, "achievements": ["speedrun", "perfectionist"]}
+    async def network_intel(inputs):
+        return {"peak_fraud_score": 90, "flagged_cards": ["511111******2222", "601111******3333"]}
 
-    graph.add_node("level1", level_1)
-    graph.add_node("level2", level_2)
-    graph.add_node("level3", level_3)
+    graph.add_node("fraud", fraud_engine)
+    graph.add_node("device", device_check)
+    graph.add_node("intel", network_intel)
 
-    graph.add_edge(START, "level1")
-    graph.add_edge("level1", "level2")
-    graph.add_edge("level2", "level3")
-    graph.add_edge("level3", END)
+    graph.add_edge(START, "fraud")
+    graph.add_edge("fraud", "device")
+    graph.add_edge("device", "intel")
+    graph.add_edge("intel", END)
 
     result = await graph.execute({})
-    print(f"High score (max): {result.final_state.get('high_score')}")
-    print(f"Achievements (unique): {result.final_state.get('achievements')}")
+    print(f"Peak fraud score (max): {result.final_state.get('peak_fraud_score')}")
+    print(f"Flagged cards (unique): {result.final_state.get('flagged_cards')}")
     print()
 
 
@@ -276,38 +286,38 @@ async def example_custom_reducer():
 async def example_last_value():
     """last_value spells out the default behaviour: take the latest write."""
     print("=== Part 4: last_value ===\n")
-    note = _llm_call(
-        "In one sentence, what kind of field is a good fit for the last_value reducer?"
+    note = await _llm_call(
+        "In one sentence, what kind of authorization field fits the last_value reducer?"
     )
     print(f"AI note: {note}")
 
-    class ProcessState(BaseModel):
-        status: Annotated[str, last_value] = "pending"
-        log: Annotated[list, append_list] = []
+    class CaseState(BaseModel):
+        status: Annotated[str, last_value] = "new"
+        timeline: Annotated[list, append_list] = []
 
-    graph = StateGraph(state_schema=ProcessState)
+    graph = StateGraph(state_schema=CaseState)
 
-    async def step1(inputs):
-        return {"status": "processing", "log": ["Step 1 complete"]}
+    async def screen(inputs):
+        return {"status": "screening", "timeline": ["Risk screening complete"]}
 
-    async def step2(inputs):
-        return {"status": "validating", "log": ["Step 2 complete"]}
+    async def review(inputs):
+        return {"status": "reviewing", "timeline": ["Manual review complete"]}
 
-    async def step3(inputs):
-        return {"status": "done", "log": ["Step 3 complete"]}
+    async def decide(inputs):
+        return {"status": "declined", "timeline": ["Decline decision logged"]}
 
-    graph.add_node("step1", step1)
-    graph.add_node("step2", step2)
-    graph.add_node("step3", step3)
+    graph.add_node("screen", screen)
+    graph.add_node("review", review)
+    graph.add_node("decide", decide)
 
-    graph.add_edge(START, "step1")
-    graph.add_edge("step1", "step2")
-    graph.add_edge("step2", "step3")
-    graph.add_edge("step3", END)
+    graph.add_edge(START, "screen")
+    graph.add_edge("screen", "review")
+    graph.add_edge("review", "decide")
+    graph.add_edge("decide", END)
 
     result = await graph.execute({})
     print(f"Status (last value): {result.final_state.get('status')}")
-    print(f"Log (accumulated): {result.final_state.get('log')}")
+    print(f"Timeline (accumulated): {result.final_state.get('timeline')}")
     print()
 
 
@@ -317,74 +327,74 @@ async def example_last_value():
 
 
 async def example_complex_state():
-    """An order schema where each field merges differently."""
+    """An authorization schema where each field merges differently."""
     print("=== Part 5: Mixing reducers on one schema ===\n")
-    note = _llm_call(
+    note = await _llm_call(
         "In one sentence, explain why combining append_list, add_numbers, and "
-        "merge_dict reducers is useful for an order-processing graph."
+        "merge_dict reducers is useful when merging multi-check payment output."
     )
     print(f"AI note: {note}")
 
-    class OrderState(BaseModel):
-        items: Annotated[list, append_list] = []
-        total: Annotated[float, add_numbers] = 0.0
-        discounts: Annotated[dict, merge_dict] = {}
+    class AuthorizationState(BaseModel):
+        signals: Annotated[list, append_list] = []
+        risk_score: Annotated[float, add_numbers] = 0.0
+        adjustments: Annotated[dict, merge_dict] = {}
         status: Annotated[str, last_value] = "new"
         messages: Annotated[list, add_messages] = []
 
-    graph = StateGraph(state_schema=OrderState)
+    graph = StateGraph(state_schema=AuthorizationState)
 
-    async def add_item(inputs):
+    async def record_velocity(inputs):
         return {
-            "items": [{"name": "Laptop", "price": 999.99}],
-            "total": 999.99,
-            "status": "items_added",
-            "messages": [Message.system("Item added: Laptop")],
+            "signals": [{"source": "fraud", "title": "Velocity: 8 charges in 2 minutes"}],
+            "risk_score": 40.0,
+            "status": "signals_recorded",
+            "messages": [Message.system("Evidence added: velocity spike on account A-204")],
         }
 
-    async def add_another(inputs):
+    async def record_avs(inputs):
         return {
-            "items": [{"name": "Mouse", "price": 49.99}],
-            "total": 49.99,
-            "status": "items_added",
-            "messages": [Message.system("Item added: Mouse")],
+            "signals": [{"source": "avs", "title": "AVS mismatch: billing ZIP"}],
+            "risk_score": 25.0,
+            "status": "signals_recorded",
+            "messages": [Message.system("Evidence added: AVS mismatch on billing ZIP")],
         }
 
-    async def apply_discount(inputs):
-        discount_amount = inputs.get("total", 0) * 0.1
+    async def review_false_positives(inputs):
+        deduction = inputs.get("risk_score", 0) * 0.1
         return {
-            "discounts": {"loyalty": discount_amount},
+            "adjustments": {"allowlist_review": deduction},
             # add_numbers will sum this in — a negative delta acts like a subtraction.
-            "total": -discount_amount,
-            "status": "discount_applied",
-            "messages": [Message.system(f"10% loyalty discount: -${discount_amount:.2f}")],
+            "risk_score": -deduction,
+            "status": "allowlist_reviewed",
+            "messages": [Message.system(f"10% allowlist deduction: -{deduction:.2f}")],
         }
 
     async def finalize(inputs):
         return {
             "status": "finalized",
-            "messages": [Message.system(f"Order total: ${inputs.get('total', 0):.2f}")],
+            "messages": [Message.system(f"Case risk score: {inputs.get('risk_score', 0):.2f}")],
         }
 
-    graph.add_node("add_item", add_item)
-    graph.add_node("add_another", add_another)
-    graph.add_node("discount", apply_discount)
+    graph.add_node("record_velocity", record_velocity)
+    graph.add_node("record_avs", record_avs)
+    graph.add_node("allowlist_review", review_false_positives)
     graph.add_node("finalize", finalize)
 
-    graph.add_edge(START, "add_item")
-    graph.add_edge("add_item", "add_another")
-    graph.add_edge("add_another", "discount")
-    graph.add_edge("discount", "finalize")
+    graph.add_edge(START, "record_velocity")
+    graph.add_edge("record_velocity", "record_avs")
+    graph.add_edge("record_avs", "allowlist_review")
+    graph.add_edge("allowlist_review", "finalize")
     graph.add_edge("finalize", END)
 
     result = await graph.execute({})
 
-    print("Final Order State:")
-    print(f"  Items: {len(result.final_state.get('items', []))} items")
-    print(f"  Total: ${result.final_state.get('total', 0):.2f}")
-    print(f"  Discounts: {result.final_state.get('discounts')}")
+    print("Final Authorization State:")
+    print(f"  Signals: {len(result.final_state.get('signals', []))} signals")
+    print(f"  Risk score: {result.final_state.get('risk_score', 0):.2f}")
+    print(f"  Adjustments: {result.final_state.get('adjustments')}")
     print(f"  Status: {result.final_state.get('status')}")
-    print(f"  Messages: {len(result.final_state.get('messages', []))} entries")
+    print(f"  Messages: {len(result.final_state.get('messages', []))} audit entries")
     print()
 
 
@@ -397,44 +407,44 @@ async def example_reducer_with_llm():
     """Both nodes generate text and append a Message — add_messages keeps both."""
     print("=== Part 6: add_messages with two LLM-producing nodes ===\n")
 
-    class ChatLog(BaseModel):
+    class CaseLog(BaseModel):
         messages: Annotated[list, add_messages] = []
 
-    graph = StateGraph(state_schema=ChatLog)
+    graph = StateGraph(state_schema=CaseLog)
 
     import time as _t
 
-    async def headline(_inputs):
+    async def summary(_inputs):
         agent = Agent(
             model=get_model(max_tokens=40),
-            system_prompt="You write punchy one-line product headlines.",
+            system_prompt="You write punchy one-line payment-fraud case summaries.",
         )
         t0 = _t.perf_counter()
-        result = agent.run_sync("Write a headline for an SDK that orchestrates AI agents.")
+        result = await agent.arun("Summarize a case merging velocity, AVS, and 3-D Secure signals.")
         dt = _t.perf_counter() - t0
         print(
-            f"  [model call (headline): {dt:.2f}s · {result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]"
+            f"  [model call (summary): {dt:.2f}s · {result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]"
         )
-        return {"messages": [Message.assistant(f"[headline] {result.message.strip()}")]}
+        return {"messages": [Message.assistant(f"[summary] {result.message.strip()}")]}
 
-    async def tagline(_inputs):
+    async def recommendation(_inputs):
         agent = Agent(
             model=get_model(max_tokens=40),
-            system_prompt="You write 6-word taglines.",
+            system_prompt="You write 6-word transaction-disposition recommendations.",
         )
         t0 = _t.perf_counter()
-        result = agent.run_sync("Tagline for a multi-agent reasoning SDK.")
+        result = await agent.arun("Recommendation for a multi-check suspected-fraud transaction.")
         dt = _t.perf_counter() - t0
         print(
-            f"  [model call (tagline):  {dt:.2f}s · {result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]"
+            f"  [model call (recommendation):  {dt:.2f}s · {result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]"
         )
-        return {"messages": [Message.assistant(f"[tagline] {result.message.strip()}")]}
+        return {"messages": [Message.assistant(f"[recommendation] {result.message.strip()}")]}
 
-    graph.add_node("headline", headline)
-    graph.add_node("tagline", tagline)
-    graph.add_edge(START, "headline")
-    graph.add_edge("headline", "tagline")
-    graph.add_edge("tagline", END)
+    graph.add_node("summary", summary)
+    graph.add_node("recommendation", recommendation)
+    graph.add_edge(START, "summary")
+    graph.add_edge("summary", "recommendation")
+    graph.add_edge("recommendation", END)
 
     result = await graph.execute({})
     for msg in result.final_state.get("messages", []):
@@ -449,7 +459,7 @@ async def example_reducer_with_llm():
 
 async def main():
     print("=" * 60)
-    print("Notebook 19: State reducers")
+    print("Notebook 18: Merging payment check signals with state reducers")
     print("=" * 60)
     print()
 
@@ -463,7 +473,7 @@ async def main():
     await example_reducer_with_llm()
 
     print("=" * 60)
-    print("Next: Notebook 20 — Human-in-the-loop")
+    print("Next: Notebook 19 — Payment hold approval gates (human-in-the-loop)")
     print("=" * 60)
 
 

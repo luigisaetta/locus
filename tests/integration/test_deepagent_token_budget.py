@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Oracle and/or its affiliates.
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
@@ -20,7 +20,7 @@ and verify the fix end-to-end against a stub model:
     new factory raises ``TypeError`` instead of silently flowing
     through to the per-completion field.
 
-The tests use Locus's stub model surface so no OCI/Gemini/OpenAI
+The tests use Locus's stub model surface so no provider
 credentials are required.
 """
 
@@ -51,11 +51,11 @@ def submit_research(text: str, confidence: float) -> str:
 
 
 def _stub_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Provide just enough OCI config to satisfy the OCIModel string
-    parser without making any real network calls. Tests below only
-    inspect the agent's configured termination + kwargs — they never
-    invoke the model."""
-    monkeypatch.setenv("OCI_PROFILE", "DEFAULT")
+    """Provide just enough config to satisfy the model string parser
+    without making any real network calls. Tests below only inspect
+    the agent's configured termination + kwargs — they never invoke
+    the model."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ def test_explicit_small_budget_attaches_token_limit(
     surfaces it explicitly so callers know they're opting in."""
     _stub_env(monkeypatch)
     agent = create_deepagent(
-        model="oci:openai.gpt-4o-mini",
+        model="openai:gpt-4o-mini",
         tools=[submit_research],
         system_prompt="be helpful",
         output_schema=_Echo,
@@ -122,7 +122,7 @@ def test_default_budget_none_removes_token_limit(
     cumulative token cap."""
     _stub_env(monkeypatch)
     agent = create_deepagent(
-        model="oci:openai.gpt-4o-mini",
+        model="openai:gpt-4o-mini",
         tools=[submit_research],
         system_prompt="a " * 5_000,  # long-ish system prompt
         output_schema=_Echo,
@@ -149,7 +149,7 @@ def test_long_prompt_with_no_budget_still_runs_via_max_iterations(
     long-narrative deep research."""
     _stub_env(monkeypatch)
     agent = create_deepagent(
-        model="oci:openai.gpt-4o-mini",
+        model="openai:gpt-4o-mini",
         tools=[submit_research],
         # Simulate a graph-grounded research prompt
         system_prompt="\n".join([f"line {i}" for i in range(2_000)]),
@@ -179,7 +179,7 @@ def test_legacy_max_tokens_kwarg_raises(monkeypatch: pytest.MonkeyPatch) -> None
     _stub_env(monkeypatch)
     with pytest.raises(TypeError) as excinfo:
         create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[submit_research],
             system_prompt="be helpful",
             output_schema=_Echo,
@@ -200,13 +200,13 @@ def test_max_output_tokens_lands_on_agent_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``max_output_tokens`` flows to ``AgentConfig.max_tokens`` —
-    that's the per-completion cap field the OCI model provider
+    that's the per-completion cap field the model provider
     forwards to every LLM request. Verifies the wiring stays correct
     after the rename so callers who set the per-completion knob via
     the new name don't accidentally land it elsewhere."""
     _stub_env(monkeypatch)
     agent = create_deepagent(
-        model="oci:openai.gpt-4o-mini",
+        model="openai:gpt-4o-mini",
         tools=[submit_research],
         system_prompt="be helpful",
         output_schema=_Echo,

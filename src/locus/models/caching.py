@@ -5,7 +5,7 @@
 """Prompt-cache breakpoint helpers.
 
 Anthropic (and, as of 2026, a growing set of providers including
-OCI-hosted Claude, Bedrock, and Gemini) supports ephemeral prompt
+Bedrock-hosted Claude and Gemini) supports ephemeral prompt
 caching: mark a message as a cache checkpoint and subsequent requests
 that share the same prefix reuse the provider's computation at a
 fraction of the input cost.

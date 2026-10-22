@@ -30,7 +30,7 @@ class TestCacheGatedOnMetadata:
         # Idiomatic user code: only mark when the metadata registry
         # confirms the model supports caching. When it doesn't, the
         # message is left unmarked.
-        meta = metadata_for("meta.llama-3.3-70b-instruct")
+        meta = metadata_for("o1")
         assert meta is not None
         assert meta.supports_prompt_caching is False
 

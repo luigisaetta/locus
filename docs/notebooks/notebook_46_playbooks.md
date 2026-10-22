@@ -3,8 +3,8 @@
 A playbook is a typed, ordered sequence of steps with declared
 `expected_tools`. Wire it into an agent and the agent is constrained
 to walk the steps in order, calling only the tools each step allows.
-Useful for incident response, deployments, and any procedure where
-you want auditability over agent freedom.
+Useful for GDPR data-subject requests, right-to-erasure workflows, and
+any privacy procedure where you want auditability over agent freedom.
 
 - `PlaybookStep` — id, description, expected tools, hints, validation
   rules.
@@ -22,10 +22,10 @@ to the structured execution mechanics — every section prints
 
 ## Run it
 
-OCI GenAI is the default — the notebook harness picks it when `~/.oci/config` exists (set `OCI_PROFILE` to choose a non-default profile):
+The bundled mock model is the default; set `LOCUS_MODEL_PROVIDER` for a live provider:
 
 ```bash
-LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_46_playbooks.py
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_46_playbooks.py
 ```
 
 Offline:
@@ -36,11 +36,11 @@ LOCUS_MODEL_PROVIDER=mock python examples/notebook_46_playbooks.py
 
 ## Prerequisites
 
-- An OCI profile with GenAI access, or `LOCUS_MODEL_PROVIDER` set to
+- An OpenAI or Anthropic API key, or `LOCUS_MODEL_PROVIDER` set to
   `openai` / `anthropic` / `mock`.
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_46_playbooks.py"
-```
+````

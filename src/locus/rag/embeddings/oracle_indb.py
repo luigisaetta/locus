@@ -112,11 +112,11 @@ work.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, Field, SecretStr
 
-from locus._oracle_pool_cache import safe_acquire
+from locus._oracle_pool_cache import get_pool, safe_acquire
 from locus.memory.backends._oracle_config import validate_sql_identifier
 from locus.rag.embeddings.base import (
     BaseEmbedding,
@@ -300,7 +300,8 @@ class OracleInDBEmbeddings(BaseEmbedding):
         load) so installs without the driver can still ``import`` this
         module — same pattern as :class:`OracleStore`.
         """
-        if self._pool is None:
+
+        def _build() -> Any:
             try:
                 import oracledb
             except ImportError as e:
@@ -324,7 +325,7 @@ class OracleInDBEmbeddings(BaseEmbedding):
                 if cfg.wallet_password is not None:
                     params["wallet_password"] = cfg.wallet_password.get_secret_value()
 
-            self._pool = oracledb.create_pool_async(
+            return oracledb.create_pool_async(
                 user=cfg.user,
                 password=cfg.password.get_secret_value(),
                 dsn=dsn,
@@ -332,7 +333,9 @@ class OracleInDBEmbeddings(BaseEmbedding):
                 max=cfg.max_pool_size,
                 **params,
             )
-        return self._pool
+
+        # Bound to the running event loop — see locus._oracle_pool_cache.
+        return cast("oracledb.AsyncConnectionPool", await get_pool(self, _build))
 
     # -- SQL builders -------------------------------------------------------
 

@@ -5,7 +5,7 @@
 """GSAR — Grounding-Stratified Adaptive Replanning.
 
 Implements the typed-grounding scoring layer and three-tier decision
-function from Kamelhar 2026 (`arXiv:2604.23366`). The framework
+function from `arXiv:2604.23366` (2026). The framework
 extends ``locus.reasoning.grounding`` from a binary scalar to a
 four-way claim partition with cost-asymmetric recovery actions.
 

@@ -5,21 +5,27 @@ edges decide what runs next, and state flows through. Cycles
 (retry-until-confidence), conditional branches, and subgraphs are
 all first-class.
 
-![StateGraph pattern — START → plan → research → write → review → END, with a conditional loop-back from review to research when confidence < 0.85](../../img/patterns/graph.svg){ .diagram }
+{{ locus_diagram graph }}
 
 ## What it is
 
-- **`StateGraph(state_schema=...)`** — a builder bound to a typed
-  state shape (your own dataclass or BaseModel).
-- **`add_node(name, agent_or_callable)`** — a unit of work.
+- **`StateGraph(state_schema=...)`** — a builder that takes an optional
+  Pydantic `BaseModel` declaring the state fields and their reducers.
+- **`add_node(name, fn)`** — a unit of work: a function, sync or
+  async, that takes the state dict and returns the fields it updates
+  as a dict. A `StateGraph` passed here runs as a subgraph. An `Agent`
+  is not callable, so call `await agent.arun(...)` inside the function.
 - **`add_edge(src, dst)`** — unconditional transition.
 - **`add_conditional_edges(src, fn)`** — `fn(state) → next_node_name`
   picks the next node dynamically.
-- **`compile()`** — produces a runnable graph; `run` and `run_sync`
-  walk like any agent.
+- **`compile()`** — returns the runnable graph. `run_sync(...)` /
+  `invoke(...)` give you the final state dict; `await execute(...)`
+  gives you the full `GraphResult` (`final_state`, `node_results`,
+  `interrupt`).
 
-State is a typed value object with custom **reducers** that control
-how each node's output merges into shared fields.
+State is carried and returned as a plain dict. `state_schema`
+supplies the custom **reducers** that control how each node's output
+merges into shared fields; it does not coerce state into the model.
 
 ## When to use it
 
@@ -42,33 +48,35 @@ how each node's output merges into shared fields.
 ## Code
 
 ```python
-from locus.multiagent import StateGraph, END
+from locus.multiagent import StateGraph, START, END
 from pydantic import BaseModel, Field
 
 class ResearchState(BaseModel):
     prompt: str
-    research_notes: list[str] = Field(default_factory=list)
-    draft: str = ""
+    findings: list[str] = Field(default_factory=list)
+    report: str = ""
     confidence: float = 0.0
 
 graph = StateGraph(state_schema=ResearchState)
 
+# Each node is a function that takes the state dict and returns the fields it updates.
 graph.add_node("plan", plan_agent)
-graph.add_node("research", research_agent)
-graph.add_node("write", write_agent)
+graph.add_node("investigate", investigate_agent)
+graph.add_node("report", report_agent)
 graph.add_node("review", review_agent)
 
-graph.add_edge("plan", "research")
-graph.add_edge("research", "write")
-graph.add_edge("write", "review")
+graph.add_edge(START, "plan")
+graph.add_edge("plan", "investigate")
+graph.add_edge("investigate", "report")
+graph.add_edge("report", "review")
 
 graph.add_conditional_edges(
     "review",
-    lambda state: END if state.confidence >= 0.85 else "research",
+    lambda state: END if state.get("confidence", 0.0) >= 0.85 else "investigate",
 )
 
-result = graph.compile().run_sync({"prompt": "Write a launch brief."})
-print(result.draft)
+result = graph.compile().run_sync({"prompt": "Research why checkout conversion dropped last week."})
+print(result["report"])
 ```
 
 ## Per-node policies
@@ -77,9 +85,9 @@ print(result.draft)
 from locus.multiagent.graph import RetryPolicy, CachePolicy
 
 graph.add_node(
-    "research",
-    research_agent,
-    retry_policy=RetryPolicy(max_attempts=3, backoff="exponential"),
+    "investigate",
+    investigate_agent,
+    retry_policy=RetryPolicy(max_attempts=3, backoff_factor=2.0),
     cache_policy=CachePolicy(ttl_seconds=3600),
 )
 ```
@@ -97,16 +105,23 @@ For map/reduce inside a graph use the `Send` primitive from
 from locus.core.send import Send
 
 def fan_out_review(state):
-    return [Send("review_one", {"vendor": v}) for v in state.vendors]
+    return [Send(node="review_one", payload={"vendor": v}) for v in state["vendors"]]
 
-graph.add_conditional_edges("plan", fan_out_review)
+graph.add_node("fan_out", fan_out_review)
 graph.add_node("review_one", review_one_vendor_agent)
-graph.add_edge("review_one", "merge")
 graph.add_node("merge", merge_reviews_agent)
+graph.add_edge("plan", "fan_out")
+graph.add_edge("fan_out", "merge")
 ```
 
-Each `Send` becomes a parallel invocation of the target node with
-the given partial state. The merge node sees all results.
+The fan-out happens when a **node** returns a `Send` or a list of
+them; the executor does not fan out a returned `SendBatch`. Whatever a
+router passed to `add_conditional_edges` returns is read as node
+names. Each `Send` names its own target, so `review_one` needs no
+incoming edge: the targets run in parallel, each with the current
+state plus that Send's payload. Once every Send has finished, each
+successful result is stored in state under that Send's `send_id`,
+and control follows `fan_out`'s own edge to `merge`.
 
 ## Mermaid visualisation
 
@@ -115,35 +130,40 @@ graph.compile().get_mermaid()
 ```
 
 …returns a Mermaid flowchart string you can paste into the docs or
-a design review.
+a design review. It draws a conditional edge only from the `targets`
+map and `default` you passed to `add_conditional_edges`. A router
+passed on its own, like the one in the example above, draws no edge,
+so that graph's review loop is missing from the output. Pass a
+`targets` map to have the branches drawn.
 
 ## Notebooks
 
-- [`notebook_16_basic_graph.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_16_basic_graph.py)
+- [`notebook_16_basic_graph.py`](https://github.com/oracle/locus/blob/main/examples/notebook_16_basic_graph.py)
   — your first StateGraph.
-- [`notebook_17_conditional_routing.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_17_conditional_routing.py)
+- [`notebook_17_conditional_routing.py`](https://github.com/oracle/locus/blob/main/examples/notebook_17_conditional_routing.py)
   — `add_conditional_edges`.
-- [`notebook_18_state_reducers.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_18_state_reducers.py)
+- [`notebook_18_state_reducers.py`](https://github.com/oracle/locus/blob/main/examples/notebook_18_state_reducers.py)
   — custom state reducers.
-- [`notebook_22_graph_advanced.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_22_graph_advanced.py)
-  — `RetryPolicy`, `CachePolicy`, subgraphs, Mermaid output.
-- [`notebook_30_map_reduce_code_review.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_30_map_reduce_code_review.py)
+- [`notebook_22_graph_advanced.py`](https://github.com/oracle/locus/blob/main/examples/notebook_22_graph_advanced.py)
+  — `RetryPolicy`, `CachePolicy`, Mermaid output, streaming with `emit_custom`.
+- [`notebook_30_map_reduce_code_review.py`](https://github.com/oracle/locus/blob/main/examples/notebook_30_map_reduce_code_review.py)
   — `Send` fan-out / reduce in a graph.
-- [`notebook_31_supervisor_critic_loop.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_31_supervisor_critic_loop.py)
-  — `allow_cycles=True` + `max_iterations` for refine-until-confidence.
-- [`notebook_63_incident_response.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_63_incident_response.py)
+- [`notebook_31_supervisor_critic_loop.py`](https://github.com/oracle/locus/blob/main/examples/notebook_31_supervisor_critic_loop.py)
+  — a draft → review loop on `add_conditional_edges`, capped at two
+  revisions by a counter in state.
+- [`notebook_63_incident_response.py`](https://github.com/oracle/locus/blob/main/examples/notebook_63_incident_response.py)
   — triage → parallel investigators → severity gate → page-the-human.
-- [`notebook_64_procurement_approval.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_64_procurement_approval.py)
+- [`notebook_64_procurement_approval.py`](https://github.com/oracle/locus/blob/main/examples/notebook_64_procurement_approval.py)
   — stacked `interrupt()` gates with tier routing.
-- [`notebook_65_contract_review.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_65_contract_review.py)
+- [`notebook_65_contract_review.py`](https://github.com/oracle/locus/blob/main/examples/notebook_65_contract_review.py)
   — parallel reviewers + `Command(goto=...)` to short-circuit a loop.
 
 ## Source
 
-[`multiagent/graph.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/multiagent/graph.py)
+[`multiagent/graph.py`](https://github.com/oracle/locus/blob/main/src/locus/multiagent/graph.py)
 — `StateGraph`, `Node`, `Edge`, `ConditionalEdge`, `RetryPolicy`,
 `CachePolicy`. `Send` lives in
-[`core/send.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/core/send.py).
+[`core/send.py`](https://github.com/oracle/locus/blob/main/src/locus/core/send.py).
 
 ## See also
 

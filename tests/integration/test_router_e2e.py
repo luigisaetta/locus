@@ -27,7 +27,7 @@ D. **Capability binding** — when a frame requires a tool-backed
    capability, the underlying ``Tool`` actually fires during
    execution. We use a recording tool to count invocations.
 
-All tests use the session-scoped ``model`` fixture (OCI / OpenAI
+All tests use the session-scoped ``model`` fixture (OpenAI / Anthropic
 auto-detected) and are marked ``requires_model`` so they skip
 cleanly when no provider is configured.
 """

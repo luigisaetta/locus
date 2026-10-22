@@ -27,14 +27,6 @@ class TestModelSettings:
         assert settings.temperature == 0.7
         assert settings.top_p == 0.9
 
-    def test_oci_defaults(self):
-        """Test OCI default settings."""
-        settings = ModelSettings()
-        assert settings.oci_profile == "DEFAULT"
-        assert settings.oci_auth_type == "security_token"
-        assert settings.oci_region == "us-chicago-1"
-        assert settings.oci_compartment_id is None
-
     def test_openai_api_key_none_by_default(self, monkeypatch):
         """Test API key is None by default."""
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)

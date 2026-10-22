@@ -16,15 +16,16 @@ with `async for event in agent.run(...)` or pipe into a hook.
 ::: locus.core.events.ModelCompleteEvent
 ::: locus.core.events.InterruptEvent
 
-## In-process SSE bus
+## In-process event bus (SSE)
 
 The `EventBus` publishes `StreamEvent`s for every meaningful step from
 every framework layer. Opt-in via `run_context()` — zero cost when
 unused.
 
 See [Observability](../concepts/observability.md) for usage patterns and
-[SSE event catalogue](../concepts/sse-events.md) for the full wire-format
-reference (40+ `event_type` strings across 9 prefixes).
+the [Server-Sent Events (SSE) event catalogue](../concepts/sse-events.md)
+for the full wire-format reference (40+ `event_type` strings across 9
+prefixes).
 
 ::: locus.observability.event_bus.EventBus
 ::: locus.observability.event_bus.StreamEvent

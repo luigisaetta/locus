@@ -1,39 +1,51 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Notebook 37: reasoning patterns — reflexion, grounding, causal chains.
+"""Notebook 36: reasoning patterns — a missed-redaction postmortem.
 
-Each part exercises one piece of the Locus reasoning toolkit against a
-live model and prints a ``[model call: X.XXs · prompt→completion tokens]``
-banner.
+A privacy-team exercise seeded a synthetic PII canary (a fake SSN) into a
+data export and the redaction pipeline never flagged it. The postmortem
+question is why the redaction pipeline stayed silent: a stale PII
+classifier model and a saturated scan queue amount to an unintended
+privacy gap (the kind that ships personal data in the clear — a
+data-protection-by-design failure under GDPR Art. 25 / Art. 32). Each
+part exercises one piece of the Locus reasoning toolkit against that
+postmortem with a live model and prints a
+``[model call: X.XXs · prompt→completion tokens]`` banner.
+
+The thesis the reasoning layer enforces here: an ungrounded claim in a
+postmortem is how a false root cause gets written into a runbook, so each
+claim is scored against tool evidence before it is allowed to stand.
 
 - ``@tool`` + ``Agent(tools=...)`` — let the agent call real Python
-  functions.
+  functions over the redaction pipeline's logs and stats.
 - ``Agent(reflexion=True)`` and ``Reflector`` — Reflexion is a
   self-critique loop; the agent looks at its own trajectory and
   decides whether it is making progress or stuck.
-- ``Agent(output_schema=...)`` — typed JSON for claims and event
-  timelines.
+- ``Agent(output_schema=...)`` — typed JSON for postmortem claims and
+  event timelines.
 - ``GroundingEvaluator`` — score each claim against tool evidence and
-  decide whether to replan.
+  decide whether to replan. Ungrounded claims in a postmortem are how
+  false root causes get written into runbooks.
 - ``CausalChain`` / ``build_causal_chain`` — build and walk a graph of
-  cause/effect relationships.
+  cause/effect relationships from canary seed to shipped-in-the-clear PII.
 
 Run it:
-    # OCI GenAI is the default — auto-detected from ~/.oci/config.
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_42_reasoning_patterns.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_36_reasoning_patterns.py
 
     # Offline:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_42_reasoning_patterns.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_36_reasoning_patterns.py
 
 Prerequisites:
-- An OCI profile with GenAI access, or set ``LOCUS_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 - A model that supports constrained JSON decoding for the
   ``output_schema=`` parts. The ``check_structured_output_capable()``
-  helper exits cleanly under mock or Cohere R-series.
+  helper exits cleanly under mock.
 """
 
+import asyncio
 import time
 
 from config import get_model
@@ -67,10 +79,12 @@ def _banner(result, label: str = "") -> None:
     )
 
 
-def _llm_call(prompt: str, *, system: str = "Reply in one sentence.", max_tokens: int = 80) -> str:
+async def _llm_call(
+    prompt: str, *, system: str = "Reply in one sentence.", max_tokens: int = 80
+) -> str:
     agent = Agent(model=get_model(max_tokens=max_tokens), system_prompt=system)
     t0 = time.perf_counter()
-    result = agent.run_sync(prompt)
+    result = await agent.arun(prompt)
     dt = time.perf_counter() - t0
     print(
         f"  [model call: {dt:.2f}s · "
@@ -85,37 +99,38 @@ def _llm_call(prompt: str, *, system: str = "Reply in one sentence.", max_tokens
 
 
 class ClaimList(BaseModel):
-    """Three factual claims about an incident."""
+    """Three factual claims about the missed redaction."""
 
     claims: list[str] = Field(..., description="Three short factual claims.")
 
 
 class EventList(BaseModel):
-    """Causal-ordered list of events leading to an outage."""
+    """Causal-ordered list of events leading to the unredacted export."""
 
     events: list[str] = Field(..., description="Events in causal order.")
 
 
 # ---------------------------------------------------------------------------
-# Tools the agent can call. Real Python — not mocks.
+# Tools the agent can call. Real Python — deterministic mock telemetry.
 # ---------------------------------------------------------------------------
 
 
 @tool
-def read_logs(file: str) -> str:
-    """Pull the last few lines of a log file."""
+def read_redaction_logs(dataset: str) -> str:
+    """Pull the last few lines of the redaction pipeline's log."""
     return (
-        "[14:02:01] ERROR db.pool exhausted (50/50 conns)\n"
-        "[14:02:14] WARN api.handler timeout calling /v1/orders\n"
-        "[14:02:18] ERROR retry budget exceeded"
+        "[14:02:01] INFO privacy-team synthetic PII canary seeded into export ds-0231\n"
+        "[14:02:14] WARN classifier heartbeat stale on ds-0231 (last seen 46 min ago)\n"
+        "[14:02:18] ERROR redaction pipeline dropped 3 records (scan queue full)"
     )
 
 
 @tool
-def query_metrics(host: str) -> str:
-    """Query the metrics backend for the host's vital signs."""
+def query_dlp(dataset: str) -> str:
+    """Query the DLP console for the dataset's redaction-pipeline vital signs."""
     return (
-        f"host={host} cpu_pct=89 memory_pct=95 db_conns=45/50 api_p99_ms=2500 api_threshold_ms=200"
+        f"dataset={dataset} classifier_version=4.2.1 latest_version=5.0.3 records_skipped=3 "
+        "redactions_applied=0 scan_latency_min=45 queue_depth_pct=98"
     )
 
 
@@ -124,32 +139,35 @@ def query_metrics(host: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def main():
+async def main():
     from config import check_structured_output_capable
 
     check_structured_output_capable()
     print("=" * 60)
-    print("Notebook 37: reasoning patterns")
+    print("Notebook 36: reasoning patterns — missed-redaction postmortem")
     print("=" * 60)
 
     # =========================================================================
     # Part 1: Reflexion — self-critique on a real agent trajectory.
     # =========================================================================
     print("\n=== Part 1: Reflexion on a real Agent run (Agent + tool) ===\n")
-    sre_agent = Agent(
+    postmortem_agent = Agent(
         model=get_model(max_tokens=300),
-        tools=[read_logs],
+        tools=[read_redaction_logs],
         system_prompt=(
-            "You are an SRE on call. Use the read_logs tool to investigate, "
-            "then summarise what's wrong in one short sentence."
+            "You are a privacy engineer running a missed-redaction postmortem. "
+            "Use the read_redaction_logs tool to investigate, then summarise "
+            "what went wrong in one short sentence."
         ),
     )
-    sre_result = sre_agent.run_sync("Investigate the recent database errors in app.log.")
-    _banner(sre_result, "Part 1")
-    print(f"Agent verdict: {sre_result.message[:200]}")
+    postmortem_result = await postmortem_agent.arun(
+        "Investigate why the synthetic PII canary in export ds-0231 was never redacted."
+    )
+    _banner(postmortem_result, "Part 1")
+    print(f"Agent verdict: {postmortem_result.message[:200]}")
 
     reflector = Reflector(loop_threshold=3, success_weight=0.15, error_penalty=0.2)
-    reflection = reflector.reflect(sre_result.state)
+    reflection = reflector.reflect(postmortem_result.state)
     print(f"Reflexion assessment: {reflection.assessment.value}")
     print(f"Confidence delta: {reflection.confidence_delta:+.2f}")
     if reflection.guidance:
@@ -159,16 +177,16 @@ def main():
     # Part 2: Loop detection — Reflector flags the same tool called repeatedly.
     # =========================================================================
     print("\n=== Part 2: Loop detection (model explains, SDK detects) ===\n")
-    rationale = _llm_call(
-        "In one sentence, why does an autonomous agent need to detect when "
-        "it's stuck calling the same tool over and over?",
-        system="Explain like an SRE.",
+    rationale = await _llm_call(
+        "In one sentence, why does an autonomous privacy agent need to detect "
+        "when it's stuck calling the same tool over and over?",
+        system="Explain like a data protection officer.",
     )
     print(f"AI rationale: {rationale}")
 
     loop_state = AgentState(
         agent_id="looping_agent",
-        tool_history=("search_logs",) * 4,
+        tool_history=("query_dlp",) * 4,
     )
     loop_reflection = reflector.reflect(loop_state)
     print(f"Assessment: {loop_reflection.assessment.value}")
@@ -179,11 +197,11 @@ def main():
     # Part 3: evaluate_progress — one-shot progress check, no Reflector instance.
     # =========================================================================
     print("\n=== Part 3: Quick progress evaluation ===\n")
-    quick = evaluate_progress(state=sre_result.state, loop_threshold=3, success_weight=0.2)
+    quick = evaluate_progress(state=postmortem_result.state, loop_threshold=3, success_weight=0.2)
     print(f"Quick assessment: {quick.assessment.value}")
-    suggestion = _llm_call(
+    suggestion = await _llm_call(
         f"An agent's reflexion module says it is '{quick.assessment.value}' "
-        "after one tool call. Suggest the SRE's next step in one sentence.",
+        "after one tool call. Suggest the privacy engineer's next step in one sentence.",
         max_tokens=80,
     )
     print(f"AI next step: {suggestion}")
@@ -197,13 +215,13 @@ def main():
 
     evidence_agent = Agent(
         model=get_model(max_tokens=200),
-        tools=[query_metrics],
+        tools=[query_dlp],
         system_prompt=(
-            "You are an SRE. Call query_metrics for host db-prod-1 and report "
+            "You are a privacy analyst. Call query_dlp for dataset ds-0231 and report "
             "back what it returned, verbatim, on a single line."
         ),
     )
-    evidence_result = evidence_agent.run_sync("Pull the metrics for db-prod-1 right now.")
+    evidence_result = await evidence_agent.arun("Pull the redaction stats for ds-0231 right now.")
     _banner(evidence_result, "Part 4a")
     evidence_line = evidence_result.message
     evidence_pieces = [chunk.strip() for chunk in evidence_line.split() if "=" in chunk]
@@ -217,13 +235,14 @@ def main():
         model=get_model(max_tokens=200),
         output_schema=ClaimList,
         system_prompt=(
-            "You are an SRE writing an incident summary. Make exactly three "
-            "factual claims about the system based on the metrics provided."
+            "You are a privacy analyst writing a missed-redaction postmortem. Make "
+            "exactly three factual claims about the redaction pipeline based on "
+            "the stats provided."
         ),
     )
-    claim_result = claim_agent.run_sync(
-        f"Metrics from query_metrics: {evidence_line}\n"
-        "Produce three factual claims about the system state."
+    claim_result = await claim_agent.arun(
+        f"Stats from query_dlp: {evidence_line}\n"
+        "Produce three factual claims about the redaction-pipeline state."
     )
     _banner(claim_result, "Part 4b")
 
@@ -257,15 +276,16 @@ def main():
     if evaluator.should_replan(grounding):
         guidance = evaluator.get_replan_guidance(grounding)
         print(guidance)
-        plan = _llm_call(
+        plan = await _llm_call(
             f"The grounding evaluator gave this guidance:\n{guidance}\n"
-            "List two concrete tools the SRE should call next, one per line.",
+            "List two concrete tools the privacy analyst should call next, one per line.",
             max_tokens=120,
         )
         print(f"\nAI replan plan:\n{plan}")
     else:
-        observation = _llm_call(
-            "All claims are sufficiently grounded. In one sentence, what does the SRE do next?",
+        observation = await _llm_call(
+            "All postmortem claims are sufficiently grounded. In one sentence, "
+            "what does the privacy engineer do next?",
             max_tokens=80,
         )
         print(f"AI says: {observation}")
@@ -278,13 +298,14 @@ def main():
         model=get_model(max_tokens=300),
         output_schema=EventList,
         system_prompt=(
-            "You are an SRE describing a failure timeline. Output exactly five "
-            "events in causal order, no numbering."
+            "You are a privacy engineer describing a missed-redaction "
+            "timeline. Output exactly five events in causal order, no numbering."
         ),
     )
-    event_result = event_agent.run_sync(
-        "Walk through what happens when a service hits an OutOfMemoryError. "
-        "Output exactly five events in causal order."
+    event_result = await event_agent.arun(
+        "Walk through how an outdated PII classifier plus a saturated scan queue "
+        "leads to a missed redaction (PII shipped in the clear). Output exactly "
+        "five events in causal order."
     )
     _banner(event_result, "Part 6")
     parsed_events: EventList | None = event_result.parsed
@@ -328,7 +349,7 @@ def main():
             for i, n in enumerate(path):
                 prefix = "  " * i + ("-> " if i > 0 else "")
                 print(f"{prefix}{n.label}")
-    walkthrough = _llm_call(
+    walkthrough = await _llm_call(
         f"Briefly summarise this causal path in one sentence: {' -> '.join(p.label for p in path)}",
         max_tokens=120,
     )
@@ -349,9 +370,9 @@ def main():
         print(f"  Description: {c.description}")
         if c.resolution_hint:
             print(f"  Built-in hint: {c.resolution_hint}")
-        ai_fix = _llm_call(
+        ai_fix = await _llm_call(
             f"A causal chain has this conflict: {c.description}. Suggest a "
-            "one-sentence resolution an SRE could apply.",
+            "one-sentence resolution a privacy engineer could apply.",
             max_tokens=80,
         )
         print(f"  AI resolution: {ai_fix}\n")
@@ -360,7 +381,7 @@ def main():
     # Part 9: Narrate the chain — the model writes a short summary.
     # =========================================================================
     print("\n=== Part 9: AI chain narration ===\n")
-    summary_text = _llm_call(
+    summary_text = await _llm_call(
         f"Summarise this causal chain in two short sentences: {' -> '.join(event_phrases)}",
         max_tokens=160,
     )
@@ -371,12 +392,12 @@ def main():
     #          → causal chain → reflexion.
     # =========================================================================
     print("\n=== Part 10: Full reasoning pipeline ===\n")
-    pipeline_paragraph = _llm_call(
+    pipeline_paragraph = await _llm_call(
         "Walk through this reasoning pipeline as one short paragraph: "
-        "(1) the agent makes claims about a database incident, "
-        "(2) the grounding evaluator checks each claim against evidence, "
+        "(1) the agent makes claims about a missed redaction, "
+        "(2) the grounding evaluator checks each claim against DLP evidence, "
         "(3) replan guidance fires if grounding is too low, "
-        "(4) a causal chain is built from the events, "
+        "(4) a causal chain is built from the timeline events, "
         "(5) reflexion monitors the agent for loops. "
         "Mention how each step ties to the next.",
         max_tokens=320,
@@ -390,14 +411,15 @@ def main():
     reflexive_agent = Agent(
         model=get_model(max_tokens=300),
         system_prompt=(
-            "You are an SRE root-cause analyst. Reason step by step before "
-            "giving a final one-paragraph conclusion."
+            "You are a privacy-engineering root-cause analyst. Reason step by "
+            "step before giving a final one-paragraph conclusion."
         ),
         reflexion=True,
     )
-    live = reflexive_agent.run_sync(
-        "Database P99 latency jumped from 30ms to 800ms after a deploy. "
-        "Connection pool is saturated. What's the most likely root cause?"
+    live = await reflexive_agent.arun(
+        "A synthetic PII canary in export ds-0231 was shipped without redaction. "
+        "The PII classifier is two major versions behind and the scan queue sat "
+        "at 98% capacity. What's the most likely root cause?"
     )
     _banner(live, "Part 11")
     print(f"Conclusion: {live.message[:400]}")
@@ -408,4 +430,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

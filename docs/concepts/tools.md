@@ -1,8 +1,12 @@
+---
+title: Tools
+---
+
 # Tools
 
-Tools are how an Oracle Generative AI – Multi-Agent Locus SDK agent
-affects the world. The model decides *"call `search` with query='hnsw'"*;
-the SDK runs your `search` function, captures the return value, and
+Tools are how a Locus agent
+affects the world. The model decides *"call `lookup_order` with order_id='ord-4821'"*;
+the SDK runs your `lookup_order` function, captures the return value, and
 feeds it back. From your side, a tool is **a regular Python function
 with a `@tool` decorator** — the SDK introspects the signature and
 docstring to build the schema the model sees.
@@ -14,9 +18,9 @@ the rest of the framework gets out of your way.
 
 | You want… | Write a tool |
 |---|---|
-| The model to call your API / database / file system | ✓ |
-| Side-effecting actions the model should be able to invoke | ✓ |
-| Read-only lookups (catalogue search, status checks) | ✓ |
+| The model to call your billing / CRM / infra APIs | ✓ |
+| Side-effecting actions the model should be able to invoke (refunds, deploys) | ✓ |
+| Read-only lookups (order status, deploy health checks) | ✓ |
 | To mutate the agent's *internal* state (system prompt, config) | use a [hook](hooks.md), not a tool |
 | To intercept *every* tool call (logging, retry) | use a [hook](hooks.md) |
 
@@ -27,33 +31,33 @@ the rest of the framework gets out of your way.
 ```python
 from locus.tools import tool
 @tool
-def search(query: str, limit: int = 10) -> list[str]:
-    """Search the knowledge base for ``query``, up to ``limit`` results."""
-    return backend.search(query, limit)
+def lookup_order(order_id: str, include_history: bool = False) -> dict:
+    """Return the order record for ``order_id``; include past events when ``include_history``."""
+    return billing.get_order(order_id, include_history)
 ```
 
 The docstring becomes the tool description the model reads. Type
-hints (`str`, `int`, `list[str]`) build the JSON schema. Defaults
+hints (`str`, `bool`, `dict`) build the JSON schema. Defaults
 mark optional parameters.
 
 ### 2. Pass to the agent
 
 ```python
-agent = Agent(model="oci:openai.gpt-5.5", tools=[search])
+agent = Agent(model="{{ locus_example_model }}", tools=[lookup_order])
 ```
 
-That's the wiring. The model now sees `search` in its tool list and
+That's the wiring. The model now sees `lookup_order` in its tool list and
 can call it whenever it decides to.
 
 ### 3. Run it
 
 ```python
-result = agent.run_sync("Find documents about HNSW.")
+result = agent.run_sync("What's the status of order ord-4821?")
 ```
 
-If the model decides to call `search("hnsw")`, the SDK invokes your
-function with that argument, captures the return value, and feeds it
-into the next model turn. You write Python; the SDK handles the
+If the model decides to call `lookup_order("ord-4821")`, the SDK
+invokes your function with that argument, captures the return value, and
+feeds it into the next model turn. You write Python; the SDK handles the
 schema marshalling.
 
 ## What you get out of the box
@@ -61,16 +65,16 @@ schema marshalling.
 ### Idempotent tools — the model can retry; the side effect can't
 
 This is the SDK's flagship tool primitive. Some side-effecting tools
-must run *exactly once* per logical request — bookings, charges,
-emails, paging. Mark them `idempotent=True`:
+should not repeat for an identical call within a run — issuing a refund, paging
+on-call, rolling out a deploy. Mark them `idempotent=True`:
 
 ```python
 @tool(idempotent=True)
-def book_flight(flight_id: str, customer_id: str) -> dict:
-    """Book the flight. Re-issuing the same (flight_id, customer_id)
-    within a single run returns the prior result; the body is not
-    re-executed."""
-    return billing.charge_and_book(flight_id, customer_id)
+def issue_refund(order_id: str, amount: float) -> dict:
+    """Refund ``amount`` against the order. Re-issuing the same
+    (order_id, amount) within a single run returns the prior
+    result; the body is not re-executed."""
+    return billing.refund(order_id, amount)
 ```
 
 When the model re-issues a tool call with the same
@@ -94,13 +98,14 @@ is never blocked.
 
 ```python
 @tool
-def add(a: int, b: int) -> int:
-    return a + b                        # sync — runs in thread pool
+def score_priority(amount: float, age_days: int) -> float:
+    return amount / max(age_days, 1)    # sync — runs in thread pool
 
 @tool
-async def fetch(url: str) -> str:
+async def query_siem(query: str) -> str:
+    """Search the SIEM (a security team's log platform) for matching events."""
     async with httpx.AsyncClient() as c:
-        return (await c.get(url)).text   # async — runs on the loop
+        return (await c.get(f"https://siem.example/search?q={query}")).text  # async — runs on the loop
 ```
 
 ### Parallel by default — fast when the model wants multiple things
@@ -108,13 +113,13 @@ async def fetch(url: str) -> str:
 ```python
 agent = Agent(
     model=...,
-    tools=[search_a, search_b, search_c],
+    tools=[lookup_order, lookup_customer, fetch_policy],
     tool_execution="concurrent",   # default
 )
 ```
 
 When the model emits multiple tool calls in one turn, the SDK runs
-them concurrently via `asyncio.gather`. Three independent searches
+them concurrently via `asyncio.gather`. Three independent lookups
 finish in `max(t1, t2, t3)`, not `t1+t2+t3`.
 
 If your tools have side effects that must be ordered, switch to
@@ -122,23 +127,34 @@ If your tools have side effects that must be ordered, switch to
 
 ### Error handling — tool failures don't crash the agent
 
-If a tool raises, the executor catches the exception, wraps it as a
-`ToolResult(success=False, error=...)`, and feeds it back into the
-next model turn. The model sees the failure and can react: retry,
-try a different tool, or report to the user.
+If a tool raises, the loop catches the exception and turns it into a
+`ToolResult` whose `error` is `f"{type(exc).__name__}: {message}"` —
+first line only, with common secret patterns (`postgresql://`, `redis://`,
+`mongodb://` and `mysql://` URLs, `password=`/`api_key=`/`token=`
+assignments, well-known vendor key prefixes, `Authorization: Bearer`
+values, JWTs, home-directory paths) redacted or masked on a best-effort
+basis — then feeds that back into the next model turn. The redaction is
+pattern-based: a `postgres://` URL or an unrecognised key format passes
+through unchanged, so keep secrets out of exception messages.
+(`ToolResult.success` is a read-only property derived from
+`error` — it's `True` when `error is None`, not something you set.) The
+model sees the failure and can react: retry, try a different tool, or
+report to the user.
 
 ```python
 @tool
-def lookup_by_id(id: str) -> dict:
-    record = db.get(id)
+def lookup_order(order_id: str) -> dict:
+    record = billing.get_order(order_id)
     if record is None:
-        raise ValueError(f"no record with id={id}")
+        raise ValueError(f"no order with id={order_id}")
     return record
 ```
 
-The model sees `"no record with id=42"` and decides what to do.
-Behind the scenes, the SDK chains the original exception as the cause
-on a `ToolExecutionError` for your structured logs.
+The model sees `"Error: ValueError: no order with id=ord-4821"` and decides what to do.
+Behind the scenes, the loop captures the exception type plus its sanitized
+first line into `ToolResult.error`, and that string is folded into the tool
+message content (prefixed with `Error:`) when the tool produced no content;
+the traceback and any later lines of the message never reach the model.
 
 ### Custom names and descriptions
 
@@ -146,12 +162,12 @@ Override the auto-derived defaults when the function name doesn't
 read well to the model:
 
 ```python
-@tool(name="find_customer", description="Look up a customer by email address.")
-async def _find_customer_internal(email: str) -> Customer:
+@tool(name="lookup_customer", description="Return the account record and open orders for a customer id.")
+async def _lookup_customer_internal(customer_id: str) -> dict:
     ...
 ```
 
-The model sees `find_customer`; your code keeps the internal name.
+The model sees `lookup_customer`; your code keeps the internal name.
 
 ## Practical recipes
 
@@ -159,9 +175,9 @@ The model sees `find_customer`; your code keeps the internal name.
 
 ```python
 @tool
-def get_order_status(order_id: str) -> dict:
-    """Return the current status and shipment info for an order."""
-    return orders.get(order_id)
+def get_deploy_status(deploy_id: str) -> dict:
+    """Return the current rollout status and health for a deploy."""
+    return deploys.get(deploy_id)
 ```
 
 No need for `idempotent=True` — read-only calls are safe to repeat.
@@ -170,9 +186,9 @@ No need for `idempotent=True` — read-only calls are safe to repeat.
 
 ```python
 @tool(idempotent=True)
-def submit_po(vendor_id: str, line_items: list[dict]) -> dict:
-    """Submit a purchase order. Re-fires return the cached PO id."""
-    return procurement.submit(vendor_id, line_items)
+def deploy_service(service: str, version: str) -> dict:
+    """Roll ``service`` out at ``version``. Re-fires return the cached deploy id."""
+    return infra.deploy(service, version)
 ```
 
 ### A tool that's also exposed via MCP
@@ -181,80 +197,21 @@ If you've built a tool you want other agents to reach, expose it
 through `LocusMCPServer` — same `@tool`, no rewrite. See
 [MCP](mcp.md).
 
-## Open-spec built-ins for the Oracle estate
-
-For most domains, you write a `@tool` per operation: `search_orders`,
-`get_invoice`, `cancel_subscription`. That stops scaling once the
-domain is *cloud-sized* — the Oracle Cloud Infrastructure (OCI)
-Python SDK alone has ~190 service modules. The SDK ships two built-in
-**open-specification** tools that cover the whole surface through a
-single agentic primitive:
-
-```python
-from locus.tools import describe_oci, use_oci
-
-agent = Agent(
-    model=get_model("oci:openai.gpt-5.5", profile="MY_GENAI"),
-    tools=[describe_oci, use_oci],
-    system_prompt="""
-You can call OCI. When unsure of the right service / client /
-operation / parameters, call describe_oci first — then use_oci.
-""",
-)
-
-agent.run_sync("Are there any compute instances running anywhere in my tenancy?")
-```
-
-- **`describe_oci(service?, client?, operation?)`** — runtime
-  introspection. Progressively zooms: no args → list ~190 services;
-  `service` → list `*Client` classes; `service + client` → list
-  operations partitioned read-only vs mutating; `service + client +
-  operation` → parameter schema parsed from the OCI SDK `:param:`
-  docstring.
-- **`use_oci(service, client, operation, parameters, ...)`** —
-  execute. Builds the right `oci.<service>.<Client>` with the
-  requested auth (`api_key`, `security_token`, `instance_principal`,
-  `resource_principal`), invokes the method, returns the serialised
-  response with `http_status` + `opc-request-id` for traceability.
-
-This is the agentic-framework angle on cloud control planes:
-**hand the model two tools, not 190.** The model uses `describe_oci`
-like a `man` page, then dispatches `use_oci`. One execution path, one
-auth code-path, one serialiser, one mutation-safety gate covers all
-of Identity, Compute, Database, Object Storage, Networking, Vault,
-Functions, Bastion, GenAI, and the rest.
-
-`use_oci` is **read-only by default** — operations that don't start
-with a read-only verb (`list_/get_/head_/summarize_/describe_/
-search_/fetch_/compute_/preview_/validate_/test_`) are refused
-unless the caller passes `allow_mutations=True` or sets
-`LOCUS_USE_OCI_ALLOW_MUTATIONS=1`. Enforced in code, not via
-interactive prompt, because agent tools must be non-interactive.
-
-The same open-spec pattern composes with Oracle's own data-plane
-primitives. If your agent needs to **read or write data** (not just
-operate the control plane), wire it up with the Oracle 26ai RAG +
-in-DB primitives — see [Notebook 41 — Oracle 26ai
-RAG](../notebooks/notebook_41_oracle_26ai_rag.md) and the
-[`docs/concepts/rag.md`](rag.md) chapter. The full agent-driven OCI
-walkthrough is in [Notebook 70 — `use_oci` +
-`describe_oci`](../notebooks/notebook_70_oci_tools.md).
-
 ## Common gotchas
 
 | Symptom | Likely cause |
 |---|---|
 | Model never calls the tool | Description / docstring isn't telling the model when to use it. Be explicit: *"Use this tool when the user asks about X."* |
-| Tool fires twice on the same input | You're seeing the model retry. Add `idempotent=True`. |
+| Tool fires twice on the same input | You're seeing the model retry. Add `idempotent=True` (a refund goes out once, not twice). |
 | `TypeError: missing 1 required positional argument` at call time | Function signature has a parameter without a default that you didn't surface in the docstring; the model omitted it. Add a default or explain the parameter. |
 | Tool returns Python objects but the model echoes `<__main__.X object at 0x…>` | Tool return value isn't JSON-serialisable. Return a dict / Pydantic model / list of strings, not arbitrary objects. |
 | Async tool blocks the event loop | The "async" body is calling sync I/O. Wrap the blocking call in `asyncio.to_thread(...)` or use an async client. |
 
 ## Source
 
-- [`@tool` decorator and `Tool` class](https://github.com/oracle-samples/locus/blob/main/src/locus/tools/decorator.py)
-- [`ToolRegistry`](https://github.com/oracle-samples/locus/blob/main/src/locus/tools/registry.py)
-- [Built-in tools](https://github.com/oracle-samples/locus/tree/main/src/locus/tools/builtins) — `get_today_date`, `task_complete`, `ask_user`, `use_oci`, `describe_oci`
+- [`@tool` decorator and `Tool` class](https://github.com/oracle/locus/blob/main/src/locus/tools/decorator.py)
+- [`ToolRegistry`](https://github.com/oracle/locus/blob/main/src/locus/tools/registry.py)
+- [Built-in tools](https://github.com/oracle/locus/blob/main/src/locus/tools/builtins.py) — `get_today_date`. The agent also auto-injects `task_complete` and `ask_user` in explicit-completion mode.
 
 ## See also
 

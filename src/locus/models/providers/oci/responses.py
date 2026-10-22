@@ -30,6 +30,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from locus.core.events import ModelChunkEvent
+from locus.core.loop_bound import loop_bound
 from locus.core.messages import Message, ToolCall
 from locus.models.base import ModelResponse
 from locus.models.providers.oci._responses_parse import (
@@ -137,6 +138,7 @@ class OCIResponsesModel(BaseModel):
 
     config: OCIResponsesConfig
     _client: httpx.AsyncClient | None = None
+    _client_loop: Any = None  # event loop ``_client`` was built on
     _signer: Any = None  # AbstractBaseSigner — lazy import-free
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -259,7 +261,8 @@ class OCIResponsesModel(BaseModel):
 
     def _http_client(self) -> httpx.AsyncClient:
         """Build (or reuse) the OCI-signed httpx client."""
-        if self._client is None:
+
+        def build() -> httpx.AsyncClient:
             signer = self._build_signer()
             # Wire the signer's refresh hook so instance-principal /
             # resource-principal federation tokens auto-refresh both
@@ -271,7 +274,7 @@ class OCIResponsesModel(BaseModel):
             # future signer types get refresh support in one place.
             # Static signers (user-principal API key) return None and
             # the refresh branches stay dormant.
-            client = httpx.AsyncClient(
+            return httpx.AsyncClient(
                 auth=OCIRequestSigner(
                     signer,
                     compartment_id=self.config.compartment_id,
@@ -286,9 +289,9 @@ class OCIResponsesModel(BaseModel):
                 timeout=httpx.Timeout(self.config.request_timeout),
                 base_url=self.config.base_url or "",
             )
-            object.__setattr__(self, "_client", client)
-        assert self._client is not None  # noqa: S101
-        return self._client
+
+        # Bound to the loop that built it — see locus.core.loop_bound.
+        return loop_bound(self, "_client", build)
 
     def _extra_headers(self) -> dict[str, str]:
         """Headers added on top of OCIRequestSigner's signature.

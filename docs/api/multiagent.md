@@ -1,10 +1,16 @@
 # Multi-agent
 
+Ways to combine agents into one system — pipelines, an orchestrator
+with specialists, swarms, handoffs, and the `StateGraph` workflow
+primitive.
+
+For the concepts, start with [Multi-agent workflows](../concepts/multi-agent.md).
+
 ## Composition
 
-The agent-level pipelines. Same `AgentResult` shape at the boundary as
-a plain `Agent.run_sync(...)` call — these are drop-in for any place
-that takes an agent.
+The agent-level pipelines. Each exposes an async `run(task)` that
+returns a `PipelineResult` (`success`, `outputs`, `final_output`,
+`duration_ms`, `error`) — `await pipeline.run(task)`.
 
 ::: locus.agent.composition.SequentialPipeline
 ::: locus.agent.composition.ParallelPipeline
@@ -66,6 +72,9 @@ DAG-based workflow with explicit nodes, edges, reducers, and a typed
 state. The most expressive composition primitive — used by
 `create_research_workflow` (see [DeepAgent](deepagent.md)) and the
 router's compiled `Runnable`s.
+
+To publish a compiled graph over HTTP or A2A, wrap it in `GraphRunnable` —
+see [Serving a graph](server.md#serving-a-graph).
 
 ::: locus.multiagent.graph.StateGraph
 ::: locus.multiagent.graph.GraphConfig

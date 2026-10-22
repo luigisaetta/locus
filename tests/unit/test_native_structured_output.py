@@ -5,9 +5,8 @@ exposes ``supports_structured_output`` as True, the loop should pass
 ``response_format=`` to ``model.complete()`` directly — skipping the
 prompted-JSON fallback.
 
-When the provider returns False (Anthropic, Ollama, OCI's native SDK),
-the loop falls back to the prompted-JSON path and ``response_format``
-is NOT passed.
+When the provider returns False (Anthropic), the loop falls
+back to the prompted-JSON path and ``response_format`` is NOT passed.
 """
 
 from __future__ import annotations
@@ -61,60 +60,8 @@ def test_supports_structured_output_capability_on_anthropic_model():
     """AnthropicModel reports False; falls back to prompted JSON."""
     from locus.models.native.anthropic import AnthropicModel
 
-    model = AnthropicModel(model="claude-sonnet-4-20250514", api_key="sk-test")
+    model = AnthropicModel(model="claude-sonnet-4-6", api_key="sk-test")
     assert model.supports_structured_output is False
-
-
-def test_supports_structured_output_capability_on_ollama_model():
-    """OllamaModel reports False."""
-    from locus.models.native.ollama import OllamaModel
-
-    model = OllamaModel(model="llama3.3")
-    assert model.supports_structured_output is False
-
-
-def test_supports_structured_output_capability_on_oci_native_model():
-    """OCIModel (native SDK transport) reports False; use OCIChatCompletionsModel for native."""
-    pytest.importorskip("oci")
-    from locus.models.providers.oci import OCIModel
-
-    # Model id chosen to route to the native SDK transport.
-    try:
-        model = OCIModel(model_id="cohere.command-r-08-2024", profile_name="DEFAULT")
-    except Exception:
-        pytest.skip("OCI client construction requires real config")
-    assert model.supports_structured_output is False
-
-
-def test_oci_openai_compat_inherits_capability():
-    """OCIChatCompletionsModel inherits from OpenAIModel; reports True."""
-    pytest.importorskip("oci")
-    from unittest.mock import MagicMock, patch
-
-    from locus.models.providers.oci.openai_compat import OCIChatCompletionsModel
-
-    fake_cfg = {
-        "tenancy": "ocid1.tenancy.oc1..aaa",
-        "user": "ocid1.user.oc1..aaa",
-        "fingerprint": "aa:bb:cc",
-        "key_file": "/dev/null",
-        "region": "us-chicago-1",
-    }
-    fake_signer = MagicMock()
-    fake_signer.region = "us-chicago-1"
-
-    with (
-        patch(
-            "locus.models.providers.oci.openai_compat._load_profile_config",
-            return_value=fake_cfg,
-        ),
-        patch(
-            "locus.models.providers.oci.openai_compat._build_signer_from_profile",
-            return_value=fake_signer,
-        ),
-    ):
-        model = OCIChatCompletionsModel(model="openai.gpt-5", profile="DEFAULT")
-    assert model.supports_structured_output is True
 
 
 def test_build_response_format_returns_openai_shape():
@@ -176,8 +123,8 @@ def test_inline_schema_refs_inlines_nested():
     assert result["properties"]["items"]["items"]["type"] == "object"
 
 
-def test_inline_schema_refs_gemini_integration():
-    """Nested Pydantic model produces schema that Gemini would accept after inlining."""
+def test_inline_schema_refs_nested_pydantic_integration():
+    """Nested Pydantic model produces a fully inlined schema (no $defs/$ref)."""
     from pydantic import BaseModel, Field
 
     from locus.core.structured import inline_schema_refs
@@ -194,40 +141,3 @@ def test_inline_schema_refs_gemini_integration():
     inlined = inline_schema_refs(raw)
     assert "$defs" not in inlined
     assert "$ref" not in str(inlined)
-
-
-# ---------------------------------------------------------------------------
-# OCIChatCompletionsModel Gemini $ref inlining — unit tests
-# ---------------------------------------------------------------------------
-
-
-def test_oci_openai_model_requires_inlined_refs_for_gemini():
-    """google.* models trigger ref inlining; others do not."""
-    pytest.importorskip("oci")
-    from unittest.mock import MagicMock, patch
-
-    from locus.models.providers.oci.openai_compat import OCIChatCompletionsModel
-
-    fake_cfg = {
-        "tenancy": "t",
-        "user": "u",
-        "fingerprint": "f",
-        "key_file": "/dev/null",
-        "region": "us-chicago-1",
-    }
-    fake_signer = MagicMock()
-
-    with (
-        patch(
-            "locus.models.providers.oci.openai_compat._load_profile_config", return_value=fake_cfg
-        ),
-        patch(
-            "locus.models.providers.oci.openai_compat._build_signer_from_profile",
-            return_value=fake_signer,
-        ),
-    ):
-        gemini = OCIChatCompletionsModel(model="google.gemini-2.5-flash", profile="DEFAULT")
-        gpt = OCIChatCompletionsModel(model="openai.gpt-5", profile="DEFAULT")
-
-    assert gemini._requires_inlined_schema_refs is True
-    assert gpt._requires_inlined_schema_refs is False

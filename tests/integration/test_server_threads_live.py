@@ -9,9 +9,8 @@ Stands up an in-process FastAPI server backed by a real Agent +
 verifies ``GET /threads/{tid}`` returns the persisted state and
 ``DELETE`` removes it.
 
-Runs against three providers:
+Runs against two providers:
 
-* OCI ``/openai/v1`` (gpt-4o-mini) — needs ``OCI_PROFILE``
 * OpenAI direct (gpt-4o-mini) — needs ``OPENAI_API_KEY``
 * Anthropic direct (claude-haiku-4.5) — needs ``ANTHROPIC_API_KEY``
 
@@ -21,7 +20,6 @@ Each provider that's unavailable is silently skipped.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import pytest
 
@@ -29,22 +27,8 @@ import pytest
 pytestmark = [pytest.mark.integration]
 
 
-_PROFILE = os.environ.get("OCI_PROFILE")
-_REGION = os.environ.get("OCI_REGION", "us-chicago-1")
 _OPENAI = bool(os.environ.get("OPENAI_API_KEY"))
 _ANTHROPIC = bool(os.environ.get("ANTHROPIC_API_KEY"))
-
-
-def _has_oci_config() -> bool:
-    return Path("~/.oci/config").expanduser().exists()
-
-
-def _build_oci_v1():
-    if not (_PROFILE and _has_oci_config()):
-        return None
-    from locus.models.providers.oci import OCIChatCompletionsModel
-
-    return OCIChatCompletionsModel(model="openai.gpt-4o-mini", profile=_PROFILE, region=_REGION)
 
 
 def _build_openai_native():
@@ -68,7 +52,6 @@ def _build_anthropic_native():
 
 
 _PROVIDER_FACTORIES = [
-    pytest.param(_build_oci_v1, id="oci-v1-gpt-4o-mini"),
     pytest.param(_build_openai_native, id="openai-native-gpt-4o-mini"),
     pytest.param(_build_anthropic_native, id="anthropic-native-claude-haiku"),
 ]

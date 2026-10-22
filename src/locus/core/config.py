@@ -27,12 +27,7 @@ class ModelSettings(BaseSettings):
 
     # API Keys (from environment)
     openai_api_key: SecretStr | None = Field(default=None, alias="OPENAI_API_KEY")
-
-    # OCI Settings
-    oci_profile: str = "DEFAULT"
-    oci_auth_type: Literal["security_token", "api_key", "instance_principal"] = "security_token"
-    oci_compartment_id: str | None = None
-    oci_region: str = "us-chicago-1"
+    anthropic_api_key: SecretStr | None = Field(default=None, alias="ANTHROPIC_API_KEY")
 
     # Generation defaults
     max_tokens: int = 4096

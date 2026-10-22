@@ -64,11 +64,11 @@ def task_tool(
     ``description`` (str). On call:
 
     1. Look up ``subagent_type`` in the registered subagents.
-    2. Spawn a fresh ``locus.Agent`` with the subagent's tools, prompt,
-       and (optional) model override.
-    3. Run the subagent on ``description`` using ``agent.run()`` and
-       capture the final ``TerminateEvent.final_message``.
-    4. Return that string as the tool's output to the parent.
+    2. Spawn a fresh child loop via
+       :func:`locus.agent.subagent.run_subagent` with the subagent's
+       tools, prompt, and (optional) model override — so its usage rolls
+       up into the calling run and the parent's cancel stops it.
+    3. Return the child's final message as the tool's output.
 
     Args:
         subagents: List of :class:`SubAgentDef` declaring the
@@ -107,8 +107,7 @@ def task_tool(
 
         import time as _time
 
-        from locus.agent.agent import Agent
-        from locus.core.events import TerminateEvent
+        from locus.agent.subagent import run_subagent
         from locus.observability.emit import (
             EV_DEEPAGENT_SUBAGENT_COMPLETED,
             EV_DEEPAGENT_SUBAGENT_SPAWNED,
@@ -124,18 +123,19 @@ def task_tool(
         _started = _time.perf_counter()
 
         sub_model = defn.model if defn.model is not None else parent_model
-        sub_agent = Agent(
+        # The first-class primitive, not a hand-rolled child loop: the
+        # subagent's token usage folds into the calling run's counters,
+        # cancelling the parent cancels the child, and the child's events
+        # reach the bus stamped with the subagent's name.
+        sub_result = await run_subagent(
+            description,
             model=sub_model,
             tools=defn.tools,
             system_prompt=defn.system_prompt,
             max_iterations=defn.max_iterations,
-            reflexion=False,  # Subagents are short-lived; reflexion is overkill.
-            grounding=False,
+            name=defn.name,
         )
-        final_message = ""
-        async for event in sub_agent.run(description):
-            if isinstance(event, TerminateEvent):
-                final_message = event.final_message or ""
+        final_message = sub_result.text
         await emit(
             EV_DEEPAGENT_SUBAGENT_COMPLETED,
             subagent_type=subagent_type,

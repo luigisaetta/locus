@@ -53,6 +53,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import Field
 
+from locus.core.loop_bound import loop_bound
 from locus.models.native.openai import OpenAIConfig, OpenAIModel
 
 
@@ -473,7 +474,8 @@ class OCIChatCompletionsModel(OpenAIModel):
     @property
     def client(self) -> openai.AsyncOpenAI:
         """Build the AsyncOpenAI client wired with the OCI request signer."""
-        if self._client is None:
+
+        def build() -> openai.AsyncOpenAI:
             import httpx
             import openai
 
@@ -512,14 +514,16 @@ class OCIChatCompletionsModel(OpenAIModel):
                 ),
                 timeout=httpx.Timeout(self.config.request_timeout),
             )
-            self._client = openai.AsyncOpenAI(
+            return openai.AsyncOpenAI(
                 api_key="not-used",
                 base_url=self.config.base_url,
                 http_client=http_client,
                 max_retries=self.config.max_retries,
                 timeout=self.config.request_timeout,
             )
-        return self._client
+
+        # Bound to the loop that built it — see locus.core.loop_bound.
+        return loop_bound(self, "_client", build)
 
     def _build_signer(self) -> AbstractBaseSigner:
         if self.config.auth_type == "instance_principal":

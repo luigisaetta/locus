@@ -39,7 +39,7 @@ effect you never want duplicated, mark it idempotent:
 ```python
 @tool(idempotent=True)
 def transfer_points(from_user: str, to_partner: str, amount: int) -> dict:
-    """Transfer points — must be charged exactly once per (user, partner, amount)."""
+    """Transfer points; repeated identical calls reuse the result in this run."""
     return loyalty.transfer(from_user, to_partner, amount)
 ```
 
@@ -80,8 +80,11 @@ thread id there at agent-run time.
 
 ## Error handling
 
-Your tool can raise anything. The agent catches at the executor
-boundary and surfaces the error to the model via
-`ToolResult(success=False, error=...)`. The original exception is
-preserved as the `__cause__` of a
-[`ToolExecutionError`](../concepts/errors.md).
+Your tool can raise anything. The executor catches at the boundary and
+returns a `ToolResult` whose `error` field carries the sanitized
+`"{ExceptionType}: {message}"` string (and whose read-only `success`
+property is then `False`), so the model sees the failure instead of the
+run crashing. The exception is not re-raised — execution continues with
+the error surfaced as the tool's result. See
+[Errors](../concepts/errors.md) for the exception types the rest of the
+SDK uses.

@@ -30,7 +30,7 @@ class TestTaskTool:
             description="reviews stuff",
             system_prompt="You review.",
         )
-        t = task_tool([sa], parent_model="oci:fake-model")
+        t = task_tool([sa], parent_model="openai:fake-model")
         assert t.name == "task"
 
     def test_parameter_schema_has_flat_fields(self) -> None:
@@ -39,18 +39,18 @@ class TestTaskTool:
             description="reviews stuff",
             system_prompt="You review.",
         )
-        t = task_tool([sa], parent_model="oci:fake-model")
+        t = task_tool([sa], parent_model="openai:fake-model")
         props = t.parameters.get("properties", {})
         assert {"subagent_type", "description"} <= set(props.keys())
 
     def test_empty_subagents_list_rejected(self) -> None:
         with pytest.raises(ValueError, match="at least one"):
-            task_tool([], parent_model="oci:fake-model")
+            task_tool([], parent_model="openai:fake-model")
 
     def test_catalog_attached_for_prompt_injection(self) -> None:
         sa1 = SubAgentDef(name="a", description="A does A.", system_prompt="A.")
         sa2 = SubAgentDef(name="b", description="B does B.", system_prompt="B.")
-        t = task_tool([sa1, sa2], parent_model="oci:fake-model")
+        t = task_tool([sa1, sa2], parent_model="openai:fake-model")
         catalog = getattr(t, "_subagent_catalog", "")
         assert "a: A does A." in catalog
         assert "b: B does B." in catalog
@@ -58,7 +58,7 @@ class TestTaskTool:
     @pytest.mark.asyncio
     async def test_unknown_subagent_returns_error_string(self) -> None:
         sa = SubAgentDef(name="reviewer", description="x", system_prompt="x")
-        t = task_tool([sa], parent_model="oci:fake-model")
+        t = task_tool([sa], parent_model="openai:fake-model")
         result = await t.execute(subagent_type="ghost", description="...")
         assert "unknown subagent_type" in result
         assert "reviewer" in result  # surfaces what is available
@@ -70,7 +70,7 @@ class TestTaskTool:
     ) -> None:
         """The tool runs the subagent and returns its
         TerminateEvent.final_message verbatim. We mock the Agent class
-        so we don't need OCI auth.
+        so we don't need provider auth.
         """
 
         # Stub locus.agent.agent.Agent + locus.core.events.TerminateEvent
@@ -108,7 +108,7 @@ class TestTaskTool:
             description="reviews drafts",
             system_prompt="You review.",
         )
-        t = task_tool([sa], parent_model="oci:fake-model")
+        t = task_tool([sa], parent_model="openai:fake-model")
 
         result = await t.execute(
             subagent_type="reviewer",
@@ -122,15 +122,15 @@ class TestTaskTool:
 # ---------------------------------------------------------------------------
 
 
-def _stub_oci(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OCI_PROFILE", "DEFAULT")
+def _stub_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
 
 class TestCreateDeepagentSlice3:
     def test_subagents_off_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        _stub_oci(monkeypatch)
+        _stub_env(monkeypatch)
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             reflexion=False,
@@ -142,10 +142,10 @@ class TestCreateDeepagentSlice3:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        _stub_oci(monkeypatch)
+        _stub_env(monkeypatch)
         sa = SubAgentDef(name="reviewer", description="x", system_prompt="x")
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             subagents=[sa],
@@ -159,9 +159,9 @@ class TestCreateDeepagentSlice3:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        _stub_oci(monkeypatch)
+        _stub_env(monkeypatch)
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             reflexion=False,
@@ -180,9 +180,9 @@ class TestCreateDeepagentSlice3:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        _stub_oci(monkeypatch)
+        _stub_env(monkeypatch)
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             summarize_after_messages=20,

@@ -2,13 +2,14 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 """
-Express a workflow as decorated async functions instead of a graph.
+Notebook 23: Payment dispute triage with the functional API.
 
-If `StateGraph` feels like overkill for a straight-line pipeline, the
-functional API lets you write the same workflow as ordinary Python:
-decorate the units of work with `@task`, decorate the orchestrator
-with `@entrypoint`, and Locus tracks timing, retries, and caching for
-you behind the scenes.
+If `StateGraph` feels like overkill for a straight-line dispute
+workflow, the functional API lets you write the same payment dispute
+triage as ordinary Python: decorate the units of work with
+`@task`, decorate the orchestrator with `@entrypoint`, and Locus
+tracks timing, retries, and caching for you behind the scenes. Scenario:
+payments operations — fetch transaction, look up risk score, assess dispute.
 
 - @task — a unit of work; can declare retry_attempts and cache.
 - @entrypoint — the top-level coroutine; tracks every task it awaits.
@@ -16,11 +17,13 @@ you behind the scenes.
 - Same execution semantics as StateGraph, written imperatively.
 
 Run it:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_29_functional_api.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_23_functional_api.py
 
-The default provider is OCI GenAI — auto-detected from ~/.oci/config.
-Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick an OCI model with
-LOCUS_MODEL_ID=openai.gpt-4.1 (or meta.llama-3.3-70b-instruct, etc.).
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER for a live provider.
+Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+provider: ollama, vllm, groq, together, openrouter, ...).
 """
 
 import asyncio
@@ -32,13 +35,13 @@ from locus.agent import Agent
 from locus.multiagent.functional import entrypoint, task
 
 
-def _llm_call(
+async def _llm_call(
     prompt: str, *, system: str = "Reply in one short sentence.", max_tokens: int = 80
 ) -> str:
     """Run a one-shot Agent and print a timing/token banner. Used by every part."""
     agent = Agent(model=get_model(max_tokens=max_tokens), system_prompt=system)
     t0 = time.perf_counter()
-    res = agent.run_sync(prompt)
+    res = await agent.arun(prompt)
     dt = time.perf_counter() - t0
     print(
         f"  [model call: {dt:.2f}s · {res.metrics.prompt_tokens}→{res.metrics.completion_tokens} tokens]"
@@ -54,25 +57,27 @@ def _llm_call(
 async def example_basic():
     """Two @task functions wired together inside an @entrypoint."""
     print("=== Part 1: A two-task pipeline ===\n")
-    print(
-        f"AI rationale: {_llm_call('In one sentence, when is the Locus functional API a better choice than StateGraph?')}"
+    _ai_note = await _llm_call(
+        "In one sentence, when is the Locus functional API a better choice than StateGraph?"
     )
+    print(f"AI rationale: {_ai_note}")
 
     @task
-    async def fetch(url: str) -> dict:
-        return {"data": f"fetched from {url}", "status": 200}
+    async def fetch_transaction(txn_id: str) -> dict:
+        # Mock transaction fetch — invented data, clearly fake.
+        return {"transaction": f"transaction record for {txn_id}", "status": 200}
 
     @task
-    async def process(data: dict) -> str:
-        return f"processed: {data['data']}"
+    async def assess(transaction: dict) -> str:
+        return f"dispute assessed: {transaction['transaction']}"
 
     @entrypoint
-    async def pipeline(url: str) -> str:
-        data = await fetch(url)
-        result = await process(data)
+    async def pipeline(txn_id: str) -> str:
+        transaction = await fetch_transaction(txn_id)
+        result = await assess(transaction)
         return result
 
-    result = await pipeline("https://api.example.com/data")
+    result = await pipeline("TXN-2024-99999")
     print(f"Result: {result}")
 
     ep = pipeline.get_result()
@@ -88,25 +93,26 @@ async def example_basic():
 
 
 async def example_retry():
-    """retry_attempts on the decorator handles transient failures."""
+    """retry_attempts on the decorator handles a flaky payment processor feed."""
     print("\n=== Part 2: @task(retry_attempts=3) ===\n")
-    print(
-        f"AI rationale: {_llm_call('In one sentence, why does @task(retry_attempts=3) belong on the task and not in caller code?')}"
+    _ai_note = await _llm_call(
+        "In one sentence, why does @task(retry_attempts=3) belong on the task and not in caller code?"
     )
+    print(f"AI rationale: {_ai_note}")
 
     attempt = 0
 
     @task(retry_attempts=3)
-    async def unreliable_api(query: str) -> str:
+    async def query_processor_feed(txn_id: str) -> str:
         nonlocal attempt
         attempt += 1
         if attempt < 3:
-            raise ConnectionError("API timeout")
-        return f"result for: {query}"
+            raise ConnectionError("payment processor feed timeout")
+        return f"processor entry for: {txn_id}"
 
     @entrypoint
     async def retry_pipeline() -> str:
-        return await unreliable_api("test")
+        return await query_processor_feed("TXN-2024-99999")
 
     result = await retry_pipeline()
     print(f"Result: {result}")
@@ -119,25 +125,26 @@ async def example_retry():
 
 
 async def example_cache():
-    """Same arguments return the cached result without re-running the task."""
+    """Same transaction id returns the cached score without re-running the lookup."""
     print("\n=== Part 3: @task(cache=True) ===\n")
-    print(
-        f"AI rationale: {_llm_call('In one sentence, when should you turn @task(cache=True) ON for an LLM-heavy pipeline?')}"
+    _ai_note = await _llm_call(
+        "In one sentence, when should you turn @task(cache=True) ON for a transaction-enrichment pipeline?"
     )
+    print(f"AI rationale: {_ai_note}")
 
     call_count = 0
 
     @task(cache=True)
-    async def expensive_compute(key: str) -> str:
+    async def lookup_risk_score(txn_id: str) -> str:
         nonlocal call_count
         call_count += 1
-        return f"computed_{call_count}"
+        return f"score_lookup_{call_count}"
 
     @entrypoint
     async def cache_pipeline() -> tuple:
-        r1 = await expensive_compute("same_key")
-        r2 = await expensive_compute("same_key")  # cache hit
-        r3 = await expensive_compute("diff_key")
+        r1 = await lookup_risk_score("TXN-2024-99999")
+        r2 = await lookup_risk_score("TXN-2024-99999")  # cache hit
+        r3 = await lookup_risk_score("TXN-2024-88888")
         return (r1, r2, r3)
 
     r1, r2, r3 = await cache_pipeline()
@@ -150,19 +157,19 @@ async def example_with_llm():
     print("\n=== Part 4: @task wrapping an LLM call ===\n")
 
     @task
-    async def fetch_topic(seed: str) -> str:
-        return f"Tell me about {seed}."
+    async def build_question(txn_id: str) -> str:
+        return f"Assess the likely fraud risk of {txn_id} for a typical card-not-present charge."
 
     @task
-    async def think(prompt: str) -> str:
+    async def assess_risk(prompt: str) -> str:
         import time as _t
 
         agent = Agent(
             model=get_model(max_tokens=80),
-            system_prompt="Answer in one factual sentence.",
+            system_prompt="Answer in one factual sentence for a payments fraud analyst.",
         )
         t0 = _t.perf_counter()
-        result = agent.run_sync(prompt)
+        result = await agent.arun(prompt)
         dt = _t.perf_counter() - t0
         print(
             f"  [model call: {dt:.2f}s · {result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]"
@@ -170,16 +177,21 @@ async def example_with_llm():
         return result.message.strip()
 
     @entrypoint
-    async def pipeline(seed: str) -> str:
-        question = await fetch_topic(seed)
-        return await think(question)
+    async def pipeline(txn_id: str) -> str:
+        question = await build_question(txn_id)
+        return await assess_risk(question)
 
-    answer = await pipeline("Oracle Cloud Infrastructure")
-    print(f"Answer: {answer}")
+    answer = await pipeline("TXN-2024-99999")
+    print(f"Assessment: {answer}")
+
+
+async def main():
+    """Run all notebook parts."""
+    await example_basic()
+    await example_retry()
+    await example_cache()
+    await example_with_llm()
 
 
 if __name__ == "__main__":
-    asyncio.run(example_basic())
-    asyncio.run(example_retry())
-    asyncio.run(example_cache())
-    asyncio.run(example_with_llm())
+    asyncio.run(main())

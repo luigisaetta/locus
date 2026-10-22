@@ -5,9 +5,9 @@
 """Multi-credential pool with rotation and cooldown.
 
 For providers that allow multiple API keys under a single account
-(OpenAI projects, OpenRouter sibling keys, Anthropic org tokens, OCI
-API keys, …) a :class:`CredentialPool` lets the model wrapper rotate
-through keys when any one of them trips rate-limit or billing errors.
+(OpenAI projects, OpenRouter sibling keys, Anthropic org tokens, …) a
+:class:`CredentialPool` lets the model wrapper rotate through keys when
+any one of them trips rate-limit or billing errors.
 
 The pool is deliberately tiny and provider-neutral:
 

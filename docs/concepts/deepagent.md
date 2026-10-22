@@ -1,6 +1,6 @@
 # DeepAgent
 
-Oracle Generative AI – Multi-Agent Locus SDK ships two primitives for
+Locus ships two primitives for
 long-horizon research:
 
 | | `create_deepagent` | `create_research_workflow` |
@@ -21,13 +21,22 @@ and evaluation primitive from the rest of the SDK attaches normally.
 
 ## What it is
 
-A deep agent runs a tool loop until one of three exit conditions fires:
+A deep agent runs a tool loop until an exit condition fires:
 
 ```python
-termination = (
-    ToolCalled(submit_tool) & ConfidenceMet(min_confidence)
-) | TokenLimit(max_tokens) | MaxIterations(max_iterations)
+base = ToolCalled(submit_tool, require_success=True) & ConfidenceMet(min_confidence)
+if total_token_budget is not None:
+    termination = base | TokenLimit(total_token_budget) | MaxIterations(max_iterations)
+else:
+    termination = base | MaxIterations(max_iterations)
 ```
+
+`total_token_budget` defaults to `None`, so there is no token-based exit
+unless you set one. `require_success=True` means a submit tool that
+raises does not end the loop: the agent sees the rejection and keeps
+working. The per-completion output cap is a separate knob,
+`max_output_tokens=`; `create_deepagent` rejects `max_tokens=` with a
+`TypeError`.
 
 The conditions are composable, greppable, and unit-testable without a
 live model. The loop exits when the work is done — not after a fixed
@@ -37,7 +46,7 @@ number of steps.
 
 - `reflexion=True` — self-evaluates every turn; rewrites the plan when
   the last step was wrong.
-- `grounding=True` — scores every claim against the tool-call evidence
+- `grounding=True` — asks a configured judge to score the answer against the tool-call evidence
   trail; below-threshold claims get dropped or sent back for re-research.
 - `output_schema=` — the model provider's strict structured-output mode
   enforces the Pydantic schema before the result reaches the caller.
@@ -75,16 +84,16 @@ def submit_research(result: ResearchResult) -> str:
 
 
 agent = create_deepagent(
-    model="oci:openai.gpt-5.5",
+    model="{{ locus_example_model }}",
     tools=[search_kb, submit_research],
-    system_prompt="You are a research agent. Submit when confident.",
+    system_prompt="You are a market-research agent. Submit when confident.",
     output_schema=ResearchResult,
     submit_tool="submit_research",
     min_confidence=0.85,
     max_iterations=20,
 )
 
-result = agent.run_sync("Summarise our Q3 pipeline coverage.")
+result = agent.run_sync("Summarise the competitive landscape for mid-market CRM platforms.")
 report: ResearchResult = result.parsed  # Pydantic-typed structured output
 ```
 
@@ -131,17 +140,17 @@ gives the caller a live view after the run.
 ```python
 from locus.deepagent import SubAgentDef
 
-symbol_analyst = SubAgentDef(
-    name="symbol_analyst",
-    description="Deep-dives on a single module's public API.",
-    system_prompt="Inspect the given module and return its public symbols.",
-    tools=[inspect_module],
+competitor_analyst = SubAgentDef(
+    name="competitor_analyst",
+    description="Deep-dives on a single competitor's product and pricing.",
+    system_prompt="Research the given competitor and return its positioning, pricing, and recent launches.",
+    tools=[search_kb],
     max_iterations=4,
 )
 
 agent = create_deepagent(
     # model=..., tools=..., system_prompt=... (required)
-    subagents=[symbol_analyst],
+    subagents=[competitor_analyst],
 )
 ```
 
@@ -165,24 +174,24 @@ Missing paths are silently skipped so defaults like
 ### Datastore auto-wiring
 
 ```python
-from locus.rag import OCIEmbeddings, RAGRetriever
-from locus.rag.stores.oracle import OracleVectorStore
+from locus.rag import OpenAIEmbeddings, RAGRetriever
+from locus.rag.stores.qdrant import QdrantVectorStore
 
 retriever = RAGRetriever(
-    embedder=OCIEmbeddings(model_id="cohere.embed-v4.0", ...),
-    store=OracleVectorStore(dsn=..., table_name="VECTOR_DOCUMENTS", dimension=1536),
+    embedder=OpenAIEmbeddings(model="text-embedding-3-small"),
+    store=QdrantVectorStore(collection_name="industry_reports", dimension=1536),
 )
 
 agent = create_deepagent(
     # model=..., tools=..., system_prompt=... (required)
     datastores={
-        "medical": {
+        "industry_reports": {
             "retriever": retriever,
-            "description": "clinical knowledge: anemia, hemochromatosis, "
-                           "iron diagnostics and treatment",
+            "description": "analyst reports: market sizing, competitor "
+                           "pricing, launch timelines",
             "top_k": 6,
         },
-        # additional named stores — agent routes between them
+        # additional named stores (e.g. "support_tickets") — agent routes between them
     },
 )
 ```
@@ -191,22 +200,22 @@ For each entry, a `search_<name>` tool is auto-wired via
 `locus.rag.tools.create_rag_tool` (passing the retriever, top_k, and
 threshold) and appended to the agent's tool list, and a per-store
 description block is prepended to the system prompt so the model can
-route each query to the right store. Mirrors the langchain-oci
+route each query to the right store. Mirrors a common deep-research
 `create_deep_research_agent(datastores=...)` shape so existing recipes
 translate 1:1.
 
 The retriever's `store` can be any `BaseVectorStore` implementation —
-`OracleVectorStore` (Autonomous DB), `OpenSearchVectorStore`,
-`InMemoryVectorStore`, `PgVectorStore`, etc. See
+the SDK ships five: `InMemoryVectorStore`, `PgVectorStore`,
+`OpenSearchVectorStore`, `QdrantVectorStore`, and `ChromaVectorStore`. See
 [`examples/projects/deep-research/`][dr] for working ports of seven
-upstream deep-research gists covering all four major backends.
+upstream deep-research gists across these backends.
 
-[dr]: https://github.com/oracle-samples/locus/tree/main/examples/projects/deep-research
+[dr]: https://github.com/oracle/locus/tree/main/examples/projects/deep-research
 
 A few interop notes:
 
 - Some model providers JSON-encode floats as strings — `gpt-5.x` sends
-  `"min_score": "0.5"`. `RAGRetriever.retrieve` and `OracleVectorStore.search`
+  `"min_score": "0.5"`. `RAGRetriever.retrieve` and `QdrantVectorStore.search`
   coerce defensively so the threshold comparison doesn't `TypeError`.
 - From inside an async `def` use `async for event in agent.run(...)`,
   not `agent.run_sync(...)` — `run_sync` spawns a new thread + event
@@ -230,14 +239,14 @@ on long research runs without losing recent reasoning steps.
 ## Observability
 
 `create_deepagent` returns a standard `locus.Agent`, so all `deepagent.*`
-SSE events stream out whenever a `run_context` is active:
+SSE events stream out when the agent is awaited inside an active `run_context`:
 
 ```python
+import asyncio
 from locus.observability import run_context, get_event_bus
 
-async with run_context() as rid:
-    result = agent.run_sync("Research the observability module.")
 
+async def watch(rid: str) -> None:
     async for ev in get_event_bus().subscribe(rid):
         match ev.event_type:
             case "deepagent.subagent.spawned":
@@ -248,7 +257,20 @@ async with run_context() as rid:
                 print("  ☐", ev.data["content"])
             case "agent.terminate":
                 print("  ✓", ev.data["final_message_preview"])
+
+
+async with run_context() as rid:
+    watcher = asyncio.create_task(watch(rid))
+    await asyncio.sleep(0)  # let the subscriber register
+    result = await agent.arun("Research the pricing history for this product line.")
+    await get_event_bus().close_stream(rid)  # ends the subscriber's iterator
+    await watcher
 ```
+
+Use `await agent.arun(...)` here, not `run_sync`: inside a running event
+loop `run_sync` drives the agent on a worker thread that does not inherit
+the `run_id`, so nothing is published. The subscriber's iterator ends only
+when you call `close_stream(rid)`; `run_context` does not close it for you.
 
 | Event | When |
 |---|---|
@@ -259,21 +281,24 @@ async with run_context() as rid:
 
 ## KnowledgeProvider — multi-item scans
 
-For research that iterates over a discoverable surface (e.g. every table
-in a database schema), implement `KnowledgeProvider`:
+For research that iterates over a discoverable surface (e.g. every host
+in an asset inventory), implement `KnowledgeProvider`:
 
 ```python
 from locus.deepagent import KnowledgeProvider, KnowledgeRow, ItemRef
 
-class SchemaProvider(KnowledgeProvider):
+class AssetInventoryProvider(KnowledgeProvider):
     def list_items(self) -> list[ItemRef]:
-        return [ItemRef(id=t, label=t) for t in db.list_tables()]
+        return [
+            ItemRef(name=h, provider="asset_inventory")
+            for h in inventory.list_hosts()
+        ]
 
     def describe_item(self, ref: ItemRef) -> str:
-        return db.describe_table(ref.id)
+        return inventory.describe_host(ref.name)
 
     def to_row(self, ref: ItemRef, result: ResearchResult) -> KnowledgeRow:
-        return KnowledgeRow(id=ref.id, data=result.model_dump())
+        return KnowledgeRow(id=ref.name, data=result.model_dump())
 ```
 
 Feed the provider into your scan loop. Each item gets its own agent
@@ -289,17 +314,7 @@ the workflow runs the full ReAct phase first, then evaluates the summary
 post-hoc with an LLM-as-judge, and replans at the graph level when the
 grounding score is too low.
 
-```
-START
-  ↓
-execute          ← Agent(reflexion=True) tool loop; collects evidence
-  ↓
-summarize        ← distill evidence into a summary (optionally structured)
-  ↓
-grounding_eval   ← GroundingEvaluator scores summary claims vs evidence
-  ├── score ≥ threshold ──► END
-  └── score < threshold ──► replan ──► execute   (up to max_replans)
-```
+{{ locus_diagram deepagent-workflow }}
 
 ```python
 from locus.deepagent.workflow import create_research_workflow
@@ -312,29 +327,30 @@ class Report(BaseModel):
 
 workflow = create_research_workflow(
     model=get_model(),
-    tools=[search_kb, inspect_record, submit_research],
+    tools=[search_kb, enrich_indicator, submit_research],
     output_schema=Report,
     grounding_threshold=0.65,   # accept summary when ≥ 65% claims grounded
     max_replans=2,               # retry up to 2× with focused re-plan
 )
 
-result = await workflow.execute({"prompt": "Investigate FUSION.AP_INVOICES_ALL"})
+result = await workflow.execute({"prompt": "Investigate indicator 198.51.100.7"})
 report: Report = result.final_state["structured_output"]
 print(f"grounding: {result.final_state['grounding_score']:.0%}")
 print(f"replans used: {result.final_state['replan_count']}")
 ```
 
 `create_research_workflow` accepts the same `datastores=` mapping as
-`create_deepagent`. Internally both call `wire_datastores(...)` so the
-execute agent gets the identical `search_<name>` tool surface and
-system-prompt routing block:
+`create_deepagent` — here with a threat-intel corpus as the
+security-flavored variant. Internally both call `wire_datastores(...)`
+so the execute agent gets the identical `search_<name>` tool surface
+and system-prompt routing block:
 
 ```python
 workflow = create_research_workflow(
     model=...,
     tools=[],
     output_schema=Report,
-    datastores={"medical": {"retriever": medical_retriever, "top_k": 6}},
+    datastores={"threat_intel": {"retriever": threat_intel_retriever, "top_k": 6}},
     grounding_threshold=0.65,
 )
 ```
@@ -350,7 +366,7 @@ workflow = create_research_workflow(
 
 ## See also
 
-- [Notebook 42](../notebooks/notebook_29_deepagent.md) — four-part
+- [DeepAgent](../notebooks/notebook_29_deepagent.md) — four-part
   walkthrough: basic factory, filesystem + todos, subagents, observability.
 - [API reference — DeepAgent](../api/deepagent.md) — full class and
   function signatures including `create_research_workflow`.

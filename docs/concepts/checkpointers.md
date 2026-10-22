@@ -2,34 +2,64 @@
 
 A checkpointer is the contract for **persisting agent state** between
 runs. Pass one to `Agent(checkpointer=...)` and the agent saves
-`AgentState` after every iteration; resume a conversation by re-running
-with the same `thread_id`. Same code, same context, different process,
+`AgentState` after every iteration; resume a thread by re-running with
+the same `thread_id`. Same code, same case context, different process,
 different day.
 
-This is the durability story for production agents. Without a
-checkpointer your agent forgets every conversation when the process
-exits. With one, the same `thread_id` round-trips through restarts,
-across containers, and across regions.
+This is the continuity story for production agents. A case outlives a
+process: a refund case opens Friday, the service redeploys over the
+weekend, and Monday's run picks up the same conversation — every
+lookup, every approval, carried forward. Without a checkpointer the
+agent forgets what it already did and re-litigates the case from
+scratch. With one, the same `thread_id` round-trips through restarts,
+across containers, and across regions, so the record of *what was done
+and why* survives.
+
+The same story, security-operations flavored: a host gets isolated at
+02:00, the runner restarts, the on-call hands off, and the next shift
+must pick up the *same* investigation — every enriched indicator, every
+containment receipt, the case record carried forward.
 
 ```python
 from locus.agent import Agent
-from locus.memory.backends import oci_bucket_checkpointer
+from locus.memory.backends import S3Backend
+
+from locus_security import security_toolset
 
 agent = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[search, summarise],
-    checkpointer=oci_bucket_checkpointer(
-        bucket_name="my-app-checkpoints",
-        namespace="my-tenancy-namespace",
+    model="{{ locus_example_model }}",
+    tools=security_toolset(),   # query_siem, enrich_indicator, isolate_host, ...
+    # S3Backend is a native checkpointer — pass it straight to the agent.
+    checkpointer=S3Backend(
+        bucket="soc-case-checkpoints",
+        endpoint_url="https://s3.amazonaws.com",
     ),
 )
 
-# Day 1
-agent.run_sync("I'm planning a trip to Tokyo.", thread_id="user-c42")
+# 02:00 — triage fires, host gets isolated, the runner crashes mid-loop
+agent.run_sync("Triage alert A-42 and contain the affected host.", thread_id="case-4821")
 
-# Day 2 — different process, same thread_id, conversation continues
-agent.run_sync("What were we discussing?", thread_id="user-c42")
+# 08:00 — next shift, different process, same thread_id: the saved case state is loaded back
+agent.run_sync("What host did we isolate, and on what evidence?", thread_id="case-4821")
 ```
+
+!!! note "What a checkpoint is — and isn't"
+    A checkpoint is the agent's `AgentState` serialised to plain,
+    mutable JSON. Each save the agent makes mints a new checkpoint id and
+    writes a new record — a new `<checkpoint_id>.json` for
+    `FileCheckpointer`, a new object plus metadata for `S3Backend`, a new
+    `<thread_id>:<checkpoint_id>` entry for the `redis_checkpointer` /
+    `postgresql_checkpointer` / `mysql_checkpointer` factories. Only
+    bookkeeping is overwritten: the `<thread_id>/_latest` pointer object
+    for `S3Backend`, and for the factories a `<thread_id>:latest` copy
+    plus the `<thread_id>:_checkpoints` index. Earlier checkpoints stay
+    until you delete them or a retention rule (TTL, lifecycle policy,
+    `vacuum`) expires them. What you do not get is signing or any
+    integrity guarantee on the stored bytes: anything with write access
+    to the store can alter a checkpoint in place. It gives you
+    **durability and resumability**, not a tamper-evident audit log. For
+    a tamper-evident record of decisions, route those through the
+    [`AuditTrail`](agentic-ai-security.md) hash chain instead.
 
 ## Picking a backend
 
@@ -37,18 +67,17 @@ agent.run_sync("What were we discussing?", thread_id="user-c42")
 |---|---|
 | Unit tests, single-process REPL | `MemoryCheckpointer` |
 | Local development, single machine | `FileCheckpointer` |
-| Multi-worker deployment, fast access, TTLs | `redis_checkpointer` |
-| Postgres shop, want SQL queries on metadata | `postgresql_checkpointer` |
-| MySQL shop, want official Connector/Python async access | `mysql_checkpointer` |
-| Need full-text search across past runs | `opensearch_checkpointer` |
-| Oracle Database shop, want JSON queries | `oracle_checkpointer` |
-| **[Oracle 26ai][oracle-db] with versioned history + pending writes** | `OracleCheckpointSaver` — LangGraph-shape, native |
-| **[OCI Object Storage][oci-objectstorage], serverless, lifecycle policies** | `oci_bucket_checkpointer` — the day-1 OCI path |
+| Multi-worker deployment, fast access, TTLs | `RedisBackend` |
+| Postgres shop, want SQL queries on metadata | `PostgreSQLBackend` |
+| MySQL shop, want official Connector/Python async access | `MySQLBackend` |
+| Need full-text search across past runs | `OpenSearchBackend` |
+| **Object storage (S3 / MinIO / R2), serverless, lifecycle policies** | `S3Backend` |
+| **Oracle Database 26ai / Autonomous Database — durable threads next to your data, versioned history** | `oracle_checkpointer()` · `OracleCheckpointSaver` |
+| **OCI Object Storage** | `OCIBucketBackend` |
 | Already have a checkpoint service over HTTP | `HTTPCheckpointer` |
 
-Default on OCI: `oci_bucket_checkpointer`. No DB to run,
-no Redis to scale, lifecycle policies handle retention, IAM handles
-auth.
+Production default: `S3Backend`. No DB to run, no Redis to scale,
+lifecycle policies handle retention, IAM handles auth.
 
 ## Getting started
 
@@ -60,33 +89,36 @@ from locus.memory.backends.file import FileCheckpointer
 agent = Agent(
     model=...,
     tools=[...],
-    checkpointer=FileCheckpointer(directory="./threads"),
+    checkpointer=FileCheckpointer(base_dir="./threads"),
 )
 ```
 
-One JSON file per `thread_id` in the directory. Zero dependencies,
-plays well with `git stash` for "save my agent state" workflows.
+One directory per `thread_id` — one per case — with a JSON file per
+checkpoint.
+Zero dependencies; the on-disk case files are grep-able when you need to
+eyeball a thread's saved state by hand.
 
-### Production: `oci_bucket_checkpointer`
+### Production: `S3Backend`
 
 ```python
-from locus.memory.backends import oci_bucket_checkpointer
+from locus.memory.backends import S3Backend
 
 agent = Agent(
     model=...,
     tools=[...],
-    checkpointer=oci_bucket_checkpointer(
-        bucket_name="my-app-checkpoints",
-        namespace="my-tenancy-namespace",
-        compartment_id="ocid1.compartment...",
+    # S3Backend implements BaseCheckpointer directly — no adapter needed.
+    checkpointer=S3Backend(
+        bucket="agent-thread-checkpoints",
+        endpoint_url="https://s3.amazonaws.com",  # or a MinIO / R2 endpoint
         prefix="prod/",
     ),
 )
 ```
 
-OCI Object Storage with bucket-level lifecycle rules ("delete threads
-older than 90 days"), region replication, and IAM-controlled access.
-Workers across processes / pods see the same threads.
+S3-compatible object storage (S3 / MinIO / Cloudflare R2) with
+bucket-level lifecycle rules (retain closed cases for your audit
+window, then expire), region replication, and IAM-controlled access.
+Workers across processes / pods see the same cases.
 
 ### Postgres: `postgresql_checkpointer`
 
@@ -98,7 +130,7 @@ agent = Agent(
     tools=[...],
     checkpointer=postgresql_checkpointer(
         dsn="postgresql://user:pass@host:5432/locus",
-        schema="locus_threads",
+        schema_name="locus_threads",
     ),
 )
 ```
@@ -140,71 +172,37 @@ agent = Agent(
 )
 ```
 
-Fastest reads, optional TTL for ephemeral conversations.
+Fastest reads, optional TTL for short-lived threads that
+auto-expire once the case is closed.
 
-### Oracle 26ai: `oracle_checkpointer` + `OracleCheckpointSaver`
+### SQL: `PostgreSQLBackend` / `MySQLBackend`
 
-If your stack is already on **[Oracle Autonomous Database 26ai][adb]**,
-Oracle Generative AI – Multi-Agent Locus SDK ships two native
-checkpointers — one to colocate agent state with the rest of your app
-data, the other to give LangGraph-style versioned history in the same
-database.
-
-#### Single-row per thread — `oracle_checkpointer`
-
-The default option. One row per `thread_id` (MERGE-upsert). Survives
-restarts, lives in the same schema as your business data, supports
-`list_threads` / `vacuum` / `search` over a `CLOB IS JSON` column.
+If your stack is already on PostgreSQL or MySQL, the SDK ships storage
+backends so agent state can live alongside your app data. The backend
+upserts one row per key. Through the factories below, that key is
+`<thread_id>:<checkpoint_id>`, so each save adds a row, and a
+`<thread_id>:latest` row and a `<thread_id>:_checkpoints` index row are
+updated in place. `list_threads` and `vacuum` work over those rows, and
+`search_data` matches against the JSON `data` column. These are
+**storage backends**, not native checkpointers, so go
+through the `postgresql_checkpointer` / `mysql_checkpointer` factories
+(which wrap the backend in a `StorageBackendAdapter`):
 
 ```python
-from locus.memory.backends import oracle_checkpointer
+from locus.memory.backends import postgresql_checkpointer
 
 agent = Agent(
     model=...,
     tools=[...],
-    checkpointer=oracle_checkpointer(
-        dsn="mydb_low",                      # tnsnames alias from the wallet
-        user="locus_app",                    # least-privileged app schema
-        password=os.environ["ORACLE_PW"],
-        wallet_location="~/.oci/wallets/mydb",
-        wallet_password=os.environ["WALLET_PW"],
+    checkpointer=postgresql_checkpointer(
+        dsn="postgresql://locus_app:pass@host:5432/locus",
         table_name="locus_checkpoints",
     ),
 )
 ```
 
-CLOB columns are pinned via `setinputsizes(... = DB_TYPE_CLOB)` on every
-write — large agent states won't trip ORA-01461.
-
-#### Versioned history + pending writes — `OracleCheckpointSaver`
-
-Direct equivalent of `langgraph-oracledb.OracleSaver`. Two tables —
-one row per `(thread_id, checkpoint_ns, checkpoint_id)` for full
-graph-step history plus a `<table>_writes` table for intra-step
-durability. Zero `langchain` / `langgraph` dependency.
-
-```python
-from locus.memory.backends import OracleCheckpointSaver
-
-saver = OracleCheckpointSaver(
-    dsn="mydb_low",
-    user="locus_app",
-    password=os.environ["ORACLE_PW"],
-    wallet_location="~/.oci/wallets/mydb",
-    table_name="locus",                      # creates locus_checkpoints + locus_writes
-)
-await saver.put(thread_id="t1", checkpoint_id="v1", checkpoint_data={"step": 1})
-await saver.put_writes(
-    thread_id="t1", checkpoint_id="v1",
-    task_id="node-a",
-    writes=[("channel-x", "pending-write")],
-)
-latest = await saver.get(thread_id="t1")               # most-recent checkpoint
-history = await saver.list_checkpoints(thread_id="t1")  # walk lineage
-```
-
-Notebook walkthrough: [Notebook 07 — Oracle 26ai
-checkpointer](../notebooks/notebook_53_oracle_26ai_checkpointer.md).
+`mysql_checkpointer` mirrors the same shape on the official MySQL
+Connector/Python asyncio driver.
 
 ## Two checkpointer shapes — the gotcha to know
 
@@ -213,19 +211,21 @@ to wire them differently:
 
 1. **Native checkpointers** implement `BaseCheckpointer` directly and
    accept `AgentState`:
-   - `MemoryCheckpointer`, `FileCheckpointer`, `HTTPCheckpointer`,
-     `OCIBucketBackend`.
+   - `MemoryCheckpointer`, `FileCheckpointer`, `HTTPCheckpointer`, and
+     **`S3Backend`** (despite the `Backend` name, it subclasses
+     `BaseCheckpointer`).
    - Pass straight to `Agent(checkpointer=...)`.
 
-2. **Storage backends** expose a simpler dict-shaped interface and
-   need adapter wrapping:
-   - `RedisBackend`, `PostgreSQLBackend`, `MySQLBackend`, `OpenSearchBackend`,
-     `OracleBackend`.
-   - Use the factory function: `redis_checkpointer(...)`,
-     `postgresql_checkpointer(...)`, `mysql_checkpointer(...)`, etc.
+2. **Storage backends** expose a simpler dict-shaped `save(thread_id,
+   data)` interface and need adapter wrapping:
+   - `RedisBackend`, `PostgreSQLBackend`, `MySQLBackend`,
+     `OpenSearchBackend`.
+   - Wrap with the matching `*_checkpointer()` factory — there is **no
+     `.as_checkpointer()` method**.
 
 ```python
-# WRONG — passing a storage backend directly will fail at save time
+# WRONG — passing a storage backend directly fails: the agent calls
+# save(state, thread_id) but RedisBackend.save expects (thread_id, data)
 from locus.memory.backends.redis import RedisBackend
 agent = Agent(..., checkpointer=RedisBackend(url="..."))   # ✗
 
@@ -237,6 +237,8 @@ agent = Agent(..., checkpointer=redis_checkpointer(url="..."))  # ✓
 The `*_checkpointer()` factory wraps the storage backend in a
 `StorageBackendAdapter` that translates the agent's `save(state,
 thread_id)` calls into the backend's `save(thread_id, dict)` shape.
+(`s3_checkpointer()` is the exception — it returns the native `S3Backend`
+unchanged, since `S3Backend` already implements `BaseCheckpointer`.)
 
 ## Capabilities — feature detection
 
@@ -272,77 +274,81 @@ if caps.list_threads:
 
 ## Building your own
 
-Subclass `BaseCheckpointer`, implement `save`, `load`,
-`list_checkpoints`, `exists`, `delete`. Advertise your capabilities.
-Pass the instance directly to `Agent(checkpointer=...)` — no glue
-needed.
+Subclass `BaseCheckpointer` and implement the three abstract methods —
+`save`, `load`, `list_checkpoints` — and override `delete` / `exists`
+if the defaults don't fit. Advertise your `capabilities`. Pass the
+instance directly to `Agent(checkpointer=...)` — no glue needed.
 
 See [how-to/custom-checkpointer](../how-to/custom-checkpointer.md)
 for a worked example.
 
 ## Cross-thread store
 
-Checkpointers persist *one thread's* state. The companion abstraction —
-`BaseStore` — persists key-value data **across** threads: a per-user
-profile, long-term memory, anything that should outlive a single
-conversation.
+Checkpointers persist *one case's* state. The companion abstraction —
+`BaseStore` — persists key-value data **across** cases: a team
+playbook, a pricing-exception cache, anything that should outlive a
+single case.
 
 ```python
+import asyncio
 from locus.memory.store import InMemoryStore   # tests / REPL
 
-store = InMemoryStore()
-store.put(("locus_memory", "user"), "role", {"content": "Senior Python engineer"})
-hit = store.get(("locus_memory", "user"), "role")
+
+async def main():
+    store = InMemoryStore()
+    await store.put(("locus_memory", "support"), "refund_policy", {"content": "Refunds over $500 need manager approval"})
+    hit = await store.get(("locus_memory", "support"), "refund_policy")
+
+
+asyncio.run(main())
 ```
 
-The interface is `put / get / list / delete` keyed on a `(namespace,
-key)` pair. The [`LLMMemoryManager`](memory-manager.md) builds on this
+The interface is `put / get / delete / list_keys`, keyed on a
+`(namespace, key)` pair, plus optional `search` and
+`search_by_embedding` that backends advertise through
+`store.capabilities`. The [`LLMMemoryManager`](memory-manager.md) builds on this
 to give an agent a long-term memory layer; you can also use the store
-directly for anything cross-thread that doesn't need LLM extraction
-(API tokens, user preferences, rate-limit counters).
+directly for anything cross-case that doesn't need LLM extraction
+(product catalogues, customer allowlists, rate-limit counters).
 
-### Production: `OracleStore` on Oracle 26ai
+### The built-in store: `InMemoryStore`
 
-The SDK ships a native `BaseStore` implementation backed by Oracle 26ai —
-the equivalent of `langgraph-oracledb.OracleStore`, with **zero**
-langchain/langgraph dependency. Namespaces persist as primary keys on
-a single table; optional vector search runs natively against an
-embedding column.
+`InMemoryStore` (`locus.memory.store`) is the in-process
+implementation — namespaces and keys live in a dict, and it is the store
+the examples pass to [`LLMMemoryManager`](memory-manager.md), which
+requires a `store` argument rather than defaulting to one. For a durable
+cross-thread store the SDK ships `HolographicStore` (SQLite + FTS5, no
+external infrastructure; give it a file `path`, since the default is
+`:memory:`) and `PgMemory` (Postgres + pgvector with per-tenant
+row-level security), both in `locus.memory.store_backends`; subclass
+`BaseStore` only if neither fits — see [Memory API](../api/memory.md).
 
 ```python
-from locus.memory.store_backends import OracleStore
+import asyncio
+from locus.memory.store import InMemoryStore
 
-store = OracleStore(
-    dsn="mydb_low",
-    user="locus_app",
-    password=os.environ["ORACLE_PW"],
-    wallet_location="~/.oci/wallets/mydb",
-    table_name="locus_store",
-    dimension=1024,           # set for vector search; omit for plain K/V
-)
-await store.put(("memory", "u42"), "fact-1", {"note": "user likes cats"})
-await store.put_with_embedding(
-    ("memory", "u42"), "fact-2", {"note": "user dislikes mornings"},
-    embedding=[...],          # 1024-dim vector
-)
-hits = await store.search_by_embedding(("memory", "u42"), query=[...], limit=5)
+
+async def main():
+    store = InMemoryStore()
+    await store.put(("memory", "cust-4821"), "fact-1", {"note": "cust-4821 prefers store credit over card refunds"})
+    hits = await store.search(("memory", "cust-4821"), query=None, limit=5)
+
+
+asyncio.run(main())
 ```
-
-Same connection envelope as `oracle_checkpointer` — one wallet, one
-schema, both checkpoint state and long-term memory live in Oracle.
 
 ## Common gotchas
 
 | Symptom | Likely cause |
 |---|---|
-| `AttributeError: 'RedisBackend' has no attribute 'save'` (with `state` arg) | Storage backend passed without the adapter. Use `redis_checkpointer(...)` factory instead. |
-| Threads forgotten between deployments | `FileCheckpointer` directory inside an ephemeral container. Mount a volume, or move to `oci_bucket_checkpointer`. |
-| Two replicas show different conversation state for the same thread | The checkpointer isn't shared between replicas. `FileCheckpointer` is per-host; switch to a centralised backend (Redis, Postgres, MySQL, OCI bucket). |
+| `TypeError` on save (e.g. `save()` got an unexpected positional/`AgentState` where a dict was expected) | Storage backend (`RedisBackend` etc.) passed directly: its `save(thread_id, data)` signature doesn't match the agent's `save(state, thread_id)`. Wrap it with the matching `*_checkpointer()` factory. |
+| Open cases forgotten between deployments | `FileCheckpointer` directory inside an ephemeral container — the saved state dies with the pod. Mount a volume, or move to `S3Backend`. |
+| Two replicas show different case state for the same thread | The checkpointer isn't shared between replicas, so one worker doesn't know the refund was already issued. `FileCheckpointer` is per-host; switch to a centralised backend (Redis, Postgres, MySQL, S3). |
 | Slow first save | Some backends auto-create schema on first call. Pre-create in your deployment script if startup latency matters. |
 
 ## Source
 
-- [`locus.memory.backends`](https://github.com/oracle-samples/locus/tree/main/src/locus/memory/backends) — every backend, plus `StorageBackendAdapter` and the `*_checkpointer()` factories.
+- [`locus.memory.backends`](https://github.com/oracle/locus/tree/main/src/locus/memory/backends) — every backend, plus `StorageBackendAdapter` and the `redis_checkpointer` / `postgresql_checkpointer` / `mysql_checkpointer` / `opensearch_checkpointer` / `s3_checkpointer` factory functions.
 
 ## See also
 
@@ -350,14 +356,3 @@ schema, both checkpoint state and long-term memory live in Oracle.
 - [Conversation management](conversation-management.md) — higher-level patterns built on checkpointers.
 - [Idempotency](idempotency.md) — replay-safe side effects when a checkpoint resume re-issues a tool call.
 - [How-to: custom checkpointer](../how-to/custom-checkpointer.md) — write your own backend.
-
-### Oracle reference docs
-
-- [OCI Object Storage — overview](https://docs.oracle.com/iaas/Content/Object/Concepts/objectstorageoverview.htm)
-  — buckets, namespaces, IAM policies. Backs the `oci_bucket_checkpointer()` factory.
-- [Oracle AI Database 26ai — AI Vector Search User's Guide](https://docs.oracle.com/en/database/oracle/oracle-database/23/vecse/index.html)
-  — referenced by the Oracle 26ai checkpointer + vector store.
-
-[oracle-db]: https://docs.oracle.com/en/database/oracle/oracle-database/23/index.html
-[adb]: https://docs.oracle.com/en/cloud/paas/autonomous-database/index.html
-[oci-objectstorage]: https://docs.oracle.com/en-us/iaas/Content/Object/Concepts/objectstorageoverview.htm

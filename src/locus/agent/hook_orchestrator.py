@@ -75,10 +75,28 @@ class HookOrchestrator:
             if hasattr(hook, "on_after_invocation"):
                 await hook.on_after_invocation(state, success)
 
+    async def run_iteration_start(self, iteration: int, state: AgentState) -> None:
+        """Dispatch ``on_iteration_start`` to every hook in order."""
+        for hook in self._hooks:
+            if hasattr(hook, "on_iteration_start"):
+                await hook.on_iteration_start(iteration, state)
+
+    async def run_iteration_end(self, iteration: int, state: AgentState) -> None:
+        """Dispatch ``on_iteration_end`` in reverse order.
+
+        Reverse, to pair symmetrically with ``run_iteration_start`` the way
+        the invocation hooks already do.
+        """
+        for hook in reversed(self._hooks):
+            if hasattr(hook, "on_iteration_end"):
+                await hook.on_iteration_end(iteration, state)
+
     async def run_before_model(
         self,
         messages: list[Any],
         tools: list[dict[str, Any]] | None,
+        *,
+        run: Any = None,
     ) -> list[Any]:
         """Dispatch ``on_before_model_call``; returns possibly-modified messages.
 
@@ -87,7 +105,7 @@ class HookOrchestrator:
         """
         from locus.hooks.provider import BeforeModelCallEvent
 
-        event = BeforeModelCallEvent(messages=messages, tools=tools)
+        event = BeforeModelCallEvent(messages=messages, tools=tools, run=run)
         for hook in self._hooks:
             if hasattr(hook, "on_before_model_call"):
                 await hook.on_before_model_call(event)
@@ -98,6 +116,8 @@ class HookOrchestrator:
         self,
         response: Any,
         messages: list[Any],
+        *,
+        run: Any = None,
     ) -> Any:
         """Dispatch ``on_after_model_call`` in reverse order.
 
@@ -106,10 +126,40 @@ class HookOrchestrator:
         """
         from locus.hooks.provider import AfterModelCallEvent
 
-        event = AfterModelCallEvent(response=response, messages=messages)
+        event = AfterModelCallEvent(response=response, messages=messages, run=run)
         for hook in reversed(self._hooks):
             if hasattr(hook, "on_after_model_call"):
                 await hook.on_after_model_call(event)
+        return event
+
+    async def run_before_compaction(
+        self,
+        messages: list[Any],
+        *,
+        tokens: int,
+        threshold: int,
+        context_window: int,
+        iteration: int,
+        run: Any = None,
+    ) -> Any:
+        """Dispatch ``on_before_compaction`` in order; returns the event.
+
+        Callers read ``event.cancel`` to skip the compaction and
+        ``event.instructions`` to steer the summary.
+        """
+        from locus.hooks.provider import BeforeCompactionEvent
+
+        event = BeforeCompactionEvent(
+            messages,
+            tokens=tokens,
+            threshold=threshold,
+            context_window=context_window,
+            iteration=iteration,
+            run=run,
+        )
+        for hook in self._hooks:
+            if hasattr(hook, "on_before_compaction"):
+                await hook.on_before_compaction(event)
         return event
 
     async def run_before_tool(
@@ -117,6 +167,8 @@ class HookOrchestrator:
         tool_name: str,
         tool_call_id: str,
         arguments: dict[str, Any],
+        *,
+        run: Any = None,
     ) -> Any:
         """Dispatch ``on_before_tool_call``; returns the event.
 
@@ -129,6 +181,7 @@ class HookOrchestrator:
             tool_name=tool_name,
             tool_call_id=tool_call_id,
             arguments=arguments,
+            run=run,
         )
         for hook in self._hooks:
             if hasattr(hook, "on_before_tool_call"):
@@ -143,6 +196,7 @@ class HookOrchestrator:
         *,
         tool_call_id: str = "",
         arguments: dict[str, Any] | None = None,
+        run: Any = None,
     ) -> Any:
         """Dispatch ``on_after_tool_call`` in reverse order; returns the event.
 
@@ -160,6 +214,7 @@ class HookOrchestrator:
             error=error,
             tool_call_id=tool_call_id,
             arguments=arguments,
+            run=run,
         )
         for hook in reversed(self._hooks):
             if hasattr(hook, "on_after_tool_call"):

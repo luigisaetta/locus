@@ -1,13 +1,15 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Notebook 43: playbooks — typed step-by-step procedures the agent must follow.
+"""Notebook 46: playbooks — a GDPR data-subject-access runbook the agent must follow.
 
 A playbook is a typed, ordered sequence of steps with declared
 ``expected_tools``. Wire it into an agent and the agent is constrained
 to walk the steps in order, calling only the tools each step allows.
-Useful for incident response, deployments, and any procedure where
-you want auditability over agent freedom.
+That is exactly what privacy operations demand: a GDPR-style data
+subject access request (DSAR) procedure where no step is skipped,
+every tool call is attributable to a step, and the whole run is
+auditable after the fact.
 
 - ``PlaybookStep`` — id, description, expected tools, hints,
   validation rules.
@@ -24,17 +26,18 @@ to the structured execution mechanics — every section prints
 ``[model call: X.XXs · prompt→completion tokens]``.
 
 Run it:
-    # OCI GenAI is the default — auto-detected from ~/.oci/config.
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_48_playbooks.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_46_playbooks.py
 
     # Offline:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_48_playbooks.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_46_playbooks.py
 
 Prerequisites:
-- An OCI profile with GenAI access, or set ``LOCUS_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 """
 
+import asyncio
 import time
 from datetime import UTC, datetime
 
@@ -51,12 +54,12 @@ from locus.playbooks import (
 from locus.tools import tool
 
 
-def _llm_call(
+async def _llm_call(
     prompt: str, *, system: str = "Reply in one short sentence.", max_tokens: int = 100
 ) -> str:
     agent = Agent(model=get_model(max_tokens=max_tokens), system_prompt=system)
     t0 = time.perf_counter()
-    res = agent.run_sync(prompt)
+    res = await agent.arun(prompt)
     dt = time.perf_counter() - t0
     print(
         f"  [model call: {dt:.2f}s · "
@@ -65,9 +68,9 @@ def _llm_call(
     return res.message.strip()
 
 
-def main():
+async def main():
     print("=" * 60)
-    print("Notebook 43: playbooks")
+    print("Notebook 46: playbooks")
     print("=" * 60)
 
     # =========================================================================
@@ -75,37 +78,37 @@ def main():
     # =========================================================================
     print("\n=== Part 1: Creating Playbook Steps ===\n")
     step1 = PlaybookStep(
-        id="gather_logs",
-        description="Collect relevant log files from the affected services",
-        expected_tools=["read_file", "search_logs"],
-        hints=["Start with the most recent logs", "Look for ERROR and WARN levels"],
+        id="verify_identity",
+        description="Verify the requester's identity before processing the access request",
+        expected_tools=["lookup_subject", "validate_id_document"],
+        hints=["Match against the subject registry", "Confirm the ID document is current"],
         required=True,
         max_tool_calls=5,
     )
     step2 = PlaybookStep(
-        id="analyze_errors",
-        description="Analyze the collected logs for error patterns",
-        expected_tools=["analyze_logs", "count_errors"],
-        hints=["Group errors by type", "Note timestamps"],
+        id="locate_records",
+        description="Find every personal-data record held for the verified subject",
+        expected_tools=["search_data_inventory", "query_systems"],
+        hints=["Group records by system", "Note collection timestamps"],
         required=True,
     )
     step3 = PlaybookStep(
-        id="check_metrics",
-        description="Review system metrics during the incident window",
-        expected_tools=["query_metrics", "get_dashboard"],
-        hints=["Focus on CPU, memory, and network"],
+        id="review_scope",
+        description="Determine which records are in scope and which exemptions apply",
+        expected_tools=["check_legal_basis", "list_data_categories"],
+        hints=["Flag third-party PII that must be excluded"],
         required=False,
     )
     step4 = PlaybookStep(
-        id="summarize_findings",
-        description="Create a summary of findings and recommendations",
+        id="compile_response",
+        description="Assemble the access-request response package for the subject",
         expected_tools=[],
-        hints=["Include root cause if identified"],
+        hints=["Include the data categories disclosed and the legal basis"],
         required=True,
     )
     print(f"  Step: {step1.id} ({len(step1.expected_tools)} expected tools)")
-    rationale = _llm_call(
-        "In one sentence, why does an incident-response playbook benefit from "
+    rationale = await _llm_call(
+        "In one sentence, why does a GDPR data-subject-access runbook benefit from "
         "having `expected_tools` declared per step?",
     )
     print(f"AI rationale: {rationale}")
@@ -115,18 +118,18 @@ def main():
     # =========================================================================
     print("\n=== Part 2: Creating a Playbook ===\n")
     playbook = Playbook(
-        id="incident_investigation",
-        name="Incident Investigation Playbook",
-        description="Standard procedure for investigating production incidents",
+        id="dsar_right_of_access",
+        name="DSAR Playbook — Right of Access",
+        description="GDPR Article 15 right-of-access fulfillment procedure for verified subjects",
         version="1.0.0",
         steps=[step1, step2, step3, step4],
         strict_sequence=True,
         allow_extra_tools=True,
         max_iterations=20,
-        tags=["incident", "investigation", "production"],
+        tags=["data-privacy", "gdpr", "dsar"],
     )
     print(f"  Playbook: {playbook.name} v{playbook.version} steps={len(playbook.steps)}")
-    described = _llm_call(
+    described = await _llm_call(
         f"Describe this playbook in two sentences: {playbook.description}. "
         f"Steps: {[s.id for s in playbook.steps]}.",
         max_tokens=160,
@@ -138,21 +141,21 @@ def main():
     # =========================================================================
     print("\n=== Part 3: Execution Plans ===\n")
     plan = PlaybookPlan(playbook=playbook)
-    plan.step_executions["gather_logs"] = StepExecution(
-        step_id="gather_logs",
+    plan.step_executions["verify_identity"] = StepExecution(
+        step_id="verify_identity",
         status=StepStatus.COMPLETED,
         started_at=datetime.now(UTC),
         completed_at=datetime.now(UTC),
-        tool_calls=["read_file", "search_logs", "read_file"],
+        tool_calls=["lookup_subject", "validate_id_document", "lookup_subject"],
         tool_call_count=3,
-        result="Found 15 error entries in app.log",
+        result="Identity verified for subject S-4821 via passport match",
     )
     plan.current_step_index = 1
     print(f"  Progress: {plan.progress:.0%}  current_step={plan.current_step.id}")
-    next_step = _llm_call(
-        f"The previous step '{plan.completed_steps[0]}' completed and found 15 "
-        f"error entries. The next step is '{plan.current_step.id}'. Suggest one "
-        "specific tool call for that step.",
+    next_step = await _llm_call(
+        f"The previous step '{plan.completed_steps[0]}' completed and verified the "
+        f"subject's identity. The next step is "
+        f"'{plan.current_step.id}'. Suggest one specific tool call for that step.",
         max_tokens=80,
     )
     print(f"AI next-step suggestion: {next_step}")
@@ -163,9 +166,10 @@ def main():
     print("\n=== Part 4: Step Status Tracking ===\n")
     for status in StepStatus:
         print(f"  - {status.value}")
-    print(f"  is_step_complete('gather_logs') = {plan.is_step_complete('gather_logs')}")
-    summary = _llm_call(
-        "In one sentence, when should an SRE mark a playbook step as SKIPPED rather than FAILED?",
+    print(f"  is_step_complete('verify_identity') = {plan.is_step_complete('verify_identity')}")
+    summary = await _llm_call(
+        "In one sentence, when should a privacy analyst mark a DSAR runbook step "
+        "as SKIPPED rather than FAILED?",
         max_tokens=80,
     )
     print(f"AI summary: {summary}")
@@ -175,16 +179,19 @@ def main():
     # =========================================================================
     print("\n=== Part 5: Playbook Validation ===\n")
     validated_step = PlaybookStep(
-        id="validate_fix",
-        description="Verify the fix is working",
-        expected_tools=["run_tests", "check_health"],
-        validation={"min_tool_calls": 1, "required_result_keywords": ["passed", "healthy"]},
+        id="validate_redaction",
+        description="Verify third-party PII has been redacted before disclosure",
+        expected_tools=["scan_pii", "apply_redactions"],
+        validation={
+            "min_tool_calls": 1,
+            "required_result_keywords": ["redacted", "no third-party"],
+        },
         required=True,
     )
     print(f"  Step: {validated_step.id}  validation={validated_step.validation}")
-    judge = _llm_call(
+    judge = await _llm_call(
         f"This step requires the result to contain {validated_step.validation['required_result_keywords']}. "
-        "If the actual result is 'tests passed: 12, services healthy', does it satisfy the validation? Reply YES or NO with one-word reason.",
+        "If the actual result is 'two contact records redacted, no third-party PII remains', does it satisfy the validation? Reply YES or NO with one-word reason.",
         max_tokens=40,
     )
     print(f"AI judgment: {judge}")
@@ -195,66 +202,66 @@ def main():
     print("\n=== Part 6: Playbook Metadata ===\n")
     step_with_meta = PlaybookStep(
         id="escalate",
-        description="Escalate if issue persists",
-        expected_tools=["send_alert", "page_oncall"],
+        description="Escalate if the request is complex or high-risk for the data controller",
+        expected_tools=["notify_dpo", "open_review_ticket"],
         metadata={
-            "severity_threshold": "high",
-            "escalation_timeout_minutes": 30,
-            "notify_channels": ["#incidents", "#oncall"],
+            "risk_threshold": "high",
+            "statutory_deadline_days": 30,
+            "notify_channels": ["#privacy-ops", "#dpo-oncall"],
         },
     )
     print(f"  metadata: {step_with_meta.metadata}")
-    suggestion = _llm_call(
-        "Suggest one extra metadata field a production-grade incident playbook "
-        "step should carry, with a one-line rationale.",
+    suggestion = await _llm_call(
+        "Suggest one extra metadata field a production-grade GDPR data-subject-access "
+        "playbook step should carry, with a one-line rationale.",
         max_tokens=80,
     )
     print(f"AI suggestion: {suggestion}")
 
     # =========================================================================
     # Part 7: Build playbooks programmatically — one factory function,
-    #         parameterised by environment and service list.
+    #         parameterised by environment and target-system list.
     # =========================================================================
     print("\n=== Part 7: Building Playbooks Programmatically ===\n")
 
-    def deployment_playbook(env: str, services: list[str]) -> Playbook:
+    def erasure_playbook(env: str, systems: list[str]) -> Playbook:
         steps = [
             PlaybookStep(
                 id="pre_check",
-                description=f"Verify {env} environment is ready",
-                expected_tools=["check_health", "verify_deps"],
+                description=f"Confirm erasure is lawful and in scope for {env}",
+                expected_tools=["check_legal_basis", "verify_scope"],
                 required=True,
             )
         ]
         steps += [
             PlaybookStep(
-                id=f"deploy_{s}",
-                description=f"Deploy {s} to {env}",
-                expected_tools=["deploy", "wait_healthy"],
-                metadata={"service": s},
+                id=f"erase_{s}",
+                description=f"Delete the subject's personal data in {s} ({env})",
+                expected_tools=["delete_records", "wait_confirmed"],
+                metadata={"system": s},
                 required=True,
             )
-            for s in services
+            for s in systems
         ]
         steps.append(
             PlaybookStep(
                 id="post_validate",
-                description="Validate deployment success",
-                expected_tools=["run_smoke_tests", "check_metrics"],
+                description="Validate erasure completed across every target system",
+                expected_tools=["scan_residual_pii", "check_backups"],
                 required=True,
             )
         )
         return Playbook(
-            id=f"deploy_{env}",
-            name=f"{env.title()} Deployment",
+            id=f"erase_{env}",
+            name=f"{env.title()} Right-to-Erasure",
             steps=steps,
-            tags=["deployment", env],
+            tags=["erasure", env],
         )
 
-    prod_playbook = deployment_playbook("production", ["api", "web", "worker"])
+    prod_playbook = erasure_playbook("production", ["crm", "billing", "analytics"])
     print(f"  Generated: {prod_playbook.name}  steps={[s.id for s in prod_playbook.steps]}")
-    review = _llm_call(
-        f"Review this generated deployment playbook: {[s.id for s in prod_playbook.steps]}. "
+    review = await _llm_call(
+        f"Review this generated right-to-erasure playbook: {[s.id for s in prod_playbook.steps]}. "
         "Spot one weakness in one short sentence.",
         max_tokens=100,
     )
@@ -265,17 +272,17 @@ def main():
     # =========================================================================
     print("\n=== Part 8: Progress Visualization ===\n")
     demo_plan = PlaybookPlan(playbook=playbook)
-    demo_plan.step_executions["gather_logs"] = StepExecution(
-        step_id="gather_logs", status=StepStatus.COMPLETED
+    demo_plan.step_executions["verify_identity"] = StepExecution(
+        step_id="verify_identity", status=StepStatus.COMPLETED
     )
-    demo_plan.step_executions["analyze_errors"] = StepExecution(
-        step_id="analyze_errors", status=StepStatus.IN_PROGRESS
+    demo_plan.step_executions["locate_records"] = StepExecution(
+        step_id="locate_records", status=StepStatus.IN_PROGRESS
     )
     demo_plan.current_step_index = 1
     bar = "#" * int(demo_plan.progress * 20) + "-" * (20 - int(demo_plan.progress * 20))
     print(f"  [{bar}] {demo_plan.progress:.0%}")
-    eta = _llm_call(
-        "An incident-investigation playbook has 4 steps. One is done, one is "
+    eta = await _llm_call(
+        "A data-subject-access playbook has 4 steps. One is done, one is "
         "in progress, two are pending. Roughly how long should we expect the "
         "remaining work to take? Answer in one short sentence.",
         max_tokens=80,
@@ -286,60 +293,65 @@ def main():
     # Part 9: The model writes a short best-practices cheatsheet.
     # =========================================================================
     print("\n=== Part 9: Best Practices ===\n")
-    practices = _llm_call(
+    practices = await _llm_call(
         "Write five terse best-practice bullets for designing reliable Locus "
-        "playbooks. Five bullets only.",
+        "data-privacy request playbooks. Five bullets only.",
         max_tokens=240,
     )
     print(practices)
 
     # =========================================================================
     # Part 10: Agent(playbook=...) — real tools, real agent, the playbook
-    #          enforces order.
+    #          enforces order. All request data below is mock (fictional IDs).
     # =========================================================================
     print("\n=== Part 10: Live Agent driving a Playbook ===\n")
 
     @tool
-    def fetch_logs(incident_id: str) -> str:
+    def fetch_request(request_id: str) -> str:
         return (
-            f"[{incident_id}] 2026-05-03T19:01:14Z ERROR db.pool exhausted "
-            "(50/50 conns)\n[INC-42] 2026-05-03T19:01:18Z ERROR api.handler "
-            "timeout calling /v1/orders"
+            f"[{request_id}] 2026-06-02T03:14:09Z DSAR right_of_access subject 'S-4821' "
+            "spanning crm, billing, analytics\n[DSAR-7741] "
+            "2026-06-02T03:14:41Z note: subject record includes a third-party contact"
         )
 
     @tool
-    def classify_severity(snippet: str) -> str:
-        return "P1" if "ERROR" in snippet and "exhausted" in snippet else "P3"
+    def classify_request(snippet: str) -> str:
+        return (
+            "complex" if "right_of_access" in snippet and "third-party" in snippet else "standard"
+        )
 
     @tool
-    def page_oncall(severity: str, incident_id: str) -> str:
-        return f"paged oncall for {incident_id} at severity {severity}"
+    def notify_dpo(complexity: str, request_id: str) -> str:
+        return f"notified DPO for {request_id} at complexity {complexity}"
 
     triage = Playbook(
-        id="incident_triage",
-        name="Incident triage",
+        id="dsar_triage",
+        name="DSAR triage",
         steps=[
-            PlaybookStep(id="gather", description="Pull logs", expected_tools=["fetch_logs"]),
             PlaybookStep(
-                id="classify", description="Decide severity", expected_tools=["classify_severity"]
+                id="gather", description="Pull the request", expected_tools=["fetch_request"]
             ),
             PlaybookStep(
-                id="page", description="Page oncall if P1", expected_tools=["page_oncall"]
+                id="classify", description="Decide complexity", expected_tools=["classify_request"]
+            ),
+            PlaybookStep(
+                id="notify", description="Notify DPO if complex", expected_tools=["notify_dpo"]
             ),
         ],
     )
 
     triage_agent = Agent(
         model=get_model(max_tokens=400),
-        tools=[fetch_logs, classify_severity, page_oncall],
+        tools=[fetch_request, classify_request, notify_dpo],
         playbook=triage,
         system_prompt=(
-            "You are an SRE on call. Follow the playbook steps in order: "
-            "fetch logs, classify severity, then page oncall if it is P1."
+            "You are a privacy analyst handling data-subject requests. Follow the "
+            "playbook steps in order: fetch the request, classify its complexity, "
+            "then notify the DPO if it is complex."
         ),
     )
     t0 = time.perf_counter()
-    triage_result = triage_agent.run_sync("Triage incident INC-42.")
+    triage_result = await triage_agent.arun("Triage request DSAR-7741.")
     dt = time.perf_counter() - t0
     print(
         f"  [model call: {dt:.2f}s · "
@@ -349,9 +361,9 @@ def main():
     print(f"Triage outcome: {triage_result.message[:300]}")
 
     print("\n" + "=" * 60)
-    print("Done. Next: notebook 43 — plugins.")
+    print("Done. Next: notebook 47 — plugins.")
     print("=" * 60)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

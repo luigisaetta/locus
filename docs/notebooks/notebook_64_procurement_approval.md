@@ -1,34 +1,39 @@
-# Procurement Approval
+# Customer-Support Concession Approval
 
-Real procurement workflows have a threshold-based escalation chain::
+Real support orgs gate costly concessions behind a tier-based escalation chain::
 
-    Request submitted
+    Ticket intake (case history on file)
        │
        ▼
-    Justifier  (drafts business justification)
+    Ticket analyst  (summarises what the customer is asking for and why)
        │
        ▼
-    Vendor analyst  (validates vendor + pricing)
+    Impact analyst  (assesses concession cost + precedent + churn risk)
        │
        ▼
-    Tier router   ── < $1k     ──> auto-approve
-                  ── $1k-$10k  ──> manager approval (interrupt)
-                  ── $10k-$100k──> manager + finance approval (two interrupts)
-                  ── > $100k   ──> manager + finance + CFO approval (three interrupts)
+    Risk-tier router  ── score < 25 ──> auto-approve (small credit)
+                      ── 25–49     ──> support-manager approval (interrupt)
+                      ── 50–74     ──> manager + billing approval (two interrupts)
+                      ── >= 75     ──> manager + billing + director approval (three interrupts)
        │
        ▼
-    PO generator  (emits structured PurchaseOrder)
+    Decision recorder  (emits structured ConcessionDecision)
 
 Each approval gate is a separate `interrupt()` so a reviewer can come
-back to it later. The workflow ends with a typed `PurchaseOrder`
-Pydantic model that can be filed into an ERP without parsing.
+back to it later. The terminal node is SCRIBE, the support org's case
+recorder: it emits a typed `ConcessionDecision` Pydantic model that files
+into the concessions ledger without parsing. A large refund or contract
+make-good spends real money and sets a precedent other customers will
+cite, so the impact step is where you weigh the customer's standing and
+lifetime value against the cost of the concession and the downside of a
+denial (churn, escalation, public complaint).
 
-- Tier router is a plain conditional edge — no DSL, no policy file.
+- Risk-tier router is a plain conditional edge — no DSL, no policy file.
 - Each gate is its own node — easy to add a tier, easy to re-order,
   easy to swap a human gate for an automated rule.
-- `output_schema=PurchaseOrder` keeps the terminal artifact typed.
+- `output_schema=ConcessionDecision` keeps the terminal artifact typed.
 
-Run it (OCI Generative AI is the default — the notebook harness picks it when `~/.oci/config` exists; set `OCI_PROFILE` to choose a non-default profile):
+Run it (defaults to the bundled mock model; set `LOCUS_MODEL_PROVIDER` to `openai` / `anthropic` for a live model):
 
     python examples/notebook_64_procurement_approval.py
 
@@ -36,12 +41,12 @@ Offline:
 
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_64_procurement_approval.py
 
-Pin a strong-enough model for the structured PurchaseOrder schema:
+Pin a strong-enough model for the structured ConcessionDecision schema:
 
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_64_procurement_approval.py
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_64_procurement_approval.py
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_64_procurement_approval.py"
-```
+````

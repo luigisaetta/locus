@@ -5,9 +5,8 @@
 """Native model providers for Locus.
 
 Native providers connect directly to model vendor APIs:
-- OpenAI → GPT models (Oracle partnership)
+- OpenAI → GPT models (and OpenAI-compatible gateways via ``base_url``)
 - Anthropic → Claude models
-- Ollama → Local LLMs (Llama, Mistral, Gemma, etc.)
 """
 
 from locus.models.native.openai import OpenAIConfig, OpenAIModel
@@ -16,7 +15,6 @@ from locus.models.native.openai import OpenAIConfig, OpenAIModel
 __all__ = [
     "OpenAIModel",
     "OpenAIConfig",
-    # Anthropic and Ollama are lazy imports to avoid hard dependencies:
+    # Anthropic is a lazy import to avoid a hard dependency:
     #   from locus.models.native.anthropic import AnthropicModel
-    #   from locus.models.native.ollama import OllamaModel
 ]

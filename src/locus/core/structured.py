@@ -254,30 +254,6 @@ def _enforce_additional_properties_false(node: Any) -> None:
             _enforce_additional_properties_false(item)
 
 
-# OCI GenAI rejects a few JSON-Schema constructs that Pydantic emits by
-# default. The rejection surfaces as ``Unknown name '<key>' at '<path>'``
-# or ``Proto field is not repeating`` errors from the Gemini Proto
-# validator (Google models on OCI use a stricter Proto schema than
-# the direct Google API surface).
-#
-# Observed in the field (see issue #281):
-#
-#   - ``type: ["string", "null"]`` from ``Optional[str]`` — Gemini's
-#     Proto requires ``type`` to be a SINGLE string, not a list. The
-#     fix is to keep the first non-null entry.
-#   - ``type: "any"`` from ``Any`` annotations — Gemini doesn't know
-#     ``any``; remap to ``object``.
-#   - Metadata keys ``title``, ``const``, ``default: None``, and
-#     ``x-*`` namespaces — OCI rejects unknown metadata in tool
-#     parameter schemas.
-#
-# This helper mirrors ``langchain_oci.common.utils.OCIUtils.sanitize_schema``
-# (Oracle's own langchain-oci package), which is the validated reference
-# implementation used by every Oracle-hosted LangChain agent in
-# production. Apply unconditionally to tool parameter schemas before
-# sending them to the OCI Generative AI endpoint — the sanitization is
-# safe for non-Gemini OCI models too (the keys it strips are pure
-# metadata that the OCI tool API ignores).
 def sanitize_oci_tool_schema(schema: Any) -> Any:
     """Recursively sanitize a JSON Schema for OCI GenAI tool compatibility.
 

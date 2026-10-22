@@ -27,16 +27,6 @@ def has_model_available() -> bool:
     if os.environ.get("MODEL_PROVIDER"):
         return True
 
-    # Check for OCI config with DEFAULT profile
-    oci_config_path = os.path.expanduser("~/.oci/config")
-    if os.path.exists(oci_config_path):
-        try:
-            with open(oci_config_path) as f:
-                if "[DEFAULT]" in f.read():
-                    return True
-        except Exception:
-            pass
-
     return False
 
 

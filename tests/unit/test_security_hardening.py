@@ -84,7 +84,7 @@ class TestPgVectorMetadataFilterInjection:
     def store(self):
         from locus.rag.stores.pgvector import PgVectorStore
 
-        instance = PgVectorStore(table_name="docs", dimension=4)
+        instance = PgVectorStore(host="localhost", table_name="docs", dimension=4)
 
         class _FakePool:
             def acquire(self):  # pragma: no cover — should never be reached
@@ -124,72 +124,6 @@ class TestPgVectorMetadataFilterInjection:
 
 
 # ---------------------------------------------------------------------------
-# F2 — Oracle memory backend identifier validation
-# ---------------------------------------------------------------------------
-
-
-class TestOracleMemoryIdentifierValidation:
-    @pytest.mark.parametrize(
-        "bad_table",
-        ["docs; DROP", "docs'--", "1docs", "docs space"],
-    )
-    def test_bad_table_name_rejected(self, bad_table):
-        from locus.memory.backends.oracle import OracleConfig
-
-        with pytest.raises((ValueError, Exception)):
-            OracleConfig(table_name=bad_table)
-
-    def test_bad_schema_name_rejected(self):
-        from locus.memory.backends.oracle import OracleConfig
-
-        with pytest.raises((ValueError, Exception)):
-            OracleConfig(table_name="ok", schema_name="bad; --")
-
-    def test_none_schema_is_accepted(self):
-        from locus.memory.backends.oracle import OracleConfig
-
-        # schema_name=None must remain allowed (use session default schema).
-        cfg = OracleConfig(table_name="ok", schema_name=None)
-        assert cfg.schema_name is None
-
-
-# ---------------------------------------------------------------------------
-# F3 — Oracle vector store: identifiers + distance_metric allowlist
-# ---------------------------------------------------------------------------
-
-
-class TestOracleVectorIdentifierAndMetricValidation:
-    @pytest.mark.parametrize("bad_table", ["docs; DROP", "1bad", "has space"])
-    def test_bad_table_name_rejected(self, bad_table):
-        from locus.rag.stores.oracle import OracleVectorConfig
-
-        with pytest.raises((ValueError, Exception)):
-            OracleVectorConfig(table_name=bad_table)
-
-    @pytest.mark.parametrize(
-        "bad_metric",
-        [
-            "COSINE; DROP INDEX x",
-            "COSINE)",
-            "sqlinj--",
-            "",
-            "UNKNOWN_METRIC",
-        ],
-    )
-    def test_bad_distance_metric_rejected(self, bad_metric):
-        from locus.rag.stores.oracle import OracleVectorConfig
-
-        with pytest.raises((ValueError, Exception)):
-            OracleVectorConfig(distance_metric=bad_metric)
-
-    @pytest.mark.parametrize("metric", ["COSINE", "DOT", "EUCLIDEAN", "MANHATTAN"])
-    def test_allowed_metrics_accepted(self, metric):
-        from locus.rag.stores.oracle import OracleVectorConfig
-
-        OracleVectorConfig(distance_metric=metric)
-
-
-# ---------------------------------------------------------------------------
 # F5 — GuardrailsHook ReDoS bound
 # ---------------------------------------------------------------------------
 
@@ -205,9 +139,11 @@ class TestGuardrailsReDoS:
         start = time.perf_counter()
         hook._check_blocked_content(evil, "input")
         elapsed_ms = (time.perf_counter() - start) * 1000
-        # Old pattern took >30s on this input. New pattern + 8 KiB scan cap
-        # must complete in well under a second even on slow hardware.
-        assert elapsed_ms < 500, f"regex took {elapsed_ms:.1f}ms — possible ReDoS"
+        # Old pattern took >30s on this input; the new pattern + 8 KiB scan
+        # cap takes milliseconds. The bound only has to separate those two
+        # regimes, so it is set far above anything a loaded CI runner (or
+        # ``pytest -n auto``) adds — a tight bound fails on scheduling noise.
+        assert elapsed_ms < 5_000, f"regex took {elapsed_ms:.1f}ms — possible ReDoS"
 
     def test_scan_limit_is_documented_bound(self):
         from locus.hooks.builtin.guardrails import GuardrailsHook

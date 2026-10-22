@@ -1,10 +1,11 @@
 # Research Workflow
 
 The end-of-series capstone: a research-shaped pipeline that strings six
-node primitives into a single `StateGraph` and streams every step.
-Mirrors the production pattern used by specialist research agents —
-gather evidence, infer causality, summarise, judge the summary's
-grounding, and recover when the score is low.
+node primitives into a single `StateGraph` and streams every step. Here
+a customer-support analyst investigates the known-issue knowledge base —
+gather evidence from KB tools, infer the root cause, summarise, judge the
+summary's grounding, and recover when the score is low. An ungrounded
+claim is a hallucinated answer, so it never reaches the customer reply.
 
 ## What you learn
 
@@ -18,16 +19,15 @@ grounding, and recover when the score is low.
 
 ## Prerequisites
 
-Notebook 64 builds on the agent loop (notebook 08), tools (09),
-streaming events (11), graphs (16), DeepAgent (29), and SSE
-observability (53). Read those first if any of the pieces look
-unfamiliar.
+This workflow builds on the agent loop, tools, streaming events,
+graphs, DeepAgent, and SSE observability. Read those first if any of
+the pieces look unfamiliar.
 
 ## Run it
 
 ```bash
-# Default: Oracle Cloud Infrastructure (OCI) Generative AI is auto-detected
-# from ~/.oci/config; uses openai.gpt-4.1 or meta.llama-3.3-70b-instruct.
+# Default: the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
+# (or anthropic ) and the matching credentials for a live model.
 python examples/notebook_69_research_workflow.py
 
 # Offline, no credentials:
@@ -36,6 +36,6 @@ LOCUS_MODEL_PROVIDER=mock python examples/notebook_69_research_workflow.py
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_69_research_workflow.py"
-```
+````

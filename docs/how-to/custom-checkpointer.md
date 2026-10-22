@@ -1,8 +1,13 @@
 # Add a checkpointer backend
 
-`BaseCheckpointer` is the contract. Subclass it, implement four
-methods, advertise your capabilities. No adapter layer — you pass
-your instance directly to `Agent`.
+`BaseCheckpointer` is the contract. Subclass it, implement three
+methods — `save`, `load`, `list_checkpoints` — and override the
+`capabilities` property to advertise what your storage actually
+supports (every flag defaults to `False`). `delete` and `exists`
+ship defaults: `exists` works out of the box on top of your
+`load` / `list_checkpoints`, while `delete` raises
+`NotImplementedError` until you override it. No adapter layer —
+you pass your instance directly to `Agent`.
 
 ## Minimal implementation
 
@@ -85,7 +90,10 @@ if checkpointer.capabilities.search:
 
 ## Test the contract
 
-Copy `tests/integration/test_checkpoint_backends.py::TestOCIBucketBackend`
-— it exercises the full `BaseCheckpointer` contract (round-trip,
-list, delete, branch, capabilities). Adapt the fixture to your
-backend's connection config and you have a complete test suite.
+Model your suite on `tests/integration/test_checkpoint_backends.py` —
+`TestBackendCompatibility` checks the save/load round-trip every backend
+must satisfy, and the per-backend classes (`TestMemoryCheckpointer`,
+`TestRedisBackend`, `TestPostgreSQLBackend`, `TestMySQLBackend`,
+`TestOpenSearchBackend`) show how to exercise list, delete, and
+capabilities against a live store. Adapt the fixtures to your backend's
+connection config and you have a complete test suite.

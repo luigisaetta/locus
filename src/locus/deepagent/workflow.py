@@ -526,7 +526,7 @@ def route_after_grounding(
 ) -> Any:
     """Return a routing function for the grounding_eval conditional edge.
 
-    Recovery strategy (mirrors Optic's two-level approach):
+    Recovery strategy (two levels, cheapest first):
     1. First failure  → ``"regenerate"``  (cheap: rewrite without re-running tools)
     2. Subsequent     → ``"replan"``      (expensive: full execute retry)
     3. Limits reached → ``END``
@@ -605,7 +605,7 @@ def create_research_workflow(
             appended to the execute agent's tool list, and a per-store
             routing hint block is prepended to ``system_prompt`` so the
             model picks the right store per query. Same shape as
-            ``create_deepagent(datastores=...)`` and the langchain-oci
+            ``create_deepagent(datastores=...)`` and the common deep-research
             ``create_deep_research_agent(datastores=...)`` contract.
         datastore_top_k: Default top-k for auto-wired datastore tools when
             an entry doesn't set its own ``top_k``. Default 5.

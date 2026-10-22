@@ -3,7 +3,7 @@
 # https://oss.oracle.com/licenses/upl/
 """Shared model factory for the mesh services.
 
-Reads ``LOCUS_MODEL_PROVIDER`` (``mock`` | ``oci`` | ``openai``) and
+Reads ``LOCUS_MODEL_PROVIDER`` (``mock`` | ``openai`` | ``anthropic``) and
 returns a model instance. Defaults to a small inline MockModel so the
 demo runs end-to-end without credentials or network access to a model
 provider.
@@ -61,30 +61,25 @@ class MockModel(BaseModel):
         yield ModelChunkEvent(done=True)
 
 
-def _oci_model() -> Any:
-    from locus.models import OCIChatCompletionsModel
-
-    return OCIChatCompletionsModel(
-        model=os.environ.get("LOCUS_MODEL_ID", "openai.gpt-5.5-2026-04-23"),
-        profile=os.environ.get("LOCUS_OCI_PROFILE", "DEFAULT"),
-        region=os.environ.get("LOCUS_OCI_REGION", "us-chicago-1"),
-        compartment_id=os.environ.get("LOCUS_OCI_COMPARTMENT"),
-    )
-
-
 def _openai_model() -> Any:
     from locus.models import OpenAIModel
 
-    return OpenAIModel(model=os.environ.get("LOCUS_MODEL_ID", "gpt-5.5-2026-04-23"))
+    return OpenAIModel(model=os.environ.get("LOCUS_MODEL_ID", "gpt-4o"))
+
+
+def _anthropic_model() -> Any:
+    from locus.models.native.anthropic import AnthropicModel
+
+    return AnthropicModel(model=os.environ.get("LOCUS_MODEL_ID", "claude-sonnet-4-6"))
 
 
 def get_model() -> Any:
     provider = os.environ.get("LOCUS_MODEL_PROVIDER", "mock").lower()
     if provider == "mock":
         return MockModel()
-    if provider == "oci":
-        return _oci_model()
     if provider == "openai":
         return _openai_model()
+    if provider == "anthropic":
+        return _anthropic_model()
     msg = f"Unknown LOCUS_MODEL_PROVIDER: {provider!r}"
     raise ValueError(msg)

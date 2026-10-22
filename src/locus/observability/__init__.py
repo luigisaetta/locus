@@ -4,7 +4,7 @@
 
 """Observability — centralised event bus + SSE telemetry for locus.
 
-Modelled on the pattern Oracle's optic SDK uses: a singleton
+Modelled on a common observability-bus pattern: a singleton
 :class:`EventBus` that fans events out to multiple consumers (Web SSE,
 CLI tail, JSON logs) from a single emission point. Locus components —
 the router, the agent loop's hooks, custom user code — publish
@@ -30,7 +30,7 @@ Quick start::
     async for ev in bus.subscribe("abc"):
         print(ev.event_type, ev.data)
 
-The workbench's SSE endpoint at ``/api/events/{run_id}`` is the public
+An SSE endpoint such as ``/api/events/{run_id}`` is the natural public
 HTTP wrapper around :meth:`EventBus.subscribe`.
 """
 

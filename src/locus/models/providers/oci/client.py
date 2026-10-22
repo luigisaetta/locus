@@ -37,6 +37,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
+from locus.core.loop_bound import loop_bound
+
 
 if TYPE_CHECKING:
     from oci.generative_ai_inference import GenerativeAiInferenceClient
@@ -129,9 +131,8 @@ class OCIClient:
     @property
     def client(self) -> GenerativeAiInferenceClient:
         """Get or create the OCI GenAI client (lazy initialization)."""
-        if self._client is None:
-            self._client = self._create_client()
-        return self._client
+        # Bound to the loop that built it — see locus.core.loop_bound.
+        return loop_bound(self, "_client", self._create_client)
 
     @property
     def compartment_id(self) -> str:

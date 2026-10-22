@@ -6,8 +6,16 @@ Two complementary primitives for long-horizon research:
   termination, and optional filesystem / todo / subagent layers. Best for
   single-agent loops.
 - **`create_research_workflow`** — a `StateGraph` with a post-execution quality
-  loop: execute (ReAct) → summarize → grounding eval → replan if needed. Best
-  for production research where you need verifiable, grounded summaries.
+  loop: execute (ReAct, reason + act) → causal inference → summarize →
+  grounding eval. When the grounding score falls below `grounding_threshold`
+  (default 0.65), it first rewrites the summary without re-running tools
+  (`max_regenerations`, default 1). Once those rewrites are used up, it
+  replans and runs a full execute pass again (`max_replans`, default 2), and
+  it stops when both limits are spent. Pass `causal_inference=False` to drop
+  the causal-inference node. Best for production research where you need
+  verifiable, grounded summaries.
+
+For the concepts, start with [DeepAgent](../concepts/deepagent.md).
 
 ## Factory — single agent
 

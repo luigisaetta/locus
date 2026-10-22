@@ -1,6 +1,6 @@
 # Prompts
 
-The model in an Oracle Generative AI – Multi-Agent Locus SDK agent
+The model in a Locus agent
 sees three sources of prompt content, in this order, every iteration:
 
 1. The **system prompt** — `Agent(system_prompt=...)`. Stable across
@@ -18,12 +18,12 @@ You don't usually configure 2 and 3 directly. You configure 1.
 
 ```python
 agent = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[search_flights, book_flight],
+    model="{{ locus_example_model }}",
+    tools=[lookup_order, issue_refund],
     system_prompt=(
-        "You are a travel concierge. "
-        "Search before booking. "
-        "Confirm the flight number with the user before calling book_flight."
+        "You are a support agent. "
+        "Look up the order before acting on it. "
+        "Confirm the order id with the customer before calling issue_refund."
     ),
 )
 ```
@@ -46,8 +46,8 @@ What does **not** belong in the system prompt:
 
 - Tool documentation. The `@tool` decorator already exposes a typed
   contract to the model; duplicating it in prose doesn't help.
-- Long examples. Use `examples=` on a `Skill` or fold into a
-  `Playbook`.
+- Long examples. Fold them into a `Skill`'s `instructions=` (loaded
+  only when the skill activates) or into a `Playbook`.
 - Fields that change per request. Pass those as the user's `prompt`
   argument to `agent.run()`.
 
@@ -55,8 +55,8 @@ What does **not** belong in the system prompt:
 
 ```python
 agent.run_sync(
-    "Book a flight from JFK to NRT on 2026-05-04 for customer C-42.",
-    thread_id="th-c42",
+    "Customer 4821 reports a duplicate charge on ord-4821, placed 2026-05-04.",
+    thread_id="th-4821",
 )
 ```
 
@@ -79,9 +79,9 @@ f-strings are usually enough; for richer templating use Jinja:
 from jinja2 import Template
 
 template = Template("""
-You are the procurement officer for {{ tenant.name }}.
-Your spending limit is {{ tenant.limit_usd }} USD per quarter.
-Always run compliance review before approving over $50,000.
+You are the support agent for {{ tenant.name }}.
+Your refund authority covers {{ tenant.refund_cap }} and below.
+Always escalate to a human before refunding above it.
 """)
 
 agent = Agent(
@@ -95,23 +95,23 @@ histories on demand — see [Conversation Management](conversation-management.md
 
 ## Prompt caching
 
-Long, stable system prompts cost real money on every iteration.
-Anthropic and OpenAI both support prompt caching: tag the part of the
-prompt that doesn't change per turn and the provider charges fewer
-tokens on cache hits.
+Long, stable system prompts cost real money on every iteration. The
+`AnthropicModel` can mark the stable prefix for caching so the provider
+charges fewer tokens on cache hits — pass `prompt_cache=True`:
 
 ```python
-from locus.models import OpenAIModel
+from locus.models import AnthropicModel
 
 agent = Agent(
-    model=OpenAIModel("gpt-4o", cache_system_prompt=True),
+    model=AnthropicModel(model="claude-sonnet-4-6", prompt_cache=True),
     system_prompt=very_long_prompt,
 )
 ```
 
-OCI GenAI's V1 transport inherits prompt caching from the underlying
-provider models when supported. See
-[Models](models.md) for the per-provider matrix.
+When `prompt_cache=True` and the provider returns cache token counts,
+they surface on `result.metrics` (`cache_creation_input_tokens` /
+`cache_read_input_tokens`). See [Models](models.md) for the per-provider
+matrix.
 
 ## When the model misbehaves
 

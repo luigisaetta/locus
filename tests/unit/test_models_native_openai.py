@@ -29,8 +29,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from locus.core.messages import Message
-from locus.models.native.openai import OpenAIModel, _decode_tool_arguments
+from locus.core.messages import Message, ToolCall, ToolResult
+from locus.models.native.openai import (
+    OpenAIModel,
+    _decode_tool_arguments,
+    _malformed_tool_arguments,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -56,9 +60,11 @@ class _MsgStub:
         *,
         content: str | None = "",
         tool_calls: list[_ToolCallStub] | None = None,
+        reasoning_content: str | None = None,
     ) -> None:
         self.content = content
         self.tool_calls = tool_calls or []
+        self.reasoning_content = reasoning_content
 
 
 class _Usage:
@@ -119,9 +125,11 @@ class _Delta:
         *,
         content: str | None = None,
         tool_calls: list[_ToolDelta] | None = None,
+        reasoning_content: str | None = None,
     ) -> None:
         self.content = content
         self.tool_calls = tool_calls
+        self.reasoning_content = reasoning_content
 
 
 class _ChunkChoice:
@@ -136,8 +144,10 @@ class _ChunkChoice:
 
 
 class _Chunk:
-    def __init__(self, choices: list[_ChunkChoice]) -> None:
+    def __init__(self, choices: list[_ChunkChoice], model: str | None = None) -> None:
         self.choices = choices
+        if model is not None:
+            self.model = model
 
 
 def _stream(chunks: list[_Chunk]) -> AsyncIterator[_Chunk]:
@@ -181,7 +191,7 @@ class TestDecodeToolArguments:
         assert _decode_tool_arguments('{"q": "hi"}') == {"q": "hi"}
 
     def test_double_encoded_string(self) -> None:
-        # OCI Llama deployments occasionally double-encode.
+        # Some provider deployments occasionally double-encode.
         assert _decode_tool_arguments('"{\\"q\\": \\"hi\\"}"') == {"q": "hi"}
 
     def test_double_encoded_invalid_inner(self) -> None:
@@ -347,6 +357,44 @@ class TestParseResponse:
         assert out.message.content is None
         assert out.message.tool_calls == []
 
+    def test_parses_reasoning_content(self) -> None:
+        # Qwen/DeepSeek via vLLM put the CoT in ``reasoning_content``.
+        m = OpenAIModel()
+        resp = _Response(
+            choices=[
+                _Choice(
+                    message=_MsgStub(
+                        content="The answer is 42.",
+                        reasoning_content="Let me think step by step...",
+                    )
+                )
+            ],
+            usage=None,
+        )
+        out = m._parse_response(resp)
+        assert out.message.content == "The answer is 42."
+        assert out.reasoning == "Let me think step by step..."
+
+    def test_reasoning_none_when_absent(self) -> None:
+        m = OpenAIModel()
+        resp = _Response(choices=[_Choice(message=_MsgStub(content="plain"))])
+        out = m._parse_response(resp)
+        assert out.reasoning is None
+
+    def test_parses_reasoning_field_variant(self) -> None:
+        # Some vLLM builds name the CoT channel ``reasoning`` instead of
+        # ``reasoning_content`` — accept both.
+        class _Msg:
+            content = "Answer."
+            reasoning = "CoT via reasoning field."
+            tool_calls = []
+
+        m = OpenAIModel()
+        resp = _Response(choices=[_Choice(message=_Msg())])
+        out = m._parse_response(resp)
+        assert out.message.content == "Answer."
+        assert out.reasoning == "CoT via reasoning field."
+
 
 # ---------------------------------------------------------------------------
 # complete request shaping
@@ -474,6 +522,40 @@ class TestStream:
         assert any(ev.done for ev in events)
 
     @pytest.mark.asyncio
+    async def test_served_model_rides_on_every_chunk(self) -> None:
+        """``ModelChunkEvent.model`` names who actually answered.
+
+        Behind a router the served model is not the requested one — a
+        fallback can answer while the primary restarts — and the stream is
+        the only place the truth appears (``chunk.model``). A UI announcing
+        "who am I talking to" reads it off the events.
+        """
+        chunks = [
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(content="Hi"))], model="qwen3.6-35b"),
+            _Chunk(
+                choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")],
+                model="qwen3.6-35b",
+            ),
+        ]
+        client = _client_with(stream_chunks=chunks)
+        m = _model_with(client)
+        events = [ev async for ev in m.stream([Message.user("hi")])]
+        assert [ev.model for ev in events if ev.content] == ["qwen3.6-35b"]
+        done = next(ev for ev in events if ev.done)
+        assert done.model == "qwen3.6-35b"
+
+    @pytest.mark.asyncio
+    async def test_chunks_without_a_model_name_leave_it_none(self) -> None:
+        chunks = [
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(content="Hi"))]),
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")]),
+        ]
+        client = _client_with(stream_chunks=chunks)
+        m = _model_with(client)
+        events = [ev async for ev in m.stream([Message.user("hi")])]
+        assert all(ev.model is None for ev in events)
+
+    @pytest.mark.asyncio
     async def test_accumulates_tool_call_deltas(self) -> None:
         # A complete tool call streamed as multiple deltas.
         chunks = [
@@ -560,6 +642,66 @@ class TestStream:
         events = [ev async for ev in m.stream([Message.user("hi")])]
         assert any(ev.content == "ok" for ev in events)
 
+    @pytest.mark.asyncio
+    async def test_yields_reasoning_deltas(self) -> None:
+        # Qwen/DeepSeek via vLLM stream CoT in delta.reasoning_content.
+        chunks = [
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(reasoning_content="Let me "))]),
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(reasoning_content="think."))]),
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(content="Final answer"))]),
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")]),
+        ]
+        client = _client_with(stream_chunks=chunks)
+        m = _model_with(client)
+        events = [ev async for ev in m.stream([Message.user("hi")])]
+        reasoning = [ev.reasoning for ev in events if ev.reasoning]
+        assert reasoning == ["Let me ", "think."]
+        # Content stays in its own channel.
+        assert [ev.content for ev in events if ev.content] == ["Final answer"]
+
+    @pytest.mark.asyncio
+    async def test_reasoning_and_content_not_mixed(self) -> None:
+        # A reasoning chunk must never be mislabelled as content.
+        chunks = [
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(reasoning_content="CoT"))]),
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")]),
+        ]
+        client = _client_with(stream_chunks=chunks)
+        m = _model_with(client)
+        events = [ev async for ev in m.stream([Message.user("hi")])]
+        assert not any(ev.content == "CoT" for ev in events)
+        assert [ev.reasoning for ev in events if ev.reasoning] == ["CoT"]
+
+    @pytest.mark.asyncio
+    async def test_yields_reasoning_via_reasoning_field(self) -> None:
+        # vLLM builds that use ``delta.reasoning`` (not
+        # ``reasoning_content``) must surface the CoT the same way.
+        chunks = [
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(reasoning_content="CoT via parser"))]),
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")]),
+        ]
+        client = _client_with(stream_chunks=chunks)
+        m = _model_with(client)
+        events = [ev async for ev in m.stream([Message.user("hi")])]
+        assert [ev.reasoning for ev in events if ev.reasoning] == ["CoT via parser"]
+
+        # Same behaviour for the ``delta.reasoning`` variant.
+        class _ReasoningDelta(_Delta):
+            def __init__(self, reasoning: str) -> None:
+                self.content = None
+                self.tool_calls = None
+                self.reasoning_content = None
+                self.reasoning = reasoning
+
+        chunks = [
+            _Chunk(choices=[_ChunkChoice(delta=_ReasoningDelta("CoT via field"))]),
+            _Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")]),
+        ]
+        client = _client_with(stream_chunks=chunks)
+        m = _model_with(client)
+        events = [ev async for ev in m.stream([Message.user("hi")])]
+        assert [ev.reasoning for ev in events if ev.reasoning] == ["CoT via field"]
+
 
 # ---------------------------------------------------------------------------
 # Stream request shaping (mirrors complete shaping)
@@ -636,3 +778,554 @@ class TestStreamRequestShaping:
         async for _ in m.stream([Message.user("hi")], tools=[{"name": "search", "parameters": {}}]):
             pass
         assert client.chat.completions.create.call_args.kwargs["tools"][0]["type"] == "function"
+
+
+# ---------------------------------------------------------------------------
+# Sampling params: None means "let the server decide"
+# ---------------------------------------------------------------------------
+
+
+class TestSamplingOmission:
+    """Self-hosted models publish sampling defaults in ``generation_config.json``.
+    Sending ours unasked overrides the model's own recommendation, so ``None``
+    must leave the parameter out of the request entirely."""
+
+    @pytest.mark.asyncio
+    async def test_none_temperature_is_omitted(self) -> None:
+        client = _client_with()
+        m = _model_with(client, temperature=None)
+        await m.complete([Message.user("hi")])
+        args = client.chat.completions.create.call_args.kwargs
+        assert "temperature" not in args
+        assert args["top_p"] == 0.9  # unset params still send their default
+
+    @pytest.mark.asyncio
+    async def test_none_top_p_is_omitted(self) -> None:
+        client = _client_with()
+        m = _model_with(client, top_p=None)
+        await m.complete([Message.user("hi")])
+        args = client.chat.completions.create.call_args.kwargs
+        assert "top_p" not in args
+        assert args["temperature"] == 0.7
+
+    @pytest.mark.asyncio
+    async def test_both_omitted_leaves_server_defaults(self) -> None:
+        client = _client_with()
+        m = _model_with(client, temperature=None, top_p=None)
+        await m.complete([Message.user("hi")])
+        args = client.chat.completions.create.call_args.kwargs
+        assert "temperature" not in args
+        assert "top_p" not in args
+
+    @pytest.mark.asyncio
+    async def test_defaults_are_unchanged(self) -> None:
+        """Existing callers must see identical behaviour."""
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete([Message.user("hi")])
+        args = client.chat.completions.create.call_args.kwargs
+        assert args["temperature"] == 0.7
+        assert args["top_p"] == 0.9
+
+    @pytest.mark.asyncio
+    async def test_per_call_override_wins(self) -> None:
+        client = _client_with()
+        m = _model_with(client, temperature=0.7)
+        await m.complete([Message.user("hi")], temperature=None)
+        assert "temperature" not in client.chat.completions.create.call_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_stream_omits_none_sampling(self) -> None:
+        client = _client_with(
+            stream_chunks=[_Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")])]
+        )
+        m = _model_with(client, temperature=None, top_p=None)
+        async for _ in m.stream([Message.user("hi")]):
+            pass
+        args = client.chat.completions.create.call_args.kwargs
+        assert "temperature" not in args
+        assert "top_p" not in args
+
+
+# ---------------------------------------------------------------------------
+# extra_body: provider-specific request fields
+# ---------------------------------------------------------------------------
+
+
+class TestExtraBody:
+    """OpenAI-compatible servers accept fields the OpenAI schema has no slot
+    for — vLLM's ``chat_template_kwargs``, ``top_k``, ``min_p``. Without a
+    passthrough they are unreachable through the SDK."""
+
+    @pytest.mark.asyncio
+    async def test_config_extra_body_is_forwarded(self) -> None:
+        client = _client_with()
+        m = _model_with(client, extra_body={"chat_template_kwargs": {"enable_thinking": False}})
+        await m.complete([Message.user("hi")])
+        args = client.chat.completions.create.call_args.kwargs
+        assert args["extra_body"] == {"chat_template_kwargs": {"enable_thinking": False}}
+
+    @pytest.mark.asyncio
+    async def test_absent_by_default(self) -> None:
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete([Message.user("hi")])
+        assert "extra_body" not in client.chat.completions.create.call_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_per_call_merges_over_config(self) -> None:
+        client = _client_with()
+        m = _model_with(client, extra_body={"top_k": 20, "min_p": 0.0})
+        await m.complete([Message.user("hi")], extra_body={"min_p": 0.05})
+        body = client.chat.completions.create.call_args.kwargs["extra_body"]
+        assert body == {"top_k": 20, "min_p": 0.05}
+
+    @pytest.mark.asyncio
+    async def test_forwarded_for_reasoning_models_too(self) -> None:
+        """o-series reject sampling params but still accept provider extensions."""
+        client = _client_with()
+        m = _model_with(client, model="o1-mini", extra_body={"top_k": 20})
+        await m.complete([Message.user("hi")])
+        args = client.chat.completions.create.call_args.kwargs
+        assert args["extra_body"] == {"top_k": 20}
+        assert "temperature" not in args
+
+    @pytest.mark.asyncio
+    async def test_stream_forwards_extra_body(self) -> None:
+        client = _client_with(
+            stream_chunks=[_Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")])]
+        )
+        m = _model_with(client, extra_body={"chat_template_kwargs": {"enable_thinking": False}})
+        async for _ in m.stream([Message.user("hi")]):
+            pass
+        args = client.chat.completions.create.call_args.kwargs
+        assert args["extra_body"] == {"chat_template_kwargs": {"enable_thinking": False}}
+
+
+# ---------------------------------------------------------------------------
+# Full Chat Completions surface: don't clog what the server supports
+# ---------------------------------------------------------------------------
+
+
+class TestParameterPassthrough:
+    """The provider previously read six keys out of **kwargs and dropped the
+    rest, so most of the API was unreachable and callers had to leave the SDK
+    to get at it."""
+
+    @pytest.mark.asyncio
+    async def test_tool_choice_reaches_the_server(self) -> None:
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete(
+            [Message.user("hi")],
+            tools=[{"name": "search", "parameters": {}}],
+            tool_choice={"type": "function", "function": {"name": "search"}},
+        )
+        args = client.chat.completions.create.call_args.kwargs
+        assert args["tool_choice"] == {"type": "function", "function": {"name": "search"}}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("name", "value"),
+        [
+            ("parallel_tool_calls", False),
+            ("logprobs", True),
+            ("top_logprobs", 5),
+            ("n", 3),
+            ("user", "u-1"),
+            ("logit_bias", {"123": -100}),
+            ("reasoning_effort", "high"),
+            ("service_tier", "auto"),
+            ("metadata", {"run": "abc"}),
+            ("store", True),
+        ],
+    )
+    async def test_documented_params_are_forwarded(self, name: str, value: Any) -> None:
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete([Message.user("hi")], **{name: value})
+        assert client.chat.completions.create.call_args.kwargs[name] == value
+
+    @pytest.mark.asyncio
+    async def test_unknown_keys_are_not_forwarded(self) -> None:
+        """A non-OpenAI key must not reach the API — that belongs in extra_body."""
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete([Message.user("hi")], not_a_real_openai_param=1)
+        assert "not_a_real_openai_param" not in client.chat.completions.create.call_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_provider_owned_params_are_not_overridden(self) -> None:
+        client = _client_with()
+        m = _model_with(client, model="gpt-4o")
+        await m.complete([Message.user("hi")], model="sneaky", stream=True, max_tokens=99)
+        args = client.chat.completions.create.call_args.kwargs
+        assert args["model"] == "gpt-4o", "provider owns the model name"
+        assert args.get("stream") is not True, "complete() must not be flipped to streaming"
+        # max_tokens keeps the family-aware path, not a second passthrough copy
+        assert args["max_tokens"] == 99
+
+    @pytest.mark.asyncio
+    async def test_stream_options_forwarded_when_streaming(self) -> None:
+        client = _client_with(
+            stream_chunks=[_Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")])]
+        )
+        m = _model_with(client)
+        async for _ in m.stream([Message.user("hi")], stream_options={"include_usage": True}):
+            pass
+        args = client.chat.completions.create.call_args.kwargs
+        assert args["stream_options"] == {"include_usage": True}
+        assert args["stream"] is True
+
+    def test_param_set_is_read_from_the_openai_package(self) -> None:
+        """Hand-maintained lists go stale; this one must track the dependency."""
+        from locus.models.native.openai import _OPENAI_PARAMS
+
+        for expected in ("tool_choice", "parallel_tool_calls", "logprobs", "n", "seed"):
+            assert expected in _OPENAI_PARAMS
+
+
+# ---------------------------------------------------------------------------
+# ModelResponse carries logprobs and extra candidates (#53)
+# ---------------------------------------------------------------------------
+
+
+class _UsageChunk:
+    """Trailing chunk carrying usage and no choices (stream_options)."""
+
+    def __init__(self, prompt: int, completion: int) -> None:
+        self.choices: list[Any] = []
+        self.usage = _Usage(prompt, completion)
+
+
+class TestResponseExtras:
+    @pytest.mark.asyncio
+    async def test_extra_candidates_are_kept(self) -> None:
+        """n>1 is paid for; the extra choices must not be discarded."""
+        client = _client_with(
+            response=_Response(
+                choices=[
+                    _Choice(message=_MsgStub(content="first")),
+                    _Choice(message=_MsgStub(content="second")),
+                    _Choice(message=_MsgStub(content="third")),
+                ]
+            )
+        )
+        m = _model_with(client)
+        resp = await m.complete([Message.user("hi")], n=3)
+        assert resp.message.content == "first"
+        assert [c.content for c in resp.candidates] == ["second", "third"]
+
+    @pytest.mark.asyncio
+    async def test_single_choice_leaves_candidates_empty(self) -> None:
+        client = _client_with()
+        m = _model_with(client)
+        resp = await m.complete([Message.user("hi")])
+        assert resp.candidates == []
+
+    @pytest.mark.asyncio
+    async def test_logprobs_are_passed_through(self) -> None:
+        client = _client_with()
+        client.chat.completions.create.return_value.choices[0].logprobs = {"content": [1, 2]}
+        m = _model_with(client)
+        resp = await m.complete([Message.user("hi")], logprobs=True)
+        assert resp.logprobs == {"content": [1, 2]}
+
+
+# ---------------------------------------------------------------------------
+# Streaming exposes usage and stop_reason (#54)
+# ---------------------------------------------------------------------------
+
+
+class TestStreamTermination:
+    @pytest.mark.asyncio
+    async def test_usage_chunk_is_not_dropped(self) -> None:
+        """The usage chunk carries no choices — it must survive the guard."""
+        client = _client_with(
+            stream_chunks=[
+                _Chunk(choices=[_ChunkChoice(delta=_Delta(content="hi"), finish_reason=None)]),
+                _Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")]),
+                _UsageChunk(11, 5),
+            ]
+        )
+        m = _model_with(client)
+        events = [ev async for ev in m.stream([Message.user("hi")])]
+
+        final = events[-1]
+        assert final.done is True
+        assert final.usage == {"prompt_tokens": 11, "completion_tokens": 5}
+        assert final.stop_reason == "stop"
+
+    @pytest.mark.asyncio
+    async def test_length_truncation_is_reported(self) -> None:
+        client = _client_with(
+            stream_chunks=[_Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="length")])]
+        )
+        m = _model_with(client)
+        events = [ev async for ev in m.stream([Message.user("hi")])]
+        assert events[-1].stop_reason == "length"
+
+    @pytest.mark.asyncio
+    async def test_done_is_emitted_exactly_once(self) -> None:
+        client = _client_with(
+            stream_chunks=[
+                _Chunk(choices=[_ChunkChoice(delta=_Delta(content="a"), finish_reason=None)]),
+                _Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")]),
+                _UsageChunk(1, 1),
+            ]
+        )
+        m = _model_with(client)
+        events = [ev async for ev in m.stream([Message.user("hi")])]
+        assert sum(1 for e in events if e.done) == 1
+
+    @pytest.mark.asyncio
+    async def test_stream_requests_usage_by_default(self) -> None:
+        """The API only sends the usage chunk when asked; stream() must ask.
+
+        Without the opt-in the terminal chunk carries ``usage=None``, the
+        loop's counters never move, and ``TerminateEvent.usage`` is None for
+        every ``stream_tokens=True`` run — streaming turns cost accounting off.
+        """
+        client = _client_with(
+            stream_chunks=[_Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")])]
+        )
+        m = _model_with(client)
+        async for _ in m.stream([Message.user("hi")]):
+            pass
+        args = client.chat.completions.create.call_args.kwargs
+        assert args["stream_options"] == {"include_usage": True}
+
+    @pytest.mark.asyncio
+    async def test_caller_stream_options_beat_the_default(self) -> None:
+        """A caller-supplied ``stream_options`` must reach the API verbatim."""
+        client = _client_with(
+            stream_chunks=[_Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")])]
+        )
+        m = _model_with(client)
+        async for _ in m.stream([Message.user("hi")], stream_options={"include_usage": False}):
+            pass
+        args = client.chat.completions.create.call_args.kwargs
+        assert args["stream_options"] == {"include_usage": False}
+
+    @pytest.mark.asyncio
+    async def test_stream_usage_false_omits_the_field(self) -> None:
+        """An OpenAI-compatible server that rejects ``stream_options`` can opt out."""
+        client = _client_with(
+            stream_chunks=[_Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")])]
+        )
+        m = _model_with(client, stream_usage=False)
+        async for _ in m.stream([Message.user("hi")]):
+            pass
+        args = client.chat.completions.create.call_args.kwargs
+        assert "stream_options" not in args
+
+
+# ---------------------------------------------------------------------------
+# Mid-run system messages must stay portable
+# ---------------------------------------------------------------------------
+
+
+class TestSystemMessagePosition:
+    """The loop injects guidance as system messages mid-run; vLLM serving Qwen
+    rejects those outright with 'System message must be at the beginning'."""
+
+    @pytest.mark.asyncio
+    async def test_leading_system_message_is_untouched(self) -> None:
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete([Message.system("you are helpful"), Message.user("hi")])
+        sent = client.chat.completions.create.call_args.kwargs["messages"]
+        assert sent[0]["role"] == "system"
+        assert sent[0]["content"] == "you are helpful"
+
+    @pytest.mark.asyncio
+    async def test_later_system_message_becomes_a_user_note(self) -> None:
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete(
+            [
+                Message.system("you are helpful"),
+                Message.user("hi"),
+                Message.system("[Grounding Check Failed] try again"),
+            ]
+        )
+        sent = client.chat.completions.create.call_args.kwargs["messages"]
+        assert [x["role"] for x in sent] == ["system", "user", "user"]
+        # the guidance survives, just re-encoded
+        assert "[Grounding Check Failed] try again" in sent[-1]["content"]
+        assert sent[-1]["content"].startswith("[System guidance]")
+
+    @pytest.mark.asyncio
+    async def test_stream_applies_the_same_normalisation(self) -> None:
+        client = _client_with(
+            stream_chunks=[_Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")])]
+        )
+        m = _model_with(client)
+        async for _ in m.stream([Message.user("hi"), Message.system("mid-run guidance")]):
+            pass
+        sent = client.chat.completions.create.call_args.kwargs["messages"]
+        assert all(x["role"] != "system" for x in sent[1:])
+
+
+# ---------------------------------------------------------------------------
+# Every request must carry a user turn
+# ---------------------------------------------------------------------------
+
+
+class TestUserTurnIsAlwaysPresent:
+    """Qwen-family chat templates scan backwards for a user message that is not
+    a ``<tool_response>`` wrapper and raise ``No user query found in messages.``
+    when there is none. Sub-calls built from ``system + assistant + tool`` (judge,
+    summary, auxiliary passes) otherwise 400 on a self-hosted Qwen while working
+    fine against api.openai.com."""
+
+    ANCHOR = "[Continue] Continue from the conversation above."
+
+    @pytest.mark.asyncio
+    async def test_system_assistant_tool_gets_a_user_turn(self) -> None:
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete(
+            [
+                Message.system("you are helpful"),
+                Message.assistant(
+                    "", tool_calls=[ToolCall(id="c1", name="read_file", arguments={"path": "a.py"})]
+                ),
+                Message.tool(ToolResult(tool_call_id="c1", name="read_file", content="contents")),
+            ]
+        )
+        sent = client.chat.completions.create.call_args.kwargs["messages"]
+        assert [x["role"] for x in sent] == ["system", "user", "assistant", "tool"]
+        # the system prompt keeps first position — the sibling template rule
+        assert sent[0]["content"] == "you are helpful"
+        assert sent[1]["content"] == self.ANCHOR
+
+    @pytest.mark.asyncio
+    async def test_a_real_user_turn_is_not_duplicated(self) -> None:
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete([Message.system("you are helpful"), Message.user("hi")])
+        sent = client.chat.completions.create.call_args.kwargs["messages"]
+        assert [x["role"] for x in sent] == ["system", "user"]
+        assert sent[1]["content"] == "hi"
+
+    @pytest.mark.asyncio
+    async def test_tool_response_wrapper_does_not_count_as_the_query(self) -> None:
+        """The template ignores such a message, so the guard must too."""
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete(
+            [
+                Message.system("you are helpful"),
+                Message.user("<tool_response>file listed</tool_response>"),
+            ]
+        )
+        sent = client.chat.completions.create.call_args.kwargs["messages"]
+        assert [x["role"] for x in sent] == ["system", "user", "user"]
+        assert sent[1]["content"] == self.ANCHOR
+
+    @pytest.mark.asyncio
+    async def test_anchor_goes_first_when_there_is_no_system_message(self) -> None:
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete([Message.assistant("hi")])
+        sent = client.chat.completions.create.call_args.kwargs["messages"]
+        assert [x["role"] for x in sent] == ["user", "assistant"]
+
+    @pytest.mark.asyncio
+    async def test_empty_message_list_is_left_alone(self) -> None:
+        client = _client_with()
+        m = _model_with(client)
+        await m.complete([])
+        assert client.chat.completions.create.call_args.kwargs["messages"] == []
+
+    @pytest.mark.asyncio
+    async def test_stream_applies_the_same_guard(self) -> None:
+        client = _client_with(
+            stream_chunks=[_Chunk(choices=[_ChunkChoice(delta=_Delta(), finish_reason="stop")])]
+        )
+        m = _model_with(client)
+        async for _ in m.stream([Message.system("s"), Message.assistant("hi")]):
+            pass
+        sent = client.chat.completions.create.call_args.kwargs["messages"]
+        assert any(x["role"] == "user" for x in sent)
+
+
+class TestResponseExtrasEdgeCases:
+    """Edge cases in candidate parsing and the param-set fallback."""
+
+    @pytest.mark.asyncio
+    async def test_candidate_without_message_is_skipped(self) -> None:
+        """A provider can return a filtered/empty choice with no message."""
+        client = _client_with(
+            response=_Response(
+                choices=[
+                    _Choice(message=_MsgStub(content="first")),
+                    _Choice(message=None),
+                    _Choice(message=_MsgStub(content="third")),
+                ]
+            )
+        )
+        m = _model_with(client)
+        resp = await m.complete([Message.user("hi")], n=3)
+        assert [c.content for c in resp.candidates] == ["third"]
+
+    @pytest.mark.asyncio
+    async def test_candidate_tool_calls_are_decoded(self) -> None:
+        client = _client_with(
+            response=_Response(
+                choices=[
+                    _Choice(message=_MsgStub(content="first")),
+                    _Choice(
+                        message=_MsgStub(
+                            content=None,
+                            tool_calls=[
+                                _ToolCallStub(call_id="c1", name="search", arguments='{"q":"x"}')
+                            ],
+                        )
+                    ),
+                ]
+            )
+        )
+        m = _model_with(client)
+        resp = await m.complete([Message.user("hi")], n=2)
+        assert len(resp.candidates) == 1
+        call = resp.candidates[0].tool_calls[0]
+        assert (call.name, call.arguments) == ("search", {"q": "x"})
+
+    @pytest.mark.asyncio
+    async def test_candidate_non_string_content_becomes_none(self) -> None:
+        """Mock-heavy stubs (and some providers) hand back non-str content."""
+        client = _client_with(
+            response=_Response(
+                choices=[
+                    _Choice(message=_MsgStub(content="first")),
+                    _Choice(message=_MsgStub(content=object())),  # type: ignore[arg-type]
+                ]
+            )
+        )
+        m = _model_with(client)
+        resp = await m.complete([Message.user("hi")], n=2)
+        assert resp.candidates[0].content is None
+
+    def test_param_names_fall_back_when_introspection_fails(self, monkeypatch) -> None:
+        """A stale hand-list would block passthrough entirely; the fallback
+        keeps the long-stable parameters reachable."""
+        import typing as _typing
+
+        import locus.models.native.openai as mod
+
+        def boom(*_a, **_k):
+            raise AttributeError("openai moved its request types")
+
+        monkeypatch.setattr(_typing, "get_type_hints", boom)
+
+        names = mod._openai_param_names()
+        assert "tool_choice" in names
+        assert names == mod._FALLBACK_OPENAI_PARAMS
+
+
+def test_malformed_tool_arguments_keep_the_raw_text() -> None:
+    assert _malformed_tool_arguments('{"path": "a') == '{"path": "a'
+    assert _malformed_tool_arguments('{"path": "a"}') is None
+    assert _malformed_tool_arguments("") is None

@@ -1,17 +1,13 @@
-# Sample local-dev LiteLLM AI Gateway in front of OCI Generative AI,
+# Sample local-dev LiteLLM AI Gateway in front of OpenAI + Anthropic,
 # with a Postgres sidecar so virtual keys, budgets, and spend logs
 # persist across restarts (required for /key/generate, /key/info,
 # per-key budget enforcement, and the admin spend dashboards).
 #
 # Stand up with:
 #
-#   # 1. OCI credentials the gateway will sign upstream calls with.
-#   export OCI_REGION="us-chicago-1"
-#   export OCI_USER="ocid1.user.oc1..xxx"
-#   export OCI_FINGERPRINT="aa:bb:cc:..."
-#   export OCI_TENANCY="ocid1.tenancy.oc1..xxx"
-#   export OCI_KEY_FILE="$HOME/.oci/keys/your_api_key.pem"
-#   export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..xxx"
+#   # 1. Provider credentials the gateway will use for upstream calls.
+#   export OPENAI_API_KEY="sk-..."
+#   export ANTHROPIC_API_KEY="sk-ant-..."
 #
 #   # 2. Admin token for /key/generate. Treat as a high-value secret.
 #   export LITELLM_MASTER_KEY="sk-master-$(openssl rand -hex 32)"
@@ -26,13 +22,13 @@
 #   curl http://localhost:4000/key/generate \
 #     -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
 #     -H "Content-Type: application/json" \
-#     -d '{"models":["oci-cohere-command"],"max_budget":5.00,"duration":"24h",
+#     -d '{"models":["gpt-4o"],"max_budget":5.00,"duration":"24h",
 #          "metadata":{"team":"platform-demo"}}'
 #
 #   # 6. Point Locus at the gateway with the virtual key from (5):
 #   #   from locus.models.native.openai import OpenAIModel
 #   #   model = OpenAIModel(
-#   #       model="oci-cohere-command",
+#   #       model="gpt-4o",
 #   #       api_key="<virtual-key-from-step-5>",
 #   #       base_url="http://localhost:4000",
 #   #   )
@@ -52,15 +48,10 @@ services:
         condition: service_healthy
     volumes:
     - ./config.yaml:/app/config.yaml:ro
-    - ${OCI_KEY_FILE:-/dev/null}:/oci-keys/key.pem:ro
     environment:
-      # OCI credentials referenced by config.yaml via os.environ/<NAME>.
-      OCI_REGION: ${OCI_REGION:?set OCI_REGION before running docker compose up}
-      OCI_USER: ${OCI_USER:?set OCI_USER}
-      OCI_FINGERPRINT: ${OCI_FINGERPRINT:?set OCI_FINGERPRINT}
-      OCI_TENANCY: ${OCI_TENANCY:?set OCI_TENANCY}
-      OCI_COMPARTMENT_ID: ${OCI_COMPARTMENT_ID:?set OCI_COMPARTMENT_ID}
-      OCI_KEY_FILE: /oci-keys/key.pem
+      # Provider credentials referenced by config.yaml via os.environ/<NAME>.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY before running docker compose up}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Admin token for /key/generate. Treat as a high-value secret.
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY}
       # Postgres URL — virtual-key state, spend logs, audit log.
@@ -76,7 +67,7 @@ services:
       retries: 3
 
   # Postgres sidecar for virtual keys + spend logs. Local-dev only —
-  # production should point DATABASE_URL at an external Postgres / ADB
+  # production should point DATABASE_URL at an external Postgres
   # so the gateway pod is stateless.
   db:
     # Image is configurable so this sample works behind corporate

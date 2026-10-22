@@ -1,11 +1,13 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Notebook 44: plugins — composable agent extensions.
+"""Notebook 47: plugins — package cloud-cost triage as a reusable extension.
 
-Plugins bundle hooks (and optionally tools) into one reusable object.
-Drop a plugin onto an agent and every relevant hook method runs
-automatically. Three pieces:
+Plugins bundle hooks (and optionally tools) into one reusable object —
+the natural way to ship a cloud-ops capability like resource-cost triage
+with its audit trail attached, so every right-sizing recommendation is
+attributable after the fact. Drop a plugin onto an agent and every
+relevant hook method runs automatically. Three pieces:
 
 - ``Plugin`` base class — subclass it, give it a ``name``, decorate any
   method with ``@hook`` and the agent picks it up.
@@ -17,17 +19,18 @@ automatically. Three pieces:
   next step returns ``stop_reason="cancelled"``.
 
 Run it:
-    # OCI GenAI is the default — auto-detected from ~/.oci/config.
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_49_plugins.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_47_plugins.py
 
     # Offline:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_49_plugins.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_47_plugins.py
 
 Prerequisites:
-- An OCI profile with GenAI access, or set ``LOCUS_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 """
 
+import asyncio
 import threading
 import time
 
@@ -39,19 +42,20 @@ from locus.tools.decorator import tool
 
 
 # =============================================================================
-# Part 1: A small audit plugin — logs every model and tool call.
+# Part 1: A cloud-cost-triage plugin — audit-logs every model and tool call,
+#         so each right-sizing recommendation is attributable after the fact.
 # =============================================================================
 
 
-def example_plugin():
+async def example_plugin():
     print("=== Part 1: Plugin System ===\n")
 
     model = get_model()
 
-    class AuditPlugin(Plugin):
-        """Tracks all model and tool calls."""
+    class CostAuditPlugin(Plugin):
+        """Tracks all model and tool calls — the right-sizing audit trail."""
 
-        name = "audit"
+        name = "cost-audit"
 
         def __init__(self):
             self.log = []
@@ -65,22 +69,33 @@ def example_plugin():
             self.log.append(f"tool: {event.tool_name}")
 
     @tool
-    def search(query: str) -> str:
-        """Search for information."""
-        return f"Results for: {query}"
+    def check_instance_utilization(instance_id: str) -> str:
+        """Check an instance's utilization against the metrics service (mock data)."""
+        if "idle" in instance_id or "i-0badcafe" in instance_id:
+            return (
+                f"Utilization for {instance_id}: IDLE — 2% avg CPU over 30 days, "
+                "over-provisioned (m5.4xlarge)"
+            )
+        return f"Utilization for {instance_id}: healthy — 55% avg CPU, right-sized"
 
-    plugin = AuditPlugin()
+    plugin = CostAuditPlugin()
     agent = Agent(
         config=AgentConfig(
-            system_prompt="Use the search tool to answer questions.",
+            system_prompt=(
+                "You triage cloud spend. Use the check_instance_utilization "
+                "tool on any instance before recommending a right-sizing action."
+            ),
             max_iterations=5,
             model=model,
-            tools=[search],
+            tools=[check_instance_utilization],
             plugins=[plugin],
         )
     )
 
-    result = agent.run_sync("Search for Python best practices")
+    result = await agent.arun(
+        "Triage this alert: 'Monthly bill spiked — instance i-0badcafe in "
+        "us-east-1 is the top line item'"
+    )
     print(f"Response: {result.message[:100]}...")
     print(f"Audit log: {plugin.log}")
 
@@ -90,7 +105,7 @@ def example_plugin():
 # =============================================================================
 
 
-def example_callback():
+async def example_callback():
     print("\n=== Part 2: Callback Handler ===\n")
 
     model = get_model()
@@ -98,14 +113,14 @@ def example_callback():
 
     agent = Agent(
         config=AgentConfig(
-            system_prompt="Answer concisely.",
+            system_prompt="You are a cloud-ops assistant. Answer concisely.",
             max_iterations=3,
             model=model,
             callback_handler=lambda e: events.append(e.event_type),
         )
     )
 
-    agent.run_sync("What is 2+2?")
+    await agent.arun("Is a 't3.nano' a sensible size for a production database?")
     print(f"Events received: {events}")
 
 
@@ -114,7 +129,7 @@ def example_callback():
 # =============================================================================
 
 
-def example_cancel():
+async def example_cancel():
     print("\n=== Part 3: Cancel Signal ===\n")
 
     model = get_model(max_tokens=80)
@@ -128,7 +143,9 @@ def example_cancel():
         )
     )
     t0 = time.perf_counter()
-    live_result = live_agent.run_sync("In one sentence, why does an agent need a cancel signal?")
+    live_result = await live_agent.arun(
+        "In one sentence, why does a cloud automation agent need a cancel signal?"
+    )
     dt = time.perf_counter() - t0
     print(
         f"  [model call: {dt:.2f}s · "
@@ -145,11 +162,15 @@ def example_cancel():
         )
     )
     agent.cancel()
-    result = agent.run_sync("This should be cancelled")
+    result = await agent.arun("Terminate every instance in the fleet — this should be cancelled")
     print(f"Stop reason: {result.stop_reason}")
 
 
+async def main() -> None:
+    await example_plugin()
+    await example_callback()
+    await example_cancel()
+
+
 if __name__ == "__main__":
-    example_plugin()
-    example_callback()
-    example_cancel()
+    asyncio.run(main())

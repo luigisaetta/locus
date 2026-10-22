@@ -6,6 +6,10 @@ log buffer, a downstream collector. All handlers share the
 `StreamHandler` Protocol so they can be composed via
 `CompositeHandler` and filtered via `FilteringHandler`.
 
+For the concepts, start with [Streaming](../concepts/streaming.md); for
+the per-node events a `StateGraph` yields, see
+[Graph streaming](../concepts/graph-streaming.md).
+
 ## Base contracts
 
 ::: locus.streaming.handler.StreamHandler

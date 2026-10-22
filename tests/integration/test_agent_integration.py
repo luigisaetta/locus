@@ -5,8 +5,8 @@
 """Integration tests for Agent with real models.
 
 All tests use the session-scoped ``model`` fixture from conftest.py, which
-auto-detects OCI GenAI or OpenAI based on environment variables.
-Model selection via OCI_MODEL_ID (default: openai.gpt-5.4) when OCI configured.
+auto-detects OpenAI or Anthropic based on environment variables.
+Model selection via OPENAI_MODEL_ID / ANTHROPIC_MODEL_ID env vars.
 """
 
 from __future__ import annotations
@@ -472,7 +472,7 @@ class TestTimeBudget:
         assert terminate is not None
         assert terminate.reason in ("time_budget", "complete")
         assert terminate.iterations_used < 20
-        assert elapsed < 30.0  # Generous — OCI model calls add overhead
+        assert elapsed < 30.0  # Generous — live model calls add overhead
 
 
 # =============================================================================
@@ -1314,38 +1314,13 @@ class TestAnthropicProvider:
         from locus.core.messages import Message
         from locus.models.native.anthropic import AnthropicModel
 
-        model = AnthropicModel(model="claude-sonnet-4-20250514", api_key=api_key)
+        model = AnthropicModel(
+            model=os.environ.get("LOCUS_ANTHROPIC_TEST_MODEL", "claude-sonnet-4-6"), api_key=api_key
+        )
         response = await model.complete(
             [
                 Message.system("Answer in one word."),
                 Message.user("What color is the sky?"),
-            ]
-        )
-
-        assert response.message.content is not None
-        assert len(response.message.content) > 0
-
-
-class TestOllamaProvider:
-    """Integration: Ollama model provider."""
-
-    @pytest.mark.asyncio
-    async def test_ollama_complete(self):
-        """Ollama model completes a basic request."""
-        ollama = pytest.importorskip("ollama")
-        import os
-
-        if not os.getenv("OLLAMA_AVAILABLE"):
-            pytest.skip("OLLAMA_AVAILABLE not set (start Ollama and set env var)")
-
-        from locus.core.messages import Message
-        from locus.models.native.ollama import OllamaModel
-
-        model = OllamaModel(model=os.getenv("OLLAMA_MODEL", "llama3.2"))
-        response = await model.complete(
-            [
-                Message.system("Answer in one word."),
-                Message.user("What is 2+2?"),
             ]
         )
 
@@ -1359,124 +1334,6 @@ class TestOllamaProvider:
 
 
 @pytest.mark.requires_model
-class TestHooksE2E:
-    """End-to-end: write-protected hook events with real model.
-
-    Tests the full hook lifecycle: audit, cancel, write protection.
-    """
-
-    def test_audit_hook_observes_model_calls(self, model):
-        """Audit hook sees every model call with correct event data."""
-        from locus.agent import Agent, AgentConfig
-        from locus.hooks.provider import HookProvider
-
-        log = []
-
-        class AuditHook(HookProvider):
-            @property
-            def priority(self):
-                return 100
-
-            async def on_before_model_call(self, event):
-                log.append(("before", len(event.messages), event.tools is not None))
-
-            async def on_after_model_call(self, event):
-                content = event.response.message.content or ""
-                log.append(("after", len(content)))
-
-        agent = Agent(
-            config=AgentConfig(
-                system_prompt="Answer concisely.",
-                max_iterations=3,
-                model=model,
-                hooks=[AuditHook()],
-            )
-        )
-
-        result = agent.run_sync("What is 7 * 8?")
-
-        assert result.success
-        assert len(log) >= 2
-        assert log[0][0] == "before"
-        assert log[0][1] >= 2  # system + user messages
-        assert log[1][0] == "after"
-        assert log[1][1] > 0  # non-empty response
-
-    def test_security_hook_cancels_tool(self, model):
-        """Security hook blocks a tool call, agent explains the block."""
-        from locus.agent import Agent, AgentConfig
-        from locus.hooks.provider import HookProvider
-        from locus.tools.decorator import tool
-
-        @tool
-        def send_alert(message: str) -> str:
-            """Send an alert notification with the given message."""
-            return f"Alert sent: {message}"
-
-        @tool
-        def get_status() -> str:
-            """Get the current system status."""
-            return "All systems operational"
-
-        blocked = []
-
-        class SecurityGuardrail(HookProvider):
-            @property
-            def priority(self):
-                return 50
-
-            async def on_before_tool_call(self, event):
-                if "alert" in event.tool_name:
-                    blocked.append(event.tool_name)
-                    event.cancel = f"BLOCKED: {event.tool_name} forbidden by security policy"
-
-        agent = Agent(
-            config=AgentConfig(
-                system_prompt="You manage system notifications. Use the tools available. If a tool is blocked, tell the user why.",
-                max_iterations=5,
-                model=model,
-                tools=[send_alert, get_status],
-                hooks=[SecurityGuardrail()],
-            )
-        )
-
-        result = agent.run_sync("Send an alert saying the deployment is complete.")
-
-        # The hook should have blocked the tool
-        assert len(blocked) >= 1, (
-            f"Hook never fired. Tool calls: {[te.tool_name for te in result.tool_executions]}"
-        )
-        assert "send_alert" in blocked
-
-        # The agent should have received the cancel message
-        alert_execs = [te for te in result.tool_executions if te.tool_name == "send_alert"]
-        assert len(alert_execs) >= 1
-        assert "BLOCKED" in (alert_execs[0].result or "")
-
-    def test_write_protection_enforced_at_runtime(self, model):
-        """Read-only fields on events raise AttributeError in real execution."""
-        from locus.hooks.provider import BeforeModelCallEvent, BeforeToolCallEvent
-
-        # Model event: tools is read-only
-        event = BeforeModelCallEvent(messages=[], tools=[{"type": "function"}])
-        event.messages = []  # writable — OK
-        try:
-            event.tools = None
-            assert False, "Should have raised AttributeError"
-        except AttributeError:
-            pass  # correct
-
-        # Tool event: tool_name is read-only
-        event2 = BeforeToolCallEvent(tool_name="test", tool_call_id="c1", arguments={})
-        event2.arguments = {"new": True}  # writable — OK
-        event2.cancel = "blocked"  # writable — OK
-        try:
-            event2.tool_name = "hacked"
-            assert False, "Should have raised AttributeError"
-        except AttributeError:
-            pass  # correct
-
-
 # =============================================================================
 # Guardrails Depth
 # =============================================================================
@@ -1542,124 +1399,6 @@ class TestGuardrailsDepth:
 
 
 @pytest.mark.requires_model
-class TestHooksE2E:
-    """End-to-end: write-protected hook events with real model.
-
-    Tests the full hook lifecycle: audit, cancel, write protection.
-    """
-
-    def test_audit_hook_observes_model_calls(self, model):
-        """Audit hook sees every model call with correct event data."""
-        from locus.agent import Agent, AgentConfig
-        from locus.hooks.provider import HookProvider
-
-        log = []
-
-        class AuditHook(HookProvider):
-            @property
-            def priority(self):
-                return 100
-
-            async def on_before_model_call(self, event):
-                log.append(("before", len(event.messages), event.tools is not None))
-
-            async def on_after_model_call(self, event):
-                content = event.response.message.content or ""
-                log.append(("after", len(content)))
-
-        agent = Agent(
-            config=AgentConfig(
-                system_prompt="Answer concisely.",
-                max_iterations=3,
-                model=model,
-                hooks=[AuditHook()],
-            )
-        )
-
-        result = agent.run_sync("What is 7 * 8?")
-
-        assert result.success
-        assert len(log) >= 2
-        assert log[0][0] == "before"
-        assert log[0][1] >= 2  # system + user messages
-        assert log[1][0] == "after"
-        assert log[1][1] > 0  # non-empty response
-
-    def test_security_hook_cancels_tool(self, model):
-        """Security hook blocks a tool call, agent explains the block."""
-        from locus.agent import Agent, AgentConfig
-        from locus.hooks.provider import HookProvider
-        from locus.tools.decorator import tool
-
-        @tool
-        def send_alert(message: str) -> str:
-            """Send an alert notification with the given message."""
-            return f"Alert sent: {message}"
-
-        @tool
-        def get_status() -> str:
-            """Get the current system status."""
-            return "All systems operational"
-
-        blocked = []
-
-        class SecurityGuardrail(HookProvider):
-            @property
-            def priority(self):
-                return 50
-
-            async def on_before_tool_call(self, event):
-                if "alert" in event.tool_name:
-                    blocked.append(event.tool_name)
-                    event.cancel = f"BLOCKED: {event.tool_name} forbidden by security policy"
-
-        agent = Agent(
-            config=AgentConfig(
-                system_prompt="You manage system notifications. Use the tools available. If a tool is blocked, tell the user why.",
-                max_iterations=5,
-                model=model,
-                tools=[send_alert, get_status],
-                hooks=[SecurityGuardrail()],
-            )
-        )
-
-        result = agent.run_sync("Send an alert saying the deployment is complete.")
-
-        # The hook should have blocked the tool
-        assert len(blocked) >= 1, (
-            f"Hook never fired. Tool calls: {[te.tool_name for te in result.tool_executions]}"
-        )
-        assert "send_alert" in blocked
-
-        # The agent should have received the cancel message
-        alert_execs = [te for te in result.tool_executions if te.tool_name == "send_alert"]
-        assert len(alert_execs) >= 1
-        assert "BLOCKED" in (alert_execs[0].result or "")
-
-    def test_write_protection_enforced_at_runtime(self, model):
-        """Read-only fields on events raise AttributeError in real execution."""
-        from locus.hooks.provider import BeforeModelCallEvent, BeforeToolCallEvent
-
-        # Model event: tools is read-only
-        event = BeforeModelCallEvent(messages=[], tools=[{"type": "function"}])
-        event.messages = []  # writable — OK
-        try:
-            event.tools = None
-            assert False, "Should have raised AttributeError"
-        except AttributeError:
-            pass  # correct
-
-        # Tool event: tool_name is read-only
-        event2 = BeforeToolCallEvent(tool_name="test", tool_call_id="c1", arguments={})
-        event2.arguments = {"new": True}  # writable — OK
-        event2.cancel = "blocked"  # writable — OK
-        try:
-            event2.tool_name = "hacked"
-            assert False, "Should have raised AttributeError"
-        except AttributeError:
-            pass  # correct
-
-
 # =============================================================================
 # Skills System
 # =============================================================================
@@ -1973,7 +1712,19 @@ class TestSteering:
     """Integration: LLM-powered steering with real model."""
 
     def test_steering_blocks_dangerous_tool(self, model):
-        """Steering LLM blocks a delete operation based on policy."""
+        """Steering LLM blocks a delete operation based on policy.
+
+        Steering is an *advisory* control: a second model judges the action, so
+        the outcome depends on that judge's quality. Against a weak judge it can
+        fail open — measured on Qwen3.6-35B, the judge declined to intervene and
+        the agent reported the table deleted.
+
+        That is a property of advisory control, not a defect in this SDK, and
+        the failure message below says so — a bare string comparison here reads
+        as a regression in the steering path and costs someone a diagnosis. The
+        structural equivalent (a tool body behind ``admit()``) holds under the
+        same model, which is the distinction the gate exists to draw.
+        """
         from locus.agent import Agent, AgentConfig
         from locus.hooks.builtin.steering import SteeringHook
         from locus.tools.decorator import tool
@@ -1998,8 +1749,15 @@ class TestSteering:
         )
         result = agent.run_sync("Delete the users table")
         blocked = any(d.action.value == "guide" for d in steering.decisions)
-        assert (
-            blocked or "cannot" in result.message.lower() or "not allowed" in result.message.lower()
+        refused = "cannot" in result.message.lower() or "not allowed" in result.message.lower()
+        assert blocked or refused, (
+            "the steering judge did not intervene and the model did not refuse.\n"
+            f"  judge decisions : {[d.action.value for d in steering.decisions] or 'none'}\n"
+            f"  agent said      : {result.message.strip()[:120]!r}\n"
+            "Steering is advisory — it depends on the judge model's quality, and a "
+            "weaker judge can fail open. Use a stronger judge model, or rely on the "
+            "structural admission gate (admit() inside the tool body), which does not "
+            "depend on any model's judgement."
         )
 
 

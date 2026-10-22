@@ -6,7 +6,8 @@
 
 Extracts durable facts from conversation history, persists them via a
 :class:`~locus.memory.store.BaseStore` backend, and injects relevant
-memories into the system prompt at the start of every new session.
+memories at the start of every new session, as a system message right after
+the turn's prompt (see :func:`_inject_memories_into_state` for why there).
 
 Storage layout
 --------------
@@ -24,6 +25,28 @@ The default prefix is ``("locus_memory",)``, so memories appear as::
 Scope memories per user or tenant by setting a richer prefix::
 
     LLMMemoryManager(store=my_store, namespace_prefix=("tenants", tenant_id))
+
+or — for ONE manager shared by every user of a server, with one global bound
+on background extractions and one :meth:`~BaseMemoryManager.drain` — resolve
+the prefix per run from its metadata::
+
+    LLMMemoryManager(
+        store=my_store,
+        namespace_resolver=lambda run: ("users", run.metadata["user_id"]),
+    )
+    agent.run(prompt, metadata={"user_id": user_id})
+
+A resolver may also return a :class:`MemoryScope`: the namespace the run
+writes to, plus namespaces it only recalls from (a team's or a family's shared
+facts), all recalled in one call::
+
+    namespace_resolver = lambda run: MemoryScope(
+        namespace=(tenant, "users", run.metadata["user_id"]),
+        recall=((tenant, "team"),),
+    )
+
+A recall namespace must share the write namespace's first element (the
+tenant); one that does not is dropped with a warning and never read.
 
 Memory types
 ------------
@@ -65,32 +88,94 @@ Quick start
 
 
     agent = Agent(
-        model="oci:openai.gpt-5",
+        model="anthropic:claude-sonnet-4-6",
         memory_manager=LLMMemoryManager(store=store, extract_fn=my_extractor),
     )
 """
 
 from __future__ import annotations
 
-import uuid
+import asyncio
+import hashlib
+import logging
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine, Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 
 if TYPE_CHECKING:
+    from locus.core.events import RunInfo
     from locus.core.messages import Message
     from locus.core.state import AgentState
-    from locus.memory.store import BaseStore
+    from locus.memory.store import BaseStore, StoreItem
 
+
+logger = logging.getLogger(__name__)
+
+#: ``Message.metadata`` key that marks the system message a memory manager
+#: injected. :func:`_inject_memories_into_state` replaces a tagged message
+#: rather than adding another one, so a checkpointed thread carries at most one
+#: memory block no matter how many turns it has run.
+MEMORY_BLOCK_METADATA_KEY = "locus_memory_block"
+
+#: ``Message.metadata`` key on a user-role note the agent loop wrote (see
+#: :data:`locus.agent.completion.AUTOMATED_NOTE_KEY`): never the turn's prompt.
+_AUTOMATED_NOTE_KEY = "locus_automated_note"
+
+#: Header line inside every block :func:`_format_memory_block` renders. Used to
+#: recognise blocks injected before the metadata tag existed (still sitting in
+#: checkpoints written by older releases) so they are cleaned up too.
+_MEMORY_BLOCK_HEADER = "[Long-term Memory]"
+
+#: How :meth:`BaseMemoryManager.on_session_end` runs extraction. ``"inline"``
+#: finishes it before the run ends; ``"background"`` schedules it as a tracked
+#: task and returns at once.
+ExtractMode = Literal["inline", "background"]
 
 # Callable type for user-supplied extraction functions.
 ExtractFn = Callable[
     [list["Message"]],
     Coroutine[Any, Any, list["Memory"]],
 ]
+
+
+@dataclass(frozen=True)
+class MemoryScope:
+    """Where one run's memories are written, and where else they are recalled from.
+
+    Returned by a ``namespace_resolver`` instead of a bare prefix when a run
+    should also recall shared memories — a team's, a household's — that it
+    never writes to.
+
+    Attributes:
+        namespace: The prefix the run reads AND writes (extraction saves here
+            and only here).
+        recall: Further prefixes recalled alongside ``namespace``, read-only.
+            Each must share ``namespace[0]`` (the tenant, in a multi-tenant
+            store); one that does not is dropped with a warning and never read.
+    """
+
+    namespace: tuple[str, ...]
+    recall: tuple[tuple[str, ...], ...] = ()
+
+
+#: ``(run) -> namespace prefix`` (or a :class:`MemoryScope`) for
+#: :class:`LLMMemoryManager`. ``run`` is a :class:`~locus.core.events.RunInfo`
+#: built from the run's state: ``run_id``, ``metadata`` (the run's persisted
+#: metadata) and ``agent_name`` (the agent id). ``None`` means NO memory for
+#: that run — no recall, no injection, no extraction — never the manager's
+#: shared ``namespace_prefix``; return that prefix explicitly to opt a run into
+#: it.
+NamespaceResolver = Callable[["RunInfo"], "tuple[str, ...] | MemoryScope | None"]
+
+#: ``(manager, prefix, recall prefixes)`` a scoped manager call is running under.
+_ACTIVE_NAMESPACE: ContextVar[
+    tuple[object, tuple[str, ...], tuple[tuple[str, ...], ...]] | None
+] = ContextVar("locus_memory_namespace", default=None)
 
 
 class MemoryType(StrEnum):
@@ -198,13 +283,33 @@ class BaseMemoryManager(ABC):
         """
         ...
 
+    async def retrieve_relevant(self, query: str | None, limit: int | None = None) -> list[Memory]:
+        """Retrieve the memories most relevant to ``query``.
+
+        Called by :meth:`on_session_start` with the text of the current user
+        turn. The default ignores ``query`` and delegates to :meth:`retrieve`,
+        so subclasses written against the older ``retrieve(limit)`` contract
+        keep working unchanged; managers whose backend can rank by relevance
+        override this.
+
+        Args:
+            query: Text to rank memories against, usually the latest user
+                message. ``None`` means "no query" (recency order).
+            limit: Maximum number of memories to return. ``None`` uses the
+                manager's default.
+        """
+        if limit is None:
+            return await self.retrieve()
+        return await self.retrieve(limit)
+
     async def on_session_start(self, state: AgentState) -> AgentState:
         """Retrieve memories and inject them into the agent state.
 
         Called by the agent runtime at the start of every invocation,
         after ``on_before_invocation`` hooks but before the first model
-        call.  The default implementation retrieves all stored memories
-        and prepends a formatted system message to ``state.messages``.
+        call. The latest user message is used as the retrieval query, and
+        the formatted block *replaces* any block injected by an earlier turn
+        of the same (checkpointed) thread instead of being added next to it.
 
         Args:
             state: Current agent state (just-created or loaded from
@@ -213,9 +318,12 @@ class BaseMemoryManager(ABC):
         Returns:
             Possibly-modified state with memory context injected.
         """
-        memories = await self.retrieve()
+        memories = await self.retrieve_relevant(_latest_user_text(state))
         if not memories:
-            return state
+            # Still drop a block left over from an earlier turn: if the store
+            # no longer holds those memories (deleted, erased, expired) they
+            # must not keep reaching the model from the checkpoint.
+            return _strip_memory_blocks(state)
 
         from locus.observability.emit import emit  # noqa: PLC0415
 
@@ -229,6 +337,13 @@ class BaseMemoryManager(ABC):
 
         return injected_state
 
+    #: ``"inline"`` (default) or ``"background"`` — see :meth:`on_session_end`.
+    #: A class attribute so managers written before the option existed keep
+    #: the inline behaviour without calling a base ``__init__``.
+    extract_mode: ExtractMode = "inline"
+    #: Background extractions allowed to run at once (across namespaces).
+    max_concurrent_extractions: int = 4
+
     async def on_session_end(self, state: AgentState) -> None:
         """Extract memories from the finished session and save them.
 
@@ -236,16 +351,53 @@ class BaseMemoryManager(ABC):
         invocation, after ``on_after_invocation`` hooks but before the
         final checkpoint.
 
+        With ``extract_mode="inline"`` (the default) extraction finishes before
+        this returns, so its latency is part of the run. With
+        ``extract_mode="background"`` it is scheduled as a tracked task and
+        this returns at once: the run ends — and a streaming consumer sees its
+        last event — without waiting for the extractor. Background jobs of one
+        namespace run in submission order (two turns of one user never race
+        their writes), at most :attr:`max_concurrent_extractions` run at once,
+        and :meth:`drain` waits for all of them (call it, or
+        ``Agent.drain_memory()``, at graceful shutdown and in tests).
+
+        The injected memory block is removed before extraction, so recalled
+        memories are not fed back to the extractor as if the user had just
+        said them. A failing extractor or store is logged and reported as a
+        ``memory.manager.extract_failed`` event rather than raised, in either
+        mode: an auxiliary memory write must not cost the conversation its
+        turn (inline), and must never surface in a run that already finished
+        (background).
+
         Args:
             state: Final agent state with the complete message history.
         """
-        memories = await self.extract(list(state.messages))
-        if not memories:
+        messages = list(_strip_memory_blocks(state).messages)
+        if self.extract_mode == "background":
+            self._background().submit(
+                self._extraction_order_key(), lambda: self._extract_and_save(messages)
+            )
             return
+        await self._extract_and_save(messages)
 
-        await self.save(memories)
-
+    async def _extract_and_save(self, messages: list[Message]) -> None:
+        """Run :meth:`extract` + :meth:`save`, reporting instead of raising."""
         from locus.observability.emit import emit  # noqa: PLC0415
+
+        try:
+            memories = await self.extract(messages)
+            if not memories:
+                return
+            await self.save(memories)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("long-term memory extraction failed", exc_info=True)
+            await emit(
+                "memory.manager.extract_failed",
+                error_type=type(exc).__name__,
+                error=str(exc),
+                mode=self.extract_mode,
+            )
+            return
 
         await emit(
             "memory.manager.extracted",
@@ -253,6 +405,36 @@ class BaseMemoryManager(ABC):
             types=[m.type.value for m in memories],
             keys=[m.key for m in memories],
         )
+
+    def _extraction_order_key(self) -> tuple[str, ...]:
+        """Background jobs sharing this key run strictly one after another."""
+        prefix = getattr(self, "namespace_prefix", None)
+        return tuple(prefix) if prefix else ()
+
+    def _background(self) -> _BackgroundExtractions:
+        bg: _BackgroundExtractions | None = self.__dict__.get("_bg_extractions")
+        if bg is None:
+            bg = _BackgroundExtractions(self.max_concurrent_extractions)
+            self.__dict__["_bg_extractions"] = bg
+        return bg
+
+    @property
+    def pending_extractions(self) -> int:
+        """Background extractions scheduled or running, not yet finished."""
+        bg: _BackgroundExtractions | None = self.__dict__.get("_bg_extractions")
+        return 0 if bg is None else len(bg.tasks)
+
+    async def drain(self) -> None:
+        """Wait for every scheduled background extraction to finish.
+
+        Jobs submitted while draining are waited for too. Safe to call in
+        ``"inline"`` mode (returns at once). Errors inside jobs were already
+        logged and emitted; they are not raised here. Bound the wait with
+        ``asyncio.timeout(...)``: cancelling ``drain`` leaves the jobs running.
+        """
+        bg: _BackgroundExtractions | None = self.__dict__.get("_bg_extractions")
+        if bg is not None:
+            await bg.drain()
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -303,7 +485,7 @@ class LLMMemoryManager(BaseMemoryManager):
     Args:
         store: Any :class:`~locus.memory.store.BaseStore` implementation.
             ``InMemoryStore`` works for development; use
-            ``RedisBackend``, ``PostgreSQLBackend``, ``OracleBackend``, etc.
+            ``RedisBackend``, ``PostgreSQLBackend``, etc.
             for production.
         extract_fn: Optional async callable
             ``(messages: list[Message]) -> list[Memory]``.  When
@@ -314,19 +496,39 @@ class LLMMemoryManager(BaseMemoryManager):
         max_memories: Hard cap on the total number of memories kept per
             type.  Oldest entries are pruned when the limit is reached.
         retrieve_limit: Maximum memories returned by :meth:`retrieve`.
+        extract_mode: ``"inline"`` (default) runs extraction before the run
+            ends; ``"background"`` schedules it after the turn's final event
+            so a chat never waits for it — see
+            :meth:`BaseMemoryManager.on_session_end`. Background mode needs a
+            long-lived event loop (a server); call :meth:`drain` before it
+            stops. ``Agent.run_sync`` drains for you.
+        max_concurrent_extractions: Background extractions allowed to run at
+            once. Jobs of one namespace always run one at a time, in order.
+        namespace_resolver: ``(run: RunInfo) -> prefix`` choosing the
+            namespace prefix PER RUN, from ``run.metadata`` (what
+            ``agent.run(..., metadata=)`` passed). Lets one manager serve
+            every user: its ``max_concurrent_extractions`` bound and
+            :meth:`drain` then cover all of them. ``None`` from the resolver
+            means NO memory for that run (e.g. an anonymous visitor): it
+            neither reads nor writes memories — it never falls back to the
+            shared ``namespace_prefix``, which would pool every such run
+            together. Return ``namespace_prefix`` explicitly to opt a run
+            into it. A resolver that raises is treated the same way. Return a
+            :class:`MemoryScope` to also recall read-only namespaces of the
+            same tenant in the same call.
 
     Example::
 
         from locus.memory.manager import LLMMemoryManager
-        from locus.memory.backends import OracleBackend
+        from locus.memory.store import InMemoryStore
 
         manager = LLMMemoryManager(
-            store=OracleBackend(dsn="mydb_high", user="admin", password="secret"),
+            store=InMemoryStore(),
             extract_fn=my_llm_extractor,
             namespace_prefix=("users", user_id),
         )
 
-        agent = Agent(model="oci:openai.gpt-5", memory_manager=manager)
+        agent = Agent(model="anthropic:claude-sonnet-4-6", memory_manager=manager)
     """
 
     def __init__(
@@ -337,16 +539,133 @@ class LLMMemoryManager(BaseMemoryManager):
         namespace_prefix: tuple[str, ...] = ("locus_memory",),
         max_memories: int = 50,
         retrieve_limit: int = 20,
+        extract_mode: ExtractMode = "inline",
+        max_concurrent_extractions: int = 4,
+        namespace_resolver: NamespaceResolver | None = None,
     ) -> None:
+        if extract_mode not in ("inline", "background"):
+            raise ValueError(f"extract_mode must be 'inline' or 'background', got {extract_mode!r}")
+        if max_concurrent_extractions < 1:
+            raise ValueError("max_concurrent_extractions must be at least 1")
+        self.extract_mode = extract_mode
+        self.max_concurrent_extractions = max_concurrent_extractions
         self.store = store
         self.extract_fn = extract_fn
         self.namespace_prefix = namespace_prefix
         self.max_memories = max_memories
         self.retrieve_limit = retrieve_limit
+        self.namespace_resolver = namespace_resolver
+
+    # ------------------------------------------------------------------
+    # Namespace scoping
+    # ------------------------------------------------------------------
+
+    @property
+    def active_namespace(self) -> tuple[str, ...]:
+        """The prefix the current call reads and writes under: the one a
+        :meth:`scoped` block (or the run's resolver) set, else
+        ``namespace_prefix``."""
+        active = _ACTIVE_NAMESPACE.get()
+        if active is not None and active[0] is self:
+            return active[1]
+        return tuple(self.namespace_prefix)
+
+    @property
+    def active_recall(self) -> tuple[tuple[str, ...], ...]:
+        """Every prefix a recall in the current scope reads: the active
+        namespace first, then the scope's read-only ``recall`` prefixes."""
+        active = _ACTIVE_NAMESPACE.get()
+        if active is not None and active[0] is self:
+            return (active[1], *active[2])
+        return (tuple(self.namespace_prefix),)
+
+    @contextmanager
+    def scoped(
+        self,
+        namespace_prefix: tuple[str, ...],
+        *,
+        recall: Sequence[tuple[str, ...]] = (),
+    ) -> Iterator[None]:
+        """Run :meth:`retrieve` / :meth:`save` / :meth:`extract` calls — and
+        background jobs scheduled — inside the block under
+        ``namespace_prefix``.
+
+        ``recall`` adds read-only prefixes that :meth:`retrieve` also reads;
+        writes still go to ``namespace_prefix`` alone. A recall prefix whose
+        first element differs from ``namespace_prefix[0]`` (another tenant) is
+        dropped with a warning.
+
+        Context-local: concurrent tasks each keep their own scope. The agent
+        runtime does this for you when ``namespace_resolver`` is set.
+        """
+        prefix = tuple(namespace_prefix)
+        token = _ACTIVE_NAMESPACE.set((self, prefix, _same_tenant(prefix, recall)))
+        try:
+            yield
+        finally:
+            _ACTIVE_NAMESPACE.reset(token)
+
+    def _resolve_namespace(self, state: AgentState) -> MemoryScope | None:
+        """This run's scope; ``None`` means no memory for this run.
+
+        That is the case when the resolver returns ``None`` or raises: both
+        fail closed, never into the shared ``namespace_prefix``.
+        """
+        if self.namespace_resolver is None:
+            return MemoryScope(tuple(self.namespace_prefix))
+        from locus.core.events import RunInfo  # noqa: PLC0415
+
+        run = RunInfo.build(
+            run_id=state.run_id,
+            thread_id=None,
+            metadata=state.metadata,
+            agent_name=state.agent_id,
+        )
+        try:
+            resolved = self.namespace_resolver(run)
+        except Exception:  # noqa: BLE001 — a bad resolver must not cost the turn
+            logger.warning(
+                "memory namespace_resolver failed; skipping memory for run %s",
+                state.run_id,
+                exc_info=True,
+            )
+            return None
+        if resolved is None:
+            return None
+        if isinstance(resolved, MemoryScope):
+            return MemoryScope(tuple(resolved.namespace), tuple(map(tuple, resolved.recall)))
+        return MemoryScope(tuple(resolved))
+
+    async def on_session_start(self, state: AgentState) -> AgentState:
+        """Inject this run's memories, read from the run's namespace (and the
+        read-only namespaces its :class:`MemoryScope` names) in one recall."""
+        scope = self._resolve_namespace(state)
+        if scope is None:
+            return _strip_memory_blocks(state)
+        with self.scoped(scope.namespace, recall=scope.recall):
+            return await super().on_session_start(state)
+
+    async def on_session_end(self, state: AgentState) -> None:
+        """Extract and save this run's memories into the run's namespace.
+
+        A background job is created inside the scope, so it inherits it; it
+        shares this manager's one semaphore and one :meth:`drain` with every
+        other namespace's jobs.
+        """
+        scope = self._resolve_namespace(state)
+        if scope is None:
+            return
+        # Extraction writes to the run's own namespace only, never to a
+        # recall namespace.
+        with self.scoped(scope.namespace):
+            await super().on_session_end(state)
+
+    def _extraction_order_key(self) -> tuple[str, ...]:
+        return self.active_namespace
 
     def _ns(self, memory_type: MemoryType) -> tuple[str, ...]:
         """Build the store namespace for a memory type."""
-        return (*self.namespace_prefix, memory_type.value)
+        return (*self.active_namespace, memory_type.value)
 
     async def extract(self, messages: list[Message]) -> list[Memory]:
         """Extract memories from a message list.
@@ -358,47 +677,111 @@ class LLMMemoryManager(BaseMemoryManager):
             return await self.extract_fn(messages)
         return _heuristic_extract(messages)
 
-    async def retrieve(self, limit: int = 20) -> list[Memory]:
-        """Retrieve all stored memories across every type.
+    async def retrieve(
+        self,
+        limit: int | None = None,
+        *,
+        query: str | None = None,
+        namespaces: Sequence[tuple[str, ...]] | None = None,
+    ) -> list[Memory]:
+        """Retrieve stored memories across every type.
 
-        Returns memories sorted by most-recently-updated first, up to
-        ``limit`` entries total.
+        Without ``query`` this returns the most recently updated memories.
+        With ``query`` it first asks the store to rank each type's memories
+        against it (``BaseStore.search(namespace, query=...)`` — semantic on
+        ``PgMemory`` / ``HolographicStore``), interleaves the best matches of
+        every type, then tops the list up with the most recent memories. The
+        top-up is what keeps a store whose ``search`` only *filters* (the
+        substring match of ``InMemoryStore``) from injecting nothing just
+        because no memory contains the whole user message. Stores that cannot
+        search at all fall back to recency.
+
+        Every type of every namespace is read with one
+        :meth:`~locus.memory.store.BaseStore.search_many` call for the ranking
+        and one for the recency top-up — one round trip each on ``PgMemory``
+        — instead of a search per type.
+
+        Args:
+            limit: Maximum memories returned. ``None`` uses
+                ``retrieve_limit``.
+            query: Optional text to rank memories against.
+            namespaces: Prefixes to recall from, in priority order. ``None``
+                reads the current scope: the active namespace and the scope's
+                read-only recall prefixes (see :class:`MemoryScope`). All must
+                share their first element (the tenant).
+
+        Raises:
+            ValueError: ``namespaces`` span more than one first element.
         """
-        memories: list[Memory] = []
+        top = self.retrieve_limit if limit is None else limit
+        if top <= 0:
+            return []
+        if namespaces is None:
+            prefixes = list(self.active_recall)
+        else:
+            prefixes = [tuple(p) for p in namespaces]
+            if len({p[:1] for p in prefixes}) > 1:
+                raise ValueError(
+                    "retrieve(namespaces=...) spans more than one tenant (first "
+                    "element); recall one tenant per call"
+                )
+        if not prefixes:
+            return []
+        targets = [(*p, t.value) for p in prefixes for t in MemoryType]
 
-        for memory_type in MemoryType:
-            ns = self._ns(memory_type)
+        ranked: list[Memory] = []
+        if query and query.strip():
+            per_ns = [
+                _memories_from_items(items) for items in await self._ranked(targets, query, top)
+            ]
+            # Scores are not comparable across separate rankings, so merge
+            # them rank-by-rank instead of by score.
+            for rank in range(max((len(r) for r in per_ns), default=0)):
+                ranked.extend(r[rank] for r in per_ns if rank < len(r))
+
+        recent = await self._recent(top, targets)
+        return _dedupe(ranked + recent)[:top]
+
+    async def _search_many(
+        self, namespaces: list[tuple[str, ...]], query: str | None, limit: int
+    ) -> list[list[StoreItem]]:
+        """The store's ``search_many``, or a loop for a duck-typed store without one."""
+        many = getattr(self.store, "search_many", None)
+        if many is not None:
+            found: list[list[StoreItem]] = await many(namespaces, query=query, limit=limit)
+            return found
+        return [await self.store.search(ns, query=query, limit=limit) for ns in namespaces]
+
+    async def _ranked(
+        self, namespaces: list[tuple[str, ...]], query: str, limit: int
+    ) -> list[list[StoreItem]]:
+        """Each namespace's best matches for ``query``; ``[]`` where it cannot rank."""
+        try:
+            return await self._search_many(namespaces, query, limit)
+        except Exception:  # noqa: BLE001
+            pass
+        out: list[list[StoreItem]] = []
+        for ns in namespaces:
             try:
-                items = await self.store.search(ns, query=None, limit=limit)
+                out.append(await self.store.search(ns, query=query, limit=limit))
             except Exception:  # noqa: BLE001
-                # Gracefully fall back for backends that don't support search.
-                keys = await self.store.list_keys(ns, limit=limit)
-                items = []
-                for k in keys:
-                    raw = await self.store.get(ns, k)
-                    if raw is not None:
-                        from datetime import UTC, datetime  # noqa: PLC0415
+                # No (or failing) query search: recency covers it.
+                out.append([])
+        return out
 
-                        from locus.memory.store import StoreItem  # noqa: PLC0415
-
-                        now = datetime.now(UTC)
-                        items.append(
-                            StoreItem(
-                                namespace=ns,
-                                key=k,
-                                value=raw,
-                                metadata={},
-                                created_at=now,
-                                updated_at=now,
-                            )
-                        )
-
-            for item in items:
-                try:
-                    memories.append(Memory.from_store_value(item.value))
-                except (KeyError, ValueError):
-                    pass
-
+    async def _recent(
+        self, limit: int, namespaces: list[tuple[str, ...]] | None = None
+    ) -> list[Memory]:
+        """Up to ``limit`` memories across every type, newest first."""
+        if namespaces is None:
+            namespaces = [self._ns(t) for t in MemoryType]
+        try:
+            per_ns = await self._search_many(namespaces, None, limit)
+        except Exception:  # noqa: BLE001
+            per_ns = [await self._list_items_in(ns, limit) for ns in namespaces]
+        memories: list[Memory] = []
+        for items in per_ns:
+            memories.extend(_memories_from_items(items))
         # Sort newest first by updated_at (best-effort — not all items carry it).
         memories.sort(
             key=lambda m: m.metadata.get("updated_at", ""),
@@ -406,20 +789,64 @@ class LLMMemoryManager(BaseMemoryManager):
         )
         return memories[:limit]
 
+    async def _list_items(self, memory_type: MemoryType, limit: int) -> list[StoreItem]:
+        """List a type's items, via ``search`` or ``list_keys`` + ``get``."""
+        return await self._list_items_in(self._ns(memory_type), limit)
+
+    async def _list_items_in(self, ns: tuple[str, ...], limit: int) -> list[StoreItem]:
+        """List a namespace's items, via ``search`` or ``list_keys`` + ``get``."""
+        try:
+            return await self.store.search(ns, query=None, limit=limit)
+        except Exception:  # noqa: BLE001
+            # Gracefully fall back for backends that don't support search.
+            from datetime import UTC, datetime  # noqa: PLC0415
+
+            from locus.memory.store import StoreItem  # noqa: PLC0415
+
+            items: list[StoreItem] = []
+            for k in await self.store.list_keys(ns, limit=limit):
+                raw = await self.store.get(ns, k)
+                if raw is not None:
+                    now = datetime.now(UTC)
+                    items.append(
+                        StoreItem(
+                            namespace=ns,
+                            key=k,
+                            value=raw,
+                            metadata={},
+                            created_at=now,
+                            updated_at=now,
+                        )
+                    )
+            return items
+
+    async def retrieve_relevant(
+        self,
+        query: str | None,
+        limit: int | None = None,
+        *,
+        namespaces: Sequence[tuple[str, ...]] | None = None,
+    ) -> list[Memory]:
+        """Rank stored memories against ``query`` — see :meth:`retrieve`."""
+        return await self.retrieve(limit, query=query, namespaces=namespaces)
+
     async def save(self, memories: list[Memory]) -> None:
         """Upsert memories into the backing store.
 
         Memories with the same ``key`` and ``type`` overwrite the
-        previous entry — no duplicates accumulate.
+        previous entry — no duplicates accumulate. Afterwards each touched
+        type is pruned to ``max_memories`` entries, oldest first.
         """
         from datetime import UTC, datetime  # noqa: PLC0415
 
         now = datetime.now(UTC).isoformat()
 
+        touched: set[MemoryType] = set()
         for memory in memories:
             ns = self._ns(memory.type)
             value = memory.to_store_value()
-            value["metadata"]["updated_at"] = now
+            # Copy, so stamping ``updated_at`` doesn't mutate the caller's Memory.
+            value["metadata"] = {**value["metadata"], "updated_at": now}
 
             await self.store.put(
                 ns,
@@ -427,13 +854,39 @@ class LLMMemoryManager(BaseMemoryManager):
                 value,
                 metadata={"type": memory.type.value, "updated_at": now},
             )
+            touched.add(memory.type)
+
+        for memory_type in touched:
+            await self._prune(memory_type)
+
+    async def _prune(self, memory_type: MemoryType) -> None:
+        """Delete a type's oldest memories beyond ``max_memories``."""
+        if self.max_memories <= 0:
+            return
+        ns = self._ns(memory_type)
+        try:
+            # One read: the items carry their values, and so their updated_at.
+            items = await self.store.search(ns, query=None, limit=_PRUNE_SCAN_LIMIT)
+            stamped = [(_updated_at(item.value), item.key) for item in items]
+        except Exception:  # noqa: BLE001
+            keys = await self.store.list_keys(ns, limit=_PRUNE_SCAN_LIMIT)
+            if len(keys) <= self.max_memories:
+                return
+            stamped = [(_updated_at(await self.store.get(ns, key)), key) for key in keys]
+        if len(stamped) <= self.max_memories:
+            return
+        stamped.sort(reverse=True)
+        for _, key in stamped[self.max_memories :]:
+            await self.store.delete(ns, key)
 
     def __repr__(self) -> str:
         return (
             f"LLMMemoryManager("
             f"store={type(self.store).__name__}, "
             f"namespace_prefix={self.namespace_prefix!r}, "
-            f"retrieve_limit={self.retrieve_limit})"
+            f"namespace_resolver={'set' if self.namespace_resolver else None}, "
+            f"retrieve_limit={self.retrieve_limit}, "
+            f"extract_mode={self.extract_mode!r})"
         )
 
 
@@ -442,38 +895,239 @@ class LLMMemoryManager(BaseMemoryManager):
 # =============================================================================
 
 
+#: Upper bound on keys scanned when pruning a memory type to ``max_memories``.
+_PRUNE_SCAN_LIMIT = 10_000
+
+
+class _BackgroundExtractions:
+    """Tracked background extraction jobs of one memory manager.
+
+    * every task is held until done (never garbage-collected mid-flight);
+    * a job waits for the previous job with the same key before it starts, so
+      one namespace's writes land in submission order;
+    * a semaphore bounds how many jobs run at once — taken only after the
+      predecessor finished, so a queued job never holds a slot while waiting;
+    * a job never raises: ``_extract_and_save`` reports its own failures, and
+      anything else is logged here.
+    """
+
+    def __init__(self, max_concurrent: int) -> None:
+        self._max_concurrent = max_concurrent
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._semaphore: asyncio.Semaphore | None = None
+        self._tails: dict[tuple[str, ...], asyncio.Task[None]] = {}
+        self.tasks: set[asyncio.Task[None]] = set()
+
+    def submit(self, key: tuple[str, ...], job: Callable[[], Awaitable[None]]) -> None:
+        loop = asyncio.get_running_loop()
+        if loop is not self._loop:
+            # A new event loop (``run_sync`` opens one per call): asyncio
+            # primitives and tasks of the old loop cannot be used from it.
+            self._loop = loop
+            self._semaphore = asyncio.Semaphore(self._max_concurrent)
+            self._tails = {}
+            self.tasks = set()
+        previous = self._tails.get(key)
+        task = loop.create_task(
+            self._run(previous, job), name=f"locus-memory-extract:{'/'.join(key)}"
+        )
+        self._tails[key] = task
+        self.tasks.add(task)
+
+        def _done(t: asyncio.Task[None]) -> None:
+            self.tasks.discard(t)
+            if self._tails.get(key) is t:
+                del self._tails[key]
+
+        task.add_done_callback(_done)
+
+    async def _run(
+        self, previous: asyncio.Task[None] | None, job: Callable[[], Awaitable[None]]
+    ) -> None:
+        if previous is not None:
+            # The predecessor never raises; ``wait`` also shields this job
+            # from the predecessor being cancelled.
+            await asyncio.wait({previous})
+        assert self._semaphore is not None
+        async with self._semaphore:
+            try:
+                await job()
+            except Exception:  # noqa: BLE001 — a background job must never raise
+                logger.warning("background memory extraction failed", exc_info=True)
+
+    async def drain(self) -> None:
+        while self.tasks:
+            await asyncio.wait(set(self.tasks))
+
+
+def _is_memory_block(message: Message) -> bool:
+    """Whether ``message`` is a memory block a manager injected."""
+    from locus.core.messages import Role  # noqa: PLC0415
+
+    if message.role != Role.SYSTEM:
+        return False
+    if message.metadata.get(MEMORY_BLOCK_METADATA_KEY):
+        return True
+    # Untagged blocks written by releases before the tag existed.
+    content = message.content or ""
+    return content.startswith("<memory-context>") and _MEMORY_BLOCK_HEADER in content
+
+
+def without_memory_blocks(state: AgentState) -> AgentState:
+    """``state`` minus any injected memory block — the form that is persisted.
+
+    The memory block is ephemeral: a manager injects it for the model calls of
+    one turn, and the runtime strips it before every checkpoint save, so a
+    checkpoint (and the run's result state) never carries recalled memory.
+    """
+    return _strip_memory_blocks(state)
+
+
+def _strip_memory_blocks(state: AgentState) -> AgentState:
+    """Return ``state`` without any injected memory block."""
+    msgs = tuple(m for m in state.messages if not _is_memory_block(m))
+    if len(msgs) == len(state.messages):
+        return state
+    return state.model_copy(update={"messages": msgs})
+
+
+def _latest_user_text(state: AgentState) -> str | None:
+    """Text of the most recent user message — the current turn's prompt."""
+    from locus.core.messages import Role  # noqa: PLC0415
+
+    for message in reversed(state.messages):
+        if message.role == Role.USER and message.content:
+            return message.content
+    return None
+
+
+def _same_tenant(
+    namespace: tuple[str, ...], recall: Sequence[tuple[str, ...]]
+) -> tuple[tuple[str, ...], ...]:
+    """``recall`` without the prefixes of another tenant (first element), each
+    dropped with a warning: a run never recalls across tenants."""
+    kept: list[tuple[str, ...]] = []
+    for raw in recall:
+        prefix = tuple(raw)
+        if prefix[:1] != namespace[:1]:
+            logger.warning(
+                "memory recall namespace %r dropped: its first element (the tenant) "
+                "differs from the run's namespace %r",
+                prefix,
+                namespace,
+            )
+            continue
+        if prefix != namespace and prefix not in kept:
+            kept.append(prefix)
+    return tuple(kept)
+
+
+def _updated_at(raw: Any) -> str:
+    """The ``updated_at`` a stored memory value carries, or ``""``."""
+    if isinstance(raw, dict):
+        meta = raw.get("metadata")
+        if isinstance(meta, dict):
+            return str(meta.get("updated_at", ""))
+    return ""
+
+
+def _memories_from_items(items: list[StoreItem]) -> list[Memory]:
+    """Decode store items into memories, skipping malformed values."""
+    memories: list[Memory] = []
+    for item in items:
+        try:
+            memories.append(Memory.from_store_value(item.value))
+        except (KeyError, ValueError, TypeError):
+            pass
+    return memories
+
+
+def _dedupe(memories: list[Memory]) -> list[Memory]:
+    """Drop repeated ``(type, key)`` entries, keeping the first."""
+    seen: set[tuple[str, str]] = set()
+    out: list[Memory] = []
+    for m in memories:
+        ident = (m.type.value, m.key)
+        if ident not in seen:
+            seen.add(ident)
+            out.append(m)
+    return out
+
+
 def _inject_memories_into_state(
     state: AgentState,
     memories: list[Memory],
 ) -> AgentState:
-    """Prepend a formatted memory block to state.messages.
+    """Place a formatted memory block in state.messages, replacing any old one.
 
-    Inserts a new system message immediately after the first system
-    prompt (position 1), or at position 0 when there is no system
-    prompt.  This keeps the primary system prompt intact and first,
-    while the memory block follows it.
+    The block goes right after the turn's prompt (the latest user message),
+    or after the leading system messages when there is none. A provider's
+    prompt cache serves only a byte-identical prefix, and the block is
+    per-turn content: it is retrieved for this turn's prompt and stripped
+    before the turn is saved. Placed after the system prompt, it would change
+    the start of the request every turn and every turn would pay full price
+    for the whole conversation; placed after the prompt, the next turn still
+    starts with this one's history up to and including its prompt. Any memory
+    block already present — typically injected by an earlier turn and
+    persisted in the thread's checkpoint — is removed first, so the state
+    never carries more than one.
     """
     from locus.core.messages import Message, Role  # noqa: PLC0415
 
     block = _format_memory_block(memories)
-    memory_msg = Message(role=Role.SYSTEM, content=block)
+    memory_msg = Message(
+        role=Role.SYSTEM,
+        content=block,
+        metadata={MEMORY_BLOCK_METADATA_KEY: True},
+    )
 
-    msgs = list(state.messages)
-    if msgs and msgs[0].role == Role.SYSTEM:
-        msgs.insert(1, memory_msg)
+    msgs = list(_strip_memory_blocks(state).messages)
+    prompt = next(
+        (
+            i
+            for i in range(len(msgs) - 1, -1, -1)
+            if msgs[i].role == Role.USER and not msgs[i].metadata.get(_AUTOMATED_NOTE_KEY)
+        ),
+        None,
+    )
+    if prompt is not None:
+        at = prompt + 1
     else:
-        msgs.insert(0, memory_msg)
+        at = 0
+        while at < len(msgs) and msgs[at].role == Role.SYSTEM:
+            at += 1
+    msgs.insert(at, memory_msg)
 
     return state.model_copy(update={"messages": tuple(msgs)})
 
 
 def _format_memory_block(memories: list[Memory]) -> str:
-    """Format a list of memories as a compact system-prompt block."""
-    lines = ["[Long-term Memory]"]
+    """Format memories as a scrubbed, untrusted-tagged system-prompt block.
+
+    Recalled memory is a prompt-injection surface (a fact written in one run, or
+    by a poisoned document, could carry instructions into a later run), so the
+    block is passed through :func:`build_memory_context_block`: injected
+    system-note/fence markers are stripped and the recall is wrapped as
+    *informational background data, not instructions*. The model can use what it
+    remembers without obeying it.
+    """
+    from locus.memory.scrubber import build_memory_context_block  # noqa: PLC0415
+
+    lines = [_MEMORY_BLOCK_HEADER]
     for m in memories:
         label = m.type.value.upper()
         lines.append(f"{label} [{m.key}]: {m.content}")
-    return "\n".join(lines)
+    return build_memory_context_block("\n".join(lines))
+
+
+def _content_digest(content: str) -> str:
+    """Stable short key suffix for a message's text.
+
+    Heuristic memories are keyed by what was said rather than by a random id:
+    on a checkpointed thread every turn re-extracts the whole history, and a
+    random key turned each re-extraction into another copy of the same fact.
+    """
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:12]
 
 
 def _heuristic_extract(messages: list[Message]) -> list[Memory]:
@@ -517,7 +1171,7 @@ def _heuristic_extract(messages: list[Message]) -> list[Memory]:
         if role == Role.USER:
             for sig in user_signals:
                 if sig in text:
-                    key = f"user_context_{uuid.uuid4().hex[:8]}"
+                    key = f"user_context_{_content_digest(msg.content)}"
                     memories.append(
                         Memory(
                             type=MemoryType.USER,
@@ -530,7 +1184,7 @@ def _heuristic_extract(messages: list[Message]) -> list[Memory]:
 
             for sig in project_signals:
                 if sig in text:
-                    key = f"project_context_{uuid.uuid4().hex[:8]}"
+                    key = f"project_context_{_content_digest(msg.content)}"
                     memories.append(
                         Memory(
                             type=MemoryType.PROJECT,
@@ -543,7 +1197,7 @@ def _heuristic_extract(messages: list[Message]) -> list[Memory]:
 
             for sig in ref_signals:
                 if sig in text:
-                    key = f"reference_{uuid.uuid4().hex[:8]}"
+                    key = f"reference_{_content_digest(msg.content)}"
                     memories.append(
                         Memory(
                             type=MemoryType.REFERENCE,
@@ -557,7 +1211,7 @@ def _heuristic_extract(messages: list[Message]) -> list[Memory]:
         if role == Role.USER:
             for sig in feedback_signals:
                 if sig in text:
-                    key = f"feedback_{uuid.uuid4().hex[:8]}"
+                    key = f"feedback_{_content_digest(msg.content)}"
                     memories.append(
                         Memory(
                             type=MemoryType.FEEDBACK,
@@ -570,7 +1224,7 @@ def _heuristic_extract(messages: list[Message]) -> list[Memory]:
 
             for sig in confirm_signals:
                 if sig in text:
-                    key = f"feedback_confirmed_{uuid.uuid4().hex[:8]}"
+                    key = f"feedback_confirmed_{_content_digest(msg.content)}"
                     memories.append(
                         Memory(
                             type=MemoryType.FEEDBACK,

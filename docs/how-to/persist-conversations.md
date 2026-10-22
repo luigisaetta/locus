@@ -1,8 +1,14 @@
+---
+title: Persist conversations
+---
+
 # Persist conversations across restarts
 
 The agent keeps conversation state in `AgentState`. Pass a
 `BaseCheckpointer` and the same `thread_id` across invocations to
-resume a conversation — even across process restarts.
+resume a conversation — even across process restarts. This is what
+keeps a multi-day case durable: a teammate picks up the same customer
+thread tomorrow, on a different worker, with full history intact.
 
 ## 1. Pick a backend
 
@@ -16,18 +22,18 @@ matters: you pass the **native** ones straight to `Agent`, and you
 - `MemoryCheckpointer` — in-process dict; tests / REPL
 - `FileCheckpointer` — JSON files on disk; single-machine dev
 - `HTTPCheckpointer` — talks to a remote checkpoint service you run
-- `OCIBucketBackend` — OCI Object Storage; lifecycle policies, region replication
+- `S3Backend` — S3-compatible object storage; lifecycle policies, region replication
+  (`s3_checkpointer(...)` is a convenience alias that returns an `S3Backend`)
 
 **Storage-backed checkpointers** (wrap a dict-shaped storage with a
 factory):
 
-- `redis_checkpointer(...)` — Redis cluster (OCI Cache with Redis)
-- `postgresql_checkpointer(...)` — managed Postgres (OCI Database with PostgreSQL)
-- `mysql_checkpointer(...)` — MySQL with the official Connector/Python async driver
-- `opensearch_checkpointer(...)` — OpenSearch cluster (OCI Search with OpenSearch)
-- `oracle_checkpointer(...)` — Oracle Autonomous Database
+- `redis_checkpointer(...)` — Redis (self-hosted or managed)
+- `postgresql_checkpointer(...)` — Postgres (self-hosted or managed)
+- `mysql_checkpointer(...)` — MySQL (via the official Connector/Python async driver)
+- `opensearch_checkpointer(...)` — OpenSearch (self-hosted or managed)
 
-The native ones are normal classes — `OCIBucketBackend(...)` and
+The native ones are normal classes — instantiate one, e.g. `S3Backend(...)`, and
 hand it to `Agent`. The storage-backed ones are the underlying
 `RedisBackend` / `PostgreSQLBackend` / `MySQLBackend` / etc. wrapped by an adapter; if
 you instantiate the backend class directly and pass it to `Agent`,
@@ -41,15 +47,15 @@ Native checkpointer (no wrapping):
 
 ```python
 from locus.agent import Agent
-from locus.memory.backends import OCIBucketBackend
+from locus.memory.backends import S3Backend
 
-checkpointer = OCIBucketBackend(
-    bucket_name="my-app-checkpoints",
-    namespace="my-namespace",
+checkpointer = S3Backend(
+    bucket="my-app-checkpoints",
+    prefix="my-namespace/",
 )
 
 agent = Agent(
-    model="oci:openai.gpt-5.5",   # any OCI model — see how-to/oci-models.md
+    model="{{ locus_example_model }}",   # any model — see concepts/models.md
     tools=[...],
     checkpointer=checkpointer,
 )
@@ -63,7 +69,7 @@ from locus.memory.backends import postgresql_checkpointer
 checkpointer = postgresql_checkpointer(
     dsn="postgresql://locus:locus@db.example.com:5432/locus",
 )
-agent = Agent(model="oci:openai.gpt-5.5", tools=[...], checkpointer=checkpointer)
+agent = Agent(model="{{ locus_example_model }}", tools=[...], checkpointer=checkpointer)
 ```
 
 MySQL with the official async driver:
@@ -74,17 +80,17 @@ from locus.memory.backends import mysql_checkpointer
 checkpointer = mysql_checkpointer(
     dsn="mysql://locus:locus@db.example.com:3306/locus",
 )
-agent = Agent(model="oci:openai.gpt-5.5", tools=[...], checkpointer=checkpointer)
+agent = Agent(model="{{ locus_example_model }}", tools=[...], checkpointer=checkpointer)
 ```
 
 ## 3. Use a stable thread_id
 
 ```python
-# First turn — new thread
-await agent.run("Plan a trip to Paris.", thread_id="user-42").__anext__()
+# First turn — new case thread
+await agent.run("Open case C-4821 for the billing dispute.", thread_id="case-4821").__anext__()
 
-# Second turn, possibly a different process instance
-await agent.run("Now book the flights.", thread_id="user-42").__anext__()
+# Second turn, possibly a different process instance (a teammate tomorrow)
+await agent.run("What did we establish so far?", thread_id="case-4821").__anext__()
 ```
 
 The agent calls `checkpointer.load(thread_id)` at the start of every
@@ -111,15 +117,20 @@ prior conversation:
 
 ```python
 agent1 = Agent(..., checkpointer=checkpointer)
-await agent1.run("I'm Alex.", thread_id="t1").__anext__()
+await agent1.run("This is case C-4821.", thread_id="t1").__anext__()
 del agent1
 
-# Simulates a process restart / different worker.
+# Simulates a process restart / different worker (e.g. a teammate tomorrow).
 agent2 = Agent(..., checkpointer=checkpointer)
-await agent2.run("Who am I?", thread_id="t1").__anext__()
+await agent2.run("Which case are we on?", thread_id="t1").__anext__()
 # The model sees the earlier user turn.
 ```
 
-Oracle Generative AI – Multi-Agent Locus SDK's integration suite has
-this exact test against a live OCI bucket. See
-`tests/integration/test_checkpointer_adapters.py`.
+Locus's suite covers pieces of this shape, not the whole of it:
+`tests/integration/test_checkpointer_adapters.py::TestAgentWithCheckpointer::test_agent_resumes_from_checkpoint`
+checks that a run saves the thread's checkpoint and that it loads back
+with at least two messages (it does not check their content), against
+`MemoryCheckpointer` with a single `Agent`, and `tests/unit/test_memory_backends_s3.py` exercises
+`S3Backend` save/load against an in-process `moto` mock. Neither starts
+a second `Agent` on the same thread, and there is no live-bucket test
+in the SDK repo — run the snippet above against your own backend.

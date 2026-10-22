@@ -5,6 +5,7 @@
 """Agent implementation for Locus."""
 
 from locus.agent.agent import Agent
+from locus.agent.completion import CompletionCheck, Continuation, chain_verifiers
 from locus.agent.composition import (
     LoopAgent,
     ParallelPipeline,
@@ -14,16 +15,32 @@ from locus.agent.composition import (
     parallel,
     sequential,
 )
-from locus.agent.config import AgentConfig, GroundingConfig, ReflexionConfig
+from locus.agent.config import (
+    AgentConfig,
+    CompactionConfig,
+    GroundingConfig,
+    ModelRetryConfig,
+    ObservationPackConfig,
+    ReflexionConfig,
+)
 from locus.agent.result import AgentResult, ExecutionMetrics, StopReason, StreamingResult
+from locus.agent.specs import AgentSpec, load_agent_specs
+from locus.agent.subagent import Subagent, SubagentResult, run_subagent
+from locus.agent.tasks import TaskRegistry, task_tool
 
 
 __all__ = [
     "Agent",
     "AgentConfig",
     "AgentResult",
+    "AgentSpec",
     "ExecutionMetrics",
+    "CompactionConfig",
+    "CompletionCheck",
+    "Continuation",
     "GroundingConfig",
+    "ModelRetryConfig",
+    "ObservationPackConfig",
     "LoopAgent",
     "ParallelPipeline",
     "PipelineResult",
@@ -31,7 +48,14 @@ __all__ = [
     "SequentialPipeline",
     "StopReason",
     "StreamingResult",
+    "Subagent",
+    "SubagentResult",
+    "TaskRegistry",
+    "chain_verifiers",
+    "load_agent_specs",
     "loop",
     "parallel",
+    "run_subagent",
     "sequential",
+    "task_tool",
 ]

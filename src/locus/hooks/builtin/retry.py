@@ -34,7 +34,7 @@ class ModelRetryHook(HookProvider):
     Catches empty responses and rate limit indicators, sets event.retry=True
     to trigger automatic re-invocation with increasing delays.
 
-    Works with all providers (OCI, OpenAI, Anthropic, Ollama).
+    Works with all providers (OpenAI, Anthropic).
 
     Args:
         max_retries: Maximum retry attempts per model call.

@@ -18,15 +18,20 @@ Run it:
 .venv/bin/python examples/notebook_07_agent_with_tools.py
 ```
 
-Uses the OCI Generative AI default provider (canonical model id:
-`openai.gpt-4.1` or `meta.llama-3.3-70b-instruct`). Set
-`LOCUS_MODEL_PROVIDER=mock` for an offline run. Tool-calling also works
-against OpenAI, Anthropic, and Ollama.
+Uses the bundled mock model by default. Set `LOCUS_MODEL_PROVIDER` to
+openai / anthropic for a live model; keep `LOCUS_MODEL_PROVIDER=mock`
+for an offline run. Tool-calling also works
+against OpenAI, Anthropic.
 
-Prerequisite: notebook 08.
+Here the agent works a deployment-readiness scenario: it looks up a
+container image digest in the build registry, pulls a service's DNS and
+health record, and only then calls go or no-go. The data is fictional —
+`example.com` hostnames, placeholder digests, and made-up service names.
+
+Prerequisite: the agent-basics notebook.
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_07_agent_with_tools.py"
-```
+````

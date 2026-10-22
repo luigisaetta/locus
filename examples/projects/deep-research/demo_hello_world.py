@@ -1,24 +1,17 @@
 #!/usr/bin/env python3
-# Copyright (c) 2026 Oracle and/or its affiliates.
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
-"""Locus port of the deepagents "hello world" gist.
+"""Locus "hello world" deepagent demo.
 
-Mirrors `gist 2453c40e/04_deep_agents_hello_world.py`:
-two `@tool` functions + `create_deep_agent(...)` against OCI GenAI,
-asking the agent to call both tools in one turn.
-
-Locus equivalents:
-- `from deepagents import create_deep_agent`           -> `from locus.deepagent import create_deepagent`
-- `from langchain_core.tools import tool`               -> `from locus.tools import tool`
-- `from langchain_oci import ChatOCIGenAI`              -> `from locus.models import get_model`
-- `agent.invoke({"messages": [...]})`                   -> `agent.run_sync("...")`
+Two `@tool` functions + `create_deepagent(...)`, asking the agent to
+call both tools in one turn.
 
 Run:
-    OCI_PROFILE=DEFAULT \\
-    OCI_COMPARTMENT=ocid1.tenancy.oc1..xxx \\
-    .venv/bin/python examples/projects/deep-research/demo_hello_world.py
+    LOCUS_MODEL=anthropic:claude-sonnet-4-6 \\
+    ANTHROPIC_API_KEY=sk-ant-... \\
+    python examples/projects/deep-research/demo_hello_world.py
 """
 
 from __future__ import annotations
@@ -32,54 +25,41 @@ from locus.tools import tool
 
 
 @tool
-def hello_world() -> str:
-    """Return a hello string."""
-    return "Hello from locus deepagent with OCI!"
+def lookup_cve(cve_id: str) -> str:
+    """Return the CVSS severity and a one-line summary for a CVE id."""
+    return f"{cve_id}: CVSS 10.0 (Critical) — remote code execution via JNDI lookup in Log4j."
 
 
 @tool
-def add(a: int, b: int) -> int:
-    """Add two integers and return the sum."""
-    return a + b
+def fetch_advisory(vendor: str) -> str:
+    """Fetch the latest security advisory headline for a vendor."""
+    return f"{vendor} advisory: patched release available — upgrade immediately and rotate exposed secrets."
 
 
 def main() -> int:
-    profile = os.environ.get("OCI_PROFILE", "DEFAULT")
-    auth_type = os.environ.get("OCI_AUTH_TYPE", "api_key")
-    compartment = os.environ.get(
-        "OCI_COMPARTMENT",
-        "ocid1.tenancy.oc1..<your-tenancy>",
-    )
-    region = os.environ.get("OCI_REGION", "us-chicago-1")
-    model_id = os.environ.get("OCI_MODEL_ID", "oci:openai.gpt-4o-mini")
+    model_id = os.environ.get("LOCUS_MODEL", "anthropic:claude-sonnet-4-6")
 
     print("== locus hello-world deepagent ==")
     print(f"   model      : {model_id}")
-    print(f"   profile    : {profile} ({auth_type})")
-    print(f"   tools      : hello_world, add")
+    print(f"   tools      : lookup_cve, fetch_advisory")
     print()
 
-    chat = get_model(
-        model_id,
-        profile=profile,
-        compartment_id=compartment,
-        region=region,
-    )
+    chat = get_model(model_id)
 
     agent = create_deepagent(
         model=chat,
-        tools=[hello_world, add],
+        tools=[lookup_cve, fetch_advisory],
         system_prompt=(
-            "You are a helpful assistant. When asked to call tools, use them "
-            "before responding. After all tools have returned, summarize the "
-            "results in one short sentence."
+            "You are a vulnerability-research assistant. When asked to call "
+            "tools, use them before responding. After all tools have returned, "
+            "summarize the findings in one short sentence."
         ),
         reflexion=False,
         grounding=False,
         max_iterations=6,
     )
 
-    result = agent.run_sync("Call hello_world and add 17 + 25, then summarize.")
+    result = agent.run_sync("Look up CVE-2021-44228 and fetch the Apache advisory, then summarize.")
 
     text = getattr(result, "text", "") or ""
     tool_execs = list(result.tool_executions or ())  # type: ignore[arg-type]

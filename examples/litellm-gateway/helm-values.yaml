@@ -1,4 +1,4 @@
-# LiteLLM AI Gateway — sample OKE / Kubernetes values for fronting OCI.
+# LiteLLM AI Gateway — sample Kubernetes values for fronting providers.
 #
 # Pairs with the official LiteLLM Helm chart:
 #   ghcr.io/berriai/litellm-helm
@@ -6,17 +6,13 @@
 #
 # Deploy with:
 #
-#   # 1. Create the OCI credentials secret (the gateway pod uses these
-#   #    to sign upstream OCI calls). Prefer External Secrets / OCI Vault
-#   #    in production; the kubectl form below is for illustration only.
+#   # 1. Create the provider credentials secret (the gateway pod uses
+#   #    these for upstream calls). Prefer External Secrets in
+#   #    production; the kubectl form below is for illustration only.
 #   kubectl create namespace litellm
-#   kubectl -n litellm create secret generic oci-credentials \
-#     --from-literal=OCI_REGION="us-chicago-1" \
-#     --from-literal=OCI_USER="ocid1.user.oc1..xxx" \
-#     --from-literal=OCI_FINGERPRINT="aa:bb:cc:..." \
-#     --from-literal=OCI_TENANCY="ocid1.tenancy.oc1..xxx" \
-#     --from-literal=OCI_COMPARTMENT_ID="ocid1.compartment.oc1..xxx" \
-#     --from-file=OCI_KEY_FILE=/path/to/api_key.pem
+#   kubectl -n litellm create secret generic provider-credentials \
+#     --from-literal=OPENAI_API_KEY="sk-..." \
+#     --from-literal=ANTHROPIC_API_KEY="sk-ant-..."
 #
 #   # 2. Master key for /key/generate. Treat as a high-value secret.
 #   kubectl -n litellm create secret generic litellm-master \
@@ -49,17 +45,17 @@ replicaCount: 2
 #   --set-file proxy_config=examples/litellm-gateway/config.yaml
 # proxy_config: |
 #   model_list:
-#     - model_name: oci-cohere-command
+#     - model_name: gpt-4o
 #       litellm_params:
-#         model: oci/cohere.command-latest
+#         model: openai/gpt-4o
 #         …
 
 # ---------------------------------------------------------------------------
-# Environment — OCI credentials + master key sourced from secrets.
+# Environment — provider credentials + master key sourced from secrets.
 # ---------------------------------------------------------------------------
 envFrom:
 - secretRef:
-    name: oci-credentials
+    name: provider-credentials
 - secretRef:
     name: litellm-master
 
@@ -76,9 +72,9 @@ resources:
 
 # ---------------------------------------------------------------------------
 # Service — cluster-internal only. The gateway issues virtual keys and
-# carries OCI signing material; do NOT expose it via a LoadBalancer.
-# Use an in-cluster Ingress + mTLS / OAuth2 proxy if you need it reachable
-# from other namespaces / clusters.
+# carries upstream provider credentials; do NOT expose it via a
+# LoadBalancer. Use an in-cluster Ingress + mTLS / OAuth2 proxy if you
+# need it reachable from other namespaces / clusters.
 # ---------------------------------------------------------------------------
 service:
   type: ClusterIP
@@ -87,7 +83,7 @@ service:
 # ---------------------------------------------------------------------------
 # Postgres — required for persistent virtual keys + spend logs in
 # production. The chart bundles an option to provision it; the form
-# below points at an external Postgres (e.g. an OCI ADB instance).
+# below points at an external Postgres instance.
 # ---------------------------------------------------------------------------
 db:
   useExisting: true
@@ -100,17 +96,12 @@ db:
     passwordKey: password
 
 # ---------------------------------------------------------------------------
-# OKE Workload Identity — when set, the gateway pod assumes an OCI
-# IAM workload identity and OCI signing keys never have to land on
-# disk. Configure the OCI principal in your IAM policy and uncomment
-# below; remove the OCI_KEY / OCI_USER / OCI_FINGERPRINT entries from
-# the oci-credentials Secret in that case.
+# Service account — bind to a workload identity / IRSA-style principal
+# if your platform supports keyless cloud auth.
 # ---------------------------------------------------------------------------
 serviceAccount:
   create: true
   name: litellm-gateway
-  # annotations:
-  #   oraclecloud.com/workload-identity: "<your-principal-ocid>"
 
 # ---------------------------------------------------------------------------
 # Pod hardening

@@ -1,14 +1,12 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
-
 """Vector stores for RAG.
 
 Available stores:
-- OracleVectorStore: Oracle 26ai with native VECTOR type
-- OpenSearchVectorStore: OpenSearch with k-NN plugin
+- InMemoryVectorStore: In-memory store (testing / small corpora)
 - PgVectorStore: PostgreSQL with pgvector extension
-- InMemoryVectorStore: In-memory store (testing)
+- OpenSearchVectorStore: OpenSearch with k-NN plugin
+- QdrantVectorStore: Qdrant (local in-memory or server)
+- ChromaVectorStore: Chroma (embedded or server)
+- OracleVectorStore: Oracle Database 26ai with the native VECTOR type
 """
 
 from typing import Any
@@ -30,40 +28,50 @@ __all__ = [
     "VectorStore",
     "VectorStoreConfig",
     # Stores (lazy imports)
+    "InMemoryVectorStore",
+    "PgVectorStore",
+    "OpenSearchVectorStore",
+    "QdrantVectorStore",
+    "ChromaVectorStore",
     "OracleVectorStore",
     "OracleSyncVectorStore",
-    "OpenSearchVectorStore",
-    "PgVectorStore",
-    "InMemoryVectorStore",
 ]
 
 
 def __getattr__(name: str) -> Any:
     """Lazy import stores to avoid requiring all dependencies."""
-    if name == "OracleVectorStore":
-        from locus.rag.stores.oracle import OracleVectorStore
+    if name == "InMemoryVectorStore":
+        from locus.rag.stores.memory import InMemoryVectorStore
 
-        return OracleVectorStore
-
-    if name == "OracleSyncVectorStore":
-        from locus.rag.stores.oracle_sync import OracleSyncVectorStore
-
-        return OracleSyncVectorStore
-
-    if name == "OpenSearchVectorStore":
-        from locus.rag.stores.opensearch import OpenSearchVectorStore
-
-        return OpenSearchVectorStore
+        return InMemoryVectorStore
 
     if name == "PgVectorStore":
         from locus.rag.stores.pgvector import PgVectorStore
 
         return PgVectorStore
 
-    if name == "InMemoryVectorStore":
-        from locus.rag.stores.memory import InMemoryVectorStore
+    if name == "OpenSearchVectorStore":
+        from locus.rag.stores.opensearch import OpenSearchVectorStore
 
-        return InMemoryVectorStore
+        return OpenSearchVectorStore
 
+    if name == "QdrantVectorStore":
+        from locus.rag.stores.qdrant import QdrantVectorStore
+
+        return QdrantVectorStore
+
+    if name == "ChromaVectorStore":
+        from locus.rag.stores.chroma import ChromaVectorStore
+
+        return ChromaVectorStore
+
+    if name == "OracleVectorStore":
+        from locus.rag.stores.oracle import OracleVectorStore
+
+        return OracleVectorStore
+    if name == "OracleSyncVectorStore":
+        from locus.rag.stores.oracle_sync import OracleSyncVectorStore
+
+        return OracleSyncVectorStore
     msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(msg)

@@ -186,12 +186,41 @@ class ConfigError(LocusError):
     kind = "config_error"
 
 
+class GSARValidationError(LocusError):
+    """A GSAR judgment did not clear the bar, and the caller asked to stop.
+
+    Raised only when ``GSARConfig.fail_on_low_score`` is set. The default is
+    off: a judgment is information, and most callers want to inspect it and
+    decide. Turning it on is for a pipeline that must not ship an un-grounded
+    summary at all — where returning the answer alongside a warning is the
+    failure mode, because something downstream will use the answer.
+
+    The decision and score that caused it are attached, so a handler does not
+    have to re-derive why it stopped.
+    """
+
+    kind = "gsar_validation_error"
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        decision: str | None = None,
+        score: float | None = None,
+        cause: BaseException | None = None,
+    ) -> None:
+        super().__init__(message, cause=cause)
+        self.decision = decision
+        self.score = score
+
+
 __all__ = [
     "CheckpointError",
     "CheckpointNotFoundError",
     "CheckpointSerializationError",
     "ConfigError",
     "EmbeddingError",
+    "GSARValidationError",
     "LocusError",
     "ModelAuthError",
     "ModelError",
@@ -205,3 +234,45 @@ __all__ = [
     "ValidationError",
     "VectorStoreError",
 ]
+
+
+# =============================================================================
+# Human-in-the-loop
+# =============================================================================
+
+
+class ApprovalPendingError(LocusError):
+    """``Agent.resume()`` was called before the held action was decided.
+
+    Raised when ``resume(..., perform_dangling=True)`` re-invokes a gated call
+    and the gate interrupts again — the approval is still pending. The thread
+    is left paused exactly as it was: nothing is folded into the conversation
+    and no checkpoint is written, so a later ``resume`` (once the decision is
+    recorded) performs the action normally.
+
+    Attributes:
+        thread_id: The thread that is still paused (``None`` for a run that
+            was started without one).
+        interrupt_id: The id of the held tool call.
+        question: The question the gate is still asking.
+        metadata: The gate's interrupt metadata (``approval_id`` and friends),
+            identical in shape to ``InterruptEvent.metadata``.
+    """
+
+    kind = "approval_pending"
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        thread_id: str | None = None,
+        interrupt_id: str = "",
+        question: str = "",
+        metadata: dict[str, Any] | None = None,
+        cause: BaseException | None = None,
+    ) -> None:
+        super().__init__(message, cause=cause)
+        self.thread_id = thread_id
+        self.interrupt_id = interrupt_id
+        self.question = question
+        self.metadata: dict[str, Any] = dict(metadata or {})

@@ -4,9 +4,9 @@
 
 """Comprehensive integration tests for the agentic loop.
 
-Tests exercise all 10 features together with real models, real databases,
-and realistic multi-step scenarios. Uses OCI GenAI GPT-5.4 and the
-deep research Oracle 26ai database.
+Tests exercise all 10 features together with real models and
+realistic multi-step scenarios. Uses whichever model the shared
+``model`` fixture resolves (OpenAI or Anthropic).
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ def search_knowledge_base(query: str) -> str:
     knowledge = {
         "python": "Python is a high-level programming language created by Guido van Rossum in 1991. It supports multiple paradigms including procedural, object-oriented, and functional programming. Python 3.14 is the latest version.",
         "quantum": "Quantum computing uses quantum-mechanical phenomena such as superposition and entanglement. Key players include IBM, Google, and IonQ. Google achieved quantum supremacy in 2019 with Sycamore.",
-        "ai": "Artificial Intelligence encompasses machine learning, deep learning, and agentic AI. Large Language Models (LLMs) like GPT-5, Claude, and Gemini power modern AI applications.",
-        "oracle": "Oracle Cloud Infrastructure (OCI) provides compute, storage, networking, and AI services. OCI GenAI offers access to Cohere, Meta, and OpenAI models.",
+        "ai": "Artificial Intelligence encompasses machine learning, deep learning, and agentic AI. Large Language Models (LLMs) like GPT-5 and Claude power modern AI applications.",
+        "cloud": "Cloud computing provides on-demand compute, storage, networking, and AI services billed per use. Major providers offer managed inference for hosted large language models.",
     }
     for key, value in knowledge.items():
         if key in query.lower():
@@ -192,7 +192,7 @@ class TestParallelToolExecution:
         # window independently. ``ThinkEvent`` starts a new iteration.
         events: list = []
         async for ev in agent.run(
-            "Look up these three topics: python, quantum, oracle. "
+            "Look up these three topics: python, quantum, cloud. "
             "Call the tool three times in one response."
         ):
             events.append((time.perf_counter(), ev))
@@ -401,7 +401,7 @@ class TestTokenBudgetMidRun:
 
         events = []
         async for event in agent.run(
-            "Research everything about Python, AI, quantum computing, and Oracle"
+            "Research everything about Python, AI, quantum computing, and cloud"
         ):
             events.append(event)
 

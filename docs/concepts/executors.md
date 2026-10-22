@@ -7,8 +7,8 @@ time**:
 
 ```python
 agent = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[search_flights, search_hotels, search_restaurants],
+    model="{{ locus_example_model }}",
+    tools=[lookup_order, fetch_customer_history, shipping_status],
     tool_execution="concurrent",   # default — fan out
     # tool_execution="sequential", # opt-in — one at a time
 )
@@ -21,7 +21,7 @@ them at once and gathers their results before the next Think:
 
 ```python
 # Think emits this:
-[search_flights(...), search_hotels(...), search_restaurants(...)]
+[lookup_order(...), fetch_customer_history(...), shipping_status(...)]
 
 # Execute fires all three concurrently
 # Each emits its own ToolStartEvent / ToolCompleteEvent
@@ -30,12 +30,14 @@ them at once and gathers their results before the next Think:
 
 When parallelism helps:
 
-- **Multi-source RAG** — fetch from a vector store, a keyword index,
-  and a knowledge graph in parallel, then merge.
-- **Independent reads** — flights, hotels, and weather have no
-  dependency on each other; do them all at once.
-- **Tool fan-out** — the model called `search_X` for ten X's; run
-  them all instead of ten round-trips.
+- **Independent reads** — fetch the order, the customer's history, and
+  the shipping status in parallel; none depends on the others.
+- **Tool fan-out** — the model called `lookup_order` for ten orders;
+  run them all instead of ten round-trips.
+- **Multi-source enrichment** (security variant) — look up an IOC
+  (indicator of compromise — an IP, domain, or file hash) in a
+  threat-intel feed, a passive-DNS index, and a malware sandbox in
+  parallel, then merge.
 
 ## Sequential execution (opt-in)
 
@@ -56,25 +58,27 @@ agent.
 
 ## Idempotent dedup runs *before* dispatch
 
-Whichever mode you pick, dedup happens first. When Execute receives
-a list of tool calls, the **first** thing it does — before launching
-any coroutines — is hash each `(tool_name, arguments)` and walk
-`state.tool_executions` for matches. For tools tagged
-`@tool(idempotent=True)`, matched calls short-circuit to the cached
-receipt and never enter the executor at all.
+Whichever mode you pick, dedup happens before dispatch. When Execute
+receives a list of tool calls, before it launches any coroutines it
+checks each `(tool_name, arguments)` pair — after
+[`on_before_tool_call`](hooks.md) hooks have run, so the check uses the
+arguments as they reach the tool — and walks `state.tool_executions`
+for matches. For tools tagged `@tool(idempotent=True)`, matched calls
+short-circuit to the cached receipt and never enter the executor at all.
 
-So a model that re-emits `book_flight(flight_id="AA-181", ...)` in
+So a model that re-emits `issue_refund(order_id="ord-4821", ...)` in
 iteration 5 — when the same call already fired in iteration 2 — gets
-the cached receipt without a network round-trip and without
-charging again. See [Idempotency](idempotency.md).
+the cached receipt without a network round-trip and without refunding
+the customer twice. See [Idempotency](idempotency.md).
 
 ## Errors don't kill the group (concurrent mode)
 
 If one tool raises while three are running, the other two finish
-normally. The error becomes a `ToolErrorEvent` and a tool-error
-message in state; the next Think sees:
+normally. The failure surfaces as a `ToolCompleteEvent` with its
+`error` field set (there is no separate `ToolErrorEvent`), plus a
+tool-error message in state; the next Think sees:
 
-> *Tool `lookup_inventory` failed with: ConnectionTimeout(after 30s).*
+> *Tool `shipping_status` failed with: ConnectionTimeout(after 30s).*
 
 …and decides what to do (retry, try a different tool, give up). The
 agent loop never sees an exception unless the whole run errors.
@@ -103,12 +107,13 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 @tool
 @retry(stop=stop_after_attempt(3),
        wait=wait_exponential(multiplier=0.5))
-def lookup_inventory(sku: str) -> dict:
-    return inventory.get(sku)
+def shipping_status(order_id: str) -> dict:
+    return carrier.track(order_id)
 ```
 
 For non-transient errors, raise — the loop will see a
-`ToolErrorEvent` and the model will decide what to do.
+`ToolCompleteEvent` with its `error` set and the model will decide what
+to do.
 
 ## See also
 

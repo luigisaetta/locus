@@ -16,7 +16,35 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field, PrivateAttr
 
 from locus.core.messages import ToolCall, ToolResult
-from locus.tools.context import ToolContext
+from locus.tools.context import ToolContext, bind_tool_context
+from locus.tools.output import ToolOutput
+
+
+def find_matching_execution(state: Any, tool_name: str, arguments: dict[str, Any]) -> Any | None:
+    """Return a prior ``ToolExecution`` on ``state`` matching this call, or None.
+
+    Backs ``idempotent=True``: a tool that declares itself idempotent is not
+    run twice for the same arguments within a run. Argument equality is a
+    structural dict comparison, so a model legitimately re-calling a tool with
+    different arguments — a new date, a different order id — misses the cache
+    and runs, which is the behaviour you want.
+
+    Lives here rather than in ``locus.loop.nodes``, where it was, because the
+    agent runtime needs it and ``locus.loop`` is deprecated. A supported
+    runtime reaching into a package scheduled for removal is a removal that
+    cannot happen.
+    """
+    for prior in reversed(state.tool_executions):
+        if prior.tool_name != tool_name:
+            continue
+        try:
+            if dict(prior.arguments) == arguments:
+                return prior
+        except (TypeError, ValueError):
+            # Arguments that will not compare structurally cannot be shown
+            # equal, so this is a miss rather than an error.
+            continue
+    return None
 
 
 # Patterns that may leak sensitive info in error messages.
@@ -24,7 +52,6 @@ from locus.tools.context import ToolContext
 _SENSITIVE_PATTERNS = [
     re.compile(r"postgresql://\S+"),  # DB connection strings
     re.compile(r"redis://\S+"),
-    re.compile(r"oracle://\S+"),
     re.compile(r"mongodb://\S+"),
     re.compile(r"mysql://\S+"),
     re.compile(r"host=['\"]?[^\s&#'\"]+['\"]?", re.IGNORECASE),
@@ -34,7 +61,6 @@ _SENSITIVE_PATTERNS = [
     re.compile(r"/home/\S+"),  # Home directory paths
     re.compile(r"/Users/\S+"),
     re.compile(r"C:\\Users\\\S+"),
-    re.compile(r"ocid1\.\w+\.oc1\.\.\S+"),  # OCI resource IDs
 ]
 
 # Vendor API-key prefixes. Each alternative is linear (bounded character
@@ -160,6 +186,69 @@ def _sanitize_error(error: str) -> str:
     return redact_sensitive_text(first_line)
 
 
+def tool_result_from_output(tool_call: ToolCall, output: Any, duration_ms: float) -> ToolResult:
+    """Build the :class:`ToolResult` for a value a tool returned.
+
+    A :class:`~locus.tools.output.ToolOutput` keeps its structured content and
+    content blocks; one flagged ``is_error`` becomes the call's error, so the
+    model is told the call failed (``Message.tool`` renders ``Error: …``) and
+    ``ToolCompleteEvent.error`` is set — a tool that *returns* a failure is
+    reported exactly like one that raises.
+    """
+    if isinstance(output, ToolOutput):
+        text = output.text
+        if output.is_error:
+            return ToolResult(
+                tool_call_id=tool_call.id,
+                name=tool_call.name,
+                content="",
+                error=text or "The tool reported an error without a message.",
+                duration_ms=duration_ms,
+                structured_content=output.structured_content,
+                content_blocks=output.content_blocks,
+            )
+        return ToolResult(
+            tool_call_id=tool_call.id,
+            name=tool_call.name,
+            content=text,
+            duration_ms=duration_ms,
+            structured_content=output.structured_content,
+            content_blocks=output.content_blocks,
+        )
+    return ToolResult(
+        tool_call_id=tool_call.id,
+        name=tool_call.name,
+        content=output,
+        duration_ms=duration_ms,
+    )
+
+
+def _malformed_arguments_result(tool_call: ToolCall) -> ToolResult:
+    """Tell the model its arguments were not JSON, so it sends them again."""
+    raw = (tool_call.malformed_arguments or "")[:300]
+    return ToolResult(
+        tool_call_id=tool_call.id,
+        name=tool_call.name,
+        content="",
+        error=(
+            f"The arguments for {tool_call.name} were not valid JSON: {raw!r}. "
+            "The tool did not run. Call it again with the same arguments as a valid JSON object."
+        ),
+    )
+
+
+def _bound_context(
+    tool_call: ToolCall, ctx_factory: ToolContextFactory | None
+) -> tuple[ToolContext | None, ToolContext]:
+    """The ``ctx`` to inject (None without a factory) and the one to bind."""
+    if ctx_factory:
+        ctx = ctx_factory.create(tool_call, tool_call.name)
+        return ctx, ctx
+    return None, ToolContext(
+        tool_call_id=tool_call.id, tool_name=tool_call.name, run_id="", iteration=0
+    )
+
+
 if TYPE_CHECKING:
     from locus.tools.registry import ToolRegistry
 
@@ -181,6 +270,7 @@ class ToolContextFactory(BaseModel):
     iteration: int = 0
     state: Any = None
     invocation_metadata: dict[str, Any] = Field(default_factory=dict)
+    ephemeral_metadata: dict[str, Any] = Field(default_factory=dict, exclude=True, repr=False)
 
     def create(self, tool_call: ToolCall, tool_name: str) -> ToolContext:
         """Create a context for a tool call."""
@@ -192,6 +282,7 @@ class ToolContextFactory(BaseModel):
             iteration=self.iteration,
             state=self.state,
             invocation_metadata=self.invocation_metadata,
+            ephemeral_metadata=self.ephemeral_metadata,
         )
 
 
@@ -301,6 +392,8 @@ class SequentialExecutor(ToolExecutor):
     ) -> ToolResult:
         """Execute a single tool call."""
         start = time.perf_counter()
+        if tool_call.malformed_arguments is not None:
+            return _malformed_arguments_result(tool_call)
 
         try:
             tool = registry.get(tool_call.name)
@@ -312,22 +405,17 @@ class SequentialExecutor(ToolExecutor):
                     error=f"Unknown tool: {tool_call.name}",
                 )
 
-            # Create context if factory provided
-            ctx = None
-            if ctx_factory:
-                ctx = ctx_factory.create(tool_call, tool_call.name)
+            # Create context if factory provided; bind it either way so code
+            # the tool calls (an MCP client) can see which call it serves.
+            ctx, bound = _bound_context(tool_call, ctx_factory)
 
             # Execute
-            result = await tool.execute(ctx=ctx, **tool_call.arguments)
+            with bind_tool_context(bound):
+                result = await tool.execute(ctx=ctx, **tool_call.arguments)
 
             duration = (time.perf_counter() - start) * 1000
 
-            return ToolResult(
-                tool_call_id=tool_call.id,
-                name=tool_call.name,
-                content=result,
-                duration_ms=duration,
-            )
+            return tool_result_from_output(tool_call, result, duration)
 
         except Exception as e:  # noqa: BLE001
             duration = (time.perf_counter() - start) * 1000
@@ -440,6 +528,8 @@ class ConcurrentExecutor(ToolExecutor):
     ) -> ToolResult:
         """Execute a single tool call."""
         start = time.perf_counter()
+        if tool_call.malformed_arguments is not None:
+            return _malformed_arguments_result(tool_call)
 
         try:
             tool = registry.get(tool_call.name)
@@ -451,20 +541,14 @@ class ConcurrentExecutor(ToolExecutor):
                     error=f"Unknown tool: {tool_call.name}",
                 )
 
-            ctx = None
-            if ctx_factory:
-                ctx = ctx_factory.create(tool_call, tool_call.name)
+            ctx, bound = _bound_context(tool_call, ctx_factory)
 
-            result = await tool.execute(ctx=ctx, **tool_call.arguments)
+            with bind_tool_context(bound):
+                result = await tool.execute(ctx=ctx, **tool_call.arguments)
 
             duration = (time.perf_counter() - start) * 1000
 
-            return ToolResult(
-                tool_call_id=tool_call.id,
-                name=tool_call.name,
-                content=result,
-                duration_ms=duration,
-            )
+            return tool_result_from_output(tool_call, result, duration)
 
         except Exception as e:  # noqa: BLE001
             duration = (time.perf_counter() - start) * 1000

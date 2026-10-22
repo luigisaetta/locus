@@ -1,95 +1,184 @@
 # Capabilities
 
-Everything Oracle Generative AI – Multi-Agent Locus SDK ships, what it
+Everything Locus ships, what it
 does, and where to find it.
 
-!!! oracle-distinctive "Distinctive to the SDK"
-    These are architectural choices no other Python agent framework ships
-    together in one coherent stack:
+## Status at a glance
 
-    - **Multi-agent reasoning orchestrator** — describe a task; a
-      typed registry picks one of eight protocols and instantiates the
-      matching SDK primitive. The LLM fills a typed `GoalFrame`; routing is
-      rule-based. Eight protocols: `direct_response` (single Agent),
-      `plan_execute_validate` (SequentialPipeline), `specialist_fanout`
-      (ParallelPipeline), `debate` (two debaters + judge),
-      `codegen_test_validate` (LoopAgent), `approval_gated_execution`
-      (Agent + interrupt), `a2a_delegate`, `handoff_chain`.
-    - **Seven native multi-agent patterns plus A2A** — Composition
+| Capability group | Status | Execution mode and requirements | Important limitation |
+|---|---|---|---|
+| Agent loop, tools, control policy, events | Supported | Core install; provider required only for model calls | Controls apply only where configured and wired |
+| OCI Generative AI, OpenAI, Anthropic, Azure OpenAI, Bedrock, OpenRouter, and Together.ai model access | Supported | Live; provider extra and credential required | Azure and Bedrock are native transports; OpenRouter and Together.ai use the OpenAI-compatible transport; model capabilities vary |
+| Checkpointer and vector-store adapters | Supported interfaces | Live infrastructure for non-memory backends; matching extra/config required | Operate and test the backing service yourself |
+| `SecurityContext` reference adapters | Offline simulation | No credentials | Vendor write templates return simulated receipts unless replaced and verified |
+| Published research and evaluation artifacts | Research-only | See each research page | Some source datasets and evaluated model artifacts are not publicly available |
+
+This build targets `locus-sdk` {{ locus_sdk_version }} on Python 3.11–3.14. See the
+[compatibility policy](compatibility.md) for label definitions and upgrade
+guidance.
+
+{{ locus_diagram trust-chain }}
+
+!!! sdk-distinctive "Distinctive to the SDK"
+    - **The control runtime — let an agent act, on your terms.** A
+      side-effecting action (a refund, a production deploy, a GDPR deletion)
+      runs only after it clears a `ControlPolicy` you write: `approve()`
+      weighs it, `admit()` runs it only on an allow, or on a hold a named
+      person approves (`approved_by=`), and a supplied
+      `AuditTrail` records each decision (each entry is chained to
+      the one before it — editing any record breaks `verify()`). Policy →
+      approval → admission → audit, enforced in code, not convention.
+    - **Eight native multi-agent shapes** — Composition
       (Sequential / Parallel / Loop), Orchestrator + Specialists, Swarm,
-      Handoff, StateGraph, Functional API (`@task` / `@entrypoint`), DeepAgent,
-      cross-process A2A. Use them directly, or let the reasoning orchestrator
-      dispatch to them. Every pattern shares the same `Agent` class and event
-      stream.
+      Handoff, StateGraph, and cross-process A2A — plus the Functional API
+      (`@task` / `@entrypoint`) and DeepAgent (a research factory built on
+      top).
+      Use them directly, or reach for them from the loop as tools.
     - **In-process observability** — opt-in `EventBus` with agent yield
-      bridge. One `run_context()` streams 60+ canonical events from every
-      layer (agent, multi-agent, router, RAG, memory, A2A). Zero allocations
+      bridge. One `run_context()` streams {{ locus_event_count }} canonical events from every
+      layer (agent, multi-agent, RAG, memory, A2A). Zero allocations
       when unused.
     - **Reasoning loop nodes** — Reflexion, Grounding, Causal as first-class
       Think → Execute → **Reflect** → Think nodes, not bolted-on libraries.
     - **GSAR** — typed-grounding safety layer from
-      [Federico A. Kamelhar (2026), arXiv:2604.23366](https://arxiv.org/abs/2604.23366):
+      [arXiv:2604.23366 (2026)](https://arxiv.org/abs/2604.23366):
       four-way claim partition (grounded / ungrounded / contradicted /
-      complementary) + tiered replanning decisions.
+      complementary) + tiered replanning decisions. A claim graded by
+      `ground_finding()` becomes a typed `Evidence` only above the threshold,
+      else it **abstains**, and
+      `verify()` challenges it before it drives an action.
     - **Termination algebra** — `MaxIterations(10) | TextMention("DONE") & ConfidenceMet(0.9)` is real Python (`__or__` / `__and__` overloads). Greppable, unit-testable, serialisable.
-    - **Idempotent tools** — `@tool(idempotent=True)` dedupes on `(name, args)` inside the Execute node. No double-charge, double-book, double-page — even on model retry or checkpoint resume.
-    - **OCI, OpenAI, and Anthropic-compatible providers** — OCI Generative AI
-      day-zero (two transports, 90+ models including OpenAI commercial and xAI
-      Grok, auto-routed by model id); OpenAI and Anthropic through their
-      official SDKs; Ollama for local models. One `get_model()` call, any
-      provider.
+    - **Idempotent tools** — `@tool(idempotent=True)` dedupes identical
+      `(name, args)` calls inside the documented run/checkpoint scope. External
+      systems still need stable idempotency keys for crash recovery.
+    - **OCI Generative AI, OpenAI, Anthropic, Azure OpenAI, Bedrock, and compatible providers** —
+      OCI Generative AI (V1, SDK and Responses transports), OpenAI, Anthropic,
+      Azure OpenAI and Bedrock as native transports, plus
+      hosted and self-hosted OpenAI-compatible endpoints (OpenRouter,
+      Together.ai and more) auto-routed by model prefix. One
+      `get_model()` call, any provider.
 
 ## Agent core
 
 | Feature | What it does | Surface |
 |---|---|---|
 | **Agent** + `AgentConfig` + `AgentResult` | The Think → Execute → Reflect → Terminate loop | `locus.agent` · [Agent loop](concepts/agent-loop.md) |
-| **Termination algebra** | Compose stop conditions with `&` and `\|` operator overloads | `locus.core.termination` · [Termination](concepts/termination.md) |
-| **Idempotent tools** | `@tool(idempotent=True)` dedupes repeat calls inside the loop — exactly-once side effects | `locus.tools.decorator` · [Idempotency](concepts/idempotency.md) |
+| **Termination algebra** | Stop conditions for a write — `(ToolCalled("issue_refund") & ConfidenceMet(0.9)) \| TextMention("ESCALATE") \| MaxIterations(10)` caps a refund run | `locus.core.termination` · [Termination](concepts/termination.md) |
+| **Idempotent tools** | `@tool(idempotent=True)` reuses results for identical calls in the documented run/checkpoint scope | `locus.tools.decorator` · [Idempotency](concepts/idempotency.md) |
 | **Reflexion** | Self-evaluation node in the ReAct cycle; rewrites the next turn when the last one was wrong | `Agent(reflexion=True)` · [Reasoning](concepts/reasoning.md) |
 | **Grounding** | LLM-as-judge claim verification against tool results; below-threshold triggers replanning | `Agent(grounding=True)` · [Reasoning](concepts/reasoning.md) |
 | **Causal chains** | Cause-effect graph builder with cycle/contradiction detection | `locus.reasoning.causal.CausalChain` · [Reasoning](concepts/reasoning.md) |
-| **GSAR** | Typed-grounding safety layer ([Federico A. Kamelhar (2026), arXiv:2604.23366](https://arxiv.org/abs/2604.23366)) — four-way claim partition + tiered replanning | `Agent(gsar=GSARConfig(...))` · [GSAR](concepts/gsar.md) |
+| **GSAR** | Typed-grounding safety layer ([arXiv:2604.23366 (2026)](https://arxiv.org/abs/2604.23366)) — four-way claim partition + tiered replanning | `Agent(gsar=GSARConfig(...))` · [GSAR](concepts/gsar.md) |
 | **Cancel** | Thread-safe abort during a run; emits `TerminateEvent` with reason | `agent.cancel()` · [Agent loop](concepts/agent-loop.md) |
 | **Interrupts (HITL)** | Pause via `InterruptEvent`; resume with `agent.resume(...)` | `locus.core.interrupt` · [Interrupts](concepts/interrupts.md) |
 | **Structured output** | Pass `output_schema=` (Pydantic), final answer is parsed into a typed instance | `locus.agent.config`, `locus.core.structured` · [Structured output](concepts/structured-output.md) |
 | **Hooks** | before/after × invocation × tool × model lifecycle observation + steering | `locus.hooks.provider` · [Hooks](concepts/hooks.md) |
 | **Plugins** | Bundle hooks + tools as one drop-in unit | `locus.hooks.plugin` · [Hooks](concepts/hooks.md) |
 
-## Multi-agent
+## Multi-agent — operational shapes
 
-| Shape | What it does | Surface |
+Every pattern maps to a real workflow across domains — payments, infra,
+support, data, security. The shape *is* the discipline: who runs in
+parallel and who hands off. No shape gates whether a refund clears, a host
+is isolated, or a record is deleted — route that side effect through
+`admit()`.
+
+{{ locus_diagram orchestrator }}
+
+| Shape | Maps to | Surface |
 |---|---|---|
-| **Composition** | Linear chain · fan-out + merge — the simplest multi-agent shape | `locus.multiagent.composition` · [Composition](concepts/multi-agent/composition.md) |
-| **Orchestrator** | One coordinator dispatches specialists in parallel | `locus.multiagent.orchestrator` · [Orchestrator](concepts/multi-agent/orchestrator.md) |
-| **Swarm** | Open-ended peer-to-peer collaboration | `locus.multiagent.swarm` · [Swarm](concepts/multi-agent/swarm.md) |
-| **Handoff** | Specialist-to-specialist context transfer with chain-of-custody | `locus.multiagent.handoff` · [Handoff](concepts/multi-agent/handoff.md) |
-| **StateGraph** | Cycles, conditional edges, subgraphs — when DAG isn't enough | `locus.multiagent.graph` · [StateGraph](concepts/multi-agent/graph.md) |
-| **Functional API** | Map / reduce over agents with `@task` and `@entrypoint` | `locus.multiagent.functional` · [Functional](concepts/multi-agent/functional.md) |
-| **A2A** | Cross-process agent meshes — `AgentCard` discovery + HTTP/SSE transport | `locus.a2a` · [A2A](concepts/multi-agent/a2a.md) |
+| **Composition** | Payments: sequential fraud-check → risk-score → settle; parallel enrichment fan-out over a transaction's signals | `locus.agent.composition` · [Composition](concepts/multi-agent/composition.md) |
+| **Orchestrator** | Security: one coordinator dispatches the triage, forensics and containment specialists it picks, in parallel, then correlates their findings | `locus.multiagent.orchestrator` · [Orchestrator](concepts/multi-agent/orchestrator.md) |
+| **Swarm** | Data & privacy: peers claim the tasks of a GDPR deletion from a shared queue and post their findings to a shared context | `locus.multiagent.swarm` · [Swarm](concepts/multi-agent/swarm.md) |
+| **Handoff** | Customer support: tier-1 hands the ticket + full history to tier-2, with context preserved | `locus.multiagent.handoff` · [Handoff](concepts/multi-agent/handoff.md) |
+| **StateGraph** | Infra: re-run a DB migration until the schema is healthy, conditional rollback edges | `locus.multiagent.graph` · [StateGraph](concepts/multi-agent/graph.md) |
+| **Functional API** | Cloud: map a config audit over N instances, reduce to one posture verdict | `locus.multiagent.functional` · [Functional](concepts/multi-agent/functional.md) |
+| **A2A** | Cross-process handoff to a remote payouts, IR, or threat-intel service | `locus.a2a` · [A2A](concepts/multi-agent/a2a.md) |
 
-## Cognitive Router
+```python
+# Orchestrator over fraud-check, risk-score and settlement: the desk's model
+# picks which run, the picked ones run in parallel, then the desk correlates
+# and summarizes. Specialists never see each other's work, and their tool
+# calls are not executed — send the refund itself through admit().
+from locus.models import get_model
+from locus.multiagent import Orchestrator, Specialist
 
-Most agent frameworks force a choice: hand-code the topology (predictable
-but brittle) or let the LLM pick it (flexible but unpredictable). The
-cognitive router takes a third path — **bounded graph generation**. The LLM fills exactly
-one typed `GoalFrame`; a typed registry selects from eight
-named protocols; a compiler instantiates real SDK primitives. The
-output is always one of the eight proven shapes — never an ad-hoc topology
-the model invented.
+model = get_model("{{ locus_example_model }}")
+settlement = Specialist(
+    name="settlement",
+    specialist_type="settlement",
+    description="Recommends how to settle a dispute.",
+    system_prompt="Recommend a settlement, citing the evidence in the task.",
+    model=model,
+)
+desk = Orchestrator(model=model)
+desk.register_specialists([fraud_check, risk_score, settlement])
+result = await desk.execute("Recommend how to resolve the duplicate charge on order 8842.")
+```
+
+## Security — a worked example domain
+
+The most fully built domain package, and the proof the chain holds under
+pressure: point an agent at an AI or at infrastructure, and every finding comes
+back grounded or abstained, ready to be verified, gated, and audited. The same
+chain — grounding, gating, audit — applies to any domain: a claim graded by
+`ground_finding()` becomes evidence only when it clears the GSAR threshold, a
+side effect routed through `admit()` runs only on an allow decision or on a hold
+a named person approves, and `admit()` records every decision it makes (allowed,
+held or denied) on the trail you pass. What it cannot do is gate a side effect
+that never passes through it, or classify your actions for you — an action left
+labelled `environment="staging"` never matches a policy that holds production,
+so see [Guarantees and boundaries](why-locus.md).
+
+{{ locus_diagram grounded-findings }}
 
 | Feature | What it does | Surface |
 |---|---|---|
-| **`Router`** | `dispatch(NL)` → extract GoalFrame → select protocol → compile → execute | `locus.router.Router` · [Router](concepts/router.md) |
-| **`GoalFrame`** | Typed schema the LLM extractor fills — 13 `TaskType`s, `Risk`, `Complexity`, domain, capabilities | `locus.router.GoalFrame` |
-| **`ProtocolRegistry`** | Typed filter (`handles ∋ goal`, `risk_max ≥ frame.risk`) + four-tier ranking (distance · canonical · cost · specificity) | `locus.router.ProtocolRegistry` |
-| **`PolicyGate`** | Two thresholds: `max_risk` (hard deny) and `require_approval_above` (human-in-the-loop gate) | `locus.router.PolicyGate` |
-| **`CognitiveCompiler`** | Instantiates real SDK primitives from frame + protocol; emits a `Runnable` adapter | `locus.router.CognitiveCompiler` |
-| **`builtin_protocols()`** | 8 v1 protocols: `direct_response` · `plan_execute_validate` · `specialist_fanout` · `debate` · `codegen_test_validate` · `approval_gated_execution` · `a2a_delegate` · `handoff_chain` | `locus.router.builtin_protocols` |
-| **`CapabilityIndex`** | Domain + risk overlay on `ToolRegistry` — no parallel storage | `locus.router.CapabilityIndex` |
-| **`SkillIndex`** | Domain-tagged view of installed `Skill` packs; scoped catalog attached to every emitted Agent | `locus.router.SkillIndex` |
-| Custom protocols | `Protocol(id=…, handles=[…], builder=fn)` registered via `ProtocolRegistry.register()` | `locus.router.Protocol` |
-| Error types | `FrameExtractionError` · `NoMatchingProtocolError` · `PolicyDeniedError` | `locus.router.runtime/protocol/policy` |
+| **Grounded findings** | `ground_finding` returns a typed `Evidence` only when the claim clears the GSAR threshold — else an `Abstention`. Build findings through it, not by constructing `Evidence` directly. | `ground_finding` · [Grounded findings](concepts/security.md) |
+| **Target** | One handle over any AI under assessment — remote endpoint, in-process `Agent`, A2A peer, or callable | `Target.endpoint/.agent/.a2a/.from_callable` · [Agentic AI-security](concepts/agentic-ai-security.md) |
+| **Red-teaming** | OWASP-ASI probe suite → grounded `Evidence` (tagged OWASP LLM / ASI / MITRE ATLAS) or `Abstention` | `red_team(target)` · [Agentic AI-security](concepts/agentic-ai-security.md) |
+| **Assurance** | Grounded guardrail-coverage posture across the suite | `assure(target)` |
+| **Verification** | An independent skeptic challenges a finding's evidence and rescores confidence | `verify(finding) -> VerificationResult` · [Verify findings](notebooks/notebook_78_verify_findings.md) |
+| **Policy + approval** | Weigh an action against evidence, verification, and a `ControlPolicy` → allow / hold / deny (`allow` / `require_human` / `deny` in the API) | `approve(action, policy=…)` · [SecurityContext](concepts/security-context.md) |
+| **Admission gate** | Run a side-effecting action only if it clears the chain; `admit(trail=...)` records the decision to the audit trail you pass; else raises `AdmissionError` | `admit(...)` · `ctx.actions.execute(...)` · [SecurityContext](concepts/security-context.md) |
+| **SecurityContext** | Investigate by domain (logs / endpoint / identity / cloud / threat-intel / actions), not by vendor | `SecurityContext()` · [SecurityContext](concepts/security-context.md) |
+| **Audit trail** | Hash-chained, tamper-evident record of every entry written to it, including each decision `admit(trail=...)` makes; exports JSONL for a SIEM | `AuditTrail` · [Observability](concepts/observability.md) |
+| **Cloud posture (read-only)** | Spec-driven AWS auditing — `describe_aws` introspects botocore models; `use_aws` runs read-only calls, writes refused by construction | `locus_security.aws` · [Cloud posture](concepts/cloud-posture.md) |
+| **Inference fingerprinting** | Timing side-channel model/hardware fingerprint → grounded `FingerprintFinding` or abstention | `fingerprint_to_finding` · [Grounded findings](concepts/security.md) |
+| **Governed agent** | An `Agent` with grounding + guardrails + audit trail on by default | `governed_agent(...)` · [Agentic AI-security](concepts/agentic-ai-security.md) |
+
+```python
+# A finding only exists above the GSAR bar — else it abstains. ground_finding never
+# returns an ungrounded Evidence.
+from locus.control import ground_finding, Severity, is_finding
+
+result = ground_finding(
+    title="Expired TLS certificate on 192.0.2.10:443",
+    description="Certificate expired 3 days ago; clients see TLS errors.",
+    severity=Severity.HIGH, asset="192.0.2.10:443",
+    remediation="Renew and redeploy the certificate.",
+    partition=partition,  # GSAR claim partition from tool evidence
+)
+if is_finding(result):
+    print("SHIPPED", result.title, result.gsar_score)
+else:
+    print("ABSTAINED", result.decision, "—", result.reason)
+```
+
+```python
+# The action chain: investigate → verify → policy → admission gate.
+# isolate_host fires only if the chain clears; production → hold (require_human).
+from locus.control import Action
+from locus_security import SecurityContext, verify
+
+ctx = SecurityContext()
+verdict = await verify(finding)
+await ctx.actions.execute(
+    Action(name="isolate_host", asset="WS-0142", environment="production"),
+    lambda: ctx.endpoint.isolate("WS-0142"),   # side effect, gated
+    finding=finding, verdict=verdict,
+)   # raises AdmissionError unless the policy allows (here production → hold); call admit(..., trail=trail, approved_by=...) directly to record it or approve the hold
+```
 
 ## Observability
 
@@ -99,9 +188,11 @@ the model invented.
 | **`run_context()`** | ContextVar-based opt-in gate — zero allocations when inactive | `locus.observability.run_context` |
 | **Agent yield bridge** | `@_bus_bridge` on `Agent.run` transparently republishes 9 `LocusEvent` types as `agent.*` SSE events | `locus.agent.runtime_loop` |
 | **`EventBusHook`** | `HookProvider` that bridges all agent lifecycle hooks onto the bus (for non-async / pre-built agents) | `locus.observability.EventBusHook` |
-| **Canonical event catalogue** | 60+ `EV_*` constants across 10 prefixes (`agent.*`, `multiagent.*`, `composition.*`, `router.*`, `research.*`, `rag.*`, `memory.*`, `a2a.*`, `skills.*`, `deepagent.*`) | `locus.observability.emit` · [SSE event catalogue](concepts/sse-events.md) |
+| **Canonical event catalogue** | {{ locus_event_count }} `EV_*` constants across {{ locus_event_prefixes }} | `locus.observability.emit` · [SSE event catalogue](concepts/sse-events.md) |
 
 ## Reasoning
+
+{{ locus_diagram gsar-decision }}
 
 | Feature | What it does | Surface |
 |---|---|---|
@@ -130,19 +221,18 @@ the model invented.
 | `MemoryCheckpointer` | Tests, REPL — in-process dict | `locus.memory.backends.memory` · [Checkpointers](concepts/checkpointers.md) |
 | `FileCheckpointer` | Local dev — JSON files on disk | `locus.memory.backends.file` |
 | `HTTPCheckpointer` | A remote checkpoint service you already run | `locus.memory.backends.http` |
-| **`OCIBucketBackend`** | OCI-native, lifecycle policies, region replication | `locus.memory.backends.oci_bucket` |
-| `RedisBackend` | Multi-replica, fast, TTLs (OCI Cache with Redis) | `locus.memory.backends.redis` |
+| **`S3Backend`** | vendor-neutral, lifecycle policies, region replication | `locus.memory.backends.s3` |
+| `RedisBackend` | Multi-replica, fast, TTLs (a managed Redis) | `locus.memory.backends.redis` |
 | `PostgreSQLBackend` | Production DB with metadata queries | `locus.memory.backends.postgresql` |
 | `MySQLBackend` | Production MySQL with official async Connector/Python | `locus.memory.backends.mysql` |
 | `OpenSearchBackend` | Full-text search across past runs | `locus.memory.backends.opensearch` |
-| `OracleBackend` | Oracle DB with JSON queries | `locus.memory.backends.oracle` |
 
 ## Memory — context management
 
 | Feature | What it does | Surface |
 |---|---|---|
-| `SlidingWindowManager` | Keeps the last N messages; drops the rest | `locus.memory.compactor` · [Conversation management](concepts/conversation-management.md) |
-| `SummarizingManager` | LLM rollup of older turns | `locus.memory.compactor` |
+| `SlidingWindowManager` | Keeps the last N messages; drops the rest | `locus.memory.conversation` · [Conversation management](concepts/conversation-management.md) |
+| `SummarizingManager` | LLM rollup of older turns | `locus.memory.conversation` |
 | **`LLMCompactor`** | Budget-aware compaction with head + tail protection | `locus.memory.compactor` |
 | Long-term key-value store | Cross-run user prefs / results with optimistic-locking `version` counter | `locus.memory.store` |
 
@@ -166,15 +256,15 @@ the model invented.
 | `StructuredStream` | Incremental Pydantic-partial parsing during streaming | `locus.core.structured` |
 | Console + SSE handlers | Render to terminal or stream over Server-Sent Events | `locus.core.events` · [Streaming](concepts/streaming.md) |
 | **`AgentServer`** | Drop-in FastAPI app: `/invoke`, `/stream`, `/threads/{id}`, `/health` | `locus.server` · [Agent Server](concepts/server.md) |
-| Per-principal threads | Bearer-token auth + thread-id namespacing prevents cross-tenant leaks | `AgentServer(api_key=...)` · [Agent Server](concepts/server.md) |
+| Thread scoping | Bearer-token auth + thread-id namespacing; one shared `api_key` per instance (single-principal — run one keyed instance per tenant for isolation) | `AgentServer(api_key=...)` · [Agent Server](concepts/server.md) |
 | Graph streaming | Multi-agent state-graph event streams | `locus.multiagent.graph` · [Graph streaming](concepts/graph-streaming.md) |
 
 ## RAG
 
 | Component | Options | Surface |
 |---|---|---|
-| Vector stores | Oracle 26ai · OpenSearch · pgvector · in-memory | `locus.rag.stores` · [RAG](concepts/rag.md) |
-| Embeddings | `OCIEmbeddings` (Cohere) · `OpenAIEmbeddings` | `locus.rag.embeddings` |
+| Vector stores | pgvector · OpenSearch · Qdrant · Chroma · in-memory | `locus.rag.stores` · [RAG](concepts/rag.md) |
+| Embeddings | `OpenAIEmbeddings` · `CohereEmbeddings` | `locus.rag.embeddings` |
 | Multimodal processors | Text · PDF (text + OCR) · Image (OCR) · Audio (transcription) | `locus.rag.multimodal` |
 | Tool wiring | `create_rag_tool(retriever)` exposes the retriever as a `@tool` | `locus.rag.tools` |
 
@@ -182,13 +272,13 @@ the model invented.
 
 | Provider | Models | Surface |
 |---|---|---|
-| **OCI Generative AI — V1 transport** | `openai.*`, `meta.*`, `xai.*`, `google.*`, `mistral.*` on OCI | `locus.models.providers.oci.openai_compat` · [OCI](concepts/providers/oci.md) |
-| **OCI Generative AI — SDK transport** | Cohere `command-r-*` series — proprietary chat shape | `locus.models.providers.oci.OCIModel` · [OCI](concepts/providers/oci.md) |
-| OpenAI | All commercial models (gpt-5.5, o-series, etc) | `locus.models.providers.openai` · [OpenAI](concepts/providers/openai.md) |
-| Anthropic | Claude 4 / 4.5 / 4.7 / 4.8 — direct API | `locus.models.providers.anthropic` · [Anthropic](concepts/providers/anthropic.md) |
-| Ollama | Local models | `locus.models.providers.ollama` · [Ollama](concepts/providers/ollama.md) |
-| Auto-routing | `get_model("oci:openai.gpt-5.5")` picks transport from id | `locus.models.registry.get_model` |
-| Decorators | Failover · pooled · cached · rate-limited wrappers over any provider | `locus.models.decorators` |
+| OCI Generative AI | OpenAI, Meta Llama, xAI Grok, Mistral, Google Gemini and Cohere models served on OCI (on-demand or Dedicated AI Cluster) | `locus.models.providers.oci` · [OCI Generative AI](concepts/providers/oci.md) |
+| OpenAI | All commercial models (gpt-5.5, o-series, etc) | `locus.models.native.openai` · [OpenAI](concepts/providers/openai.md) |
+| Anthropic | Claude 4.x (e.g. `claude-sonnet-4-6`) — direct API | `locus.models.native.anthropic` · [Anthropic](concepts/providers/anthropic.md) |
+| Azure OpenAI | OpenAI models on a deployment-named Azure resource | `locus.models.native.azure` · [Azure OpenAI](concepts/providers/azure.md) |
+| Amazon Bedrock | Chat models on Bedrock (Nova, Claude, Llama, Mistral and more) through one Converse-API client | `locus.models.native.bedrock` · [Amazon Bedrock](concepts/providers/bedrock.md) |
+| Auto-routing | `get_model("anthropic:claude-sonnet-4-6")` picks transport from id | `locus.models.registry.get_model` |
+| Resilience helpers | Failover classification, credential pooling, prompt-cache breakpoints, rate-limit buckets | `locus.models.failover` · `locus.models.pooled` · `locus.models.caching` · `locus.models.rate_limits` · [Resilience](concepts/providers/resilience.md) |
 
 ## Skills + Playbooks
 
@@ -212,4 +302,4 @@ the model invented.
 
 - **For first-time visitors**: [Quickstart](how-to/quickstart.md) ships a working agent in five minutes.
 - **For architecture**: [Agent loop](concepts/agent-loop.md) is the canonical reference.
-- **For depth on any feature**: every row in this matrix links to its concept page. Source lives at [`src/locus/`](https://github.com/oracle-samples/locus/tree/main/src/locus); canonical entry is [`src/locus/__init__.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/__init__.py).
+- **For depth on any feature**: every row in this matrix links to its concept page. Source lives at [`src/locus/`](https://github.com/oracle/locus/tree/main/src/locus); canonical entry is [`src/locus/__init__.py`](https://github.com/oracle/locus/blob/main/src/locus/__init__.py).

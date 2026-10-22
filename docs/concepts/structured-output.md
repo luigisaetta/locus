@@ -1,40 +1,40 @@
 # Structured output
 
 Sometimes you want the model to *fill a shape*, not write prose. Set
-`output_schema=` to a Pydantic model and Oracle Generative AI –
-Multi-Agent Locus SDK parses the agent's final answer into a typed
+`output_schema=` to a Pydantic model and Locus parses the agent's final answer into a typed
 instance for you.
 
 ```python
 from pydantic import BaseModel, Field
 from locus.agent import Agent
-class Vendor(BaseModel):
-    name: str = Field(description="Legal name of the vendor")
-    score: float = Field(ge=0.0, le=1.0)
-    region: str
+class TicketTriage(BaseModel):
+    ticket_id: str = Field(description="The ticket id (e.g. t-8804)")
+    confidence: float = Field(ge=0.0, le=1.0)
+    severity: str
+    needs_human: bool
 
-class VendorList(BaseModel):
-    vendors: list[Vendor]
+class TriageList(BaseModel):
+    tickets: list[TicketTriage]
 
 agent = Agent(
-    model="oci:openai.gpt-5-mini",
-    tools=[search_vendors],
-    output_schema=VendorList,
-    system_prompt="Pick three vendors for our cloud-hosting RFP.",
+    model="{{ locus_example_model }}",
+    tools=[lookup_ticket],
+    output_schema=TriageList,
+    system_prompt="Triage the top three tickets from this queue.",
 )
 
-result = agent.run_sync("Top three for $2M of cloud spend.")
+result = agent.run_sync("Score the three open tickets for customer 4821.")
 
-picks: VendorList = result.parsed   # type: ignore[assignment]
-for v in picks.vendors:
-    print(v.name, v.score, v.region)
+picks: TriageList = result.parsed   # type: ignore[assignment]
+for t in picks.tickets:
+    print(t.ticket_id, t.confidence, t.severity, t.needs_human)
 ```
 
 `output_schema` must be a `pydantic.BaseModel` subclass — including
 nested models, lists, optionals, discriminated unions, and any
 `@field_validator` / `@model_validator` you attach. The schema flows to
 the provider as a strict `response_format` when supported (OpenAI,
-OCI OpenAI-compat); otherwise the SDK falls back to prompted JSON +
+OpenAI-compatible); otherwise the SDK falls back to prompted JSON +
 extraction + validation.
 
 ## What ends up on `AgentResult`
@@ -52,9 +52,9 @@ call `result.parsed_as(YourSchema)` — runtime-checked and raises
 `ValueError` (no parsed output) or `TypeError` (wrong concrete type):
 
 ```python
-picks = result.parsed_as(VendorList)   # VendorList, narrowed by mypy
-for v in picks.vendors:
-    print(v.name)
+picks = result.parsed_as(TriageList)   # TriageList, narrowed by mypy
+for t in picks.tickets:
+    print(t.ticket_id)
 ```
 
 ## Repair on validation failure
@@ -68,8 +68,8 @@ constrained decoding.
 
 ```python
 agent = Agent(
-    model="oci:openai.gpt-5-mini",
-    output_schema=VendorList,
+    model="{{ locus_example_model }}",
+    output_schema=TriageList,
     output_schema_retries=3,        # default 2; set 0 to disable
     output_schema_strict=True,      # default; set False if your provider
                                     # rejects strict json_schema mode
@@ -83,11 +83,7 @@ When `output_schema_retries=0`, the first response is the final attempt.
 | Provider | Native mode | Mechanism | Prompted fallback | Tested |
 |---|---|---|---|---|
 | `openai:` (gpt-4o, gpt-4.1, gpt-5*, o-series) | ✓ strict | `response_format={"type":"json_schema","strict":true}` | ✓ | yes |
-| `oci:openai.*` (OpenAI on OCI GenAI) | ✓ strict | `response_format` (inherits OpenAI client) | ✓ | yes |
-| `oci:meta.llama-*` | (prompted) | — | ✓ | yes |
-| `oci:xai.grok-*` | (prompted) | — | ✓ | yes |
 | `anthropic:claude-*` | ✓ tool-use | synthetic `respond_with_schema` tool + pinned `tool_choice` | ✓ | unit-mocked |
-| `ollama:*` | (prompted) | — | ✓ | unit-only |
 
 For Anthropic, the SDK translates `response_format` into the idiomatic
 tool-use pattern: a single `respond_with_schema` tool whose
@@ -106,20 +102,28 @@ providers the prompted fallback validates client-side and replays.
 For streaming UIs, you often want to render the model in flight as
 fields populate — not wait for the full response. `StructuredStream`
 wraps any agent event iterator and yields incrementally validated
-Pydantic instances:
+Pydantic instances. Partials come from token chunks, so start the run
+with `stream_tokens=True` — without it no `ModelChunkEvent` is emitted,
+the loop body never runs, and nothing raises. Even with the flag, a
+model that has no `stream()` method, or whose `server_stateful`
+attribute is `True`, emits no chunks, so only `stream.final` can be
+filled:
 
 ```python
 from locus.streaming import StructuredStream
 
 agent = Agent(
-    model="oci:openai.gpt-5-mini",
-    output_schema=VendorList,
+    model="{{ locus_example_model }}",
+    output_schema=TriageList,
 )
 
-stream = StructuredStream(agent.run("Top 3 vendors."), schema=VendorList)
+stream = StructuredStream(
+    agent.run("Score the 3 open tickets.", stream_tokens=True),
+    schema=TriageList,
+)
 async for partial in stream:
-    ui.render(partial)               # may have 0, 1, 2, then 3 vendors
-final: VendorList | None = stream.final
+    ui.render(partial)               # may have 0, 1, 2, then 3 tickets
+final: TriageList | None = stream.final
 ```
 
 Each `ModelChunkEvent` is appended to a buffer; the SDK auto-closes any
@@ -129,8 +133,16 @@ By default identical consecutive partials are deduplicated; pass
 `emit_unchanged=True` to surface every parseable chunk.
 
 A partial is only yielded when **all required fields** are present —
-optional fields may still be `None` or absent. If the stream ends
-without a single valid partial, `stream.final` is `None`.
+optional fields may still be `None` or absent. When the run ends with a
+`TerminateEvent`, `stream.final` is parsed from the run's final message
+(or from the token buffer if that message is empty), even if no partial
+ever validated. If that parse fails, it falls back to the last partial,
+and it is `None` when neither validated. A run that pauses for input or
+approval — an `InterruptEvent` from `ask_user`, or from a call held
+under `on_refusal="interrupt"` — ends without a `TerminateEvent`, so
+`stream.final` stays `None` even if partials arrived. A run that raises
+passes the exception out of the `async for` loop, and `stream.final`
+stays `None`.
 
 ## Composing with tools
 
@@ -140,12 +152,12 @@ emits a non-tool response, the SDK parses that response into the schema:
 
 ```python
 agent = Agent(
-    model="oci:openai.gpt-5-mini",
-    tools=[search_vendors, fetch_pricing, soc2_check],
-    output_schema=VendorList,
+    model="{{ locus_example_model }}",
+    tools=[lookup_ticket, lookup_order, lookup_customer],
+    output_schema=TriageList,
     system_prompt=(
-        "Research vendors with the available tools, then return your "
-        "ranked picks as a JSON object."
+        "Investigate the tickets with the available tools, then return "
+        "your scored triage as a JSON object."
     ),
 )
 ```
@@ -159,14 +171,14 @@ builder, validation-error formatter.
 
 ## Notebooks
 
-- [`notebook_35_structured_output.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_35_structured_output.py)
+- [`notebook_35_structured_output.py`](https://github.com/oracle/locus/blob/main/examples/notebook_35_structured_output.py)
   covers both the standalone `parse_structured()` parser (useful for
   non-Agent flows) and the Agent `output_schema=` integration above.
-- [`notebook_32_debate_with_judge.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_32_debate_with_judge.py)
-  — typed `Verdict` as the workflow boundary artifact.
-- [`notebook_63_incident_response.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_63_incident_response.py)
+- [`notebook_32_debate_with_judge.py`](https://github.com/oracle/locus/blob/main/examples/notebook_32_debate_with_judge.py)
+  — typed `VerificationResult` as the workflow boundary artifact.
+- [`notebook_63_incident_response.py`](https://github.com/oracle/locus/blob/main/examples/notebook_63_incident_response.py)
   — typed `Postmortem` as the terminal artifact of an incident graph.
-- [`notebook_64_procurement_approval.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_64_procurement_approval.py)
-  — typed `PurchaseOrder` from a tiered approval flow.
-- [`notebook_65_contract_review.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_65_contract_review.py)
+- [`notebook_64_procurement_approval.py`](https://github.com/oracle/locus/blob/main/examples/notebook_64_procurement_approval.py)
+  — typed `ConcessionDecision` from a risk-tiered approval flow.
+- [`notebook_65_contract_review.py`](https://github.com/oracle/locus/blob/main/examples/notebook_65_contract_review.py)
   — typed `ContractDecision` from a parallel-review + negotiation loop.

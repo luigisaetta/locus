@@ -25,10 +25,17 @@ from locus.observability.router_events import (
     emit_runnable_compiled,
 )
 from locus.router.capability import CapabilityIndex
+from locus.router.explain import (
+    Method,
+    RoutingExplanation,
+    rank_candidates,
+    rejection_for,
+)
 from locus.router.goal_frame import GoalFrame
 from locus.router.picker import LLMProtocolPicker
 from locus.router.policy import PolicyDeniedError, PolicyGate, PolicyVerdict
 from locus.router.protocol import (
+    A2A_PEER_CAPABILITY,
     BuilderContext,
     NoMatchingProtocolError,
     Protocol,
@@ -56,7 +63,7 @@ class _ApprovalRunnable(BaseModel):
 
     Used when the policy gate verdict is ``require_approval=True``. The
     follow-up ``approval_gated_execution`` protocol replaces this with a
-    StateGraph + ``interrupt()`` node so the workbench's interrupt UI
+    StateGraph + ``interrupt()`` node so an interrupt UI
     drives the approval; for now the callback is the simplest contract
     that works for the three v1 protocols (none of which are graphs).
     """
@@ -102,9 +109,17 @@ class CognitiveCompiler:
         for ``frame.domain`` (plus any globally-tagged skills). The
         agent loop's L1 / L2 / L3 progressive disclosure surfaces them
         at runtime.
+    hooks:
+        Optional lifecycle hooks attached to **every** agent a builder
+        emits, leaves included. This is the seam governance arrives
+        through: a caller gates tool calls with a hook that can cancel
+        one, and the agents that make the calls in a routed run are
+        constructed by the builder rather than by the caller. Without
+        this, only a hand-built single agent was ever gated and every
+        multi-agent shape ran ungoverned.
     on_approval:
         Optional async callback fired when the verdict requires
-        approval. Defaults to denying — wire your workbench / CLI
+        approval. Defaults to denying — wire your UI / CLI
         approval flow here.
     protocol_picker:
         Optional :class:`LLMProtocolPicker`. When present, the compiler
@@ -126,6 +141,7 @@ class CognitiveCompiler:
         model: Any,
         skills: SkillIndex | None = None,
         a2a_endpoint: str | None = None,
+        hooks: list[Any] | None = None,
         on_approval: ApprovalCallback | None = None,
         protocol_picker: LLMProtocolPicker | None = None,
     ) -> None:
@@ -135,6 +151,7 @@ class CognitiveCompiler:
         self.model = model
         self.skills = skills
         self.a2a_endpoint = a2a_endpoint
+        self.hooks = list(hooks or [])
         self._on_approval: ApprovalCallback = on_approval or _default_deny
         self.protocol_picker = protocol_picker
 
@@ -144,6 +161,7 @@ class CognitiveCompiler:
             capabilities=self.capabilities,
             skills=self.skills,
             a2a_endpoint=self.a2a_endpoint,
+            hooks=self.hooks,
         )
 
     async def _pick_protocol(
@@ -184,15 +202,85 @@ class CognitiveCompiler:
             picked = min(candidates, key=lambda p: _rank_key(p, frame))
             return picked, "rule_based_fallback", None
 
+    def available_capabilities(self, frame: GoalFrame | None = None) -> set[str]:
+        """Capability ids the gates will see, including the synthetic a2a peer.
+
+        Factored out of :meth:`compile` so :meth:`explain` reports exactly the
+        set the real selection uses — a second copy of this rule would drift.
+        """
+        available = {c.id for c in self.capabilities.all()}
+        if self.a2a_endpoint:
+            available.add(A2A_PEER_CAPABILITY)
+        return available
+
+    def explain(self, frame: GoalFrame, *, goal: str = "") -> RoutingExplanation:
+        """Report the selection the rule-based ranker would make, and why.
+
+        Deterministic and free: no model call, no execution. An opt-in
+        :class:`LLMProtocolPicker` is deliberately **not** consulted — it
+        would cost a call and could pick differently on a second run, so the
+        explanation would stop describing a repeatable decision. When a picker
+        is configured, ``method`` reports what the ladder in
+        :meth:`_pick_protocol` would do, and the ranking shown is the
+        fallback the picker is choosing among.
+        """
+        available = self.available_capabilities(frame)
+        candidates = self.protocols.filter_candidates(frame, available_capabilities=available)
+
+        rejected = tuple(
+            r
+            for r in (rejection_for(p, frame, available) for p in self.protocols.all())
+            if r is not None
+        )
+
+        selected: str | None = None
+        method: Method | None = None
+        verdict = None
+        if candidates:
+            picked = min(candidates, key=lambda p: _rank_key(p, frame))
+            selected = picked.id
+            if self.protocol_picker is None:
+                method = "rule_based"
+            elif len(candidates) == 1:
+                method = "single_candidate"
+            else:
+                method = "llm_picked"
+            verdict = self.policy.check(frame, picked)
+
+        return RoutingExplanation(
+            goal=goal,
+            goal_frame=frame,
+            selected_protocol=selected,
+            method=method,
+            candidates=rank_candidates(candidates, frame, selected),
+            rejected=rejected,
+            available_capabilities=tuple(sorted(available)),
+            policy=verdict,
+        )
+
     async def compile(self, frame: GoalFrame, run_id: str | None = None) -> Runnable:
         """Pick a protocol, run the gate, build the runnable.
 
         ``run_id`` (when provided) scopes every emitted
-        :class:`StreamEvent` so the workbench's SSE consumer can
+        :class:`StreamEvent` so an SSE consumer can
         correlate selection / verdict / compile events with one
         cognitive dispatch.
         """
         available = {c.id for c in self.capabilities.all()}
+        # A configured remote peer IS the opt-in for `a2a_delegate`, expressed as a
+        # synthetic capability so the ordinary `requires_capabilities` filter does
+        # the work.
+        #
+        # Without this the shape was unreachable: it declared `primary_for=[]` to
+        # stay opt-in, but nothing supplied an opt-in, so across all 108
+        # goal x complexity x risk frames the ranker never returned it. One of eight
+        # advertised shapes could not be selected by anything.
+        #
+        # Gating on the endpoint is also the honest condition. `_build_a2a_delegate`
+        # raises without one, so a shape that could be chosen while unconfigured
+        # would trade "never selectable" for "selectable and then fails".
+        if self.a2a_endpoint:
+            available.add(A2A_PEER_CAPABILITY)
         candidates = self.protocols.filter_candidates(frame, available_capabilities=available)
         if not candidates:
             err = NoMatchingProtocolError(

@@ -1,34 +1,42 @@
 # Handoff
 
-Handoff is what an escalation desk does. One agent owns the
-conversation, decides it needs a different role, and hands the
-**whole transcript** to the next agent — who picks up where it left
-off.
+Handoff is what an escalation desk does. One agent owns the case
+until your code decides it needs a different tier; the manager then
+hands a **structured summary** — findings and key context — to the
+next agent, who picks up where it left off.
 
-![Handoff pattern — Triage agent classifies the customer message, hands the full transcript to Billing agent who continues the conversation](../../img/patterns/handoff.svg){ .diagram }
+{{ locus_diagram handoff }}
 
 ## What it is
 
-A `Handoff` flow has:
+A handoff flow has:
 
-- An **`initial`** agent — the entry point (usually triage).
-- A **`targets`** dict — name → agent for each possible next role.
+- A pool of **`HandoffAgent`s** — each a named agent that can receive a
+  handoff, with optional `can_escalate_to` / `can_delegate_to` paths
+  (lists of agent ids; `execute_handoff` does not check them).
+- A **`Handoff` manager** (build it with `create_handoff_manager`) — it
+  registers the agents, caps how many handoffs it runs (`max_chain`,
+  counted across every handoff in its `history`, not per chain), and
+  records the chain of custody.
 
-The initial agent ends a turn with a `Handoff(target="billing")`
-directive. The full message history transfers; the billing agent
-reads it as if it were the next turn of the same conversation.
-State, checkpointer, and `thread_id` survive.
+When the manager runs `execute_handoff(...)`, it packages the case into
+a typed **`HandoffContext`** — original task, findings, and
+instructions, plus a conversation summary and the source's confidence
+when you pass the source's `state` — and hands it to the target agent.
+The target reads that context as its opening prompt on the same case.
 
 ## When to use it
 
-- ✅ **Customer-support flows** where the conversation is the unit
-  of work.
-- ✅ **"Pass to a human"** — the human simply replaces one of the
-  targets.
-- ✅ **Escalation** when the first agent realises it's the wrong
-  specialist (after a few turns of conversation, not on first read).
-- ✅ The customer should **not have to re-explain** when control
-  transfers.
+- ✅ **Support-desk escalation (L1 support → L2 billing)** where the
+  case is the unit of work.
+- ✅ **SOC tier escalation (L1 → L2 → L3)** — the same shape for a
+  security operations center.
+- ✅ **"Pass to a human"** — the on-call human is the next tier
+  (the HITL notebook below pauses for them with a graph `interrupt()`).
+- ✅ **Escalation** when the case turns out to be above the first
+  agent's tier (after a few turns of triage, not on first read).
+- ✅ The case should **carry its findings forward** so the next
+  tier doesn't re-triage from scratch when control transfers.
 
 ## When NOT to use it
 
@@ -44,78 +52,110 @@ State, checkpointer, and `thread_id` survive.
 
 | | Handoff | Orchestrator |
 |---|---|---|
-| Conversation owner | **moves** between agents | stays with the coordinator |
-| Routing decision | the agent that's currently in charge | always the coordinator |
-| Specialist's view of history | full transcript | just the sub-task they were dispatched for |
-| Customer-facing? | usually yes | usually no |
+| Case owner | **moves** between agents | stays with the coordinator |
+| Routing decision | your code — it names the target in `execute_handoff` | always the coordinator |
+| Receiving agent's view of history | the handoff context (task + findings, plus a conversation summary when you pass `state`) | just the sub-task they were dispatched for |
+| Drives the live case? | usually yes | usually no |
 
 ## Code
 
 ```python
-from locus.multiagent import Handoff
+from locus.models import get_model
+from locus.multiagent import (
+    HandoffReason,
+    create_handoff_agent,
+    create_handoff_manager,
+)
 
-triage = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[lookup_order, lookup_account],
+# HandoffAgent calls model.complete() directly, so pass a model client,
+# not a "provider:model" string.
+model = get_model("{{ locus_example_model }}")
+
+triage = create_handoff_agent(
+    name="L1 Support",
     system_prompt=(
-        "You triage incoming customer messages. "
-        "Identify whether this is a billing, shipping, or returns issue. "
-        "Then call Handoff(target=...)."
+        "You are L1 support triage on incoming tickets. "
+        "Decide whether this is a billing, shipping, or account case, "
+        "then escalate to the right specialist."
     ),
+    tools=[lookup_order, lookup_customer],
+    model=model,
 )
-billing = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[issue_refund, retry_charge],
-    system_prompt="You handle billing escalations.",
+billing = create_handoff_agent(
+    name="L2 Billing",
+    system_prompt="You are an L2 billing specialist handling escalations.",
+    tools=[lookup_order, issue_refund],
+    model=model,
 )
-shipping = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[track_shipment, request_redelivery],
-    system_prompt="You handle shipping issues.",
-)
-returns = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[create_return_label],
-    system_prompt="You handle returns.",
-)
-
-flow = Handoff(
-    initial=triage,
-    targets={"billing": billing, "shipping": shipping, "returns": returns},
+accounts = create_handoff_agent(
+    name="L3 Accounts",
+    system_prompt="You are an L3 account specialist handling account takeovers.",
+    tools=[lock_account],
+    model=model,
 )
 
-result = flow.run_sync(
-    "My order #4321 was charged twice.",
-    thread_id="cust-c42-2026-04",
+# Declare the escalation paths (by agent id).
+triage.can_escalate_to = [billing.id, accounts.id]
+
+manager = create_handoff_manager(agents=[triage, billing, accounts])
+
+# Hand the case from L1 support up to the L2 billing specialist.
+result = await manager.execute_handoff(
+    source_agent=triage,
+    target_agent_id=billing.id,
+    task="Customer 4821 reports a duplicate charge on order ord-4821.",
+    reason=HandoffReason.ESCALATION,
+    findings={"ticket_id": "t-8804", "order": "ord-4821"},
 )
 ```
 
-## What persists across the handoff
+`execute_handoff` is async — `await` it. It returns a `HandoffResult`
+from the target agent. If the target id isn't registered, or the manager
+has already run `max_chain` handoffs, it returns a `HandoffResult` with
+`success=False` and an `error` instead, and the target never runs.
+`HandoffReason` enumerates why the handoff happened (`SPECIALIZATION`,
+`ESCALATION`, `DELEGATION`, ...).
 
-- `state.messages` — the full conversation history.
-- `state.tool_executions` — including idempotency hashes, so the
-  next agent won't re-fire a write the previous agent already ran.
-- `state.metadata` — your application's per-conversation data.
-- `thread_id` — same thread, just a different agent driving.
+## What transfers across the handoff
 
-The receiving agent picks up the same loop. It does not see the
-handoff as a "new turn"; it sees the previous transcript and the
-customer's last message.
+The `HandoffContext` the target agent receives carries:
+
+- `original_task` — the `task` you passed to `execute_handoff`.
+- `findings` — what the source agent learned, rendered into the
+  target's opening prompt.
+- `conversation_summary` — only when you pass `state`: each of its
+  messages that has text, clipped to 200 characters.
+- `confidence` — the `state.confidence` you pass (`0.0` without
+  `state`).
+- `instructions` — any specific guidance for the next tier.
+- `handoff_chain` — the chain of custody (who handed to whom).
+
+By default the raw message transcript is **not** forwarded —
+`preserve_full_history` is `False`, so the next tier reads the rendered
+context, not the messages themselves. Set
+`manager.preserve_full_history = True` to also attach key messages (the
+first system message plus the last five messages), which the target's
+model receives right after the handoff prompt. Like the conversation
+summary, they come from `state`, so nothing is attached unless you pass
+it.
 
 ## Notebooks
 
-- [`notebook_25_agent_handoff.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_25_agent_handoff.py)
-  — full triage + billing + shipping + returns escalation flow.
-- [`notebook_33_multiagent_human_in_loop.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_33_multiagent_human_in_loop.py)
-  — handoff to a human via `interrupt()` (one of three HITL patterns
-  in the same file).
+- [`notebook_25_agent_handoff.py`](https://github.com/oracle/locus/blob/main/examples/notebook_25_agent_handoff.py)
+  — support-tier escalation (L1 → L2 → L3) on a duplicate-charge
+  ticket, with `execute_handoff` and `chain_handoff`.
+- [`notebook_33_multiagent_human_in_loop.py`](https://github.com/oracle/locus/blob/main/examples/notebook_33_multiagent_human_in_loop.py)
+  — escalating to a human with a graph `interrupt()` (one of three
+  human-in-the-loop (HITL) patterns in the same file; it does not use
+  the handoff manager).
 
 ## Source
 
-[`multiagent/handoff.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/multiagent/handoff.py).
+[`multiagent/handoff.py`](https://github.com/oracle/locus/blob/main/src/locus/multiagent/handoff.py).
 
 ## See also
 
-- [Conversation Management](../conversation-management.md) — how the
-  thread is checkpointed across the handoff.
+- [Conversation Management](../conversation-management.md) — how an
+  agent's thread is checkpointed. The handoff manager checkpoints
+  nothing; its `history` lives in memory on the manager.
 - [Multi-agent overview](../multi-agent.md) — pick a shape.

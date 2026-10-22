@@ -133,13 +133,13 @@ class TestLoadAgentsMd:
 
 
 class TestCreateDeepagentSlice2:
-    def _stub_oci(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("OCI_PROFILE", "DEFAULT")
+    def _stub_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     def test_todos_off_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        self._stub_oci(monkeypatch)
+        self._stub_env(monkeypatch)
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             reflexion=False,
@@ -150,9 +150,9 @@ class TestCreateDeepagentSlice2:
         assert "read_todos" not in names
 
     def test_enable_todos_attaches_pair(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        self._stub_oci(monkeypatch)
+        self._stub_env(monkeypatch)
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             enable_todos=True,
@@ -165,10 +165,10 @@ class TestCreateDeepagentSlice2:
     def test_explicit_todo_state_observable_after_run(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        self._stub_oci(monkeypatch)
+        self._stub_env(monkeypatch)
         state = TodoState()
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             enable_todos=True,
@@ -187,11 +187,11 @@ class TestCreateDeepagentSlice2:
     def test_memory_files_prepended_to_prompt(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        self._stub_oci(monkeypatch)
+        self._stub_env(monkeypatch)
         memo = tmp_path / "AGENTS.md"
         memo.write_text("PROJECT RULE: never delete tables.")
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             memory_files=[str(memo)],
@@ -206,9 +206,9 @@ class TestCreateDeepagentSlice2:
     def test_memory_files_missing_does_not_crash(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        self._stub_oci(monkeypatch)
+        self._stub_env(monkeypatch)
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             memory_files=[str(tmp_path / "ghost.md")],

@@ -1,18 +1,19 @@
-# Contract Review
+# Vendor DPA & Data-Privacy Review
 
-Real contract review involves multiple stakeholders working in
-parallel, then a back-and-forth negotiation phase, then sign-off::
+Reviewing a data processor's Data Processing Agreement involves multiple
+stakeholders working in parallel, then a back-and-forth negotiation
+phase, then sign-off::
 
-    Contract intake
+    DPA intake
        │
        ▼
     Parser  (extracts clauses)
        │
        ▼
     Scatter to 3 parallel reviewers
-       ├── Legal    (regulatory risk, indemnity, termination)
-       ├── Risk     (financial exposure, liability cap)
-       └── Commercial (price, terms, SLAs)
+       ├── Legal       (lawful basis, data-subject rights, consent, purpose)
+       ├── Governance  (minimisation, retention/deletion, residency, sub-processors)
+       └── Compliance  (GDPR/CCPA, DPIA, transfer mechanisms, liability for fines)
        ▼
     Synthesizer  (consolidated review report)
        │
@@ -27,13 +28,20 @@ parallel, then a back-and-forth negotiation phase, then sign-off::
                                                 ▼
                                           ContractDecision (typed)
 
+The processor here is a marketing-analytics SaaS that ingests your
+customers' personal data, so a weak erasure SLA or a vague
+international-transfer mechanism is a real compliance gap, not a
+paperwork nit — the breach-notification window should track the GDPR
+Art. 33 72-hour timeline. The DPO — the privacy office's data-protection
+officer — writes the typed sign-off.
+
 - `Send`: three reviewers run concurrently.
 - `add_conditional_edges` with cycles enabled: negotiation can loop
   back to re-review when terms change. Hard cap of 3 rounds.
 - `interrupt()`: negotiation step pauses for human counsel to edit terms.
 - `output_schema=ContractDecision`: typed terminal artifact.
 
-Run it (OCI Generative AI is the default — the notebook harness picks it when `~/.oci/config` exists; set `OCI_PROFILE` to choose a non-default profile):
+Run it (defaults to the bundled mock model; set `LOCUS_MODEL_PROVIDER` to `openai` / `anthropic` for a live model):
 
     python examples/notebook_65_contract_review.py
 
@@ -43,10 +51,10 @@ Offline:
 
 Pin a strong-enough model for the structured ContractDecision schema:
 
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_65_contract_review.py
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_65_contract_review.py
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_65_contract_review.py"
-```
+````

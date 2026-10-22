@@ -40,12 +40,12 @@ from __future__ import annotations
 
 import re
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, SecretStr
 
-from locus._oracle_pool_cache import safe_acquire
+from locus._oracle_pool_cache import get_pool, safe_acquire
 from locus.rag.stores.base import Document
 
 
@@ -212,7 +212,8 @@ class OracleADBLoader(BaseModel):
         Same shape as :meth:`OracleVectorStore._get_pool` so wallet
         handling stays consistent across the Oracle backends.
         """
-        if self._pool is None:
+
+        def _build() -> Any:
             try:
                 import oracledb
             except ImportError as e:  # pragma: no cover - import guard
@@ -241,7 +242,7 @@ class OracleADBLoader(BaseModel):
             # create_pool_async returns the pool directly (the "async"
             # refers to the pool type, not the constructor). Same quirk
             # OracleBackend documents.
-            self._pool = oracledb.create_pool_async(
+            return oracledb.create_pool_async(
                 user=self.config.user,
                 password=self.config.password.get_secret_value(),
                 dsn=dsn,
@@ -250,7 +251,8 @@ class OracleADBLoader(BaseModel):
                 **params,
             )
 
-        return self._pool
+        # Bound to the running event loop — see locus._oracle_pool_cache.
+        return cast("oracledb.AsyncConnectionPool", await get_pool(self, _build))
 
     @staticmethod
     async def _materialise(value: Any) -> Any:

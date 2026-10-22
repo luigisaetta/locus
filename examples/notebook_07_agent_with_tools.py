@@ -2,37 +2,49 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 """
-Notebook 09: give an agent tools.
+Notebook 07: giving an agent tools.
 
-A model without tools can only answer from what's already in its
-context. Tools let the agent reach out — do math, look up data, call
-APIs — and bring the result back into the conversation. Locus runs this
-as a small loop: the model decides whether to call a tool, Locus runs
-the tool, the result is fed back into the next model call.
+A model on its own can only answer from what is already in its context. It
+cannot tell you which image digest is actually running in production, or
+whether a service is passing its health checks right now. Tools let the
+agent reach out, get a real answer, and bring it back. Locus runs this as
+a small ReAct loop: the model decides whether to call a tool, Locus runs
+it, the result goes into the next model call.
+
+The scenario is a deployment-readiness check. The agent looks up a
+container image digest in the build registry, pulls a service's DNS and
+health record, and only then calls go or no-go. It is a good first
+tool-using example because the answer is *not* in the model — every fact
+it needs has to be fetched — and because the go/no-go at the end is the
+kind of judgement people actually want an agent to make from fetched
+data.
 
 Key ideas:
 - ``@tool`` turns a plain Python function into something the model can
-  call. The docstring is the description the model sees.
+  call. The docstring is the description the model reads.
 - Pass tools to ``Agent(tools=[...])`` and the agent picks when to use
   them.
-- Each tool call shows up as a ``ToolStartEvent`` / ``ToolCompleteEvent``
-  pair in the event stream.
-- Tools can take typed arguments (including optional ones) and return
-  anything JSON-serialisable — strings, dicts, lists.
+- Each call shows up as a ``ToolStartEvent`` / ``ToolCompleteEvent`` pair
+  in the event stream — a record of every lookup the agent made.
+- Tools take typed arguments (including optional ones with defaults) and
+  return anything JSON-serialisable: strings, numbers, dicts, lists.
+
+The data is fictional throughout — ``example.com`` hostnames, placeholder
+digests, and made-up service names — so the notebook runs the same way
+every time and reaches nothing on the network.
 
 Run it:
-    .venv/bin/python examples/notebook_15_agent_with_tools.py
+    .venv/bin/python examples/notebook_07_agent_with_tools.py
 
-The default provider is OCI Generative AI (canonical example:
-``openai.gpt-4.1`` or ``meta.llama-3.3-70b-instruct``). Drop in
-``LOCUS_MODEL_PROVIDER=mock`` for an offline run. Tool-calling also
-works against OpenAI, Anthropic, and Ollama.
+The default provider is the bundled deterministic mock model, so this
+runs offline with no credentials. Set ``LOCUS_MODEL_PROVIDER=openai`` (or
+``anthropic``) and the matching key for a live model.
 
-Prerequisite: notebook 08.
+Prerequisite: notebook 06.
 """
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 
 # Import shared config
 from config import get_model, print_config
@@ -41,285 +53,277 @@ from locus.agent import Agent
 from locus.tools import tool
 
 
+# --- The fictional estate -------------------------------------------------
+# Fixed sample data, so the notebook is deterministic and offline. Every
+# hostname is under example.com and every digest is a placeholder.
+
+_REGISTRY = {
+    "checkout": {
+        "tag": "v4.2.1",
+        "digest": "sha256:9f2c1a7e4b3d0c8a6f5e2d1b0a9c8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a",
+        "built": "2026-08-11T09:14:00Z",
+        "signed": True,
+    },
+    "search": {
+        "tag": "v1.9.0",
+        "digest": "sha256:1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+        "built": "2026-06-02T17:40:00Z",
+        "signed": False,
+    },
+}
+
+_SERVICES = {
+    "checkout": {
+        "hostname": "checkout.svc.example.com",
+        "dns_ttl_seconds": 60,
+        "healthy_replicas": 6,
+        "total_replicas": 6,
+        "last_health_check": "passing",
+    },
+    "search": {
+        "hostname": "search.svc.example.com",
+        "dns_ttl_seconds": 3600,
+        "healthy_replicas": 2,
+        "total_replicas": 5,
+        "last_health_check": "failing",
+    },
+}
+
+
 # =============================================================================
-# Part 1: define a tool
+# Part 1: define the tools
 # =============================================================================
 
-# A tool is a plain Python function decorated with @tool. The docstring
-# is what the model reads to decide when to call it.
+# A tool is a plain Python function decorated with @tool. The docstring is
+# what the model reads to decide when to call it, so it is written for the
+# model as much as for the next human.
 
 
 @tool
-def add_numbers(a: int, b: int) -> int:
-    """Add two numbers together."""
-    return a + b
+def lookup_image_digest(service: str) -> str:
+    """Look up the container image tag and digest the build registry has for a service."""
+    entry = _REGISTRY.get(service.lower())
+    if entry is None:
+        return f"No image on file for {service!r}."
+    signed = "signed" if entry["signed"] else "UNSIGNED"
+    return f"{service}: {entry['tag']} ({signed}), built {entry['built']}, digest {entry['digest']}"
 
 
 @tool
-def multiply_numbers(a: int, b: int) -> int:
-    """Multiply two numbers together."""
-    return a * b
-
-
-def example_simple_tools():
-    """Show the tool metadata Locus generates from a decorated function."""
-    print("=== Part 1: Simple Tools ===\n")
-
-    result = add_numbers(5, 3)
-    print(f"Direct call: add_numbers(5, 3) = {result}")
-
-    print(f"\nTool name: {add_numbers.name}")
-    print(f"Tool description: {add_numbers.description}")
-    print(f"Tool parameters: {add_numbers.parameters}")
-
-    import time as _t
-
-    agent = Agent(
-        model=get_model(max_tokens=80),
-        system_prompt="Reply in one short sentence.",
+def lookup_service_health(service: str) -> str:
+    """Look up a service's DNS record and current health-check status."""
+    entry = _SERVICES.get(service.lower())
+    if entry is None:
+        return f"No service record for {service!r}."
+    return (
+        f"{entry['hostname']} · DNS TTL {entry['dns_ttl_seconds']}s · "
+        f"{entry['healthy_replicas']}/{entry['total_replicas']} replicas healthy · "
+        f"health check {entry['last_health_check']}"
     )
-    t0 = _t.perf_counter()
-    desc = agent.run_sync(
-        f"In one sentence, when would an LLM agent use a tool called '{add_numbers.name}' "
-        f"that {add_numbers.description}?"
-    )
-    dt = _t.perf_counter() - t0
+
+
+async def example_simple_tools():
+    """Call the tools directly, before an agent is anywhere near them.
+
+    Worth doing once: a tool is an ordinary function, and ``@tool`` did not
+    take that away. If it misbehaves here, the problem is not the model.
+    """
+    print("=== Part 1: Tools Are Just Functions ===\n")
+
     print(
-        f"  [model call: {dt:.2f}s · "
-        f"{desc.metrics.prompt_tokens}→{desc.metrics.completion_tokens} tokens]"
+        f"lookup_image_digest('checkout') → {await lookup_image_digest.execute(service='checkout')}"
     )
-    print(f"  AI commentary: {desc.message.strip()}")
+    print(
+        f"lookup_service_health('search') → {await lookup_service_health.execute(service='search')}"
+    )
     print()
 
 
 # =============================================================================
-# Part 2: hand tools to an agent
+# Part 2: hand the tools to an agent
 # =============================================================================
 
 
-def example_agent_with_tools():
-    """Wire tools into an Agent and let the model decide when to call them."""
-    print("=== Part 2: Agent Using Tools ===\n")
-
-    model = get_model(max_tokens=200)
+async def example_agent_with_tools():
+    """The agent decides when to call what. You do not script the sequence."""
+    print("=== Part 2: Agent with Tools ===\n")
 
     agent = Agent(
-        model=model,
-        tools=[add_numbers, multiply_numbers],
-        system_prompt="You are a calculator assistant. Use the provided tools to perform calculations.",
+        model=get_model(max_tokens=150),
+        tools=[lookup_image_digest, lookup_service_health],
+        system_prompt=(
+            "You are a release engineer's assistant. Before answering any "
+            "deployment question, look up the facts with your tools — never "
+            "answer from memory. Then give a clear go or no-go with the "
+            "reason."
+        ),
     )
 
-    print(f"Agent has {len(agent.tools)} tools registered")
+    prompt = "Are we clear to deploy Checkout? Check the image and the service health."
+    result = await agent.arun(prompt)
 
-    result = agent.run_sync("What is 15 + 27?")
-    print("\nQ: What is 15 + 27?")
-    print(f"A: {result.message}")
+    print(f"Prompt: {prompt}")
+    print(f"Response: {result.message}")
     print(f"Tool calls made: {result.metrics.tool_calls}")
     print()
 
 
 # =============================================================================
-# Part 3: tools with optional and typed arguments
+# Part 3: optional arguments and defaults
 # =============================================================================
 
 
 @tool
-def get_current_time() -> str:
-    """Get the current date and time."""
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def deployment_window_open(environment: str = "production") -> str:
+    """Say whether the change window for an environment is currently open."""
+    # Fixed rather than clock-dependent, so the notebook reads the same at
+    # 3pm and at 3am. A real one would consult the change calendar.
+    windows = {
+        "production": "closed until 22:00 UTC (business hours freeze)",
+        "staging": "open",
+    }
+    return f"{environment}: change window {windows.get(environment.lower(), 'unknown')}"
 
 
 @tool
-def calculate_age(birth_year: int) -> str:
-    """Calculate someone's age given their birth year."""
-    current_year = datetime.now().year
-    age = current_year - birth_year
-    return f"A person born in {birth_year} is {age} years old."
+def rollback_target(service: str, versions_back: int = 1) -> str:
+    """Name the version this service would roll back to, N releases back."""
+    history = {
+        "checkout": ["v4.2.1", "v4.2.0", "v4.1.7"],
+        "search": ["v1.9.0", "v1.8.3", "v1.8.2"],
+    }
+    releases = history.get(service.lower())
+    if releases is None:
+        return f"No release history for {service!r}."
+    if versions_back >= len(releases):
+        return f"{service}: only {len(releases) - 1} release(s) of history retained."
+    return f"{service}: rolling back {versions_back} would land on {releases[versions_back]}"
 
 
 @tool
-def format_greeting(name: str, formal: bool = False) -> str:
-    """Create a greeting for someone.
-
-    Args:
-        name: The person's name
-        formal: Whether to use formal greeting (default: False)
-    """
-    if formal:
-        return f"Good day, {name}. It is a pleasure to meet you."
-    return f"Hey {name}! Nice to meet you!"
+def utc_now() -> str:
+    """Get the current UTC time, for stamping a go/no-go decision."""
+    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
-def example_complex_tools():
-    """Tools with default arguments and varied return types."""
-    print("=== Part 3: Complex Tools ===\n")
+async def example_optional_arguments():
+    """Defaults mean the model can call a tool without knowing every argument."""
+    print("=== Part 3: Optional Arguments and Defaults ===\n")
 
-    model = get_model(max_tokens=200)
-
-    agent = Agent(
-        model=model,
-        tools=[get_current_time, calculate_age, format_greeting],
-        system_prompt="You are a helpful assistant with access to time and greeting tools.",
+    print(f"deployment_window_open() → {await deployment_window_open.execute()}")
+    print(
+        "deployment_window_open('staging') → "
+        f"{await deployment_window_open.execute(environment='staging')}"
     )
-
-    prompts = [
-        "What time is it right now?",
-        "How old would someone born in 1990 be?",
-        "Give me a formal greeting for Dr. Smith",
-    ]
-
-    for prompt in prompts:
-        result = agent.run_sync(prompt)
-        print(f"Q: {prompt}")
-        print(f"A: {result.message}")
-        print()
+    print(f"rollback_target('checkout') → {await rollback_target.execute(service='checkout')}")
+    print(
+        "rollback_target('checkout', 2) → "
+        f"{await rollback_target.execute(service='checkout', versions_back=2)}"
+    )
+    print()
 
 
 # =============================================================================
-# Part 4: watch tool calls happen in the event stream
+# Part 4: watching the tool calls happen
 # =============================================================================
 
 
 async def example_tool_events():
-    """Stream events to see the model plan, call a tool, and use its result."""
+    """Every lookup the agent made, in order, as it made it.
+
+    This is the part worth internalising. An agent that fetched the wrong
+    thing and an agent that fetched nothing look identical in the final
+    message; they look completely different here.
+    """
     print("=== Part 4: Tool Execution Events ===\n")
 
-    model = get_model(max_tokens=200)
-
     agent = Agent(
-        model=model,
-        tools=[add_numbers, multiply_numbers],
-        system_prompt="Use tools to calculate. Always use tools for math.",
+        model=get_model(max_tokens=150),
+        tools=[lookup_image_digest, lookup_service_health, deployment_window_open],
+        system_prompt=(
+            "You are a release engineer's assistant. Look up the facts before "
+            "answering. Give a go or no-go with the reason."
+        ),
     )
 
-    print("Q: What is (5 + 3) * 2?\n")
+    print("Prompt: Run the pre-deploy checks on Search.")
     print("Events:")
 
-    async for event in agent.run("What is (5 + 3) * 2?"):
-        event_type = event.event_type
-
-        if event_type == "tool_start":
-            print(f"  TOOL_START: {event.tool_name}({event.arguments})")
-        elif event_type == "tool_complete":
-            print(f"  TOOL_COMPLETE: {event.tool_name} -> {event.result}")
-        elif event_type == "think":
-            if event.tool_calls:
-                print(f"  THINK: Planning to call {len(event.tool_calls)} tool(s)")
-        elif event_type == "terminate":
-            print(f"  TERMINATE: {event.reason}")
-            if event.final_message:
-                print(f"\nFinal Answer: {event.final_message}")
+    async for event in agent.run("Run the pre-deploy checks on Search."):
+        if event.event_type == "tool_start":
+            print(f"  → calling {event.tool_name}({event.arguments})")
+        elif event.event_type == "tool_complete":
+            print(f"  ← {event.tool_name}: {str(event.result)[:80]}")
+        elif event.event_type == "terminate":
+            print(f"  ✓ {str(getattr(event, 'final_message', '') or '').strip()[:100]}")
 
     print()
 
 
 # =============================================================================
-# Part 5: tools that return structured data
+# Part 5: tools that return structure, not prose
 # =============================================================================
 
 
 @tool
-def search_products(query: str, max_results: int = 3) -> list[dict]:
-    """Search for products in the catalog.
-
-    Args:
-        query: Search query
-        max_results: Maximum number of results to return
-    """
-    # In-memory catalogue stands in for a database. The search logic
-    # below is the part worth reading.
-    products = [
-        {"id": 1, "name": "Laptop", "price": 999.99, "category": "electronics", "in_stock": True},
-        {
-            "id": 2,
-            "name": "Headphones",
-            "price": 149.99,
-            "category": "electronics",
-            "in_stock": True,
+def readiness_report(service: str) -> dict:
+    """Return the full readiness record for a service as structured data."""
+    image = _REGISTRY.get(service.lower())
+    health = _SERVICES.get(service.lower())
+    if image is None or health is None:
+        return {"service": service, "known": False}
+    return {
+        "service": service,
+        "known": True,
+        "image": {"tag": image["tag"], "signed": image["signed"], "digest": image["digest"][:19]},
+        "health": {
+            "hostname": health["hostname"],
+            "replicas": f"{health['healthy_replicas']}/{health['total_replicas']}",
+            "check": health["last_health_check"],
         },
-        {"id": 3, "name": "Mouse", "price": 49.99, "category": "electronics", "in_stock": True},
-        {"id": 4, "name": "Keyboard", "price": 79.99, "category": "electronics", "in_stock": False},
-        {"id": 5, "name": "Monitor", "price": 299.99, "category": "electronics", "in_stock": True},
-        {"id": 6, "name": "Webcam", "price": 89.99, "category": "electronics", "in_stock": True},
-        {
-            "id": 7,
-            "name": "Standing Desk",
-            "price": 449.99,
-            "category": "furniture",
-            "in_stock": True,
-        },
-        {
-            "id": 8,
-            "name": "Office Chair",
-            "price": 329.99,
-            "category": "furniture",
-            "in_stock": False,
-        },
-    ]
-
-    # Case-insensitive match on name OR category.
-    q = query.lower()
-    matches = [p for p in products if q in p["name"].lower() or q in p["category"].lower()]
-    return matches[:max_results]
-
-
-@tool
-def get_product_details(product_id: int) -> dict:
-    """Get detailed information about a specific product."""
-    details = {
-        1: {
-            "id": 1,
-            "name": "Laptop",
-            "price": 999.99,
-            "specs": '16GB RAM, 512GB SSD, 14" 2.8K display',
-        },
-        2: {
-            "id": 2,
-            "name": "Headphones",
-            "price": 149.99,
-            "specs": "Noise-canceling, 40h battery, USB-C",
-        },
-        3: {
-            "id": 3,
-            "name": "Mouse",
-            "price": 49.99,
-            "specs": "Wireless, 16k DPI, programmable buttons",
-        },
-        4: {"id": 4, "name": "Keyboard", "price": 79.99, "specs": "Mechanical, hot-swappable, RGB"},
-        5: {"id": 5, "name": "Monitor", "price": 299.99, "specs": '27" 4K IPS, 144Hz, USB-C 90W'},
-        6: {"id": 6, "name": "Webcam", "price": 89.99, "specs": "1080p60, dual mic, auto-framing"},
-        7: {
-            "id": 7,
-            "name": "Standing Desk",
-            "price": 449.99,
-            "specs": "Sit-stand, 60×30, programmable presets",
-        },
-        8: {
-            "id": 8,
-            "name": "Office Chair",
-            "price": 329.99,
-            "specs": "Lumbar support, adjustable arms",
-        },
+        # The blockers the agent should not have to re-derive. A tool that
+        # returns a judgement alongside the facts is doing half the work the
+        # model would otherwise do less reliably.
+        "blockers": [
+            *([] if image["signed"] else ["image is unsigned"]),
+            *(
+                []
+                if health["healthy_replicas"] == health["total_replicas"]
+                else [
+                    f"{health['total_replicas'] - health['healthy_replicas']} replica(s) unhealthy"
+                ]
+            ),
+            *([] if health["last_health_check"] == "passing" else ["health check failing"]),
+        ],
     }
-    return details.get(product_id, {"error": f"Product {product_id} not found"})
 
 
-def example_structured_tools():
-    """Tools can return dicts and lists — the model parses them on the next turn."""
-    print("=== Part 5: Structured Data Tools ===\n")
+async def example_structured_tools():
+    """A dict comes back as a dict, not as a string the model has to parse."""
+    print("=== Part 5: Structured Return Types ===\n")
 
-    model = get_model(max_tokens=300)
+    # ``.func`` is the undecorated function, so this is the real dict. The
+    # agent sees ``.execute()``'s output instead — the same data as JSON,
+    # because that is what crosses the wire to a model.
+    for service in ("checkout", "search"):
+        report = readiness_report.func(service=service)
+        blockers = report["blockers"] or ["none"]
+        print(f"{service}: {report['image']['tag']} · {report['health']['replicas']} replicas")
+        print(f"  blockers: {', '.join(blockers)}")
+    print()
 
     agent = Agent(
-        model=model,
-        tools=[search_products, get_product_details],
-        system_prompt="You are a shopping assistant. Help users find products.",
+        model=get_model(max_tokens=150),
+        tools=[readiness_report, utc_now],
+        system_prompt=(
+            "You are a release engineer's assistant. Pull the readiness report "
+            "and give a go or no-go. If there are blockers, say no-go and list "
+            "them."
+        ),
     )
 
-    result = agent.run_sync("Find me some electronics, then tell me about the laptop")
-    print("Q: Find me some electronics, then tell me about the laptop")
-    print(f"A: {result.message}")
-    print(f"\nTool calls made: {result.metrics.tool_calls}")
+    result = await agent.arun("Give me a go/no-go on Search.")
+    print(f"Agent: {result.message}")
     print()
 
 
@@ -328,26 +332,26 @@ def example_structured_tools():
 # =============================================================================
 
 
-def main():
+async def main():
     """Run all notebook parts."""
     print("=" * 60)
-    print("Notebook 09: Agent with Tools")
+    print("Notebook 07: Deployment Readiness — Giving an Agent Tools")
     print("=" * 60)
     print()
 
     print_config()
     print()
 
-    example_simple_tools()
-    example_agent_with_tools()
-    example_complex_tools()
-    asyncio.run(example_tool_events())
-    example_structured_tools()
+    await example_simple_tools()
+    await example_agent_with_tools()
+    await example_optional_arguments()
+    await example_tool_events()
+    await example_structured_tools()
 
     print("=" * 60)
-    print("Next: Notebook 10 — Agent Memory")
+    print("Next: Notebook 08 — Giving an Agent Memory")
     print("=" * 60)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

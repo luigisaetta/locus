@@ -78,7 +78,7 @@ async def smoke_pgvector() -> bool:
     docs = [
         Document(
             id="d1",
-            content="Locus is an Oracle agent framework.",
+            content="Locus is an agent framework.",
             metadata={"topic": "framework"},
             embedding=[0.10, 0.20, 0.30, 0.40],
         ),

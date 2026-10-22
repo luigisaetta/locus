@@ -3,7 +3,6 @@
 // Live-filters the notebook tables on docs/notebooks/index.md as the user
 // types. Hides rows that don't match, then hides whole sections (the
 // preceding h2 + intro paragraphs) when none of their rows survive.
-// Modeled on the workbench sidebar filter UX.
 
 (function () {
   function init() {

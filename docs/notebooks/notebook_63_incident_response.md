@@ -1,6 +1,6 @@
 # Incident Response
 
-Models the loop a real on-call engineer runs when a page fires::
+Models the loop an SRE / infra-devops on-call engineer runs when a production page fires::
 
     Page fires
       │
@@ -22,15 +22,26 @@ Models the loop a real on-call engineer runs when a page fires::
                           ▼
                        Postmortem (structured)
 
-- `Send`: fan out to 3 investigator Agents in parallel.
-- `add_conditional_edges`: severity-based routing decides
-  auto-mitigate vs escalate to a human.
-- `interrupt()`: critical severity pauses for explicit human approval
-  before any mitigation runs.
-- `output_schema=Postmortem`: the final report is a typed Pydantic
-  instance, ready to file into a runbook database.
+A bad `v4.12.0` deploy triggers the page: the triage agent classifies
+severity, then the workflow scatters to three parallel investigator
+Agents — a log analyst, a metric analyst, and a trace analyst — each
+inspecting its own signal (pod logs, latency/saturation metrics,
+downstream service traces). A synthesizer Agent fuses their reports into
+a single root-cause hypothesis, a severity gate decides whether to
+auto-remediate or page a human, and the run ends with a structured
+postmortem.
 
-Run it (OCI Generative AI is the default — the notebook harness picks it when `~/.oci/config` exists; set `OCI_PROFILE` to choose a non-default profile):
+- `Send`: fan out to 3 investigator Agents in parallel (logs, metrics,
+  traces).
+- `add_conditional_edges`: severity-based routing decides
+  auto-mitigate (rollback / scale-up / flag toggle) vs escalate to a
+  human.
+- `interrupt()`: critical severity pauses for explicit human approval
+  before any remediation runs.
+- `output_schema=Postmortem`: the final report is a typed Pydantic
+  instance, ready to file into a reliability-review database.
+
+Run it (defaults to the bundled mock model; set `LOCUS_MODEL_PROVIDER` to `openai` / `anthropic` for a live model):
 
     python examples/notebook_63_incident_response.py
 
@@ -40,10 +51,10 @@ Offline:
 
 Pin a strong-enough model for the structured postmortem schema:
 
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_63_incident_response.py
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_63_incident_response.py
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_63_incident_response.py"
-```
+````

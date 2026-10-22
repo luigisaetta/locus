@@ -42,11 +42,11 @@ import asyncio
 import json
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, SecretStr
 
-from locus._oracle_pool_cache import safe_acquire
+from locus._oracle_pool_cache import get_pool, safe_acquire
 from locus.memory.store import (
     BaseStore,
     SemanticSearchResult,
@@ -306,7 +306,8 @@ class OracleStore(BaseStore):
         ``oracledb`` is imported here (not at module load) so installs
         without the driver can still ``import`` this module.
         """
-        if self._pool is None:
+
+        def _build() -> Any:
             try:
                 import oracledb
             except ImportError as e:
@@ -331,7 +332,7 @@ class OracleStore(BaseStore):
 
             # create_pool_async returns the pool directly — the "async"
             # refers to the pool type, not the call signature.
-            self._pool = oracledb.create_pool_async(
+            return oracledb.create_pool_async(
                 user=cfg.user,
                 password=cfg.password.get_secret_value(),
                 dsn=dsn,
@@ -339,7 +340,9 @@ class OracleStore(BaseStore):
                 max=cfg.max_pool_size,
                 **params,
             )
-        return self._pool
+
+        # Bound to the running event loop — see locus._oracle_pool_cache.
+        return cast("oracledb.AsyncConnectionPool", await get_pool(self, _build))
 
     @property
     def _full_table_name(self) -> str:

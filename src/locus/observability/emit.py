@@ -18,7 +18,7 @@ construction, no allocation. SDK users who don't use telemetry pay
 exactly one ``ContextVar.get()`` per emission site.
 
 Module-level event-name constants pin the canonical wire types so
-changes are greppable and consumers (the workbench, third-party
+changes are greppable and consumers (SSE clients, third-party
 monitors) can rely on them.
 """
 
@@ -41,7 +41,7 @@ _BACKGROUND_TASKS: set[asyncio.Task[None]] = set()
 
 
 # Canonical event-type names — change here, propagates to every
-# instrumentation site. Listed verbatim in the workbench's renderer
+# instrumentation site. Consumers list them verbatim,
 # so a typo here breaks one place, not many.
 
 # --- Multi-agent ---
@@ -81,6 +81,7 @@ EV_AGENT_MODEL_COMPLETED = "agent.model.completed"
 EV_AGENT_TOKENS_USED = "agent.tokens.used"
 EV_AGENT_INTERRUPT = "agent.interrupt"
 EV_AGENT_TERMINATE = "agent.terminate"
+EV_AGENT_COMPACTION = "agent.context.compacted"
 
 # --- StateGraph node lifecycle ---
 EV_GRAPH_NODE_STARTED = "multiagent.graph.node.started"
@@ -132,6 +133,18 @@ EV_RESEARCH_COMPLETED = "research.completed"
 EV_HOOK_MODEL_RETRY = "agent.model.retry"
 EV_HOOK_STEERING_APPLIED = "agent.steering.applied"
 EV_HOOK_GUARDRAIL_TRIGGERED = "agent.guardrail.triggered"
+
+# --- Model failover (locus.models.fallback) ---
+EV_MODEL_FALLBACK = "model.fallback"
+EV_MODEL_BREAKER = "model.fallback.breaker"
+
+# --- Sandboxed tool execution ---
+EV_TOOL_SANDBOX_STARTED = "tool.sandbox.started"
+EV_TOOL_SANDBOX_COMPLETED = "tool.sandbox.completed"
+EV_TOOL_SANDBOX_DENIED = "tool.sandbox.denied"
+
+# --- Coding harness (locus.harness) ---
+EV_HARNESS_EXEC = "harness.exec"
 
 
 async def emit(event_type: str, /, **data: Any) -> None:

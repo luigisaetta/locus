@@ -5,8 +5,8 @@
 """End-to-end integration test for the LLM compactor (C.3).
 
 Exercises :class:`~locus.memory.compactor.LLMCompactor` against the
-session-scoped ``model`` fixture in ``conftest.py`` (OCI GenAI or
-OpenAI, depending on environment). The fixture auto-skips when no
+session-scoped ``model`` fixture in ``conftest.py`` (OpenAI or
+Anthropic, depending on environment). The fixture auto-skips when no
 model service is configured.
 
 The test feeds a synthetic 200-message conversation, summarises the
@@ -88,7 +88,7 @@ def _build_summarize_fn(model: Any) -> Any:
 @pytest.mark.asyncio
 async def test_compaction_with_real_model(model: Any, long_conversation: list[Message]) -> None:
     if model is None:
-        pytest.skip("no model service configured (OCI / OpenAI env vars)")
+        pytest.skip("no model service configured (OpenAI / Anthropic env vars)")
 
     compactor = LLMCompactor(
         # Force compaction: the synthetic conversation is well under any real

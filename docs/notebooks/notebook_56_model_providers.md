@@ -1,23 +1,39 @@
-# Model Providers
+# Model providers
 
-Locus targets OCI Generative AI as its primary provider, and OpenAI,
-Anthropic, and Ollama as first-class alternatives. The same `Agent`
-code works against any of them — only the model object changes.
+Locus supports OpenAI and Anthropic directly, and OpenRouter, Together.ai, and
+other hosted or self-hosted services through named OpenAI-compatible prefixes.
+The same `Agent` code works against any of them — only the model object
+changes. A cloud platform team can re-platform a provider (for cost,
+latency, data residency, or an outage failover) without rewriting a
+single runbook: the Gateway is the seam, and routing, rate limits, and
+audit live there rather than in each agent.
 
-Provider matrix (in order of priority):
+Provider matrix:
 
 | Provider | Model class | Notes |
 | --- | --- | --- |
-| **OCI Generative AI** (default) | `OCIChatCompletionsModel` | `/openai/v1` transport — OpenAI, Meta, xAI, Mistral, Gemini, non-R Cohere |
-| **OCI Generative AI** | `OCIModel` | OCI SDK transport — required for Cohere R-series |
 | OpenAI | `OpenAIModel` | GPT-4o, o1, o3, gpt-5.x against the direct API |
-| Anthropic | `AnthropicModel` | Claude models |
-| Ollama | `OllamaModel` | Local LLMs (Llama, Mistral, Gemma) |
+| Anthropic | `AnthropicModel` | Claude models (opus / sonnet / haiku) |
+| OpenRouter | `get_model("openrouter:provider/model-id")` | Uses `OPENROUTER_API_KEY` and OpenRouter's model id |
+| Together.ai | `get_model("together:organization/model-id")` | Uses `TOGETHER_API_KEY` and Together's model id |
+| OpenAI-compatible | `OpenAIModel(base_url=…)` | Any compatible endpoint — vLLM, Ollama, LiteLLM, and others |
 
-The registry helper `get_model("provider:model_name")` routes OCI ids
-to the right transport automatically.
+The registry helper `get_model("provider:model_name")` returns the right
+client for the prefix.
 
-Run it (OCI Generative AI is the default — the notebook harness picks it when `~/.oci/config` exists; set `OCI_PROFILE` to choose a non-default profile):
+This particular notebook harness supports `mock`, `openai`, and `anthropic`.
+OpenRouter and Together.ai are available in application code through the SDK's
+provider registry:
+
+```python
+from locus import Agent
+
+openrouter_agent = Agent(model="openrouter:provider/model-id")
+together_agent = Agent(model="together:organization/model-id")
+```
+
+Run the notebook (it defaults to the bundled mock model; set
+`LOCUS_MODEL_PROVIDER` to `openai` or `anthropic` for a live run):
 
     python examples/notebook_56_model_providers.py
 
@@ -25,12 +41,12 @@ Offline:
 
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_56_model_providers.py
 
-Pin a specific OCI model:
+Pin a specific model:
 
-    LOCUS_MODEL_ID=meta.llama-3.3-70b-instruct python examples/notebook_56_model_providers.py
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_56_model_providers.py
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_56_model_providers.py"
-```
+````

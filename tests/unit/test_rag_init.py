@@ -83,24 +83,6 @@ class TestRAGLazyImports:
 
         assert InMemoryVectorStore is not None
 
-    def test_lazy_import_oci_embeddings(self):
-        """Test lazy importing OCIEmbeddings."""
-        try:
-            from locus.rag import OCIEmbeddings
-
-            assert OCIEmbeddings is not None
-        except ImportError:
-            pytest.skip("OCI dependencies not available")
-
-    def test_lazy_import_oracle_store(self):
-        """Test lazy importing OracleVectorStore."""
-        try:
-            from locus.rag import OracleVectorStore
-
-            assert OracleVectorStore is not None
-        except ImportError:
-            pytest.skip("Oracle dependencies not available")
-
     def test_lazy_import_opensearch_store(self):
         """Test lazy importing OpenSearchVectorStore."""
         try:

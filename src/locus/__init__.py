@@ -3,10 +3,15 @@
 # https://oss.oracle.com/licenses/upl/
 
 """
-Locus - A zero-LangChain agentic SDK.
+Locus - the agent framework where the model never holds the trigger.
 
-Built-in Reflexion, Grounding Evaluation, and production-grade orchestration.
-100% Pydantic. No magic.
+Every consequential action clears a policy check first: real code, outside the
+model, before the side effect, on a record you can verify. Around that gate sits
+a full SDK - tools, memory, RAG, eight multi-agent shapes, typed events.
+
+Try it in thirty seconds, with no API key::
+
+    python -m locus.rogue
 
 Usage:
     from locus import Agent, tool
@@ -17,7 +22,7 @@ Usage:
         return "results..."
 
     agent = Agent(
-        model="openai:gpt-4o",  # or oci:cohere.command-r-plus
+        model="openai:gpt-4o",  # or anthropic:claude-sonnet-4-6
         tools=[search],
         system_prompt="You are a helpful assistant.",
     )
@@ -27,14 +32,21 @@ Usage:
 """
 
 from locus.core.config import LocusSettings
-from locus.core.errors import LocusError
+from locus.core.errors import ApprovalPendingError, LocusError
 from locus.core.events import (
+    CompactionEvent,
+    CustomEvent,
+    FinalAnswerVerificationEvent,
     GroundingEvent,
     LocusEvent,
+    ModelRetryEvent,
     ReflectEvent,
+    RunInfo,
+    SubagentEvent,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
+    ToolProgressEvent,
     ToolStartEvent,
 )
 from locus.core.messages import Message, Role, ToolCall
@@ -52,6 +64,14 @@ _LAZY_IMPORTS = {
     "SequentialPipeline": ("locus.agent.composition", "SequentialPipeline"),
     "ParallelPipeline": ("locus.agent.composition", "ParallelPipeline"),
     "LoopAgent": ("locus.agent.composition", "LoopAgent"),
+    # Subagents — isolated child loops with usage rollup and linked cancel.
+    "run_subagent": ("locus.agent.subagent", "run_subagent"),
+    "SubagentResult": ("locus.agent.subagent", "SubagentResult"),
+    "Subagent": ("locus.agent.subagent", "Subagent"),
+    # Delegation as a tool, and agents defined in Markdown files.
+    "task_tool": ("locus.agent.tasks", "task_tool"),
+    "AgentSpec": ("locus.agent.specs", "AgentSpec"),
+    "load_agent_specs": ("locus.agent.specs", "load_agent_specs"),
     # Multi-agent primitives — graph + handoff + orchestrator/specialist.
     "StateGraph": ("locus.multiagent.graph", "StateGraph"),
     "GraphConfig": ("locus.multiagent.graph", "GraphConfig"),
@@ -78,6 +98,7 @@ _LAZY_IMPORTS = {
     "HookRegistry": ("locus.hooks.registry", "HookRegistry"),
     # RAG
     "RAGRetriever": ("locus.rag.retriever", "RAGRetriever"),
+    "OpenAIEmbeddings": ("locus.rag.embeddings.openai", "OpenAIEmbeddings"),
     "OCIEmbeddings": ("locus.rag.embeddings.oci", "OCIEmbeddings"),
     "OracleVectorStore": ("locus.rag.stores.oracle", "OracleVectorStore"),
     # PRISM router — bounded-graph generation atop locus primitives.
@@ -129,6 +150,23 @@ _LAZY_IMPORTS = {
     "KnowledgeRow": ("locus.deepagent", "KnowledgeRow"),
     "ItemRef": ("locus.deepagent", "ItemRef"),
     "Grounding": ("locus.deepagent", "Grounding"),
+    # Grounding — evidence-grounded findings (home: locus.control).
+    "Evidence": ("locus.control", "Evidence"),
+    "Indicator": ("locus.control", "Indicator"),
+    "Severity": ("locus.control", "Severity"),
+    "IndicatorType": ("locus.control", "IndicatorType"),
+    "FingerprintFinding": ("locus.control", "FingerprintFinding"),
+    "FingerprintVerdict": ("locus.control", "FingerprintVerdict"),
+    "FingerprintClassifier": ("locus.control", "FingerprintClassifier"),
+    "Abstention": ("locus.control", "Abstention"),
+    "GroundedFinding": ("locus.control", "GroundedFinding"),
+    "ground_finding": ("locus.control", "ground_finding"),
+    "ground_fingerprint": ("locus.control", "ground_fingerprint"),
+    "is_finding": ("locus.control", "is_finding"),
+    "AtlasTechnique": ("locus.control", "AtlasTechnique"),
+    "OwaspLLM": ("locus.control", "OwaspLLM"),
+    "OwaspASI": ("locus.control", "OwaspASI"),
+    "severity_at_least": ("locus.control", "severity_at_least"),
 }
 
 
@@ -141,20 +179,38 @@ def __getattr__(name: str) -> object:
         module = importlib.import_module(module_path)
         return getattr(module, attr_name)
 
+    # ``locus.agent`` and friends are regular subpackages. Python only binds
+    # them as attributes once something has imported them, so resolve the
+    # dotted path on demand — ``monkeypatch.setattr("locus.agent.agent.x")``
+    # and ``locus.agent`` in a fresh interpreter must not depend on import
+    # order elsewhere in the process.
+    import importlib
+    import importlib.util
+
+    if importlib.util.find_spec(f"{__name__}.{name}") is not None:
+        return importlib.import_module(f"{__name__}.{name}")
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-__version__ = "0.2.0"
+__version__ = "3.0.0"
 __all__ = [
     "Agent",
+    "ApprovalPendingError",
+    "CustomEvent",
+    "RunInfo",
     "AgentConfig",
     "AgentResult",
+    "AgentSpec",
     "AgentState",
     "CausalChain",
     "END",
     "GraphConfig",
     "GroundingEvaluator",
+    "FinalAnswerVerificationEvent",
+    "CompactionEvent",
     "GroundingEvent",
+    "ModelRetryEvent",
     "Handoff",
     "HandoffContext",
     "HandoffReason",
@@ -177,19 +233,27 @@ __all__ = [
     "SequentialPipeline",
     "Specialist",
     "StateGraph",
+    "Subagent",
+    "SubagentEvent",
+    "SubagentResult",
     "TerminateEvent",
     "ThinkEvent",
     "ToolCall",
     "ToolCompleteEvent",
     "ToolContext",
+    "ToolProgressEvent",
     "ToolStartEvent",
     "__version__",
     "create_handoff_agent",
     "create_handoff_manager",
     "create_orchestrator",
+    "load_agent_specs",
+    "run_subagent",
+    "task_tool",
     "tool",
     # RAG (lazy)
     "RAGRetriever",
+    "OpenAIEmbeddings",
     "OCIEmbeddings",
     "OracleVectorStore",
     # PRISM router (lazy)
@@ -208,6 +272,23 @@ __all__ = [
     "SkillIndex",
     "TaskType",
     "builtin_protocols",
+    # Security — evidence-grounded findings (lazy)
+    "Abstention",
+    "AtlasTechnique",
+    "Evidence",
+    "FingerprintClassifier",
+    "FingerprintFinding",
+    "FingerprintVerdict",
+    "GroundedFinding",
+    "Indicator",
+    "IndicatorType",
+    "OwaspASI",
+    "OwaspLLM",
+    "Severity",
+    "ground_finding",
+    "ground_fingerprint",
+    "is_finding",
+    "severity_at_least",
     # Deep research — agent factory (lazy)
     "create_deepagent",
     "KnowledgeProvider",

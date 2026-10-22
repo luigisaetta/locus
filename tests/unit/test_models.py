@@ -164,64 +164,6 @@ class TestOpenAIModel:
 
 
 # =============================================================================
-# OCI Model Tests
-# =============================================================================
-
-
-class TestOCIModel:
-    """Tests for OCIModel."""
-
-    @pytest.fixture
-    def mock_oci(self):
-        """Mock the oci module."""
-        mock_oci = MagicMock()
-        mock_config = MagicMock()
-        mock_config.from_file = MagicMock(return_value={"tenancy": "test-tenancy"})
-        mock_oci.config = mock_config
-        mock_oci.auth = MagicMock()
-        mock_oci.generative_ai_inference = MagicMock()
-
-        with patch.dict(
-            "sys.modules",
-            {
-                "oci": mock_oci,
-                "oci.config": mock_config,
-                "oci.auth": mock_oci.auth,
-                "oci.auth.signers": MagicMock(),
-                "oci.generative_ai_inference": mock_oci.generative_ai_inference,
-                "oci.generative_ai_inference.models": MagicMock(),
-            },
-        ):
-            yield mock_oci
-
-    def test_init_default_config(self, mock_oci):
-        """Initialize with default configuration."""
-        from locus.models.providers.oci import OCIModel
-
-        model = OCIModel()
-
-        assert model.config.model_id == "cohere.command-r-plus"
-        assert model.config.profile_name == "DEFAULT"
-        assert model.config.auth_type.value == "api_key"
-
-    def test_init_custom_config(self, mock_oci):
-        """Initialize with custom configuration."""
-        from locus.models.providers.oci import OCIAuthType, OCIModel
-
-        model = OCIModel(
-            model_id="meta.llama-3-70b-instruct",
-            profile_name="DEFAULT",
-            auth_type="security_token",
-            compartment_id="test-compartment",
-        )
-
-        assert model.config.model_id == "meta.llama-3-70b-instruct"
-        assert model.config.profile_name == "DEFAULT"
-        assert model.config.auth_type == OCIAuthType.SECURITY_TOKEN
-        assert model.config.compartment_id == "test-compartment"
-
-
-# =============================================================================
 # Registry Tests
 # =============================================================================
 
@@ -288,16 +230,6 @@ class TestModelRegistry:
         else:
             pytest.skip("OpenAI provider not available")
 
-    def test_get_model_oci(self):
-        """Test getting OCI model through registry."""
-        from locus.models.registry import get_model, list_providers
-
-        if "oci" in list_providers():
-            model = get_model("oci:cohere.command-r-plus")
-            assert model is not None
-        else:
-            pytest.skip("OCI provider not available")
-
 
 # =============================================================================
 # Anthropic Provider Tests
@@ -312,8 +244,8 @@ class TestAnthropicModel:
         pytest.importorskip("anthropic")
         from locus.models.native.anthropic import AnthropicModel
 
-        model = AnthropicModel(model="claude-sonnet-4-20250514", api_key="test-key")
-        assert model.config.model == "claude-sonnet-4-20250514"
+        model = AnthropicModel(model="claude-sonnet-4-6", api_key="test-key")
+        assert model.config.model == "claude-sonnet-4-6"
         assert model.config.api_key == "test-key"
 
     def test_convert_messages_extracts_system(self):
@@ -447,44 +379,3 @@ class TestAnthropicModel:
             "name": "respond_with_schema",
         }
         assert any(t["name"] == "respond_with_schema" for t in sent_kwargs["tools"])
-
-
-# =============================================================================
-# Ollama Provider Tests
-# =============================================================================
-
-
-class TestOllamaModel:
-    """Tests for Ollama model provider."""
-
-    def test_create_model(self):
-        """Create an Ollama model with default config."""
-        pytest.importorskip("ollama")
-        from locus.models.native.ollama import OllamaModel
-
-        model = OllamaModel(model="llama3.3")
-        assert model.config.model == "llama3.3"
-        assert model.config.base_url == "http://localhost:11434"
-
-    def test_convert_messages(self):
-        """Messages converted to Ollama format."""
-        pytest.importorskip("ollama")
-        from locus.models.native.ollama import OllamaModel
-
-        model = OllamaModel()
-        messages = model._convert_messages(
-            [
-                Message.system("Be helpful"),
-                Message.user("Hi"),
-            ]
-        )
-        assert len(messages) == 2
-        assert messages[0]["role"] == "system"
-        assert messages[1]["role"] == "user"
-
-    def test_registry_has_ollama(self):
-        """Ollama provider registered in model registry."""
-        pytest.importorskip("ollama")
-        from locus.models.registry import list_providers
-
-        assert "ollama" in list_providers()

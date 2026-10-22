@@ -17,6 +17,7 @@ from locus.core.command import (
 )
 from locus.core.config import LocusSettings
 from locus.core.errors import (
+    ApprovalPendingError,
     CheckpointError,
     CheckpointNotFoundError,
     CheckpointSerializationError,
@@ -36,13 +37,19 @@ from locus.core.errors import (
     VectorStoreError,
 )
 from locus.core.events import (
+    CompactionEvent,
+    CustomEvent,
+    FinalAnswerVerificationEvent,
     GroundingEvent,
     LocusEvent,
     ModelChunkEvent,
+    ModelRetryEvent,
     ReflectEvent,
+    SubagentEvent,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
+    ToolProgressEvent,
     ToolStartEvent,
 )
 from locus.core.interrupt import (
@@ -97,17 +104,24 @@ __all__ = [
     "ModelProtocol",
     "ToolProtocol",
     # Events
+    "CustomEvent",
+    "FinalAnswerVerificationEvent",
+    "CompactionEvent",
     "GroundingEvent",
+    "ModelRetryEvent",
     "LocusEvent",
     "ModelChunkEvent",
     "ReflectEvent",
     "TerminateEvent",
     "ThinkEvent",
     "ToolCompleteEvent",
+    "SubagentEvent",
+    "ToolProgressEvent",
     "ToolStartEvent",
     # Config
     "LocusSettings",
     # Errors
+    "ApprovalPendingError",
     "CheckpointError",
     "CheckpointNotFoundError",
     "CheckpointSerializationError",

@@ -1,10 +1,13 @@
-# Multi-modal providers
+# Capability providers
 
 Non-LLM provider Protocols — web search, web fetch, image generation,
 text-to-speech, speech recognition. Setting any of them on
 `AgentConfig` (`web_search=`, `web_fetch=`, `image_generator=`,
 `speech_provider=`) auto-registers a matching `@tool` so the model
 can call the capability the same way it calls any other tool.
+
+For the concepts, start with [Multi-modal providers](../concepts/multi-modal-providers.md)
+and [Tools](../concepts/tools.md).
 
 For LLM providers, see [Models](models.md). For embedding providers
 and vector stores, see [RAG](rag.md).

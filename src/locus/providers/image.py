@@ -10,6 +10,8 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
+from locus.core.loop_bound import loop_bound
+
 
 class ImageResult(BaseModel):
     """One generated image, exposed as either a URL or base64 PNG."""
@@ -49,13 +51,13 @@ class OpenAIImageProvider:
 
     Args:
         model: Model id — ``"gpt-image-1"`` (default; OpenAI's current
-            image model), or any OCI-hosted equivalent the user wants to
+            image model), or any OpenAI-compatible equivalent the user wants to
             call through an OpenAI-compatible client. ``"dall-e-3"`` and
             ``"dall-e-2"`` are deprecated by OpenAI; pass them explicitly
             if you still need them.
         api_key: Optional explicit key. Defaults to ``OPENAI_API_KEY``.
         base_url: Optional base URL for OpenAI-compatible endpoints
-            (e.g. OCI's ``/openai/v1``).
+            (e.g. a self-hosted ``/openai/v1`` endpoint).
 
     The provider lazily imports ``openai`` to keep the package extra
     optional.
@@ -74,14 +76,14 @@ class OpenAIImageProvider:
         self._client: Any = None
 
     def _get_client(self) -> Any:
-        if self._client is None:
-            import openai
 
-            self._client = openai.AsyncOpenAI(
-                api_key=self._api_key,
-                base_url=self._base_url,
-            )
-        return self._client
+        def build() -> Any:
+            import openai  # noqa: PLC0415
+
+            return openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+
+        # Bound to the loop that built it — see locus.core.loop_bound.
+        return loop_bound(self, "_client", build)
 
     async def generate(
         self,

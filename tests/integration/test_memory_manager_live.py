@@ -11,7 +11,7 @@ Exercises the full session lifecycle:
     memories into the system prompt before the first model call.
 
 The tests use the session-scoped ``model`` fixture from conftest.py
-(OCI GenAI or OpenAI depending on environment) and auto-skip when no
+(OpenAI or Anthropic depending on environment) and auto-skip when no
 model service is configured.
 """
 

@@ -3,21 +3,25 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
-"""Notebook 64: Research workflow — execute, causal, summarise, ground, replan.
+"""Notebook 69: Customer-support research workflow — recon, hypothesize, validate, report.
 
 create_research_workflow composes six node primitives into a StateGraph
-that mirrors the production pattern used in research-shaped specialist
-agents: a ReAct loop that gathers evidence, causal inference before
-summary, LLM-as-judge grounding evaluation, and a two-level recovery
-loop.
+that mirrors how a customer-support research agent should work: a ReAct
+loop that gathers evidence from knowledge-base tools (recon), causal
+inference that proposes a root-cause hypothesis before the summary,
+LLM-as-judge grounding evaluation that scores whether the reply is
+actually backed by that evidence, and a two-level recovery loop — an
+ungrounded support claim is a hallucinated answer, so it gets
+regenerated or re-planned instead of sent to the customer. No claim
+reaches the reply without evidence behind it.
 
 Recovery strategy::
 
     grounding score < threshold (first failure) → regenerate_summary (cheap)
     grounding score < threshold (subsequent)    → replan + full execute retry
 
-Every node emits research.* SSE events so you can stream the workflow
-end-to-end the same way you would stream an Agent run.
+Every node emits research.* SSE events so you can stream the
+investigation end-to-end the same way you would stream an Agent run.
 
 - Run create_research_workflow with the convenience factory.
 - Subscribe to research.* SSE events in real time.
@@ -25,7 +29,7 @@ end-to-end the same way you would stream an Agent run.
 - Read the final state: summary, structured output, grounding score.
 
 Run it
-    # Default: OCI Generative AI auto-detected from ~/.oci/config
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_69_research_workflow.py
 
     # Offline / no credentials:
@@ -54,65 +58,68 @@ from locus.observability import get_event_bus, run_context
 from locus.tools import tool
 
 
-# Tiny module catalogue the agent can investigate via its three tools.
+# Tiny knowledge base the agent can investigate via its three tools.
+# All article IDs and data are invented for this offline demo.
 
 
-_CATALOGUE = {
-    "locus.router": {
-        "purpose": "Cognitive router — compiles NL to orchestration shape.",
-        "key_classes": ["Router", "GoalFrame", "ProtocolRegistry", "CognitiveCompiler"],
-        "since": "0.2.0",
-        "stability": "stable",
+_KB_ARTICLES = {
+    "KB-2024-00101": {
+        "summary": "Checkout hangs when a saved card has an expired billing address.",
+        "affected_features": ["checkout", "saved-payments", "address-book"],
+        "impact": 9.1,
+        "fix_shipped": True,
     },
-    "locus.deepagent": {
-        "purpose": "Research-shaped agent factory + research workflow primitives.",
-        "key_classes": ["create_deepagent", "create_research_workflow", "make_execute_node"],
-        "since": "0.2.0",
-        "stability": "stable",
+    "KB-2024-00102": {
+        "summary": "Password-reset emails land in spam for self-hosted mail domains.",
+        "affected_features": ["password-reset", "email-delivery"],
+        "impact": 7.4,
+        "fix_shipped": True,
     },
-    "locus.observability": {
-        "purpose": "In-process SSE bus — run_context, EventBus, canonical EV_* constants.",
-        "key_classes": ["EventBus", "run_context", "get_event_bus"],
-        "since": "0.2.0",
-        "stability": "stable",
+    "KB-2024-00103": {
+        "summary": "Mobile app shows stale order status until a manual refresh.",
+        "affected_features": ["mobile-app"],
+        "impact": 5.8,
+        "fix_shipped": False,
     },
 }
 
 
 @tool
-def list_modules() -> list[str]:
-    """Return the list of available modules."""
-    return list(_CATALOGUE.keys())
+def list_articles() -> list[str]:
+    """Return the list of tracked knowledge-base article IDs."""
+    return list(_KB_ARTICLES.keys())
 
 
 @tool
-def describe_module(name: str) -> dict:
-    """Return purpose, key classes, and stability for a module.
+def describe_article(article_id: str) -> dict:
+    """Return summary, affected features, impact, and fix status for an article.
 
     Args:
-        name: Dotted module name (e.g. ``locus.router``).
+        article_id: Knowledge-base identifier (e.g. ``KB-2024-00101``).
     """
-    return _CATALOGUE.get(name, {"error": f"module '{name}' not found"})
+    return _KB_ARTICLES.get(article_id, {"error": f"article '{article_id}' not found"})
 
 
 @tool
-def count_classes(name: str) -> int:
-    """Return the number of key public classes in a module.
+def count_affected_features(article_id: str) -> int:
+    """Return the number of product features affected by an article.
 
     Args:
-        name: Dotted module name.
+        article_id: Knowledge-base identifier.
     """
-    entry = _CATALOGUE.get(name, {})
-    return len(entry.get("key_classes", []))
+    entry = _KB_ARTICLES.get(article_id, {})
+    return len(entry.get("affected_features", []))
 
 
 # Structured output schema — the workflow emits this typed instance.
 
 
-class ModuleSurvey(BaseModel):
-    modules_covered: list[str] = Field(description="Modules that were researched.")
-    summary: str = Field(description="2-3 sentence survey of what was found.")
-    stability: str = Field(description="Overall stability assessment.")
+class SupportAssessment(BaseModel):
+    articles_covered: list[str] = Field(description="Article IDs that were researched.")
+    summary: str = Field(description="2-3 sentence assessment of the customer impact found.")
+    overall_severity: str = Field(
+        description="Overall severity rating: low, medium, high, or critical."
+    )
     confidence: float = Field(ge=0.0, le=1.0)
 
 
@@ -120,16 +127,17 @@ class ModuleSurvey(BaseModel):
 
 
 async def part1_factory_with_sse() -> None:
-    print("\n--- Part 1: research workflow with SSE ---")
+    print("\n--- Part 1: customer-support research workflow with SSE ---")
 
     workflow = create_research_workflow(
         model=get_model(),
-        tools=[list_modules, describe_module, count_classes],
+        tools=[list_articles, describe_article, count_affected_features],
         system_prompt=(
-            "You are a locus SDK analyst. Use tools to survey the available modules. "
-            "List all modules, then describe each one in detail."
+            "You are a customer-support research analyst. Use tools to survey the tracked "
+            "knowledge-base articles. List all articles, then describe each one in detail. "
+            "Every claim must trace to tool evidence."
         ),
-        output_schema=ModuleSurvey,
+        output_schema=SupportAssessment,
         grounding_threshold=0.60,
         max_replans=1,
         max_regenerations=1,
@@ -147,7 +155,9 @@ async def part1_factory_with_sse() -> None:
 
     async with run_context() as rid:
         streamer = asyncio.create_task(stream_research_events(rid))
-        result = await workflow.execute({KEY_PROMPT: "Survey all locus modules."})
+        result = await workflow.execute(
+            {KEY_PROMPT: "Assess the customer impact across all tracked articles."}
+        )
         await get_event_bus().close_stream(rid)
         await asyncio.wait_for(streamer, timeout=5.0)
 
@@ -158,11 +168,13 @@ async def part1_factory_with_sse() -> None:
     print(f"  replans used     : {final.get(KEY_REPLAN_COUNT, 0)}")
     print(f"  regenerations    : {final.get(KEY_REGENERATION_COUNT, 0)}")
 
-    survey: ModuleSurvey | None = final.get(KEY_STRUCTURED_OUTPUT)
-    if survey:
-        print(f"\n  modules covered: {survey.modules_covered}")
-        print(f"  summary: {survey.summary[:200]}")
-        print(f"  stability: {survey.stability} | confidence: {survey.confidence:.0%}")
+    assessment: SupportAssessment | None = final.get(KEY_STRUCTURED_OUTPUT)
+    if assessment:
+        print(f"\n  articles covered: {assessment.articles_covered}")
+        print(f"  summary: {assessment.summary[:200]}")
+        print(
+            f"  severity: {assessment.overall_severity} | confidence: {assessment.confidence:.0%}"
+        )
     else:
         summary = final.get(KEY_SUMMARY, "")
         print(f"\n  summary: {summary[:300]}")
@@ -171,7 +183,7 @@ async def part1_factory_with_sse() -> None:
     print(f"\n  research.* events fired: {research_events}")
 
 
-# Part 2: build a minimal graph manually — execute + summarise, no causal.
+# Part 2: build a minimal graph manually — recon + summarise, no causal step.
 
 
 async def part2_custom_graph() -> None:
@@ -187,7 +199,7 @@ async def part2_custom_graph() -> None:
     from locus.multiagent.graph import END, START, StateGraph  # noqa: PLC0415
 
     graph = StateGraph()
-    graph.add_node("execute", make_execute_node(get_model(), [list_modules, describe_module]))
+    graph.add_node("execute", make_execute_node(get_model(), [list_articles, describe_article]))
     graph.add_node("summarize", make_summarize_node(get_model()))
     graph.add_node("grounding_eval", make_grounding_eval_node(get_model()))
 
@@ -205,7 +217,7 @@ async def part2_custom_graph() -> None:
     workflow = graph.compile()
 
     async with run_context() as rid:
-        result = await workflow.execute({KEY_PROMPT: "What does locus.router do?"})
+        result = await workflow.execute({KEY_PROMPT: "What does KB-2024-00101 affect?"})
         await get_event_bus().close_stream(rid)
 
     final = result.final_state

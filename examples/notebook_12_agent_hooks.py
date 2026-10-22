@@ -2,12 +2,13 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 """
-Notebook 12: hooks — middleware for agents.
+Notebook 12: audit hooks — every agent action on the record.
 
 A ``HookProvider`` plugs into four lifecycle points: before/after the
-whole invocation, and before/after each tool call. Use hooks to add
-logging, timing, validation, or simple guardrails without touching the
-agent or the tools themselves.
+whole invocation, and before/after each tool call. For a cloud-ops
+agent that's an audit trail for free — every scaling action it takes
+can be logged, timed, validated, or blocked without touching the agent
+or the tools themselves.
 
 Key ideas:
 - Subclass ``HookProvider`` and override only the callbacks you need.
@@ -18,17 +19,23 @@ Key ideas:
   for clamping or sanitising values before the tool actually runs.
 - Multiple hooks compose. Locus iterates them in priority order.
 
-Run it:
-    .venv/bin/python examples/notebook_18_agent_hooks.py
+The Part 5 guardrail watches untrusted manifest text for secrets before
+they flow onward — the control behind OWASP LLM02 (Sensitive Information
+Disclosure). Notebook 14 builds on this with a deploy-gating agent that
+risk-scores each change before it lands.
 
-The default provider is OCI Generative AI (canonical model id:
-``openai.gpt-4.1`` or ``meta.llama-3.3-70b-instruct``). Set
-``LOCUS_MODEL_PROVIDER=mock`` for offline runs; OpenAI, Anthropic, and
-Ollama also work.
+Run it:
+    .venv/bin/python examples/notebook_12_agent_hooks.py
+
+The default provider is the mock model; set LOCUS_MODEL_PROVIDER for a live one (e.g.
+``openai`` or ``anthropic``). Set
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs; OpenAI and Anthropic
+also work.
 
 Prerequisite: notebook 11.
 """
 
+import asyncio
 from datetime import datetime
 
 # Import shared config
@@ -40,55 +47,55 @@ from locus.tools import tool
 
 
 # =============================================================================
-# Part 1: a logging hook
+# Part 1: an audit-trail hook
 # =============================================================================
 
 
-class SimpleLoggingHook(HookProvider):
-    """Print a line at each of the four lifecycle points."""
+class AuditTrailHook(HookProvider):
+    """Print an audit line at each of the four lifecycle points."""
 
     @property
     def priority(self) -> int:
         return HookPriority.OBSERVABILITY_DEFAULT
 
     async def on_before_invocation(self, prompt, state):
-        print(f"  [HOOK] Starting: '{prompt[:50]}...'")
+        print(f"  [AUDIT] Run started: '{prompt[:50]}...'")
         return state
 
     async def on_after_invocation(self, state, success):
-        print(f"  [HOOK] Finished: success={success}")
+        print(f"  [AUDIT] Run finished: success={success}")
 
     async def on_before_tool_call(self, event):
-        print(f"  [HOOK] Tool call: {event.tool_name}({event.arguments})")
+        print(f"  [AUDIT] Tool call: {event.tool_name}({event.arguments})")
 
     async def on_after_tool_call(self, event):
         if event.error:
-            print(f"  [HOOK] Tool error: {event.tool_name} -> {event.error}")
+            print(f"  [AUDIT] Tool error: {event.tool_name} -> {event.error}")
         else:
-            print(f"  [HOOK] Tool done: {event.tool_name} -> {str(event.result)[:50]}")
+            print(f"  [AUDIT] Tool done: {event.tool_name} -> {str(event.result)[:50]}")
 
 
 @tool
-def add(a: int, b: int) -> int:
-    """Add two numbers."""
-    return a + b
+def adjust_capacity(base: int, delta: int) -> int:
+    """Add a delta to a service's current instance count."""
+    return base + delta
 
 
-def example_simple_hook():
-    """Wire a hook into an agent and run one prompt."""
+async def example_simple_hook():
+    """Wire an audit hook into an autoscaling agent and run one prompt."""
     print("=== Part 1: Understanding Hooks ===\n")
 
     model = get_model(max_tokens=100)
 
     agent = Agent(
         model=model,
-        tools=[add],
-        system_prompt="Use the add tool for calculations.",
-        hooks=[SimpleLoggingHook()],
+        tools=[adjust_capacity],
+        system_prompt="Use the adjust_capacity tool to scale service instances.",
+        hooks=[AuditTrailHook()],
     )
 
-    print("Running agent with logging hook:\n")
-    result = agent.run_sync("What is 5 + 3?")
+    print("Running agent with audit-trail hook:\n")
+    result = await agent.arun("Scale the service: base 5, delta 3")
     print(f"\nResult: {result.message}")
     print()
 
@@ -99,7 +106,7 @@ def example_simple_hook():
 
 
 class TimingHook(HookProvider):
-    """Time the whole invocation and each tool call."""
+    """Time the whole invocation and each tool call — cloud-ops telemetry."""
 
     def __init__(self):
         self.start_time = None
@@ -129,7 +136,7 @@ class TimingHook(HookProvider):
         self.tool_times[event.tool_name] = (datetime.now().timestamp() * 1000) - start
 
 
-def example_timing_hook():
+async def example_timing_hook():
     """Use a hook to time the agent and its tool calls."""
     print("=== Part 2: Timing Hook ===\n")
 
@@ -137,12 +144,12 @@ def example_timing_hook():
 
     agent = Agent(
         model=model,
-        tools=[add],
-        system_prompt="Use the add tool for calculations.",
+        tools=[adjust_capacity],
+        system_prompt="Use the adjust_capacity tool to scale service instances.",
         hooks=[TimingHook()],
     )
 
-    result = agent.run_sync("Calculate 10 + 20")
+    result = await agent.arun("Scale the service: base 10, delta 20")
     print(f"Result: {result.message}")
     print()
 
@@ -153,7 +160,7 @@ def example_timing_hook():
 
 
 class ValidationHook(HookProvider):
-    """Clamp out-of-range tool arguments before the tool runs."""
+    """Clamp out-of-range capacity changes before the tool runs."""
 
     def __init__(self, max_value: int = 1000):
         self.max_value = max_value
@@ -164,21 +171,22 @@ class ValidationHook(HookProvider):
         return HookPriority.SECURITY_DEFAULT
 
     async def on_before_tool_call(self, event):
-        if event.tool_name == "add":
-            a = event.arguments.get("a", 0)
-            b = event.arguments.get("b", 0)
+        if event.tool_name == "adjust_capacity":
+            base = event.arguments.get("base", 0)
+            delta = event.arguments.get("delta", 0)
 
             # event.arguments is writable; mutating it changes what the
-            # tool actually receives.
-            if a > self.max_value:
-                print(f"  [VALIDATION] Clamping a={a} to {self.max_value}")
-                event.arguments["a"] = self.max_value
-            if b > self.max_value:
-                print(f"  [VALIDATION] Clamping b={b} to {self.max_value}")
-                event.arguments["b"] = self.max_value
+            # tool actually receives — instance counts stay within the
+            # quota that keeps the cloud bill in check.
+            if base > self.max_value:
+                print(f"  [VALIDATION] Clamping base={base} to {self.max_value}")
+                event.arguments["base"] = self.max_value
+            if delta > self.max_value:
+                print(f"  [VALIDATION] Clamping delta={delta} to {self.max_value}")
+                event.arguments["delta"] = self.max_value
 
 
-def example_validation_hook():
+async def example_validation_hook():
     """Clamp arguments before the tool sees them."""
     print("=== Part 3: Validation Hook ===\n")
 
@@ -186,12 +194,12 @@ def example_validation_hook():
 
     agent = Agent(
         model=model,
-        tools=[add],
-        system_prompt="Use the add tool. Try large numbers if asked.",
+        tools=[adjust_capacity],
+        system_prompt="Use the adjust_capacity tool. Try large numbers if asked.",
         hooks=[ValidationHook(max_value=100)],
     )
 
-    result = agent.run_sync("Add 5000 and 3000")
+    result = await agent.arun("Scale the service: base 5000, delta 3000")
     print(f"Result: {result.message}")
     print()
 
@@ -202,7 +210,7 @@ def example_validation_hook():
 
 
 class AuditHook(HookProvider):
-    """Record every tool call for later audit."""
+    """Record every tool call as structured entries for compliance review."""
 
     def __init__(self):
         self.audit_log = []
@@ -236,7 +244,7 @@ class AuditHook(HookProvider):
         return self.audit_log
 
 
-def example_multiple_hooks():
+async def example_multiple_hooks():
     """Two hooks on one agent — priority decides who runs first."""
     print("=== Part 4: Multiple Hooks ===\n")
 
@@ -248,12 +256,12 @@ def example_multiple_hooks():
     # Lower priority value runs earlier: timing (100) then audit (200).
     agent = Agent(
         model=model,
-        tools=[add],
-        system_prompt="Use the add tool.",
+        tools=[adjust_capacity],
+        system_prompt="Use the adjust_capacity tool.",
         hooks=[timing, audit],
     )
 
-    result = agent.run_sync("What is 7 + 8?")
+    result = await agent.arun("Scale the service: base 7, delta 8")
     print(f"Result: {result.message}")
 
     print("\nAudit Log:")
@@ -268,7 +276,12 @@ def example_multiple_hooks():
 
 
 class GuardrailsHook(HookProvider):
-    """Watch prompts and tool arguments for forbidden patterns."""
+    """Watch prompts and tool arguments for sensitive-data patterns.
+
+    A first line against OWASP LLM02 (Sensitive Information Disclosure):
+    secrets in untrusted input never reach a tool that might log or
+    forward them.
+    """
 
     def __init__(self, blocked_patterns: list[str] | None = None):
         self.blocked_patterns = blocked_patterns or []
@@ -303,8 +316,8 @@ class GuardrailsHook(HookProvider):
 
 
 @tool
-def process_text(text: str) -> str:
-    """Word and character counts plus a sha-256 digest of the input."""
+def analyze_manifest(text: str) -> str:
+    """Word and character counts plus a sha-256 digest of the manifest text."""
     import hashlib
     import re
 
@@ -316,23 +329,24 @@ def process_text(text: str) -> str:
     )
 
 
-def example_guardrails_hook():
-    """A guardrail hook spots a forbidden pattern and warns."""
+async def example_guardrails_hook():
+    """A guardrail hook spots a sensitive-data pattern and warns."""
     print("=== Part 5: Guardrails Hook ===\n")
 
     model = get_model(max_tokens=100)
 
-    guardrails = GuardrailsHook(blocked_patterns=["password", "secret", "credit card"])
+    guardrails = GuardrailsHook(blocked_patterns=["password", "api key", "access key"])
 
     agent = Agent(
         model=model,
-        tools=[process_text],
-        system_prompt="Process any text the user provides.",
+        tools=[analyze_manifest],
+        system_prompt="Analyze any deployment manifest text the operator provides.",
         hooks=[guardrails],
     )
 
-    # The word "password" trips the guardrail.
-    result = agent.run_sync("Process this text: 'my password is 1234'")
+    # The word "password" trips the guardrail — manifest text is untrusted
+    # input and may carry secrets that must not flow onward.
+    result = await agent.arun("Analyze this manifest: 'env: DB_PASSWORD=hunter2'")
     print(f"Result: {result.message}")
 
     if guardrails.blocked_calls:
@@ -345,26 +359,26 @@ def example_guardrails_hook():
 # =============================================================================
 
 
-def main():
+async def main():
     """Run all notebook parts."""
     print("=" * 60)
-    print("Notebook 12: Agent Hooks & Lifecycle")
+    print("Notebook 12: Audit Hooks & Lifecycle")
     print("=" * 60)
     print()
 
     print_config()
     print()
 
-    example_simple_hook()
-    example_timing_hook()
-    example_validation_hook()
-    example_multiple_hooks()
-    example_guardrails_hook()
+    await example_simple_hook()
+    await example_timing_hook()
+    await example_validation_hook()
+    await example_multiple_hooks()
+    await example_guardrails_hook()
 
     print("=" * 60)
-    print("Next: Notebook 14 — Sse Streaming")
+    print("Next: Notebook 13 — Cloud Ops Dashboard SSE Streaming")
     print("=" * 60)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

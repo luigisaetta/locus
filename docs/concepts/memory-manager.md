@@ -1,10 +1,10 @@
 # Long-term memory
 
-An Oracle Generative AI – Multi-Agent Locus SDK agent is stateless
+A Locus SDK agent is stateless
 between sessions by default. Checkpointing preserves the full message
-history for one conversation thread, but facts learned in thread A are
-invisible in thread B — and when a thread is deleted, everything in it
-is gone.
+history for one thread, but the pricing exceptions learned handling
+customer A are invisible when helping customer B — and when a thread is
+deleted, everything the agent learned goes with it.
 
 `MemoryManager` fills that gap. It runs two lifecycle hooks
 on every agent invocation:
@@ -14,18 +14,34 @@ on every agent invocation:
 | `on_session_start` | Before the first model call | Retrieve stored memories → inject into system prompt |
 | `on_session_end` | After the agent stops | Extract durable facts from the conversation → persist to store |
 
-The result: the agent accumulates knowledge across sessions without the
+The result: a support agent accumulates standing rules, pricing
+exceptions, and customer preferences across cases — without the
 context window ever filling up with raw history.
 
 ## Where memories live
 
 All memories are persisted via a
-[`BaseStore`](checkpointers.md#cross-thread-store) backend — the same
-store abstraction used for cross-thread key-value storage.  Every
-backend that implements `BaseStore` works: `InMemoryStore` for local
-development, `RedisBackend` / `PostgreSQLBackend` / `OracleBackend` /
-`OpenSearchBackend` / `OCIBucketBackend` for distributed production
-workloads.
+[`BaseStore`](checkpointers.md#the-built-in-store-inmemorystore) backend
+— the same store abstraction used for cross-thread key-value storage.
+Three `BaseStore` implementations ship. The built-in `InMemoryStore`
+covers local development and tests, but it is process-local and not
+durable. `HolographicStore` (SQLite + FTS5, no external infrastructure)
+is durable when constructed with a file path —
+`HolographicStore(path="memories.db")`; its default `path=":memory:"`
+is not. `PgMemory` (Postgres + pgvector, per-tenant row-level security,
+needs the `postgresql` extra) is the shared, multi-tenant option. It
+treats the first namespace element as the tenant, so put the tenant id
+first in `namespace_prefix`, and its `search()` ranks by meaning only
+when you pass it an `embedder` — without one, ranking is
+lexical/associative token matching. The built-in
+`LLMMemoryManager.retrieve()` sends no query, though, so with `PgMemory`
+it returns the most recently updated memories and the `embedder` does
+not change what gets injected. For relevance-ranked recall, override
+`retrieve()` (see [Context bloat vs. recall](#context-bloat-vs-recall))
+and call `self.store.search(ns, query=..., limit=limit)`.
+`HolographicStore` and `PgMemory` both live in
+[`locus.memory.store_backends`](../api/memory.md#durable-store-backends).
+For any other backend, subclass `BaseStore` (or use `Mem0MemoryManager`).
 
 Storage layout inside the store:
 
@@ -35,12 +51,16 @@ Storage layout inside the store:
 
 With the default prefix `("locus_memory",)`:
 
-```
-("locus_memory", "user")       →  "role":             {content: "Senior Python engineer"}
-("locus_memory", "feedback")   →  "no_db_mocks":      {content: "Never mock the DB. Why: ..."}
-("locus_memory", "project")    →  "auth_rewrite":     {content: "Driven by compliance, not TD"}
-("locus_memory", "reference")  →  "linear_pipeline":  {content: "Pipeline bugs → Linear INGEST"}
-```
+| Namespace | Key | `content` of the stored value |
+|---|---|---|
+| `("locus_memory", "user")` | `"role"` | Tier-2 support agent |
+| `("locus_memory", "feedback")` | `"refund_approval"` | Refunds over $500 need manager approval. Why: ... |
+| `("locus_memory", "project")` | `"billing_rollout"` | Driven by the new billing rollout, not backlog |
+| `("locus_memory", "reference")` | `"orders_api"` | Orders tracked in the 'orders' service API |
+
+The stored value is the whole record: `type`, `key`, `content` and
+`metadata`. `save()` stamps `metadata["updated_at"]` on every write, and
+`retrieve()` sorts by it, newest first.
 
 Each memory key acts as a stable identifier: re-extracting the same
 fact under the same key **updates** the record, not duplicates it.
@@ -49,33 +69,39 @@ fact under the same key **updates** the record, not duplicates it.
 
 | Type | What to store | Decays? |
 |---|---|---|
-| `user` | Role, expertise, working style | Rarely |
-| `feedback` | Behavioural rules — what to do/avoid and *why* | Rarely |
-| `project` | Goals, deadlines, active decisions | Fast — include a *Why* |
-| `reference` | Pointers to external systems (Jira, dashboards, configs) | Medium |
+| `user` | Operator role, tier, shift, expertise | Rarely |
+| `feedback` | Standing rules, playbook steps — what to do/avoid and *why* | Rarely |
+| `project` | Active cases, customer-specific exceptions, decisions taken | Fast — include a *Why* |
+| `reference` | Pointers to external systems, tuned queries, data feeds, runbooks | Medium |
 
 ## Quick start
 
 ```python
+import asyncio
 from locus.agent import Agent
 from locus.memory.manager import LLMMemoryManager, Memory, MemoryType
 from locus.memory.store import InMemoryStore
 
-store = InMemoryStore()   # swap for a persistent backend in production
 
-agent = Agent(
-    model="oci:openai.gpt-5.5",
-    memory_manager=LLMMemoryManager(store=store),
-)
+async def main():
+    store = InMemoryStore()   # swap for a persistent backend in production
 
-# Session 1 — agent learns that the user dislikes mocking
-async for event in agent.run("I prefer real DB connections — never mock the database."):
-    ...
+    agent = Agent(
+        model="{{ locus_example_model }}",
+        memory_manager=LLMMemoryManager(store=store),
+    )
 
-# Session 2 — the agent already knows
-async for event in agent.run("How should I write the new integration tests?"):
-    ...
-# → agent uses real DB connections, no explanation needed
+    # Session 1 — agent learns a standing rule
+    async for event in agent.run("Refunds over $500 need manager approval — page the duty manager first."):
+        ...
+
+    # Session 2 — the agent already knows
+    async for event in agent.run("The customer on order ord-4821 wants a $750 refund. What do you do?"):
+        ...
+    # → agent requests manager approval before refunding, no reminder needed
+
+
+asyncio.run(main())
 ```
 
 ## Supplying an LLM extraction function
@@ -111,10 +137,10 @@ You are a memory extraction assistant. Given a conversation, identify
 facts worth remembering across sessions. Return JSON:
 
 [
-  {"type": "user",      "key": "role",       "content": "..."},
-  {"type": "feedback",  "key": "no_mocks",   "content": "... Why: ... How to apply: ..."},
-  {"type": "project",   "key": "auth",       "content": "... Why: ..."},
-  {"type": "reference", "key": "linear",     "content": "..."}
+  {"type": "user",      "key": "role",           "content": "..."},
+  {"type": "feedback",  "key": "refund_approval","content": "... Why: ... How to apply: ..."},
+  {"type": "project",   "key": "billing",        "content": "... Why: ..."},
+  {"type": "reference", "key": "orders_api",     "content": "..."}
 ]
 
 Only include facts that are non-obvious, durable, and actionable.
@@ -129,109 +155,74 @@ or tenant:
 ```python
 manager = LLMMemoryManager(
     store=shared_store,
-    namespace_prefix=("tenants", tenant_id, "users", user_id),
+    namespace_prefix=(tenant_id, "users", user_id),
 )
 ```
+
+Put the tenant id first. `PgMemory` uses the first namespace element as
+its row-level-security tenant, so a fixed first element such as
+`"tenants"` would put every tenant behind the same boundary.
 
 Each combination gets its own set of memories — no cross-contamination.
 
 ## Persistent backends
 
 The SDK exposes memory along a spectrum, from "works everywhere" to
-"opinionated Oracle-specific":
+"fully managed":
 
 | Path | Manager class | When to pick it |
 |---|---|---|
-| Portable / multi-backend | `LLMMemoryManager` + any `BaseStore` (InMemory / Redis / Postgres / OpenSearch / Oracle `OracleStore`) | You need backend portability, an LLM-free extractor, or a test-friendly path |
-| Oracle-native | `OracleAgentMemoryManager` (Oracle's official [`oracleagentmemory`](https://pypi.org/project/oracleagentmemory/) client) | You're on Oracle AI Database and want LongMemEval-tuned recall, context cards, and scoped retrieval by `user_id` / `agent_id` / `thread_id` without writing your own extractor |
+| Portable / multi-backend | `LLMMemoryManager` + any `BaseStore` (`InMemoryStore`, `HolographicStore`, `PgMemory`, or a custom subclass) | You need backend portability, an LLM-free extractor, or a test-friendly path |
+| Managed | `Mem0MemoryManager` ([`mem0ai`](https://pypi.org/project/mem0ai/)) | You want a managed memory layer with LLM-tuned recall and scoped retrieval by `user_id` without writing your own extractor |
+| Oracle-native | `OracleAgentMemoryManager` ([`oracleagentmemory`](https://pypi.org/project/oracleagentmemory/)) | You run on Oracle Database 26ai and want Oracle's official agent-memory client — context-card summaries, scoped retrieval by user / agent / thread, LongMemEval-benchmarked extraction |
 
-### Oracle agent memory
+### Managed memory — `Mem0MemoryManager`
 
-`OracleAgentMemoryManager` is a thin adapter that implements the
-`BaseMemoryManager` contract on top of `oracleagentmemory.core.OracleAgentMemory`.
-You get LLM-backed extraction (94.4 % on LongMemEval / GPT-5.5 xhigh),
-prompt-ready context cards, scoped retrieval, and temporal reasoning —
+`Mem0MemoryManager` is a thin adapter that implements the
+`BaseMemoryManager` contract on top of [mem0](https://mem0.ai). You get
+LLM-backed extraction, prompt-ready context, and scoped retrieval —
 without changing how your `Agent` consumes memory.
 
 ```python
-import oracledb
-from locus.memory.managers import OracleAgentMemoryManager
+from locus.memory.managers import Mem0MemoryManager
 
-conn = oracledb.connect(
-    user="locus_app",
-    password=os.environ["ORACLE_PW"],
-    dsn="mydb_low",
-    config_dir="~/.oci/wallets/mydb",
-    wallet_location="~/.oci/wallets/mydb",
-    wallet_password=os.environ.get("ORACLE_WALLET_PW", ""),
-)
-manager = OracleAgentMemoryManager(
-    connection=conn,
-    embedder="openai/text-embedding-3-small",  # or any litellm-style model spec
-    llm="openai/gpt-4o-mini",                  # or "oci/openai.gpt-4.1" with OCI kwargs
-    table_name_prefix="locus_oam_",
-)
-agent = Agent(model="oci:openai.gpt-4.1", memory_manager=manager)
+manager = Mem0MemoryManager(user_id="agent-7")
+agent = Agent(model="{{ locus_example_model }}", memory_manager=manager)
 
 # Pass user_id (and optional thread_id) via metadata to scope retrieval:
 agent.run_sync(
-    "Hi, I'm Alice — I prefer us-chicago-1 for inference.",
-    metadata={"user_id": "alice", "thread_id": "t-a"},
+    "I'm on the night shift — I prefer concise case summaries.",
+    metadata={"user_id": "agent-7", "thread_id": "t-a"},
 )
 ```
 
-Install the optional extras:
+Install the optional extra:
 
 ```bash
-pip install 'locus-sdk[agentmemory]'      # just the agent-memory client
-pip install 'locus-sdk[checkpoints]'      # everything Oracle: checkpointers + agent memory
+pip install 'locus-sdk[mem0]'
 ```
 
-The upstream is currently alpha (`oracleagentmemory` 26.4.0, Dev
-Status 3). When you need a portable backend or a fully-deterministic
-LLM-free extractor, fall back to the portable path below.
-
-See [notebook 13](../notebooks/notebook_09_oracle_agent_memory.md) for
-a runnable end-to-end demo with two sessions on the same `user_id`.
+When you need a fully-deterministic LLM-free extractor or a custom
+backend, fall back to the portable path below.
 
 ### Portable path (any BaseStore backend)
 
 `LLMMemoryManager` works against any `BaseStore` implementation. Use
-this for InMemory tests, Redis/Postgres/OpenSearch deployments, or
-when you need a deterministic regex-based extractor:
+this for `InMemoryStore`, `HolographicStore`, `PgMemory`, or a custom
+`BaseStore` subclass over your own backend, or when you need a
+deterministic regex-based extractor:
 
 ```python
-from locus.memory.backends import RedisBackend, PostgreSQLBackend
-from locus.memory.store_backends import OracleStore   # Oracle 26ai native
+from locus.memory.store import InMemoryStore
+from locus.memory.store_backends import HolographicStore
 
-# Redis — distributed, fast (OCI Cache with Redis)
-manager = LLMMemoryManager(store=RedisBackend("redis://localhost:6379"))
+# In-memory — tests, demos, single process
+manager = LLMMemoryManager(store=InMemoryStore())
 
-# PostgreSQL — relational, JSONB metadata ([OCI Database with PostgreSQL][oci-postgres])
-manager = LLMMemoryManager(store=PostgreSQLBackend(host="...", database="..."))
-
-# [Oracle 26ai][oracle-db] (`OracleStore`) — namespaced key/value with optional [VECTOR][ai-vector-search]
-# search inside a namespace. Native to the SDK, no langchain dep. For
-# Oracle workloads, prefer `OracleAgentMemoryManager` above unless
-# you specifically want the BaseStore protocol or the LLM-free
-# regex extractor.
-manager = LLMMemoryManager(
-    store=OracleStore(
-        dsn="mydb_low",
-        user="locus_app",
-        password=os.environ["ORACLE_PW"],
-        wallet_location="~/.oci/wallets/mydb",
-        table_name="locus_store",
-        dimension=1024,   # set for semantic-recall memory; omit for plain K/V
-    ),
-)
+# Durable, no external infrastructure — needs a file path
+# (the default path=":memory:" is not durable)
+manager = LLMMemoryManager(store=HolographicStore(path="memories.db"))
 ```
-
-`OracleStore` is the SDK-native equivalent of
-`langgraph-oracledb.OracleStore`: same connection envelope as the
-checkpointer (one wallet, one schema), namespaces persist as PK columns,
-and `put_with_embedding` + `search_by_embedding` give you semantic
-recall against a native `VECTOR(N, FLOAT32)` column.
 
 ## What gets injected
 
@@ -241,14 +232,14 @@ after the main system prompt:
 
 ```
 [System Prompt]
-You are a helpful engineering assistant.
+You are a customer-support assistant.
 
 [Memory Block — injected by MemoryManager]
 [Long-term Memory]
-USER [role]: Senior Python engineer, new to React.
-FEEDBACK [no_db_mocks]: Never mock the database. Why: prior mock/prod divergence.
-PROJECT [auth_rewrite]: Auth rewrite driven by compliance, not tech debt.
-REFERENCE [linear_pipeline]: Pipeline bugs tracked in Linear project 'INGEST'.
+USER [role]: Tier-2 support agent, covers the night shift.
+FEEDBACK [refund_approval]: Refunds over $500 need manager approval. Why: prior chargeback from an unreviewed refund.
+PROJECT [billing_rollout]: Active billing migration, prioritise invoice disputes.
+REFERENCE [orders_api]: Orders tracked in the 'orders' service API.
 
 [Conversation continues...]
 ```
@@ -264,7 +255,7 @@ Use `NoopMemoryManager` as a test double or placeholder:
 from locus.memory.manager import NoopMemoryManager
 
 agent = Agent(
-    model="oci:openai.gpt-5.5",
+    model="{{ locus_example_model }}",
     memory_manager=NoopMemoryManager(),  # wires the hook, stores nothing
 )
 ```
@@ -313,21 +304,35 @@ from locus.observability.emit import EV_MEMORY_MANAGER_INJECTED, EV_MEMORY_MANAG
 ## Context bloat vs. recall
 
 The memory manager is designed to keep injected context small.
-Retrieval returns at most `retrieve_limit` memories (default 20).
-Each memory is a single line in the injected block — typically 50–150
-tokens total, regardless of how many sessions have accumulated.
+At session start the built-in injection calls `retrieve()` with its
+default `limit=20`, so at most 20 memories are injected. Each memory is
+a single line in the injected block — typically 50–150 tokens total,
+regardless of how many sessions have accumulated.
 
-For larger memory sets, plug in a vector-capable `BaseStore` backend
-and override `retrieve` to run a semantic similarity search against the
-current prompt before injecting:
+!!! note
+    `LLMMemoryManager` accepts a `retrieve_limit` constructor argument,
+    but the built-in `on_session_start` injection calls `retrieve()`
+    without passing it — so today `retrieve_limit` does **not** change
+    how many memories are injected (the effective cap is the `retrieve()`
+    default of 20). To use a different cap, override `retrieve()` as
+    shown below and pass your own `limit`.
+
+For larger memory sets, plug in a store whose `search()` ranks by
+relevance (`PgMemory` with an `embedder` ranks by meaning) and override
+`retrieve` to search against the current prompt before injecting. Pass
+the prompt text as `query` to `self.store.search()`: `PgMemory` embeds
+it for you, and none of the shipped stores implements
+`search_by_embedding()` (the `BaseStore` default raises
+`StoreCapabilityError`).
 
 ```python
 async def retrieve(self, limit: int = 20) -> list[Memory]:
-    query_vec = await embedder.embed(self._current_prompt)
-    results = await self.store.search_by_embedding(
-        self._ns(MemoryType.FEEDBACK), query_vec, limit=limit
+    # self._current_prompt is yours to set, e.g. from the last user message
+    # in an on_session_start override before it calls super().
+    items = await self.store.search(
+        self._ns(MemoryType.FEEDBACK), query=self._current_prompt, limit=limit
     )
-    return [Memory.from_store_value(r.item.value) for r in results]
+    return [Memory.from_store_value(item.value) for item in items]
 ```
 
 ## See also
@@ -335,8 +340,12 @@ async def retrieve(self, limit: int = 20) -> list[Memory]:
 - [Conversation management](conversation-management.md) — in-session
   context-window management (`SlidingWindowManager`, `LLMCompactor`).
 - [Checkpointers](checkpointers.md) — thread-level state persistence
-  and the nine native backends.
+  and the native checkpointer backends.
 - [Cross-thread store](checkpointers.md#cross-thread-store) — the
-  `BaseStore` interface all memory backends implement.
+  `BaseStore` interface. Note: the checkpointer backends are a separate
+  KV interface and do **not** implement `BaseStore`; for durable
+  cross-thread memory use `HolographicStore` or `PgMemory` (see
+  [Where memories live](#where-memories-live)), your own `BaseStore`, or
+  `Mem0MemoryManager`.
 - [Hooks](hooks.md) — intercept `memory.manager.*` events for custom
   logging or routing.

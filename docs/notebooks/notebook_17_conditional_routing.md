@@ -11,19 +11,23 @@ What you'll see:
 - Binary and multi-way branching with `add_conditional_edges`.
 - Optional `targets` mapping to translate router output to node ids.
 - `default` for handling unexpected router output.
-- Two routers in sequence (auth → role).
+- Two routers in sequence (source → role).
 - An LLM acting as the router for one node.
 
-Runs on the same OCI GenAI default as the rest of the notebooks:
+The running scenario is cloud incident escalation: low-severity
+monitoring alerts auto-resolve, high-severity ones page an on-call SRE,
+and an LLM sorts raw alerts into families (compute, storage, network).
+
+Runs on the same default (mock) as the rest of the notebooks:
 
 ```bash
-LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_17_conditional_routing.py
-# or, fully offline:
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_17_conditional_routing.py
+# or, the zero-setup default (mock):
 LOCUS_MODEL_PROVIDER=mock python examples/notebook_17_conditional_routing.py
 ```
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_17_conditional_routing.py"
-```
+````

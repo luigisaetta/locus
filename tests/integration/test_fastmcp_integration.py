@@ -6,12 +6,9 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
-from locus import Agent
-from locus.integrations.fastmcp import LocusMCPServer, mcp_tool_to_locus
+from locus.integrations.fastmcp import mcp_tool_to_locus
 from locus.tools import tool
 from tests._safe_math import safe_math_eval
 
@@ -145,87 +142,3 @@ class TestLocusMCPServer:
         assert schema["name"] == "add_numbers"
         assert "description" in schema
         assert "inputSchema" in schema
-
-
-# =============================================================================
-# Live Integration Tests (require OCI)
-# =============================================================================
-
-
-def load_local_config() -> dict:
-    """Load local config if available."""
-    from pathlib import Path
-
-    import yaml
-
-    config_path = Path(__file__).parent.parent.parent / "config.local.yaml"
-    if config_path.exists():
-        with config_path.open() as f:
-            return yaml.safe_load(f) or {}
-    return {}
-
-
-@pytest.mark.requires_oci
-class TestLocusMCPServerLive:
-    """Live integration tests with real model."""
-
-    @pytest.fixture
-    def live_agent(self):
-        """Create a live agent with OCI."""
-        from locus.models import OCIModel
-
-        config = load_local_config().get("oci", {})
-        model = OCIModel(
-            model_id=config.get("models", {}).get(
-                "gpt", os.getenv("OCI_MODEL_ID", "openai.gpt-5.4")
-            ),
-            profile_name=config.get("profile_name", "DEFAULT"),
-            auth_type=config.get("auth_type", "api_key"),
-            region=config.get("region", "eu-frankfurt-1"),
-            compartment_id=config.get("compartment_id"),
-            service_endpoint=config.get("service_endpoint"),
-            max_tokens=256,
-        )
-
-        @tool
-        async def get_time() -> str:
-            """Get current time."""
-            from datetime import datetime
-
-            return datetime.now().isoformat()
-
-        return Agent(model=model, tools=[get_time])
-
-    @pytest.mark.asyncio
-    async def test_live_mcp_server_tools_list(self, live_agent):
-        """List tools from live agent."""
-        server = LocusMCPServer(agent=live_agent, name="live-test")
-
-        response = await server.handle_request(
-            {
-                "method": "tools/list",
-                "params": {},
-            }
-        )
-
-        assert "tools" in response
-        tool_names = [t["name"] for t in response["tools"]]
-        assert "get_time" in tool_names
-
-    @pytest.mark.asyncio
-    async def test_live_mcp_server_run_agent(self, live_agent):
-        """Run agent via MCP."""
-        server = LocusMCPServer(agent=live_agent, name="live-test")
-
-        response = await server.handle_request(
-            {
-                "method": "tools/call",
-                "params": {
-                    "name": "run_agent",
-                    "arguments": {"prompt": "What is 2+2? Just say the number."},
-                },
-            }
-        )
-
-        assert "content" in response
-        assert "4" in response["content"][0]["text"]

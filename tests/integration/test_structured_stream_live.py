@@ -12,15 +12,13 @@ before the final fully-valid instance.
 
 Activation:
 
-* ``OCI_PROFILE=<profile>`` OR ``OPENAI_API_KEY=<key>`` — runs against
-  whichever provider is available.
+* ``OPENAI_API_KEY=<key>`` — runs against OpenAI when available.
 """
 
 from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
-from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, Field
@@ -33,13 +31,7 @@ from locus.streaming.structured import StructuredStream
 pytestmark = [pytest.mark.integration]
 
 
-_PROFILE = os.environ.get("OCI_PROFILE")
-_REGION = os.environ.get("OCI_REGION", "us-chicago-1")
 _OPENAI = bool(os.environ.get("OPENAI_API_KEY"))
-
-
-def _has_oci_config() -> bool:
-    return Path("~/.oci/config").expanduser().exists()
 
 
 class Vendor(BaseModel):
@@ -49,14 +41,6 @@ class Vendor(BaseModel):
 
 class VendorList(BaseModel):
     vendors: list[Vendor] = Field(description="Exactly 3 vendor records")
-
-
-def _build_oci_v1():
-    if not (_PROFILE and _has_oci_config()):
-        return None
-    from locus.models.providers.oci import OCIChatCompletionsModel
-
-    return OCIChatCompletionsModel(model="openai.gpt-4o-mini", profile=_PROFILE, region=_REGION)
 
 
 def _build_openai_native():
@@ -69,7 +53,6 @@ def _build_openai_native():
 
 
 _FACTORIES = [
-    pytest.param(_build_oci_v1, id="oci-v1-gpt-4o-mini"),
     pytest.param(_build_openai_native, id="openai-native-gpt-4o-mini"),
 ]
 

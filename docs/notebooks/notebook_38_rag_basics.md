@@ -1,51 +1,47 @@
 # RAG Basics
 
 Retrieval-Augmented Generation grounds an agent's answers in your own
-documents. This notebook drives the four-step pipeline against a real
-26ai instance.
+documents. This notebook drives the four-step pipeline over a cloud
+Well-Architected best-practice catalogue, using the bundled in-memory
+vector store.
 
-- **Embed** — `OCIEmbeddings` (Cohere V3 English, 1024 dims) on the OCI
-  GenAI inference endpoint.
-- **Store** — `OracleVectorStore` writes to 26ai's native
-  `VECTOR(N, FLOAT32)` column — no extension required.
-- **Search** — `VECTOR_DISTANCE` is a first-class SQL function in 26ai.
-  The native type plus operator are differentiators.
+- **Embed** — `OpenAIEmbeddings` (`text-embedding-3-small`, 1536 dims).
+- **Store** — the pure-Python `InMemoryVectorStore` keeps vectors in
+  process with no extra dependencies; swap in `QdrantVectorStore` /
+  `PgVectorStore` / `OpenSearchVectorStore` / `ChromaVectorStore` for a
+  durable backend.
+- **Search** — nearest-neighbour by cosine distance.
 - **Retrieve** — `RAGRetriever` wraps embed + chunk + store behind one
-  call.
+  call, tagging each chunk with the pillar/practice metadata the cloud-ops
+  agent uses to narrow results.
+
+The corpus is AWS Well-Architected best practices (`REL-xx`, `COST-xx`,
+`SEC-xx`, `OPS-xx`) mapped to your runbooks — the Index the cloud-ops
+agent (ATLAS, notebook 40) reads from.
 
 ## Run it
 
-OCI GenAI is the default for embeddings (auto-detected from
-`~/.oci/config`):
+Embeddings need an OpenAI api key:
+
+```bash
+export OPENAI_API_KEY=sk-...
+python examples/notebook_38_rag_basics.py
+```
+
+Offline (skips the live demo cleanly when the key is missing):
 
 ```bash
 python examples/notebook_38_rag_basics.py
 ```
 
-Offline (skips the live demo cleanly when env vars are missing):
-
-```bash
-LOCUS_MODEL_PROVIDER=mock python examples/notebook_38_rag_basics.py
-```
-
 ## Prerequisites
 
-Provision an Autonomous Database 26ai and an OCI GenAI compartment,
-then export:
-
 ```bash
-export ORACLE_DSN=mydb_low                   # tnsnames alias
-export ORACLE_USER=locus_app                 # least-privileged user
-export ORACLE_PASSWORD='<app-password>'
-export ORACLE_WALLET=~/.oci/wallets/mydb
-export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if encrypted
-export OCI_PROFILE=<your-profile>
-export OCI_REGION=us-chicago-1
-export OCI_COMPARTMENT=ocid1.compartment.oc1..…
+export OPENAI_API_KEY=sk-...
 ```
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_38_rag_basics.py"
-```
+````

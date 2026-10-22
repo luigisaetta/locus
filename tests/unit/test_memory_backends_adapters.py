@@ -17,9 +17,9 @@ This file targets the remaining gaps:
 - ``list_threads`` signature variations: ``pattern=`` arg, ``limit=`` arg,
   no-arg, plus client-side pattern filter when backend doesn't support it.
 - ``list_with_metadata`` and ``close`` delegation.
-- Each factory function (``redis``, ``postgresql``, ``mysql``, ``opensearch``,
-  ``oci_bucket``, ``oracle``) — uses ``sys.modules`` stubs so we don't
-  need the real SDK clients.
+- Each factory function (``redis``, ``postgresql``, ``mysql``,
+  ``opensearch``) — uses ``sys.modules`` stubs so we don't need the
+  real SDK clients.
 """
 
 from __future__ import annotations
@@ -492,28 +492,6 @@ def fake_os_module() -> Any:
     sys.modules.pop("locus.memory.backends.opensearch", None)
 
 
-@pytest.fixture
-def fake_oci_module() -> Any:
-    class FakeOCIBucketBackend:
-        def __init__(self, **kw: Any) -> None:
-            self.kwargs = kw
-
-    _stub_module("locus.memory.backends.oci_bucket", OCIBucketBackend=FakeOCIBucketBackend)
-    yield FakeOCIBucketBackend
-    sys.modules.pop("locus.memory.backends.oci_bucket", None)
-
-
-@pytest.fixture
-def fake_oracle_module() -> Any:
-    class FakeOracleBackend:
-        def __init__(self, **kw: Any) -> None:
-            self.kwargs = kw
-
-    _stub_module("locus.memory.backends.oracle", OracleBackend=FakeOracleBackend)
-    yield FakeOracleBackend
-    sys.modules.pop("locus.memory.backends.oracle", None)
-
-
 class TestFactoryFunctions:
     def test_redis_checkpointer(self, fake_redis_module: Any) -> None:
         from locus.memory.backends.adapters import redis_checkpointer
@@ -542,21 +520,6 @@ class TestFactoryFunctions:
         cp = opensearch_checkpointer(hosts=["http://x:9200"])
         assert isinstance(cp, StorageBackendAdapter)
         assert isinstance(cp._backend, fake_os_module)
-
-    def test_oci_bucket_checkpointer(self, fake_oci_module: Any) -> None:
-        from locus.memory.backends.adapters import oci_bucket_checkpointer
-
-        cp = oci_bucket_checkpointer(bucket_name="b", namespace="n")
-        # Returns the raw backend (not wrapped in adapter) — the comment
-        # in the source says it's a native BaseCheckpointer.
-        assert isinstance(cp, fake_oci_module)
-
-    def test_oracle_checkpointer(self, fake_oracle_module: Any) -> None:
-        from locus.memory.backends.adapters import oracle_checkpointer
-
-        cp = oracle_checkpointer(dsn="db_high", user="admin", password="p")  # noqa: S106
-        assert isinstance(cp, StorageBackendAdapter)
-        assert isinstance(cp._backend, fake_oracle_module)
 
 
 # ---------------------------------------------------------------------------

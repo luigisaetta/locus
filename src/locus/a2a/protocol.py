@@ -235,7 +235,7 @@ class _TaskStore:
     """In-process task store for non-persistent A2A deployments.
 
     Production deployments behind a load balancer should swap this out
-    for a shared store (Redis / SQL / OCI Object Storage) — the
+    for a shared store (Redis / SQL / S3) — the
     ``A2AServer`` accepts a ``store`` parameter that follows this
     duck-typed protocol: ``get``, ``put``, ``cancel``.
     """
@@ -298,7 +298,7 @@ class A2AServer(A2AV1ServerMixin):
         url: Public URL the agent is reachable at — set this for
             cross-process / cross-host deployments so the card's ``url``
             field is correct. Defaults to a placeholder.
-        provider: Optional :class:`AgentProvider` (e.g. ``Oracle``).
+        provider: Optional :class:`AgentProvider` (e.g. ``Acme``).
         version: Agent semver — useful for capability negotiation.
         api_key: Bearer token required on every route; if ``None``,
             falls back to ``LOCUS_A2A_API_KEY``.

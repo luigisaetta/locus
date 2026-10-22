@@ -24,7 +24,7 @@ def register_checkpointer(
     Register a checkpointer provider.
 
     Args:
-        name: Provider name (e.g., "redis", "postgresql", "oracle")
+        name: Provider name (e.g., "redis", "postgresql", "s3")
         factory: Factory function that takes kwargs and returns a checkpointer
 
     Example:
@@ -50,8 +50,7 @@ def get_checkpointer(checkpointer_string: str, **kwargs: Any) -> BaseCheckpointe
         - "postgresql:mydb" -> PostgreSQLCheckpointer(database="mydb")
         - "mysql:mydb" -> MySQLCheckpointer(database="mydb")
         - "opensearch" -> OpenSearchCheckpointer()
-        - "oci:bucket/namespace" -> OCIBucketCheckpointer(bucket_name="bucket", namespace="namespace")
-        - "oracle:mydb" -> OracleCheckpointer(database="mydb")
+        - "s3:my-bucket" -> S3Backend(bucket="my-bucket")
 
     Args:
         checkpointer_string: Checkpointer identifier
@@ -183,6 +182,20 @@ def _register_defaults() -> None:
             return opensearch_checkpointer(**kwargs)
 
         register_checkpointer("opensearch", opensearch_factory)
+    except ImportError:  # pragma: no cover - defensive parity with optional backends
+        pass
+
+    # S3 / MinIO / R2 (optional)
+    try:
+
+        def s3_factory(config_hint: str | None = None, **kwargs: Any) -> BaseCheckpointer:
+            from locus.memory.backends.adapters import s3_checkpointer
+
+            if config_hint:
+                kwargs.setdefault("bucket", config_hint)
+            return s3_checkpointer(**kwargs)
+
+        register_checkpointer("s3", s3_factory)
     except ImportError:  # pragma: no cover - defensive parity with optional backends
         pass
 

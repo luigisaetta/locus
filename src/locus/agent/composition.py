@@ -20,6 +20,22 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+async def _arun_agent(agent: Any, prompt: str) -> Any:
+    """Run an agent from within a pipeline's async ``run`` method.
+
+    Pipelines are already ``async``, so they drive agents with the native
+    async ``arun`` — which is thread-free and therefore works where threads
+    aren't available (e.g. WASM/Pyodide in a browser tab). For agent-likes
+    that predate ``arun`` we fall back to running ``run_sync`` off the event
+    loop, preserving the previous behaviour without blocking it.
+    """
+    arun = getattr(agent, "arun", None)
+    if arun is not None:
+        return await arun(prompt)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, agent.run_sync, prompt)
+
+
 class PipelineResult(BaseModel):
     """Result from a pipeline execution."""
 
@@ -85,7 +101,7 @@ class SequentialPipeline(BaseModel):
                     stage=i,
                     stage_count=len(self.agents),
                 )
-                result = agent.run_sync(current_input)
+                result = await _arun_agent(agent, current_input)
                 output = result.message or ""
                 outputs.append(output)
                 await emit(
@@ -124,10 +140,10 @@ class ParallelPipeline(BaseModel):
 
     Example:
         >>> pipeline = ParallelPipeline(
-        ...     agents=[fact_checker, analyst, summarizer],
+        ...     agents=[triage, forensics, reporter],
         ...     merge_strategy="concatenate",
         ... )
-        >>> result = await pipeline.run("Analyze climate change impacts")
+        >>> result = await pipeline.run("Investigate the ws-0042 ransomware alert")
     """
 
     agents: list[Any] = Field(default_factory=list)
@@ -164,8 +180,7 @@ class ParallelPipeline(BaseModel):
 
         async def run_agent(index: int, agent: Any) -> str:
             prompt = task_map.get(index, task) if task_map else task
-            loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(None, agent.run_sync, prompt)
+            result = await _arun_agent(agent, prompt)
             return result.message or ""
 
         # ``return_exceptions=True`` so one stuck/failed agent doesn't
@@ -221,7 +236,7 @@ class LoopAgent(BaseModel):
         ...     max_loops=5,
         ...     loop_prompt="Review and improve:\\n{previous_output}\\n\\nSay APPROVED if quality is good.",
         ... )
-        >>> result = await loop.run("Write a haiku about Python")
+        >>> result = await loop.run("Draft the incident report for case IR-2026-014")
     """
 
     agent: Any = None
@@ -257,7 +272,7 @@ class LoopAgent(BaseModel):
                     iteration=i,
                     max_loops=self.max_loops,
                 )
-                result = self.agent.run_sync(current_input)
+                result = await _arun_agent(self.agent, current_input)
                 output = result.message or ""
                 outputs.append(output)
                 stopped = self.condition(output)

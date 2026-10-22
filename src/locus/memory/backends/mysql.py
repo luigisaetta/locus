@@ -16,6 +16,8 @@ from urllib.parse import parse_qsl, unquote, urlparse
 
 from pydantic import BaseModel, Field, SecretStr
 
+from locus.core.loop_bound import loop_bound_async
+
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -80,6 +82,12 @@ def _parse_dsn(dsn: str) -> dict[str, Any]:
 
 class MySQLConfig(BaseModel):
     """Configuration for the MySQL backend."""
+
+    # Reject unknown keys rather than absorbing them. The backends take
+    # **kwargs and splat them in here, so a misspelled or wrong-named
+    # parameter used to vanish silently — notebook 68 passed namespace=
+    # instead of prefix= and every run quietly shared one keyspace.
+    model_config = {"extra": "forbid"}
 
     host: str = "localhost"
     port: int = 3306
@@ -321,10 +329,14 @@ class MySQLBackend(BaseModel):
 
     async def _get_pool(self) -> _MySQLConnectionPool:
         """Get or create the connection pool."""
-        if self._pool is None:
-            self._pool = _MySQLConnectionPool(self.config)
-            await self._pool.initialize()
-        return self._pool
+
+        async def build() -> _MySQLConnectionPool:
+            pool = _MySQLConnectionPool(self.config)
+            await pool.initialize()
+            return pool
+
+        # Bound to the loop that opened it — see locus.core.loop_bound.
+        return await loop_bound_async(self, "_pool", build)
 
     @property
     def _quoted_table_name(self) -> str:

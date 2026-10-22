@@ -7,7 +7,7 @@
 The agent's ``run()`` async generator yields typed :class:`LocusEvent`
 objects (``ThinkEvent``, ``ToolStartEvent``, ``ReflectEvent``, etc.).
 Without this bridge, only the immediate ``async for`` consumer sees
-them — the SSE workbench sees nothing of the agent's inner work.
+them — an SSE consumer sees nothing of the agent's inner work.
 
 We tap the iterator with a single ``bridge_locus_event()`` call that
 maps each event type to the canonical ``EV_AGENT_*`` constants and
@@ -24,6 +24,7 @@ greppable and testable.
 from __future__ import annotations
 
 from locus.core.events import (
+    CompactionEvent,
     GroundingEvent,
     InterruptEvent,
     LocusEvent,
@@ -36,6 +37,7 @@ from locus.core.events import (
     ToolStartEvent,
 )
 from locus.observability.emit import (
+    EV_AGENT_COMPACTION,
     EV_AGENT_GROUNDING,
     EV_AGENT_INTERRUPT,
     EV_AGENT_MODEL_CHUNK,
@@ -65,7 +67,7 @@ async def bridge_locus_event(event: LocusEvent) -> None:
     ``emit()`` checks the contextvar first).
 
     Each branch carries the same fields as the source ``LocusEvent``,
-    plus tags useful for the workbench renderer to pick a swimlane:
+    plus tags useful for a renderer to pick a swimlane:
 
     * ``ThinkEvent`` → ``agent.think`` with reasoning preview + tool
       call count.
@@ -84,6 +86,8 @@ async def bridge_locus_event(event: LocusEvent) -> None:
       modals on the bus.
     * ``TerminateEvent`` → ``agent.terminate`` with the canonical
       stop reason + iteration count.
+    * ``CompactionEvent`` → ``agent.context.compacted`` with the stage
+      and the token counts before and after.
 
     Failures inside this bridge are swallowed by the underlying
     ``emit()`` — telemetry must never break the agent loop.
@@ -159,6 +163,16 @@ async def bridge_locus_event(event: LocusEvent) -> None:
             interrupt_id=event.interrupt_id,
             question_preview=_preview(event.question),
             options=event.options,
+        )
+    elif isinstance(event, CompactionEvent):
+        await emit(
+            EV_AGENT_COMPACTION,
+            iteration=event.iteration,
+            stage=event.stage,
+            tokens_before=event.tokens_before,
+            tokens_after=event.tokens_after,
+            threshold=event.threshold,
+            exhausted=event.exhausted,
         )
     elif isinstance(event, TerminateEvent):
         await emit(

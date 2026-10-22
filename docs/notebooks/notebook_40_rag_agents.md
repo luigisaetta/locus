@@ -1,50 +1,55 @@
 # RAG Agents
 
-Once you have documents in a vector store (notebook 38 / 39), the next
-step is to let an agent reach into it. `RAGRetriever.as_tool()` turns
-the retriever into an ordinary Locus tool the agent picks up alongside
-any other `@tool` you define.
+Once you have runbooks in a vector store (the RAG basics and RAG providers notebooks), the next
+step is to let an agent reach into it — so an incident answer cites your
+runbooks instead of model memory. `RAGRetriever.as_tool()` turns the
+retriever into an ordinary Locus tool that the agent picks up alongside
+any other `@tool` you define. ATLAS is the platform team's on-call SRE
+copilot; it reads the Index — the internal runbook knowledge base.
 
 - `retriever.as_tool(name, description)` — convert a retriever into a
   callable tool for the agent.
-- Single-tool Q&A agent against a product knowledge base.
-- Mixed tool set — RAG search alongside a calculator and a date tool.
+- Single-tool Q&A copilot against an internal runbook KB.
+- Mixed tool set — runbook search alongside a calculator and a date tool
+  for rollout math.
 - Streaming events from the agent while it searches and answers.
+- An **answer-grounding gate**: before ATLAS ships remediation advice,
+  the GSAR scorer (`locus.reasoning.gsar`) partitions the answer's claims
+  into grounded vs. ungrounded, and `decide()` returns proceed /
+  regenerate / replan. A fix anchored in a retrieved runbook chunk
+  proceeds; a hunch with no retrieved text replans rather than guess.
 - Best-practice notes on chunk size, prompt design, and metadata
-  filters.
+  filters for ops corpora.
 
-Backend: `OracleVectorStore` is the default — Oracle Database 26ai's
-native `VECTOR` column and `VECTOR_DISTANCE` SQL function. Swap
-`_oracle_store` for any other Locus vector store (OpenSearch,
-pgvector, in-memory).
+Backend: the pure-Python `InMemoryVectorStore` keeps the demo dependency-free
+and runnable anywhere. Swap `_make_store` for any other Locus vector store
+(`PgVectorStore`, `OpenSearchVectorStore`, `QdrantVectorStore`,
+`ChromaVectorStore`) for a durable backend.
 
 ## Run it
 
-OCI GenAI is the default — the notebook harness picks it when `~/.oci/config` exists (set `OCI_PROFILE` to choose a non-default profile):
+Embeddings need an OpenAI api key:
 
 ```bash
-LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_40_rag_agents.py
+export OPENAI_API_KEY=sk-...
+python examples/notebook_40_rag_agents.py
 ```
 
-Offline (skips the live demo cleanly when env vars are missing):
+Offline (skips the retrieval sections cleanly when the key is missing;
+the answer-grounding gate is pure-Python and always runs):
 
 ```bash
-LOCUS_MODEL_PROVIDER=mock python examples/notebook_40_rag_agents.py
+python examples/notebook_40_rag_agents.py
 ```
 
 ## Prerequisites
 
 ```bash
-export ORACLE_DSN=mydb_low                   # tnsnames alias
-export ORACLE_USER=locus_app
-export ORACLE_PASSWORD='<app-password>'
-export ORACLE_WALLET=~/.oci/wallets/mydb
-export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if encrypted
-export OCI_COMPARTMENT=ocid1.compartment.oc1..…
+export OPENAI_API_KEY=sk-...
 ```
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_40_rag_agents.py"
-```
+````

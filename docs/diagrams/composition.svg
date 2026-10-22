@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The composition primitives, as run by locus.agent.composition (v2.16.0):
+    SequentialPipeline.run(task)
+      agents[0] gets the task; agents[i] gets prompt_template(previous_output, task)
+      final_output = the last agent's output
+    ParallelPipeline.run(task, task_map=None)
+      every agent gets the same task (or task_map[i]), run at once with asyncio.gather
+      merge_strategy "concatenate" (default, joins non-empty outputs) or "last" (the last agent in list order, not the last to finish)
+    LoopAgent.run(task)
+      run agent -> condition(output); met -> stop
+      not met -> rerun on loop_prompt(previous_output, task), at most max_loops runs
+      final_output = the last output
+  Each run returns one PipelineResult; success is False if an agent raised.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 714" role="img" aria-labelledby="title desc">
+  <title id="title">Composition pipelines</title>
+  <desc id="desc">Three ways to compose agents, each returning one PipelineResult. Sequential pipeline: Research gets the task; Draft and then Review each get the previous agent's output plus the original task; the last output becomes final_output. Parallel pipeline: Web search, Data query and Docs retrieval all get the same task (unless a task_map gives one its own) and run at once; a merge step concatenates their non-empty outputs, or keeps only the output of the last agent in the list, into final_output. Loop agent: a Reviser agent runs, then a check runs its condition on the output; if the condition is not met the Reviser runs again on its output plus the task; the loop ends when the condition is met or when max_loops runs are reached, and the last output becomes final_output. If any agent raises, the result's success is False.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- ============ SequentialPipeline ============ -->
+  <g class="lane">
+    <text class="lane-title" x="30" y="36">Sequential pipeline</text>
+  </g>
+
+  <path class="edge" marker-end="url(#ah)" d="M30,91 L88,91"/>
+  <rect class="label-bg" x="39" y="102" width="40" height="20" rx="4"/>
+  <text class="label" x="59" y="112">task</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M202,91 L304,91"/>
+  <rect class="label-bg" x="206" y="102" width="94" height="20" rx="4"/>
+  <text class="label" x="253" y="112">output + task</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M418,91 L520,91"/>
+  <rect class="label-bg" x="422" y="102" width="94" height="20" rx="4"/>
+  <text class="label" x="469" y="112">output + task</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M634,91 L720,91"/>
+  <rect class="label-bg" x="638" y="102" width="78" height="20" rx="4"/>
+  <text class="label" x="677" y="112">last output</text>
+
+  <g class="node">
+    <rect x="90" y="62" width="112" height="58" rx="12"/>
+    <text x="146" y="83">Research</text>
+    <text class="sub" x="146" y="104">agents[0]</text>
+  </g>
+  <g class="node">
+    <rect x="306" y="62" width="112" height="58" rx="12"/>
+    <text x="362" y="83">Draft</text>
+    <text class="sub" x="362" y="104">agents[1]</text>
+  </g>
+  <g class="node">
+    <rect x="522" y="62" width="112" height="58" rx="12"/>
+    <text x="578" y="83">Review</text>
+    <text class="sub" x="578" y="104">agents[2]</text>
+  </g>
+  <g class="node end">
+    <rect x="722" y="62" width="166" height="58" rx="29"/>
+    <text x="805" y="83">PipelineResult</text>
+    <text class="sub" x="805" y="104">final_output</text>
+  </g>
+
+  <!-- ============ ParallelPipeline ============ -->
+  <g class="lane">
+    <text class="lane-title" x="30" y="186">Parallel pipeline</text>
+  </g>
+
+  <!-- stem, then fan out to every agent -->
+  <path class="edge" d="M30,309 L110,309"/>
+  <rect class="label-bg" x="34" y="320" width="72" height="20" rx="4"/>
+  <text class="label" x="70" y="330">same task</text>
+  <path class="edge" marker-end="url(#ah)" d="M110,309 C160,309 148,237 198,237"/>
+  <path class="edge" marker-end="url(#ah)" d="M110,309 L198,309"/>
+  <path class="edge" marker-end="url(#ah)" d="M110,309 C160,309 148,381 198,381"/>
+
+  <!-- converge on the merge step -->
+  <path class="edge" marker-end="url(#ah)" d="M340,237 C400,237 393,295 453,295"/>
+  <path class="edge" marker-end="url(#ah)" d="M340,309 L453,309"/>
+  <path class="edge" marker-end="url(#ah)" d="M340,381 C400,381 393,323 453,323"/>
+
+  <path class="edge" marker-end="url(#ah)" d="M615,309 L720,309"/>
+
+  <g class="node">
+    <rect x="200" y="208" width="140" height="58" rx="12"/>
+    <text x="270" y="229">Web search</text>
+    <text class="sub" x="270" y="250">agents[0]</text>
+  </g>
+  <g class="node">
+    <rect x="200" y="280" width="140" height="58" rx="12"/>
+    <text x="270" y="301">Data query</text>
+    <text class="sub" x="270" y="322">agents[1]</text>
+  </g>
+  <g class="node">
+    <rect x="200" y="352" width="140" height="58" rx="12"/>
+    <text x="270" y="373">Docs retrieval</text>
+    <text class="sub" x="270" y="394">agents[2]</text>
+  </g>
+  <g class="node">
+    <rect x="455" y="280" width="160" height="58" rx="12"/>
+    <text x="535" y="301">Merge</text>
+    <text class="sub" x="535" y="322">concatenate or last</text>
+  </g>
+  <g class="node end">
+    <rect x="722" y="280" width="166" height="58" rx="29"/>
+    <text x="805" y="301">PipelineResult</text>
+    <text class="sub" x="805" y="322">final_output</text>
+  </g>
+
+  <!-- ============ LoopAgent ============ -->
+  <g class="lane">
+    <text class="lane-title" x="30" y="474">Loop agent</text>
+  </g>
+
+  <path class="edge" marker-end="url(#ah)" d="M30,579 L198,579"/>
+  <rect class="label-bg" x="94" y="590" width="40" height="20" rx="4"/>
+  <text class="label" x="114" y="600">task</text>
+
+  <!-- reviser -> condition -->
+  <path class="edge" marker-end="url(#ah)" d="M340,579 L453,579"/>
+
+  <!-- condition -> reviser, when not met -->
+  <path class="edge" marker-end="url(#ah)" d="M535,550 C535,494 270,494 270,548"/>
+  <rect class="label-bg" x="330" y="498" width="146" height="20" rx="4"/>
+  <text class="label" x="403" y="508">not met: output + task</text>
+
+  <!-- condition -> result, when met -->
+  <path class="edge" marker-end="url(#ah)" d="M615,579 L720,579"/>
+  <rect class="label-bg" x="656" y="590" width="40" height="20" rx="4"/>
+  <text class="label" x="676" y="600">met</text>
+
+  <!-- condition -> result, out of runs -->
+  <path class="edge" marker-end="url(#ah)" d="M535,608 C535,660 805,660 805,610"/>
+  <rect class="label-bg" x="614" y="636" width="124" height="20" rx="4"/>
+  <text class="label" x="676" y="646">max_loops reached</text>
+
+  <g class="node">
+    <rect x="200" y="550" width="140" height="58" rx="12"/>
+    <text x="270" y="571">Reviser</text>
+    <text class="sub" x="270" y="592">agent</text>
+  </g>
+  <g class="node">
+    <rect x="455" y="550" width="160" height="58" rx="12"/>
+    <text x="535" y="571">Check</text>
+    <text class="sub" x="535" y="592">condition(output)</text>
+  </g>
+  <g class="node end">
+    <rect x="722" y="550" width="166" height="58" rx="29"/>
+    <text x="805" y="571">PipelineResult</text>
+    <text class="sub" x="805" y="592">final_output</text>
+  </g>
+
+  <text class="note" x="460" y="698">Each run returns one PipelineResult. If any agent raises, the result's success is False.</text>
+</svg>

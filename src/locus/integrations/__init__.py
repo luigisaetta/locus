@@ -6,12 +6,24 @@
 
 from locus.integrations.fastmcp import (
     LocusMCPServer,
+    MCPClient,
+    MCPConnectionError,
+    MCPRequestContext,
+    MCPToolNotAllowedError,
+    MCPToolResult,
     create_mcp_server,
     mcp_tool_to_locus,
 )
 
 
 __all__ = [
+    # Consume MCP servers.
+    "MCPClient",
+    "MCPConnectionError",
+    "MCPRequestContext",
+    "MCPToolNotAllowedError",
+    "MCPToolResult",
+    # Expose Locus's own tools and agent as an MCP server.
     "LocusMCPServer",
     "create_mcp_server",
     "mcp_tool_to_locus",

@@ -5,7 +5,7 @@
 """Provider protocol + supporting types for the deep-research surface.
 
 A ``KnowledgeProvider`` is the contract a research domain implements
-(Mimir metrics, Oracle DB schemas, Loki streams, …). The deepagent
+(Mimir metrics, SQL schemas, Loki streams, …). The deepagent
 runtime drives it through:
 
     discover  →  ground  →  agent.research (with tools)  →  merge_to_row

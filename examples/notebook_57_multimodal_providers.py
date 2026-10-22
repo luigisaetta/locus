@@ -1,20 +1,25 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Notebook 52: Multi-modal providers — web search, web fetch, image, speech.
+"""Notebook 57: Multi-modal dispute triage — order pages, ledger, image, speech.
 
-Set a provider on the Agent kwargs (web_search, web_fetch, image_generator,
-speech_provider) and Locus auto-registers a matching @tool. The model
-calls it the same way it calls a hand-written tool — you don't write the
-wrapper.
+A chargeback case is rarely just text. The payments analyst has a merchant
+order URL to fetch, an internal transactions ledger to query, a receipt
+image to regenerate for the dispute packet, and a customer voicemail to
+transcribe. Set a provider on the Agent kwargs (web_search, web_fetch,
+image_generator, speech_provider) and Locus auto-registers a matching
+@tool. The model calls it the same way it calls a hand-written tool —
+you don't write the wrapper.
 
 - Four Protocols under locus.providers: search, fetch, image, speech.
-- Live demo with HTTPXWebFetcher (no API key needed) against example.com.
-- Bring-your-own: any duck-typed object that implements the protocol method.
+- Live demo with HTTPXWebFetcher (no API key needed) — example.com
+  stands in for a merchant's order-confirmation URL.
+- Bring-your-own: any duck-typed object that implements the protocol
+  method, e.g. an internal transaction-ledger search.
 - Optional OpenAI-backed providers (image, speech, search-preview).
 
 Run it
-    # Default: OCI Generative AI auto-detected from ~/.oci/config
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_57_multimodal_providers.py
 
     # Offline / no credentials:
@@ -70,7 +75,7 @@ def example_auto_register():
     agent = Agent(
         config=AgentConfig(
             model=get_model(),
-            system_prompt="Use web_fetch to look up pages when asked.",
+            system_prompt="Use web_fetch to retrieve a merchant's order URL for dispute review when asked.",
             max_iterations=4,
             web_fetch=fetcher,
         )
@@ -88,7 +93,8 @@ def example_auto_register():
     print("`speak` and/or `transcribe` depending on `provider.capabilities`).")
 
 
-# Part 3: live demo — fetch example.com through the auto-registered tool.
+# Part 3: live demo — fetch the order-confirmation page behind a disputed
+# charge through the auto-registered tool. example.com stands in for it.
 
 
 async def example_live_fetch():
@@ -108,31 +114,33 @@ async def example_live_fetch():
     assert tool is not None, "web_fetch tool was not registered"
 
     # Calling tool.fn directly bypasses the model so we can verify wiring
-    # without spending a round-trip on a trivial fetch.
+    # without spending a round-trip on a trivial fetch. In a real triage
+    # run the model would call this with the order URL from the dispute case.
     rendered = await tool.fn(url="https://example.com", max_chars=400)
     print("First 200 chars of the rendered tool output:")
     print(rendered[:200])
     print("...")
 
 
-# Part 4: any duck-typed object implementing the protocol method works.
+# Part 4: any duck-typed object implementing the protocol method works —
+# here, a stand-in for an internal transaction-ledger search service.
 
 
 def example_byo_backend():
-    """A toy custom search provider — any duck-typed class works."""
-    print("\n=== Part 4: Bring your own backend ===\n")
+    """A toy transaction-ledger search provider — any duck-typed class works."""
+    print("\n=== Part 4: Bring your own ledger backend ===\n")
 
     from locus.providers.types import SearchResult
 
-    class StaticSearch:
-        """Hard-coded results — swap for a real Bing / Tavily client."""
+    class StaticLedgerSearch:
+        """Hard-coded ledger hits — swap for your real payments-ledger client."""
 
         async def search(self, query, *, max_results=5):
             return [
                 SearchResult(
-                    title=f"Result {i + 1} for {query!r}",
-                    url=f"https://example.org/{i}",
-                    snippet="snippet text",
+                    title=f"Transaction {i + 1} matching {query!r}",
+                    url=f"https://ledger.example/txns/{i}",
+                    snippet="settled charge, USD 49.00 (mock)",
                 )
                 for i in range(min(max_results, 3))
             ]
@@ -140,15 +148,15 @@ def example_byo_backend():
     agent = Agent(
         config=AgentConfig(
             model=get_model(),
-            system_prompt="Use web_search when asked to look something up.",
-            web_search=StaticSearch(),
+            system_prompt="Use web_search to query the transaction ledger when asked about a charge.",
+            web_search=StaticLedgerSearch(),
         )
     )
     print(f"Registered tools: {sorted(agent._tool_registry.tools.keys())}")
     print()
     print("The model now has a `web_search(query, max_results)` tool that")
-    print("calls our StaticSearch.search() under the hood. Swap StaticSearch")
-    print("for a real client and you have a Bing / Tavily / DuckDuckGo agent.")
+    print("calls our StaticLedgerSearch.search() under the hood. Swap it for")
+    print("your payments-ledger client and the agent queries live transactions.")
 
 
 # Part 5: OpenAI-backed providers (only if OPENAI_API_KEY is set).
@@ -188,7 +196,10 @@ def example_openai_providers():
     print(f"Speech provider: {type(speech).__name__}, capabilities={speech.capabilities}")
     print()
     print("Set them on AgentConfig and the agent gets `generate_image`, ")
-    print("`speak`, and `transcribe` tools without any extra wiring.")
+    print("`speak`, and `transcribe` tools without extra wiring — e.g.")
+    print("regenerating a receipt image for the dispute packet, spoken")
+    print("case summaries, and customer-voicemail transcription in one")
+    print("chargeback-triage agent.")
 
 
 if __name__ == "__main__":

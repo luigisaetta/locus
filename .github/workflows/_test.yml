@@ -10,6 +10,14 @@ jobs:
   build:
     name: "test #${{ matrix.python-version }}"
     runs-on: ubuntu-latest
+    env:
+      # Full-deps job: the MCP loopback-server suites (test_mcp_fidelity.py,
+      # test_mcp_secrets_and_sessions.py) must RUN (real MCP
+      # server on loopback), not skip. With this set a missing mcp/uvicorn
+      # fails collection instead of skipping the module — which is how the
+      # MCP client's real-server tests went silently unrun once pip started
+      # resolving mcp 2.x (no ``mcp.server.fastmcp``).
+      LOCUS_REQUIRE_MCP_SERVER_TESTS: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -31,7 +39,7 @@ jobs:
           cache: pip
 
       # Install locus with every optional extra so tests that import
-      # ``oci``, ``openai``, ``fastmcp``, ``mcp``, ``redis``, etc. don't
+      # ``openai``, ``fastmcp``, ``mcp``, ``redis``, etc. don't
       # fail with ModuleNotFoundError. We bypass hatch here because
       # ``hatch run test`` uses the default env which only carries
       # ``[dev]`` deps; spinning up ``hatch -e test`` per matrix slot
@@ -40,33 +48,45 @@ jobs:
       - name: Install locus + all extras
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,sdk]"
+          pip install -e ".[dev,sdk,mysql,pgvector,chroma,mem0]"
+
+      # The security-domain tooling is a separate distribution in this repo
+      # (packages/locus-sdk-security). Install it from the checkout so its
+      # suite runs here too — it is not on PyPI.
+      - name: Install locus-sdk-security
+        run: pip install -e "packages/locus-sdk-security[aws]"
 
       - name: Run unit tests with coverage
-        # ``--cov-fail-under`` is set in pyproject.toml ([tool.coverage.report].fail_under).
+        # Hard org-wide gate: ``--cov-fail-under=95`` makes this step (and the
+        # job) FAIL when deterministic unit line+branch coverage drops below
+        # 95%. It mirrors ``fail_under = 95`` in pyproject.toml
+        # ([tool.coverage.report]); kept explicit here so the gate is visible
+        # at the CI call site and survives any pyproject refactor.
         # ``coverage.json`` feeds the per-file ratchet step below.
         # ``coverage.xml`` is uploaded as an artifact so reviewers can
         # pull it into any local viewer.
         run: |
-          pytest tests/unit/ \
+          pytest tests/unit/ packages/locus-sdk-security/tests/unit/ \
             --cov=src/locus \
+            --cov=packages/locus-sdk-security/src/locus_security \
             --cov-report=term-missing \
             --cov-report=json \
-            --cov-report=xml
+            --cov-report=xml \
+            --cov-fail-under=95
 
       # Per-file regression gate: fail if any tracked file's coverage
       # dropped below the value committed in scripts/coverage_baseline.json
       # (refreshed with `python scripts/coverage_ratchet.py --update`).
-      # Only runs on the highest-supported Python so we don't double-fail
-      # the matrix when an older runtime emits slightly different branch
-      # counts.
+      # Runs on the highest-supported STABLE Python (3.13) — not the 3.14
+      # prerelease, where deps that aren't built for it yet make some tests
+      # skip, dropping coverage and tripping the ratchet spuriously.
       - name: Coverage ratchet (per-file regression gate)
-        if: matrix.python-version == '3.14'
+        if: matrix.python-version == '3.13'
         run: python scripts/coverage_ratchet.py --check
 
       # actions/upload-artifact@v7.0.1
       - name: Upload coverage artifact
-        if: matrix.python-version == '3.14'
+        if: matrix.python-version == '3.13'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: coverage-report
@@ -74,6 +94,24 @@ jobs:
             coverage.xml
             coverage.json
           retention-days: 14
+
+      # ``locus[mcp]`` accepts ``mcp>=1.0``; the install above resolves the
+      # newest major (2.x). Re-run the MCP client suites against mcp 1.x too
+      # so both majors a user can install stay exercised against a real
+      # server. fastmcp 4 requires mcp 2, hence the paired cap.
+      - name: MCP client against mcp 1.x
+        if: matrix.python-version == '3.13'
+        run: |
+          pip install "mcp>=1.0,<2" "fastmcp>=3.2.0,<4"
+          python -c "import importlib.metadata as m; v = m.version('mcp'); print('mcp', v); assert v.startswith('1.')"
+          pytest -p no:cacheprovider \
+            tests/unit/test_mcp_fidelity.py \
+            tests/unit/test_mcp_secrets_and_sessions.py \
+            tests/unit/test_mcp_client_internals.py \
+            tests/unit/test_integrations_fastmcp.py \
+            tests/unit/test_integrations_fastmcp_full.py \
+            tests/unit/test_fastmcp.py \
+            tests/unit/test_fastmcp_extended.py
 
       - name: Ensure tests did not create stray files
         run: |

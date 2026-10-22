@@ -12,9 +12,9 @@ OCI ships Cohere's rerank-v3.5 and (on-demand) rerank-v4 on the
 
 Usage::
 
-    from locus.rag.reranker import CohereReranker
+    from locus.rag.reranker import OCICohereReranker
 
-    reranker = CohereReranker(
+    reranker = OCICohereReranker(
         model="cohere.rerank-v3.5",  # or "cohere.rerank-v4" when GA
         compartment_id="ocid1.compartment.oc1..xxx",
         profile_name="DEFAULT",
@@ -53,7 +53,7 @@ from locus.rag.stores.base import SearchResult
 DEFAULT_COHERE_RERANK_MODEL = "cohere.rerank-v4.0-fast"
 
 
-class CohereReranker(Reranker):
+class OCICohereReranker(Reranker):
     """Reranker backed by OCI Generative AI Cohere ``rerank_text``.
 
     Args:

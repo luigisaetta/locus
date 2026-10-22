@@ -79,18 +79,18 @@ class RAGRetriever(BaseModel):
     - Chunking large documents
 
     Example:
-        >>> from locus.rag import RAGRetriever, OCIEmbeddings, OracleVectorStore
+        >>> from locus.rag import RAGRetriever, OpenAIEmbeddings, InMemoryVectorStore
         >>>
         >>> retriever = RAGRetriever(
-        ...     embedder=OCIEmbeddings(model_id="cohere.embed-english-v3.0"),
-        ...     store=OracleVectorStore(dsn="..."),
+        ...     embedder=OpenAIEmbeddings(model="text-embedding-3-small"),
+        ...     store=InMemoryVectorStore(),
         ... )
         >>>
         >>> # Add documents
         >>> await retriever.add_documents(
         ...     [
         ...         "Python is a programming language.",
-        ...         "Oracle Database supports vectors.",
+        ...         "Vector search powers retrieval-augmented generation.",
         ...     ]
         ... )
         >>>

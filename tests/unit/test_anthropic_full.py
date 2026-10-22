@@ -32,7 +32,7 @@ import pytest
 pytest.importorskip("anthropic")
 
 from locus.core.messages import Message, Role, ToolCall  # noqa: E402
-from locus.models.native.anthropic import AnthropicModel  # noqa: E402
+from locus.models.native.anthropic import AnthropicModel, _rejects_temperature  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -350,6 +350,37 @@ class TestComplete:
 # ---------------------------------------------------------------------------
 
 
+class TestTemperatureOmission:
+    """Models that deprecate ``temperature`` must not receive the param.
+
+    Anthropic 400s (``temperature is deprecated for this model``) on Opus 4.7+
+    and the Claude 5 family — issue #29 hit this live on claude-sonnet-5.
+    """
+
+    def test_rejects_temperature_prefixes(self) -> None:
+        assert _rejects_temperature("claude-sonnet-5")
+        assert _rejects_temperature("claude-fable-5")
+        assert _rejects_temperature("claude-opus-4-8")
+        assert not _rejects_temperature("claude-sonnet-4-6")
+        assert not _rejects_temperature("claude-haiku-4-5-20251001")
+
+    @pytest.mark.asyncio
+    async def test_sonnet_5_omits_temperature(self) -> None:
+        m = AnthropicModel(model="claude-sonnet-5", api_key="sk-x")  # noqa: S106
+        client = _patch_client(m, _make_response(blocks=[_block(type="text", text="ok")]))
+        await m.complete([Message.user("hi")], temperature=0.7)
+        sent_params = client.messages.create.call_args.kwargs
+        assert "temperature" not in sent_params
+
+    @pytest.mark.asyncio
+    async def test_sonnet_4_6_still_sends_temperature(self) -> None:
+        m = AnthropicModel(model="claude-sonnet-4-6", api_key="sk-x")  # noqa: S106
+        client = _patch_client(m, _make_response(blocks=[_block(type="text", text="ok")]))
+        await m.complete([Message.user("hi")], temperature=0.3)
+        sent_params = client.messages.create.call_args.kwargs
+        assert sent_params["temperature"] == 0.3
+
+
 class TestStream:
     @pytest.mark.asyncio
     async def test_stream_yields_chunks_then_done(self) -> None:
@@ -371,15 +402,31 @@ class TestStream:
                 except StopIteration as e:
                     raise StopAsyncIteration from e
 
+        class _FakeFinalMessage:
+            """The assembled message the SDK exposes after the text stream.
+
+            Tool_use blocks, usage and the stop reason only appear here —
+            ``text_stream`` yields text and nothing else.
+            """
+
+            def __init__(self, blocks: list[Any] | None = None) -> None:
+                self.content = blocks or []
+                self.usage = None
+                self.stop_reason = "end_turn"
+
         class _FakeStreamCM:
-            def __init__(self, parts: list[str]) -> None:
+            def __init__(self, parts: list[str], blocks: list[Any] | None = None) -> None:
                 self.text_stream = _FakeTextStream(parts)
+                self._final = _FakeFinalMessage(blocks)
 
             async def __aenter__(self) -> _FakeStreamCM:
                 return self
 
             async def __aexit__(self, *exc: Any) -> None:
                 return None
+
+            async def get_final_message(self) -> _FakeFinalMessage:
+                return self._final
 
         client = MagicMock()
         client.messages = MagicMock()
@@ -406,6 +453,17 @@ class TestStream:
             async def __anext__(self) -> str:
                 raise StopAsyncIteration
 
+        class _FakeToolUseBlock:
+            type = "tool_use"
+            id = "tu_1"
+            name = "x"
+            input = {"q": "hi"}  # noqa: A003
+
+        class _FakeFinal:
+            content = [_FakeToolUseBlock()]
+            usage = None
+            stop_reason = "tool_use"
+
         class _FakeStreamCM:
             text_stream = _FakeTextStream()
 
@@ -414,6 +472,9 @@ class TestStream:
 
             async def __aexit__(self, *exc: Any) -> None:
                 return None
+
+            async def get_final_message(self) -> _FakeFinal:
+                return _FakeFinal()
 
         client = MagicMock()
         client.messages = MagicMock()
@@ -435,5 +496,89 @@ class TestStream:
         # Check both branches were taken
         assert captured["system"] == "be brief"
         assert "tools" in captured
-        # Just the done event
         assert events[-1].done is True
+        assert events[-1].stop_reason == "tool_use"
+        # text_stream yields nothing here, so the tool call can only have come
+        # from the assembled final message — the regression this guards.
+        tool_events = [e for e in events if e.tool_calls]
+        assert len(tool_events) == 1
+        assert tool_events[0].tool_calls[0].name == "x"
+
+
+def test_default_headers_passthrough_for_browser() -> None:
+    """default_headers reach the config + client (browser/Pyodide CORS use)."""
+    from locus.models.native.anthropic import AnthropicModel
+
+    hdr = {"anthropic-dangerous-direct-browser-access": "true"}
+    m = AnthropicModel(model="claude-haiku-4-5", api_key="x", default_headers=hdr)
+    assert m.config.default_headers == hdr
+    # client is constructed with the headers (property builds AsyncAnthropic)
+    assert m.client is not None
+    # backward-compatible: default is None
+    assert AnthropicModel(model="claude-haiku-4-5", api_key="x").config.default_headers is None
+
+
+class TestStreamFinalMessage:
+    """The assembled final message is where tool calls, usage and the stop
+    reason live — ``text_stream`` carries none of them."""
+
+    @pytest.mark.asyncio
+    async def test_non_tool_blocks_are_skipped_and_usage_is_mapped(self) -> None:
+        m = AnthropicModel(api_key="sk-x")  # noqa: S106
+
+        class _FakeTextStream:
+            def __aiter__(self) -> _FakeTextStream:
+                return self
+
+            async def __anext__(self) -> str:
+                raise StopAsyncIteration
+
+        class _TextBlock:
+            type = "text"
+            text = "hello"
+
+        class _ToolBlock:
+            type = "tool_use"
+            id = "tu_9"
+            name = "lookup"
+            input = {"city": "Tokyo"}  # noqa: A003
+
+        class _Usage:
+            input_tokens = 11
+            output_tokens = 4
+
+        class _FakeFinal:
+            content = [_TextBlock(), _ToolBlock()]
+            usage = _Usage()
+            stop_reason = "tool_use"
+
+        class _FakeStreamCM:
+            text_stream = _FakeTextStream()
+
+            async def __aenter__(self) -> _FakeStreamCM:
+                return self
+
+            async def __aexit__(self, *exc: Any) -> None:
+                return None
+
+            async def get_final_message(self) -> _FakeFinal:
+                return _FakeFinal()
+
+        client = MagicMock()
+        client.messages = MagicMock()
+        client.messages.stream = MagicMock(return_value=_FakeStreamCM())
+        m._client = client  # type: ignore[assignment]
+
+        events = [ev async for ev in m.stream([Message.user("hi")])]
+
+        tool_events = [e for e in events if e.tool_calls]
+        assert len(tool_events) == 1
+        # the text block must not be mistaken for a tool call
+        assert len(tool_events[0].tool_calls) == 1
+        call = tool_events[0].tool_calls[0]
+        assert (call.id, call.name, call.arguments) == ("tu_9", "lookup", {"city": "Tokyo"})
+
+        done = events[-1]
+        assert done.done is True
+        assert done.usage == {"prompt_tokens": 11, "completion_tokens": 4}
+        assert done.stop_reason == "tool_use"

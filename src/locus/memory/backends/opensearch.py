@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -19,6 +20,12 @@ if TYPE_CHECKING:
 
 class OpenSearchConfig(BaseModel):
     """Configuration for OpenSearch backend."""
+
+    # Reject unknown keys rather than absorbing them. The backends take
+    # **kwargs and splat them in here, so a misspelled or wrong-named
+    # parameter used to vanish silently — notebook 68 passed namespace=
+    # instead of prefix= and every run quietly shared one keyspace.
+    model_config = {"extra": "forbid"}
 
     hosts: list[str] = Field(default_factory=lambda: ["localhost:9200"])
     index_name: str = "locus-checkpoints"
@@ -47,6 +54,10 @@ class OpenSearchBackend(BaseModel):
 
     config: OpenSearchConfig = Field(default_factory=OpenSearchConfig)
     _client: AsyncOpenSearch | None = None
+    #: The loop the cached client was built on, or ``None`` when the client
+    #: did not come from here — a caller (or a test) that assigns ``_client``
+    #: owns its lifecycle, and second-guessing that would discard it.
+    _client_loop: asyncio.AbstractEventLoop | None = None
     _initialized: bool = False
 
     model_config = {"arbitrary_types_allowed": True}
@@ -69,8 +80,16 @@ class OpenSearchBackend(BaseModel):
         super().__init__(config=config)
 
     async def _get_client(self) -> AsyncOpenSearch:
-        """Get or create OpenSearch client."""
-        if self._client is None:
+        """Get or create the OpenSearch client for the running event loop.
+
+        The underlying aiohttp session binds to the loop that created it, so a
+        cached client is only usable inside that one loop; a second loop fails
+        with ``Event loop is closed``. Keying the cache on the loop keeps the
+        usual single-loop case free and rebuilds only when the loop changed.
+        """
+        loop = asyncio.get_running_loop()
+        stale = self._client_loop is not None and self._client_loop is not loop
+        if self._client is None or stale:
             try:
                 from opensearchpy._async.client import AsyncOpenSearch
             except ImportError as e:
@@ -83,6 +102,8 @@ class OpenSearchBackend(BaseModel):
             if self.config.username and self.config.password:
                 auth = (self.config.username, self.config.password)
 
+            self._client_loop = loop
+            self._initialized = False
             self._client = AsyncOpenSearch(
                 hosts=self.config.hosts,
                 http_auth=auth,

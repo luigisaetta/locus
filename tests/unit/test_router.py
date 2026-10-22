@@ -628,6 +628,33 @@ class TestRouter:
         asyncio.run(router.dispatch("?"))
         assert observed == [frame]
 
+    def test_pinned_frame_skips_the_extractor_but_still_flows(self):
+        # The resume seam: a dispatch replayed after an approval must run
+        # under the SAME frame the approval was granted against — a live
+        # extractor re-reading the goal could frame it differently and
+        # re-hold what was already approved.
+        frame = _frame()
+        observed: list[GoalFrame] = []
+        router = self._build_router(frame=_frame(domain="other"), on_frame_calls=observed)
+        result = asyncio.run(router.dispatch("life?", frame=frame))
+        assert result.text == "answer"
+        router.extractor.invoke.assert_not_called()
+        # the pinned frame still reaches on_frame consumers
+        assert observed == [frame]
+
+    def test_frame_payload_round_trips_the_requires_switches(self):
+        from locus.observability.router_events import _frame_payload
+
+        frame = _frame().model_copy(
+            update={"requires_tools": True, "requires_code_generation": True}
+        )
+        rebuilt = GoalFrame.model_validate(_frame_payload(frame))
+        assert rebuilt.requires_tools is True
+        assert rebuilt.requires_code_generation is True
+        assert rebuilt.requires_memory is False
+        assert rebuilt.primary_goal == frame.primary_goal
+        assert rebuilt.risk == frame.risk
+
     def test_extractor_failure_raises(self):
         extractor = MagicMock()
         # No parsed -> error.
@@ -1032,3 +1059,32 @@ class TestLLMProtocolPickerInternals:
         custom = "You are a strict canonical-only picker."
         picker = LLMProtocolPicker(model=MagicMock(), system_prompt=custom)
         assert picker.system_prompt == custom
+
+
+class TestDeniedProtocols:
+    def _frame(self):
+        from locus.router import Complexity, GoalFrame, Risk, TaskType
+
+        return GoalFrame(
+            primary_goal=TaskType.ANSWER,
+            domain="general",
+            complexity=Complexity.LOW,
+            risk=Risk.LOW,
+        )
+
+    def test_a_denied_protocol_is_refused_before_any_risk_math(self):
+        from locus.router import PolicyGate
+
+        gate = PolicyGate(denied_protocols={"a2a_delegate"})
+        proto = next(p for p in builtin_protocols() if p.id == "a2a_delegate")
+        verdict = gate.check(self._frame(), proto)
+        assert verdict.allow is False
+        assert verdict.require_approval is False
+        assert "denied by policy" in verdict.reason
+
+    def test_an_undenied_protocol_still_passes(self):
+        from locus.router import PolicyGate
+
+        gate = PolicyGate(denied_protocols={"a2a_delegate"})
+        proto = next(p for p in builtin_protocols() if p.id == "direct_response")
+        assert gate.check(self._frame(), proto).allow is True

@@ -8,11 +8,11 @@ Usage:
     # Run all notebooks with mock (default):
     python scripts/run_notebooks.py
 
-    # Run all notebooks with OCI:
-    python scripts/run_notebooks.py --provider oci --profile DEFAULT
+    # Run all notebooks with OpenAI:
+    python scripts/run_notebooks.py --provider openai
 
     # Run specific notebook:
-    python scripts/run_notebooks.py --provider oci --notebook 01
+    python scripts/run_notebooks.py --provider openai --notebook 06
 
     # List available notebooks:
     python scripts/run_notebooks.py --list
@@ -26,35 +26,17 @@ from pathlib import Path
 
 
 # Provider configurations.
-#
-# For OCI, examples/config.py auto-routes by model family:
-#   cohere.command-r-* → OCIModel (SDK transport)
-#   everything else    → OCIChatCompletionsModel (V1, /openai/v1)
-#
-# The default below uses an OpenAI-shape model so notebooks exercise the
-# V1 transport. compartment is auto-derived from the profile's tenancy
-# under V1 — no need to hardcode a placeholder.
 PROVIDERS = {
     "mock": {
         "LOCUS_MODEL_PROVIDER": "mock",
     },
-    "oci": {
-        "LOCUS_MODEL_PROVIDER": "oci",
-        "LOCUS_MODEL_ID": "openai.gpt-5.5",
-        "LOCUS_OCI_PROFILE": "DEFAULT",
-        "LOCUS_OCI_REGION": "us-chicago-1",
-    },
-    "oci-cohere": {
-        # Forces the OCI SDK transport via Cohere R-series.
-        "LOCUS_MODEL_PROVIDER": "oci",
-        "LOCUS_MODEL_ID": "cohere.command-r-plus-08-2024",
-        "LOCUS_OCI_PROFILE": "DEFAULT",
-        "LOCUS_OCI_AUTH_TYPE": "api_key",
-        "LOCUS_OCI_ENDPOINT": "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
-    },
     "openai": {
         "LOCUS_MODEL_PROVIDER": "openai",
         "LOCUS_MODEL_ID": "gpt-4o",
+    },
+    "anthropic": {
+        "LOCUS_MODEL_PROVIDER": "anthropic",
+        "LOCUS_MODEL_ID": "claude-sonnet-4-6",
     },
 }
 
@@ -101,14 +83,6 @@ def main():
         help="Model provider to use",
     )
     parser.add_argument(
-        "--profile",
-        help="OCI profile name (overrides default)",
-    )
-    parser.add_argument(
-        "--endpoint",
-        help="OCI endpoint URL (overrides default)",
-    )
-    parser.add_argument(
         "--model",
         help="Model ID (overrides default for provider)",
     )
@@ -145,10 +119,6 @@ def main():
     env = PROVIDERS[args.provider].copy()
 
     # Apply overrides
-    if args.profile:
-        env["LOCUS_OCI_PROFILE"] = args.profile
-    if args.endpoint:
-        env["LOCUS_OCI_ENDPOINT"] = args.endpoint
     if args.model:
         env["LOCUS_MODEL_ID"] = args.model
 

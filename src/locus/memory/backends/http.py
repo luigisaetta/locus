@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Self
 from urllib.parse import quote
 from uuid import uuid4
 
+from locus.core.loop_bound import loop_bound_async
 from locus.memory.checkpointer import BaseCheckpointer
 
 
@@ -85,20 +86,24 @@ class HTTPCheckpointer(BaseCheckpointer):
 
     async def _get_client(self) -> Any:
         """Get or create the HTTP client."""
-        if self._client is None:
+
+        async def build() -> Any:
             try:
-                import httpx
+                import httpx  # noqa: PLC0415
             except ImportError as e:
                 raise ImportError(
                     "httpx is required for HTTPCheckpointer. Install it with: pip install httpx"
                 ) from e
 
-            self._client = httpx.AsyncClient(
+            return httpx.AsyncClient(
                 base_url=self.base_url,
                 headers=self.headers,
                 auth=self.auth,
                 timeout=self.timeout,
             )
+
+        # Bound to the loop that built it — see locus.core.loop_bound.
+        self._client = await loop_bound_async(self, "_client", build)
         return self._client
 
     async def close(self) -> None:

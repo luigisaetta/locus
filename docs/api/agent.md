@@ -1,10 +1,33 @@
 # Agent
 
+The high-level entry point — configure an `Agent`, run it, and read
+back a typed `AgentResult`.
+
+For the concepts, start with [Agent](../concepts/agent.md) and
+[the agent loop](../concepts/agent-loop.md).
+
 ## `Agent` class
+
+```text
+Agent(
+    model: str | ModelProtocol | None = None,
+    tools: list[Tool] | None = None,
+    system_prompt: str | None = None,
+    reflexion: ReflexionConfig | bool | None = None,
+    grounding: GroundingConfig | bool | None = None,
+    max_iterations: int = 20,
+    conversation_manager: ConversationManager | None = None,
+    checkpointer: Checkpointer | None = None,
+    hooks: list[HookProvider] | None = None,
+    config: AgentConfig | None = None,
+    **kwargs,
+)
+```
 
 ::: locus.agent.agent.Agent
     options:
       show_root_heading: true
+      show_signature: false
       members_order: source
 
 ## AgentConfig

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import UTC, datetime
@@ -35,6 +36,12 @@ def _validate_sql_identifier(value: str, field_name: str) -> str:
 
 class PostgreSQLConfig(BaseModel):
     """Configuration for PostgreSQL backend."""
+
+    # Reject unknown keys rather than absorbing them. The backends take
+    # **kwargs and splat them in here, so a misspelled or wrong-named
+    # parameter used to vanish silently — notebook 68 passed namespace=
+    # instead of prefix= and every run quietly shared one keyspace.
+    model_config = {"extra": "forbid"}
 
     host: str = "localhost"
     port: int = 5432
@@ -83,6 +90,10 @@ class PostgreSQLBackend(BaseModel):
 
     config: PostgreSQLConfig = Field(default_factory=PostgreSQLConfig)
     _pool: Pool | None = None
+    #: The loop the cached pool was built on, or ``None`` when the pool did
+    #: not come from here — a caller (or a test) that assigns ``_pool`` owns
+    #: its lifecycle, and second-guessing that would discard it.
+    _pool_loop: asyncio.AbstractEventLoop | None = None
     _initialized: bool = False
 
     model_config = {"arbitrary_types_allowed": True}
@@ -109,8 +120,16 @@ class PostgreSQLBackend(BaseModel):
         super().__init__(config=config)
 
     async def _get_pool(self) -> Pool:
-        """Get or create connection pool."""
-        if self._pool is None:
+        """Get or create the connection pool for the running event loop.
+
+        asyncpg pools are loop-affine: a pool created on one loop cannot be
+        used from another, and doing so fails with 'another operation is in
+        progress'. Keying the cache on the loop keeps the usual single-loop
+        case free and rebuilds only when the loop changed.
+        """
+        loop = asyncio.get_running_loop()
+        stale = self._pool_loop is not None and self._pool_loop is not loop
+        if self._pool is None or stale:
             try:
                 import asyncpg
             except ImportError as e:
@@ -118,6 +137,12 @@ class PostgreSQLBackend(BaseModel):
                     "PostgreSQLBackend requires the 'asyncpg' package. "
                     "Install with: pip install locus[postgresql]"
                 ) from e
+
+            # Stamp the loop before creating: the pool built below belongs to
+            # it, and a later call on another loop must rebuild rather than
+            # reuse. Schema setup is per-pool, so it has to run again too.
+            self._pool_loop = loop
+            self._initialized = False
 
             if self.config.dsn:
                 self._pool = await asyncpg.create_pool(
@@ -151,6 +176,15 @@ class PostgreSQLBackend(BaseModel):
         pool = await self._get_pool()
 
         async with pool.acquire() as conn:
+            # An existing table needs no DDL. Probing first matters: CREATE
+            # SCHEMA / TABLE / INDEX ... IF NOT EXISTS check privileges before
+            # existence, so a role without CREATE on the database (or schema)
+            # failed against a table a migration had already made.
+            existing = await conn.fetchval("SELECT to_regclass($1)", self._full_table_name)
+            if existing is not None:
+                self._initialized = True
+                return
+
             # Create schema if needed
             await conn.execute(f"""
                 CREATE SCHEMA IF NOT EXISTS {self.config.schema_name}

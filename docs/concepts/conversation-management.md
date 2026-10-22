@@ -1,6 +1,6 @@
 # Conversation management
 
-An Oracle Generative AI – Multi-Agent Locus SDK agent holds one user's
+A Locus agent holds one user's
 conversation in `state.messages`. To make that conversation **survive
 across requests** — across deploys, restarts, and "I'll come back
 tomorrow" gaps — you wire a checkpointer and a `thread_id`.
@@ -9,40 +9,46 @@ tomorrow" gaps — you wire a checkpointer and a `thread_id`.
 
 ```python
 from locus.agent import Agent
-from locus.memory.backends import OCIBucketBackend
+from locus.memory.backends import S3Backend
 
 agent = Agent(
-    model="oci:openai.gpt-5.5",
+    model="{{ locus_example_model }}",
     tools=[...],
-    checkpointer=OCIBucketBackend(
-        bucket_name="locus-threads",
-        namespace="<your-namespace>",
+    checkpointer=S3Backend(
+        bucket="locus-threads",
+        prefix="<your-prefix>/",
     ),
 )
 
 # Day 1
-agent.run_sync("I'm looking for a flight to Tokyo.", thread_id="user-c42")
+agent.run_sync("Look into the refund request on order ord-4821.", thread_id="ticket-8912-refund")
 
 # Day 2 — same thread_id, conversation continues
-agent.run_sync("What were we talking about?",       thread_id="user-c42")
-# → "We were searching for flights to Tokyo. Want me to keep looking?"
+agent.run_sync("What did we conclude?",                           thread_id="ticket-8912-refund")
+# → "The return on ord-4821 is eligible. Want me to draft the refund for manager approval?"
 ```
 
-The `thread_id` is the unit of conversation. Every node that runs
-saves state to the checkpointer; every fresh `agent.run_sync(...,
-thread_id=...)` call rehydrates state before the first Think.
+The `thread_id` is the unit of conversation. With `checkpointer=`
+alone, state is saved when the run finishes or raises, and before the
+agent pauses on an interrupt; pass `checkpoint_every_n_iterations=1`
+to also save at the end of each loop iteration that executes tool
+calls, so a process that dies mid-run keeps its progress up to the
+last such save. A run continued with `agent.resume(...)` does not save
+per iteration: it is saved when it finishes, raises, or pauses again.
+Every fresh `agent.run_sync(..., thread_id=...)` call rehydrates state
+before the first Think.
 
 ## Threads, not sessions
 
 The SDK uses **thread** as the term — borrowing from chat UIs and
-issue trackers — because a single user can have many simultaneous
-conversations:
+issue trackers — because a single piece of work can have many
+simultaneous conversations:
 
 | Thread | Use |
 |---|---|
-| `user-c42-support` | a customer's open support chat |
-| `user-c42-research` | a parallel research crew the same user kicked off |
-| `agent-research-q3` | a long-running autonomous workflow not tied to a single user |
+| `ticket-8912-refund` | an open support conversation about one refund request |
+| `deploy-2026-07-rollout` | a release thread the deploy operator drives across the week |
+| `case-7731-triage` | a security-operations triage conversation for one alert |
 
 A thread is a string. Pick the convention that matches your domain.
 
@@ -66,36 +72,36 @@ goes in `metadata`.
 ```python
 # List all threads in a bucket
 threads = await checkpointer.list_threads()
-# → ["user-c42-support", "user-c42-research", ...]
+# → ["ticket-8912-refund", "case-7731-triage", ...]
 
 # Inspect one
-state = await checkpointer.load("user-c42-support")
+state = await checkpointer.load("case-7731-triage")
 print(len(state.messages), "messages")
 
 # Branch — new thread, copy of an existing one
 await checkpointer.copy_thread(
-    source_thread_id="user-c42-support",
-    dest_thread_id="user-c42-support-experiment",
+    source_thread_id="case-7731-triage",
+    dest_thread_id="case-7731-triage-replay",
 )
 
 # Drop
-await checkpointer.delete("user-c42-experiment")
+await checkpointer.delete("case-7731-triage-replay")
 
 # Vacuum old threads via lifecycle policy (per backend)
 ```
 
-For OCI Object Storage, retention is enforced by the bucket's
+For S3-compatible object storage, retention is enforced by the bucket's
 lifecycle policy — *not* by locus. Configure
 `days_until_archive` / `days_until_delete` once at the bucket
-level and OCI handles the cleanup.
+level and the store handles the cleanup.
 
 ## Concurrent updates to the same thread
 
 Two `agent.run(...)` calls against the same `thread_id` are usually a
 bug — you'll race on the checkpoint. Three patterns to avoid that:
 
-1. **Per-user lock at the application layer.** Most chat UIs already
-   serialise messages per session.
+1. **Per-case lock at the application layer.** Most chat UIs and
+   ticketing systems already serialise messages per session.
 2. **Distinct sub-threads.** If the user asks two things in
    parallel, give them two thread ids.
 3. **Last-write-wins is the default.** The SDK's checkpointers do not
@@ -105,9 +111,19 @@ bug — you'll race on the checkpoint. Three patterns to avoid that:
 ## Compaction — keep long threads in budget
 
 After dozens of turns, even the most disciplined conversation
-exceeds the model's context window. The `LLMCompactor` is the
-built-in `ConversationManager` that summarises old turns while
-protecting:
+exceeds the model's context window, so an agent manages its context
+by default. With no `conversation_manager`, an agent whose model has
+registered metadata (a built-in entry, or one you add with
+`locus.models.metadata.register_metadata`) gets
+`LLMCompactor(context_length=<model window>)` with no summariser.
+Stale tool output is pruned and a token-budgeted tail is kept, with
+no extra model calls. When the window is unknown, the agent falls
+back to `SlidingWindowManager(window_size=max(20, max_iterations * 2))`.
+Pass `NullManager()` to turn management off.
+
+`LLMCompactor` is the token-aware built-in `ConversationManager`: it
+compacts old turns (and summarises them if you pass `summarize_fn`)
+while protecting:
 
 - The system prompt.
 - The first N user/assistant turns (the "anchor" of the
@@ -117,18 +133,20 @@ protecting:
 ```python
 from locus.memory.compactor import LLMCompactor
 
-async def summarise(messages: list) -> str:
+async def summarise(messages: list, previous_summary: str | None) -> str:
     """Your summarise function — typically a small-model call."""
     ...
 
+# Every argument has a default. Set context_length to your model's window:
+# an LLMCompactor you pass yourself does not look it up (default 128_000).
 agent = Agent(
     ...,
     conversation_manager=LLMCompactor(
         context_length=128_000,        # the model's context window
-        trigger_fraction=0.85,         # compact when usage hits 85%
-        head_turns=2,                  # first 2 turns kept verbatim
-        tail_token_fraction=0.4,       # ~40% of budget reserved for recent turns
-        summarize_fn=summarise,
+        trigger_fraction=0.85,         # compact when usage hits 85% (default 0.8)
+        head_turns=2,                  # first 2 turns kept verbatim (default)
+        tail_token_fraction=0.4,       # ~40% of budget for recent turns (default 0.5)
+        summarize_fn=summarise,        # optional; without it the middle is dropped
     ),
 )
 ```
@@ -145,13 +163,13 @@ and returns the message list — useful for rendering chat history on
 page load.
 
 ```python
-GET /threads/user-c42-support
+GET /threads/case-7731-triage
 # → { "messages": [...], "iterations": 9, ... }
 ```
 
 ## See also
 
-- [Checkpointers](checkpointers.md) — the nine native backends and
+- [Checkpointers](checkpointers.md) — the eight native backends and
   their tradeoffs.
 - [Streaming & Server](server.md) — `AgentServer` and SSE.
 - [Hooks](hooks.md) — observe save/load events.

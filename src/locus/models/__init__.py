@@ -4,38 +4,41 @@
 
 """Model providers for Locus.
 
-Models are organized into two categories:
+Native providers (direct API connections):
+   - ``OpenAIModel`` — OpenAI (GPT); also fronts OpenAI-compatible gateways via ``base_url``
+   - ``AnthropicModel`` — Anthropic (Claude)
 
-1. Native providers (direct API connections):
-   - OpenAI (GPT) - Oracle partnership
-
-2. Hosted providers (OCI GenAI):
-   - ``OCIChatCompletionsModel`` — OpenAI-compatible ``/openai/v1`` transport.
-     For OpenAI / Meta / xAI / Mistral / Gemini families.
-     Real SSE streaming and day-0 model support.
-   - ``OCIModel`` — OCI SDK transport against ``/20231130/actions/v1``.
-     Required for Cohere R-series (``cohere.command-r-*``).
+Hosted providers (OCI Generative AI):
+   - ``OCIChatCompletionsModel`` — OpenAI-compatible ``/openai/v1`` transport
+     (OpenAI, Meta, xAI, Mistral, Gemini and non-R Cohere models on OCI).
+   - ``OCIModel`` — OCI SDK transport against ``/20231130/actions/v1``
+     (Cohere R-series, Dedicated AI Cluster endpoints).
+   - ``OCIResponsesModel`` — opt-in server-stateful Responses API transport.
 
 Usage:
-    # Native provider (OpenAI)
+    # Direct class
     from locus.models import OpenAIModel
     model = OpenAIModel(model="gpt-4o")
+
+    from locus.models import AnthropicModel
+    model = AnthropicModel(model="claude-sonnet-4-6")
 
     # OCI GenAI — V1 transport
     from locus.models import OCIChatCompletionsModel
     model = OCIChatCompletionsModel(model="openai.gpt-5", profile="DEFAULT")
 
-    # OCI GenAI — Cohere R-series
-    from locus.models import OCIModel
-    model = OCIModel(
-        model_id="cohere.command-r-plus",
-        profile_name="DEFAULT",
-        auth_type="api_key",
-    )
-
-    # String factory — auto-routes to the right transport
+    # String factory — "provider:model"
     from locus.models import get_model
+    model = get_model("anthropic:claude-sonnet-4-6")
     model = get_model("oci:openai.gpt-5", profile="DEFAULT")
+
+Provider failover — ``FallbackChain`` (see :mod:`locus.models.fallback`)::
+
+    from locus.models import FallbackChain
+
+    model = FallbackChain(
+        [get_model("anthropic:claude-sonnet-4-6"), get_model("openai:gpt-4o")]
+    )
 """
 
 from locus.models.base import (
@@ -60,44 +63,56 @@ __all__ = [
     "get_model",
     "list_providers",
     "register_provider",
+    # Failover (lazy imports)
+    "CircuitBreaker",
+    "FallbackChain",
     # Native providers (lazy imports)
     "OpenAIModel",
     "OpenAIConfig",
+    "AnthropicModel",
+    "AnthropicConfig",
     # OCI GenAI (lazy imports)
     "OCIModel",
     "OCIConfig",
     "OCIAuthType",
     "OCIChatCompletionsModel",
     "OCIChatCompletionsConfig",
+    "OCIResponsesModel",
+    "OCIResponsesConfig",
 ]
 
 
 def __getattr__(name: str) -> object:
     """Lazy import providers to avoid requiring all dependencies."""
-    # Native providers - OpenAI (Oracle partnership)
+    if name in ("FallbackChain", "CircuitBreaker"):
+        from locus.models import fallback
+
+        return getattr(fallback, name)
+
     if name in ("OpenAIModel", "OpenAIConfig"):
         from locus.models.native.openai import OpenAIConfig, OpenAIModel
 
         return OpenAIModel if name == "OpenAIModel" else OpenAIConfig
 
-    # OCI GenAI
-    if name in ("OCIModel", "OCIConfig", "OCIAuthType"):
-        from locus.models.providers.oci import OCIAuthType, OCIConfig, OCIModel
+    if name in ("AnthropicModel", "AnthropicConfig"):
+        from locus.models.native.anthropic import AnthropicConfig, AnthropicModel
 
-        if name == "OCIModel":
-            return OCIModel
-        if name == "OCIConfig":
-            return OCIConfig
-        return OCIAuthType
+        return AnthropicModel if name == "AnthropicModel" else AnthropicConfig
 
-    if name in ("OCIChatCompletionsModel", "OCIChatCompletionsConfig"):
-        from locus.models.providers.oci import OCIChatCompletionsConfig, OCIChatCompletionsModel
+    # OCI GenAI — needs the ``oci`` extra; resolved lazily so importing
+    # ``locus.models`` never pulls the OCI SDK in.
+    if name in (
+        "OCIModel",
+        "OCIConfig",
+        "OCIAuthType",
+        "OCIChatCompletionsModel",
+        "OCIChatCompletionsConfig",
+        "OCIResponsesModel",
+        "OCIResponsesConfig",
+    ):
+        from locus.models.providers import oci
 
-        return (
-            OCIChatCompletionsModel
-            if name == "OCIChatCompletionsModel"
-            else OCIChatCompletionsConfig
-        )
+        return getattr(oci, name)
 
     msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(msg)

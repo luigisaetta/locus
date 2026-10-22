@@ -3,26 +3,34 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
-"""Notebook 54: Observability basics — opt-in SSE telemetry.
+"""Notebook 59: Support timeline — every step a ticket bot takes, on the record.
 
-Locus ships an in-process pub/sub EventBus that publishes typed
-StreamEvents for every meaningful step of execution: agent thinking,
-tool calls, model completions, token usage, multi-agent fan-outs,
-checkpoints — all under one canonical event_type per component.
+When a support agent handles a customer ticket, you want to see — later,
+on a QA review or when a customer disputes an outcome — exactly what it
+did. Locus ships an in-process pub/sub EventBus that publishes typed
+StreamEvents for every meaningful step of execution: agent thinking, tool
+calls, model completions, token usage, multi-agent fan-outs, checkpoints
+— all under one canonical event_type per component. That stream is the
+Timeline: the support desk's typed, ordered, replayable record of every
+action an agent took on a ticket.
+
+A complete action timeline is what lets a supervisor reconstruct, after
+the fact, whether the bot followed policy before it refunded an order or
+closed a case.
 
 Telemetry is opt-in. Code that never enters a run_context pays one
 ContextVar.get() per emission site — no bus, no events, no
 allocations.
 
 - Run an Agent with no telemetry: the SDK-default path.
-- Wrap the same call in run_context() and subscribe to the bus.
+- Wrap the same ticket reply in run_context() and subscribe to the bus.
 - The canonical events: agent.think, agent.tool.started/completed,
   agent.tokens.used, agent.terminate.
 - Read the per-run history buffer after the fact (replay semantics for
-  late subscribers).
+  late subscribers — i.e. reconstruct the ticket timeline after the run).
 
 Run it
-    # Default: OCI Generative AI auto-detected from ~/.oci/config
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_59_observability_basics.py
 
     # Offline / no credentials:
@@ -47,7 +55,9 @@ async def part1_no_telemetry() -> None:
     print("\n--- Part 1: no run_context — bus stays uninstantiated ---")
 
     agent = Agent(model=get_model(), max_iterations=2)
-    result = agent.run_sync("In one sentence, what is locus?")
+    result = await agent.arun(
+        "In one sentence, summarize ticket CS-1042: customer says their order arrived damaged."
+    )
     print("agent reply:", result.message[:120])
 
     # Probe the module-level singleton to prove it was never built.
@@ -59,13 +69,13 @@ async def part1_no_telemetry() -> None:
     print("bus singleton is None — zero allocations spent on telemetry")
 
 
-# Part 2: opt in by wrapping the call in run_context(); subscribe to the
-# bus and watch every event_type land.
+# Part 2: opt in by wrapping the ticket reply in run_context(); subscribe
+# to the bus and watch every action the agent takes land on the timeline.
 
 
 async def part2_subscribe() -> None:
-    """Same Agent.run, this time inside a run_context."""
-    print("\n--- Part 2: run_context active — subscribe to the bus ---")
+    """Same Agent.run, this time inside a run_context — the timeline is live."""
+    print("\n--- Part 2: run_context active — subscribe to the ticket timeline ---")
 
     agent = Agent(model=get_model(), max_iterations=2)
     seen: list[str] = []
@@ -84,33 +94,34 @@ async def part2_subscribe() -> None:
 
         # The contextvar set by run_context() means the @_bus_bridge
         # decorator on Agent.run forwards every yielded LocusEvent to
-        # the bus automatically.
-        result = await asyncio.to_thread(agent.run_sync, "Reply with the single word: hello")
+        # the bus automatically — nothing the agent does goes unrecorded.
+        result = await agent.arun("Reply with the single word: resolved")
         print("agent reply:", result.message[:120])
 
         await asyncio.wait_for(consumer_task, timeout=10.0)
         # Closing the stream ends any other subscribers cleanly.
         await bus.close_stream(rid)
 
-    print(f"events seen ({len(seen)}):")
+    print(f"timeline events recorded ({len(seen)}):")
     for e in seen:
         print(f"  - {e}")
 
 
 # Part 3: late subscribers see the whole run replayed from history
-# (capped at 500 events x 200 retained runs).
+# (capped at 500 events x 200 retained runs) — a QA review the next day
+# reads the same timeline the live agent console saw.
 
 
 async def part3_history_replay() -> None:
-    """Subscribe after the run finished; the history deque replays."""
-    print("\n--- Part 3: late subscriber — history replay ---")
+    """Subscribe after the run finished; the history deque replays the ticket."""
+    print("\n--- Part 3: late subscriber — after-the-fact QA replay ---")
 
     agent = Agent(model=get_model(), max_iterations=2)
 
     async with run_context() as rid:
         bus = get_event_bus()
         # Run first; close the stream; subscribe second.
-        await asyncio.to_thread(agent.run_sync, "Reply: ok")
+        await agent.arun("Reply: acknowledged")
         await bus.close_stream(rid)
 
         replayed: list[str] = []

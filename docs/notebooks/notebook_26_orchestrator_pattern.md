@@ -1,27 +1,39 @@
 # Orchestrator Pattern
 
-An orchestrator routes a task to a chosen set of specialist agents, runs
-them in parallel under a semaphore, then correlates their outputs into a
-single summary. Compared with a swarm (Notebook 25), the decision of who
-does what is centralised here instead of emerging from capability tags.
+A privacy officer routes a data-subject request to a chosen set of
+specialist agents, runs them in parallel under a semaphore, then
+correlates their outputs into a single privacy assessment. Compared with
+a swarm, the decision of who investigates what is centralised here
+instead of emerging from capability tags. The routing step is one named
+place where you can see, log and review which specialist was asked what
+— `OrchestratorResult.decisions` carries the `RoutingDecision` trail —
+rather than reconstructing it from a self-organising pool. It does not
+itself restrict what a specialist can reach: the tools you attach to
+each `Specialist` set that. Gating a side-effecting call is a separate
+step you add by wrapping it in `admit()`; neither the orchestrator nor
+the specialist calls it for you. If the planner does not return a
+parseable fenced JSON block,
+routing falls back to the specialist IDs named in its reply, or to every
+registered specialist if it names none.
 
 This notebook covers:
 
 - `Specialist` — domain-focused agent with tools, system prompt, and a
   confidence threshold. Locus ships pre-built ones for logs, metrics,
-  traces, and code.
+  traces, and code — useful evidence sources when tracing where personal
+  data flows.
 - `Orchestrator` — registers specialists, emits `RoutingDecision`
   objects, and runs the chosen ones concurrently behind
   `max_parallel_specialists` (an `asyncio.Semaphore`).
 - `RoutingDecision` — the typed object the planner returns: which
   specialists, which sub-task per specialist, and the reasoning.
-- `OrchestrationResult` — each specialist's output, the decisions
+- `OrchestratorResult` — each specialist's output, the decisions
   trail, and a correlated summary.
 
 ## Prerequisites
 
-- Notebook 08 (Agent basics).
-- Notebook 25 (Swarm) for the unsupervised counterpoint.
+- Agent basics.
+- The swarm multi-agent notebook for the unsupervised counterpoint.
 
 ## Run
 
@@ -29,13 +41,12 @@ This notebook covers:
 python examples/notebook_26_orchestrator_pattern.py
 ```
 
-The default provider is OCI Generative AI. With `~/.oci/config`
-present the agents talk to a live OCI model; canonical picks are
-`openai.gpt-4.1` or `meta.llama-3.3-70b-instruct`. Set
+The default provider is the bundled mock model. Set `LOCUS_MODEL_PROVIDER`
+(openai / anthropic) and credentials to use a live model. Set
 `LOCUS_MODEL_PROVIDER=mock` for offline runs.
 
 ## Source
 
-```python
---8<-- "examples/notebook_26_orchestrator_pattern.py"
-```
+````python
+--8<-- "examples/notebook_26_orchestrator_pattern.py:47:"
+````

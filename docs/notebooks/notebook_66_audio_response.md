@@ -1,50 +1,48 @@
 # Voice Output
 
 A real agent often needs to talk, not just type. This notebook pairs a
-regular chat-completions agent (text in, text out) with an
-audio-capable model on OCI Generative AI so the response can be spoken
-aloud.
+regular chat-completions agent (text in, text out) with OpenAI's
+audio.speech endpoint so a cloud status advisory can be spoken aloud —
+ready for the on-call hotline, a status-page audio feed, or an IVR
+announcement about a region degradation.
 
 Pipeline::
 
-    user prompt ──▶ Agent (OCIChatCompletionsModel · chat model)
-                       │
-                       │  reply text
-                       ▼
-                 OCI /openai/v1/audio/speech
-                 (openai.gpt-4o-mini-tts)
-                       │
-                       │  mp3 bytes
-                       ▼
-                 ./notebook_66_response.mp3
+    advisory request ──▶ Agent (chat model)
+                            │
+                            │  advisory text
+                            ▼
+                      OpenAI /v1/audio/speech
+                      (gpt-4o-mini-tts)
+                            │
+                            │  mp3 bytes
+                            ▼
+                      ./notebook_66_response.mp3
 
-- Same OCI v1 transport as the rest of the notebooks — one signer, one
-  base URL, one set of credentials. No separate audio service to
-  configure.
+- A plain OpenAI client — no separate audio service to configure.
 - Bring-your-own-voice via the `voice=` parameter (alloy, ash, ballad,
   coral, echo, sage, shimmer, verse).
 - Output is a normal MP3 you can pipe into a frontend `<audio>`
-  element, an IVR system, or a podcast feed.
+  element, the on-call IVR, or a status-page audio feed.
 
-Prerequisites: an audio-capable model on OCI Generative AI. The
-notebook uses `openai.gpt-4o-mini-tts` for synthesis.
+Prerequisites for live speech: an OpenAI API key with access to a TTS
+model. The notebook uses `gpt-4o-mini-tts` for synthesis.
 
 Run it:
 
-    LOCUS_MODEL_PROVIDER=oci \
-    LOCUS_OCI_PROFILE=MY_PROFILE \
-    LOCUS_OCI_REGION=us-chicago-1 \
-    LOCUS_OCI_AUTH_TYPE=security_token \
-    LOCUS_OCI_COMPARTMENT=ocid1.compartment.oc1..…  \
+    LOCUS_MODEL_PROVIDER=openai \
+    OPENAI_API_KEY=sk-... \
     python examples/notebook_66_audio_response.py
 
     afplay notebook_66_response.mp3   # macOS
 
-This notebook does not run under `LOCUS_MODEL_PROVIDER=mock` — it
-builds an OCI signer directly, so it needs real OCI credentials.
+Offline, under `LOCUS_MODEL_PROVIDER=mock` (or with no `OPENAI_API_KEY`),
+the agent still drafts the advisory text against the mock model and the
+notebook prints the synthesis step it *would* run instead of calling the
+real TTS endpoint — so it runs end-to-end with zero credentials.
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_66_audio_response.py"
-```
+````

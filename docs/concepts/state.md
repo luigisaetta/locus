@@ -34,7 +34,7 @@ for you. Reach for it when:
 |---|---|
 | You're writing a custom hook and want to inspect the conversation so far | Read `state.messages`, `state.tool_executions`, `state.confidence` |
 | You're persisting a run and rehydrating later | `state.to_checkpoint()` / `AgentState.from_checkpoint(d)` — every checkpointer does this internally |
-| You're writing a custom termination predicate | `CustomCondition(lambda s: ...)` — `s` is `AgentState` |
+| You're writing a custom termination predicate | `CustomCondition(lambda s, **ctx: (..., "reason"))` — `s` is `AgentState` |
 | You're building a multi-agent graph | Reducers compose new `AgentState` from parallel branches (see below) |
 | You want to seed a run from a previous transcript | Construct `AgentState(messages=(...))` and pass to `agent.run(...)` |
 
@@ -99,7 +99,7 @@ serialize whatever `to_checkpoint()` returns and rehydrate with
 ## Reducers (for graphs only)
 
 When two branches of a [StateGraph](multi-agent/graph.md) modify the
-state in parallel, Oracle Generative AI – Multi-Agent Locus SDK needs
+state in parallel, Locus needs
 to know how to merge them. That's what reducers do:
 
 | Reducer | Combines two values by… |
@@ -125,12 +125,12 @@ doesn't use them. See `locus.core.reducers` for the source.
 
 ## Source
 
-- [`locus.core.state`](https://github.com/oracle-samples/locus/blob/main/src/locus/core/state.py) — `AgentState`, `ToolExecution`, `ReasoningStep`.
-- [`locus.core.reducers`](https://github.com/oracle-samples/locus/blob/main/src/locus/core/reducers.py) — graph-level merge helpers.
+- [`locus.core.state`](https://github.com/oracle/locus/blob/main/src/locus/core/state.py) — `AgentState`, `ToolExecution`, `ReasoningStep`.
+- [`locus.core.reducers`](https://github.com/oracle/locus/blob/main/src/locus/core/reducers.py) — graph-level merge helpers.
 
 ## See also
 
 - [Checkpointers](checkpointers.md) — durable persistence of `AgentState`.
 - [Events](events.md) — what gets emitted as state changes.
-- [Termination](termination.md) — `CustomCondition(fn)` is `(state) -> bool`.
+- [Termination](termination.md) — `CustomCondition(fn)` is `(state, **ctx) -> (stop, reason)`.
 - [Multi-agent: StateGraph](multi-agent/graph.md) — where reducers earn their keep.

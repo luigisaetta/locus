@@ -94,7 +94,7 @@ class TestPrivateAddressesBlocked:
 @pytest.mark.parametrize(
     "ip",
     [
-        "169.254.169.254",  # AWS / GCP / Azure / OCI / DO IMDS
+        "169.254.169.254",  # AWS / GCP / Azure / DO IMDS
         "169.254.170.2",  # AWS ECS task role metadata
         "169.254.169.253",  # Azure IMDS wire server
         "169.254.99.99",  # arbitrary link-local — whole /16 blocked

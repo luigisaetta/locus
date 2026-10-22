@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, SecretStr
@@ -337,7 +337,7 @@ class OracleVectorStore(BaseModel, BaseVectorStore):
                 **params,
             )
 
-        return await get_pool(self, _build)
+        return cast("oracledb.AsyncConnectionPool", await get_pool(self, _build))
 
     @property
     def _full_table_name(self) -> str:

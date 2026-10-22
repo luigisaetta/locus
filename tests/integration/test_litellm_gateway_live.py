@@ -13,21 +13,16 @@ forks.
 
 Run locally::
 
-    # 1. Bring up the sample gateway in another shell.
+    # 1. Bring up the sample gateway in another shell with whatever
+    #    upstream provider credentials it is configured for.
     cd examples/litellm-gateway/
-    export OCI_REGION="us-chicago-1"
-    export OCI_USER="ocid1.user.oc1..xxx"
-    export OCI_FINGERPRINT="aa:bb:cc:..."
-    export OCI_TENANCY="ocid1.tenancy.oc1..xxx"
-    export OCI_KEY_FILE="$HOME/.oci/keys/your_api_key.pem"
-    export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..xxx"
     export LITELLM_MASTER_KEY="$(openssl rand -hex 32)"
     docker compose up -d
 
     # 2. Run the test against the gateway.
     export LITELLM_GATEWAY_URL="http://localhost:4000"
     export LITELLM_GATEWAY_KEY="$LITELLM_MASTER_KEY"
-    export LITELLM_GATEWAY_MODEL="oci-cohere-command"   # alias from config.yaml
+    export LITELLM_GATEWAY_MODEL="gpt-4o-mini"   # alias from config.yaml
     pytest tests/integration/test_litellm_gateway_live.py -v
 
 The CI workflow ``.github/workflows/_litellm_integration.yml`` (added
@@ -44,7 +39,7 @@ import pytest
 
 _GATEWAY_URL = os.environ.get("LITELLM_GATEWAY_URL", "").rstrip("/")
 _GATEWAY_KEY = os.environ.get("LITELLM_GATEWAY_KEY", "")
-_GATEWAY_MODEL = os.environ.get("LITELLM_GATEWAY_MODEL", "oci-cohere-command")
+_GATEWAY_MODEL = os.environ.get("LITELLM_GATEWAY_MODEL", "gpt-4o-mini")
 
 pytestmark = [
     pytest.mark.integration,
@@ -84,7 +79,7 @@ def test_gateway_models_endpoint_lists_documented_alias():
 
 def test_gateway_rejects_unauthenticated_call():
     """Negative-path: without a Bearer token the gateway must NOT
-    forward to OCI. This catches "I forgot to set master_key" and
+    forward upstream. This catches "I forgot to set master_key" and
     open-gateway-by-accident regressions."""
     import httpx
 
@@ -120,7 +115,7 @@ def model():
 
 @pytest.mark.asyncio
 async def test_basic_completion_via_gateway(model):
-    """Locus → gateway → OCI → response. The minimal happy path."""
+    """Locus → gateway → upstream → response. The minimal happy path."""
     from locus.core.messages import Message
 
     resp = await model.complete(
@@ -204,10 +199,9 @@ async def test_tool_call_via_gateway(model):
     # Most chat models will issue the call given an explicit prompt.
     # If the configured alias points at a non-tool-capable model and
     # this assertion ever flakes, change LITELLM_GATEWAY_MODEL to a
-    # tool-capable alias (e.g. oci-grok or oci-gpt5-mini).
+    # tool-capable alias.
     assert resp.message.tool_calls, (
-        "model issued no tool call — set LITELLM_GATEWAY_MODEL to a "
-        "tool-capable alias (e.g. oci-grok)"
+        "model issued no tool call — set LITELLM_GATEWAY_MODEL to a tool-capable alias"
     )
     tc = resp.message.tool_calls[0]
     assert tc.name == "get_weather"
@@ -224,7 +218,7 @@ async def test_tool_call_via_gateway(model):
 async def test_agent_loop_via_gateway(model):
     """Build an Agent, run a prompt, assert the result — this is what
     notebook_71 does in production form. Confirms the entire wiring
-    (Agent + OpenAIModel + gateway + OCI) holds together."""
+    (Agent + OpenAIModel + gateway + upstream) holds together."""
     from locus.agent import Agent
 
     agent = Agent(model=model, system_prompt="Reply with a single sentence.")

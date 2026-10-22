@@ -10,7 +10,7 @@ the last call and threads a continuation token via
 :attr:`ModelResponse.provider_state` /
 :attr:`AgentState.provider_state`.
 
-These tests lock in the plumbing without requiring a real OCI endpoint:
+These tests lock in the plumbing without requiring a real provider endpoint:
 
 - ``AgentState.with_provider_state`` round-trips.
 - ``ModelResponse.provider_state`` defaults to ``None`` for stateless

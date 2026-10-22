@@ -28,7 +28,7 @@ The headline value over the direct providers:
 | Provisioned-capacity inference via [DAC](../../how-to/oci-dac.md) | ✓ |
 | To avoid managing per-provider API keys | ✓ |
 | Bleeding-edge OpenAI features the day they ship | use [OpenAI](openai.md) direct — OCI sometimes lags by hours/days |
-| Local development without auth setup | use [Ollama](ollama.md) instead |
+| Local development without auth setup | use [Ollama or another OpenAI-compatible endpoint](openai-compatible.md) instead |
 
 ## Two transports under one prefix
 
@@ -242,7 +242,7 @@ The agent doesn't care. That's the OCI provider's whole pitch.
 - [OCI Dedicated AI Cluster (DAC)](../../how-to/oci-dac.md) — provisioned-capacity endpoints.
 - [OpenAI](openai.md) — direct OpenAI when OCI lags.
 - [Anthropic](anthropic.md) — Claude direct when OCI lags.
-- [Ollama](ollama.md) — local development before swapping to OCI.
+- [OpenAI-compatible endpoints](openai-compatible.md) — Ollama, vLLM and friends for local development before swapping to OCI.
 
 ### Oracle reference docs
 

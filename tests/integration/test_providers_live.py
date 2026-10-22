@@ -58,8 +58,10 @@ async def test_httpx_web_fetcher_against_example_com() -> None:
 
     assert page.status == 200
     assert "example.com" in page.url.lower() or page.url.startswith("https://")
-    assert "Example Domain" in page.text
+    # The page's wording changes over time (it dropped "Example Domain" from the
+    # body in 2026-09); assert on the title and on some extracted body text.
     assert page.title.lower().startswith("example domain")
+    assert page.text.strip()
 
 
 @skip_without_network
@@ -85,9 +87,11 @@ async def test_openai_search_preview_returns_results() -> None:
     from locus.models.native.openai import OpenAIModel
     from locus.providers.web_search import OpenAISearchPreviewProvider
 
-    model = OpenAIModel(model="gpt-4o-search-preview", max_tokens=1024)
+    model = OpenAIModel(
+        model=os.environ.get("LOCUS_OPENAI_SEARCH_MODEL", "gpt-4o-search-preview"), max_tokens=1024
+    )
     provider = OpenAISearchPreviewProvider(model)
-    hits = await provider.search("Oracle Generative AI service", max_results=3)
+    hits = await provider.search("OpenAI generative AI service", max_results=3)
     assert len(hits) >= 1
     assert all(h.url.startswith(("http://", "https://")) for h in hits)
 
@@ -167,7 +171,9 @@ async def test_agent_uses_auto_registered_web_fetch() -> None:
     from locus.providers.web_fetch import HTTPXWebFetcher
 
     agent = Agent(
-        model=OpenAIModel(model="gpt-4o-mini", max_tokens=512),
+        model=OpenAIModel(
+            model=os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=512
+        ),
         web_fetch=HTTPXWebFetcher(timeout_seconds=10.0),
         max_iterations=4,
         system_prompt=(

@@ -21,12 +21,32 @@ import os
 import time
 from pathlib import Path
 
+import pytest
+
 from locus.tools.registry import ToolRegistry
 from locus.tools.watcher import (
     ToolWatcher,
     load_tools_from_directory,
     load_tools_from_file,
 )
+
+
+def _wait_until(predicate, what: str, timeout: float = 10.0, interval: float = 0.05) -> None:
+    """Block until ``predicate()`` holds, or fail saying what never happened.
+
+    The watcher runs on its own thread, so every assertion about it races a
+    poll loop. The previous form gave the watcher 2s and then asserted
+    regardless of whether the wait had succeeded — so on a loaded runner it
+    produced a confusing value comparison instead of "the watcher never
+    reloaded". A longer deadline costs nothing when the reload is prompt: the
+    loop returns the moment it lands.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return
+        time.sleep(interval)
+    raise AssertionError(f"timed out after {timeout:g}s waiting for {what}")
 
 
 # A reusable tool source shared by most tests.
@@ -182,11 +202,7 @@ class TestToolWatcherDevReload:
         try:
             # Drop a new file in after start — the poll loop must pick it up.
             _write_tool_file(tmp_path, "echo_tool.py")
-            for _ in range(40):
-                if "echo" in registry.tools:
-                    break
-                time.sleep(0.05)
-            assert "echo" in registry.tools
+            _wait_until(lambda: "echo" in registry.tools, "the new file to be picked up")
         finally:
             watcher.stop()
 
@@ -203,11 +219,7 @@ class TestToolWatcherDevReload:
             path.write_text(new_source)
             future_mtime = time.time() + 1
             os.utime(path, (future_mtime, future_mtime))
-            for _ in range(40):
-                if "echo_v2" in registry.tools:
-                    break
-                time.sleep(0.05)
-            assert "echo_v2" in registry.tools
+            _wait_until(lambda: "echo_v2" in registry.tools, "the renamed tool to appear")
         finally:
             watcher.stop()
 
@@ -219,11 +231,10 @@ class TestToolWatcherDevReload:
         try:
             assert str(path) in watcher._file_mtimes
             path.unlink()
-            for _ in range(40):
-                if str(path) not in watcher._file_mtimes:
-                    break
-                time.sleep(0.05)
-            assert str(path) not in watcher._file_mtimes
+            _wait_until(
+                lambda: str(path) not in watcher._file_mtimes,
+                "the deleted file to leave the mtime map",
+            )
         finally:
             watcher.stop()
 
@@ -235,11 +246,7 @@ class TestToolWatcherDevReload:
         watcher.start()
         try:
             _write_tool_file(tmp_path, "echo_tool.py")
-            for _ in range(40):
-                if seen:
-                    break
-                time.sleep(0.05)
-            assert seen, "callback was never invoked"
+            _wait_until(lambda: bool(seen), "the on-change callback to fire")
             assert seen[0][0].name == "echo_tool.py"
         finally:
             watcher.stop()
@@ -254,10 +261,18 @@ class TestToolWatcherDevReload:
         watcher.start()
         try:
             _write_tool_file(tmp_path, "echo_tool.py")
-            # Wait long enough to ensure at least one poll cycle ran.
-            time.sleep(0.5)
-            # The watcher is still running; mtime got recorded.
-            assert any(k.endswith("echo_tool.py") for k in watcher._file_mtimes)
+            # A fixed sleep here raced the poll thread under ``pytest -n
+            # auto``; wait for the observable outcome instead.
+            _wait_until(
+                lambda: any(k.endswith("echo_tool.py") for k in watcher._file_mtimes),
+                "the watcher to record the new file despite the raising callback",
+            )
+            # Still alive after the callback raised: a later file is picked up.
+            _write_tool_file(tmp_path, "second.py")
+            _wait_until(
+                lambda: any(k.endswith("second.py") for k in watcher._file_mtimes),
+                "the watcher to keep polling after the callback raised",
+            )
         finally:
             watcher.stop()
 
@@ -275,13 +290,88 @@ class TestToolWatcherDevReload:
             path.write_text(new_source)
             future_mtime = time.time() + 1
             os.utime(path, (future_mtime, future_mtime))
-            for _ in range(40):
-                if registry.tools["echo"] is not initial_tool:
-                    break
-                time.sleep(0.05)
+            _wait_until(
+                lambda: registry.tools["echo"] is not initial_tool,
+                "the watcher to reload the changed file",
+            )
             assert registry.tools["echo"].description == "Updated description."
         finally:
             watcher.stop()
+
+
+# ---------------------------------------------------------------------------
+# Change detection that mtime alone gets wrong
+# ---------------------------------------------------------------------------
+
+
+class TestToolWatcherChangeSignature:
+    """Driven through ``_scan_directory`` / ``_check_for_changes`` directly, so
+    each case is one deterministic poll instead of a race with the thread."""
+
+    def test_content_written_within_the_same_mtime_tick_is_reloaded(self, tmp_path: Path) -> None:
+        # ``write_text`` creates/truncates the file and then writes it. A poll
+        # between the two steps records the empty file; on a coarse-clock
+        # filesystem the write that follows keeps the same mtime. Pinning
+        # the mtime reproduces that torn read deterministically.
+        registry = ToolRegistry()
+        path = tmp_path / "echo_tool.py"
+        path.write_text("")
+        watcher = ToolWatcher(tmp_path, registry=registry, dev_reload=True)
+        watcher._scan_directory()
+        assert registry.tools == {}
+
+        before = path.stat()
+        path.write_text(_TOOL_SOURCE)
+        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+        watcher._check_for_changes()
+
+        assert "echo" in registry.tools
+
+    def test_file_restored_to_an_older_mtime_is_reloaded(self, tmp_path: Path) -> None:
+        # ``git checkout`` / ``cp -p`` / an editor restoring a backup can move
+        # the mtime backwards; that is still a change to pick up.
+        registry = ToolRegistry()
+        path = _write_tool_file(tmp_path, "t.py")
+        watcher = ToolWatcher(tmp_path, registry=registry, dev_reload=True)
+        watcher._scan_directory()
+        original = registry.tools["echo"]
+
+        # Same length, different description — only the mtime can tell.
+        path.write_text(_TOOL_SOURCE.replace("Echo back the input.", "Echo back the inpuT."))
+        past = time.time() - 3600
+        os.utime(path, (past, past))
+        watcher._check_for_changes()
+
+        assert registry.tools["echo"] is not original
+        assert registry.tools["echo"].description == "Echo back the inpuT."
+
+    def test_unchanged_file_is_not_reloaded(self, tmp_path: Path) -> None:
+        registry = ToolRegistry()
+        _write_tool_file(tmp_path, "t.py")
+        watcher = ToolWatcher(tmp_path, registry=registry, dev_reload=True)
+        watcher._scan_directory()
+        original = registry.tools["echo"]
+
+        watcher._check_for_changes()
+
+        assert registry.tools["echo"] is original
+
+    def test_file_vanishing_between_glob_and_stat_is_skipped(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import locus.tools.watcher as watcher_module
+
+        path = _write_tool_file(tmp_path, "t.py")
+        watcher = ToolWatcher(tmp_path, dev_reload=True)
+        watcher._scan_directory()
+
+        def gone(_p: Path) -> tuple[int, int]:
+            raise FileNotFoundError(str(_p))
+
+        monkeypatch.setattr(watcher_module, "_signature", gone)
+        watcher._check_for_changes()  # Must not raise.
+
+        assert str(path) not in watcher._file_mtimes
 
 
 # ---------------------------------------------------------------------------

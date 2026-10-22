@@ -28,15 +28,6 @@ class TestRAGEmbeddingsDirectImports:
 class TestRAGEmbeddingsLazyImports:
     """Tests for lazy imports in RAG embeddings module."""
 
-    def test_lazy_import_oci_embeddings(self):
-        """Test lazy importing OCIEmbeddings."""
-        try:
-            from locus.rag.embeddings import OCIEmbeddings
-
-            assert OCIEmbeddings is not None
-        except ImportError:
-            pytest.skip("OCI dependencies not available")
-
     def test_lazy_import_openai_embeddings(self):
         """Test lazy importing OpenAIEmbeddings."""
         try:

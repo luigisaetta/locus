@@ -1,7 +1,3 @@
-# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
-# Licensed under the Universal Permissive License v1.0 as shown at
-# https://oss.oracle.com/licenses/upl/
-
 """Rerankers — reorder retriever candidates by relevance to a query.
 
 The retrieve-then-rerank pattern materially improves answer grounding in
@@ -14,15 +10,39 @@ score misses.
 This subpackage adds:
 
   * :class:`Reranker` — abstract base every reranker implements.
-  * :class:`CohereReranker` — OCI Generative AI Cohere rerank-v3.5 (and,
-    once GA on the on-demand wire, rerank-v4) implementation.
+  * :class:`CrossEncoderReranker` — local ``sentence-transformers``
+    cross-encoder; runs fully offline, no API key.
+  * :class:`CohereReranker` — Cohere's hosted rerank API (direct).
+  * :class:`OCICohereReranker` — Cohere rerank models served by OCI
+    Generative AI (rerank-v3.5, rerank-v4.0).
 
-Closes #216. Wire one into a retriever with ``RAGRetriever(reranker=...)``
-to swap the default semantic-only ordering for a reranked one.
+Wire one into a retriever with ``RAGRetriever(reranker=...)`` to swap the
+default semantic-only ordering for a reranked one.
 """
 
+from typing import Any
+
 from locus.rag.reranker.base import Reranker
-from locus.rag.reranker.cohere_oci import CohereReranker
 
 
-__all__ = ["CohereReranker", "Reranker"]
+__all__ = ["CohereReranker", "CrossEncoderReranker", "OCICohereReranker", "Reranker"]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy import rerankers to avoid requiring optional dependencies."""
+    if name == "CrossEncoderReranker":
+        from locus.rag.reranker.cross_encoder import CrossEncoderReranker
+
+        return CrossEncoderReranker
+
+    if name == "CohereReranker":
+        from locus.rag.reranker.cohere import CohereReranker
+
+        return CohereReranker
+
+    if name == "OCICohereReranker":
+        from locus.rag.reranker.cohere_oci import OCICohereReranker
+
+        return OCICohereReranker
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)

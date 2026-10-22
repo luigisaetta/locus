@@ -1,3 +1,7 @@
+---
+title: GSAR — typed grounding
+---
+
 # GSAR — typed grounding
 
 Imagine an incident-response agent that pulls three log lines, two
@@ -8,8 +12,8 @@ the outage."* Vanilla `Agent(grounding=True)` — a single LLM-as-judge
 scalar over the answer as a whole — often misses this. Each *claim* is
 grounded; the *conclusion* over-reaches.
 
-**GSAR** (Grounding-Stratified Adaptive Replanning, from
-[Federico A. Kamelhar (2026), arXiv:2604.23366](https://arxiv.org/abs/2604.23366))
+**GSAR** (typed grounding, after the method in F. A. Kamelhar,
+[arXiv:2604.23366 (2026)](https://arxiv.org/abs/2604.23366))
 is the upgrade. It
 breaks the synthesis into claims, partitions them four ways, scores
 the partition with per-evidence-type weights, and picks one of three
@@ -17,8 +21,9 @@ responses: `proceed` if the synthesis holds up, `regenerate` if the
 evidence is fine but the wording is loose (rewrites without re-running
 tools), or `replan` if the evidence itself is missing or contradicted.
 The math is small (one equation), the integration is one Pydantic
-type, and six monotonicity / adversarial-robustness properties are
-formally provable.
+type, and six properties of the scoring function are formally provable. Those
+properties describe the arithmetic after a partition is supplied; they do not
+prove that an LLM judge classified a claim or its evidence correctly.
 
 Use GSAR for high-stakes pipelines — operational incidents, regulated
 diagnostics, anything where the "evidence fine, conclusion loose"
@@ -26,11 +31,13 @@ failure mode is a real cost. Use vanilla `grounding=True` for
 everything else; binary verdicts are cheaper and good enough most
 of the time.
 
+{{ locus_diagram gsar-decision }}
+
 ## What it adds
 
 | | Vanilla grounding | GSAR |
 |---|---|---|
-| Output | `is_grounded ∈ {true, false}` + scalar `s ∈ [0, 1]` | Four-way partition `G ⊔ U ⊔ X ⊔ K`, scalar `S`, abstain channel |
+| Output | `is_grounded ∈ {true, false}` + scalar `s ∈ [0, 1]` | Four-way partition `G ⊔ U ⊔ X ⊔ K` (grounded, ungrounded, contradicted, complementary), scalar `S`, abstain channel |
 | Evidence weighting | Uniform | Per-type weights `w: T → [0, 1]` (tool_match weighted higher than inference) |
 | Recovery | Binary `{stop, replan}` | Three-tier `{proceed, regenerate, replan}` — middle tier rewrites the synthesis without re-running expensive tools |
 | Adversarial robustness | Score inflates if a contradicted claim is silently dropped | Asymmetric contradiction penalty `ρ` keeps `X` in the denominator |
@@ -42,14 +49,22 @@ For a claim partition — `G` grounded, `U` ungrounded, `X` contradicted,
 `K` complementary — an evidence-type weight map `w`, and a
 contradiction penalty `ρ ∈ [0, 1]`, the GSAR score is:
 
-$$
-S = \frac{W(\mathcal G) + W(\mathcal K)}{W(\mathcal G) + W(\mathcal U) + \rho \cdot W(\mathcal X) + W(\mathcal K)}
-$$
+<math display="block" aria-label="S equals the weight of G plus the weight of K, divided by the weight of G plus the weight of U plus rho times the weight of X plus the weight of K">
+  <mrow>
+    <mi>S</mi><mo>=</mo>
+    <mfrac>
+      <mrow><mi>W</mi><mo>(</mo><mi>G</mi><mo>)</mo><mo>+</mo><mi>W</mi><mo>(</mo><mi>K</mi><mo>)</mo></mrow>
+      <mrow><mi>W</mi><mo>(</mo><mi>G</mi><mo>)</mo><mo>+</mo><mi>W</mi><mo>(</mo><mi>U</mi><mo>)</mo><mo>+</mo><mi>ρ</mi><mo>·</mo><mi>W</mi><mo>(</mo><mi>X</mi><mo>)</mo><mo>+</mo><mi>W</mi><mo>(</mo><mi>K</mi><mo>)</mo></mrow>
+    </mfrac>
+  </mrow>
+</math>
 
 where `W(P) = Σ_{c ∈ P} w(type(c))`. On the empty partition `S = 0.5`
 (epistemic indifference). The score lives in `[0, 1]`; six monotonicity
-and adversarial-robustness properties are proven in Appendix A of the
-paper and locked under unit tests in `tests/unit/test_gsar.py`.
+and adversarial-robustness properties of this scoring function are proven in
+Appendix A of the paper and locked under unit tests in
+`tests/unit/test_gsar.py`. Empirical judge reliability is a separate question
+that must be evaluated on deployment data.
 
 ## The decision
 
@@ -139,21 +154,21 @@ production you'd map your tool taxonomy onto these.
 
 ## Source and tests
 
-- [`src/locus/reasoning/gsar.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/reasoning/gsar.py)
+- [`src/locus/reasoning/gsar.py`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/gsar.py)
   — Pydantic types, `gsar_score`, `decide`, defaults from Appendix B.
-- [`src/locus/reasoning/gsar_judge.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/reasoning/gsar_judge.py)
+- [`src/locus/reasoning/gsar_judge.py`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/gsar_judge.py)
   — `BaseGSARJudge` Protocol, `JudgeOutput` schema (Appendix C),
   `StructuredOutputGSARJudge` reference implementation.
-- [`src/locus/reasoning/gsar_evaluator.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/reasoning/gsar_evaluator.py)
+- [`src/locus/reasoning/gsar_evaluator.py`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/gsar_evaluator.py)
   — Algorithm-1 outer loop with `K_max` budget.
-- [`tests/unit/test_gsar.py`](https://github.com/oracle-samples/locus/blob/main/tests/unit/test_gsar.py)
-  — 54 tests verifying properties P1–P6 + Appendix-E worked example.
-- [`tests/unit/test_gsar_judge.py`](https://github.com/oracle-samples/locus/blob/main/tests/unit/test_gsar_judge.py)
+- [`tests/unit/test_gsar.py`](https://github.com/oracle/locus/blob/main/tests/unit/test_gsar.py)
+  — property tests verifying P1–P6 + the Appendix-E worked example.
+- [`tests/unit/test_gsar_judge.py`](https://github.com/oracle/locus/blob/main/tests/unit/test_gsar_judge.py)
   — schema validation + structured-output fallback chain.
-- [`tests/unit/test_gsar_evaluator.py`](https://github.com/oracle-samples/locus/blob/main/tests/unit/test_gsar_evaluator.py)
+- [`tests/unit/test_gsar_evaluator.py`](https://github.com/oracle/locus/blob/main/tests/unit/test_gsar_evaluator.py)
   — outer loop, abstain handling, budget exhaustion.
-- [`tests/integration/test_gsar_live.py`](https://github.com/oracle-samples/locus/blob/main/tests/integration/test_gsar_live.py)
+- [`tests/integration/test_gsar_live.py`](https://github.com/oracle/locus/blob/main/tests/integration/test_gsar_live.py)
   — live LLM judge driving the full loop.
-- [`examples/notebook_37_gsar_typed_grounding.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_37_gsar_typed_grounding.py)
+- [`examples/notebook_37_gsar_typed_grounding.py`](https://github.com/oracle/locus/blob/main/examples/notebook_37_gsar_typed_grounding.py)
   — a runnable walkthrough of the four parts.
-- Paper: [Federico A. Kamelhar (2026), arXiv:2604.23366](https://arxiv.org/abs/2604.23366).
+- Paper: [arXiv:2604.23366 (2026)](https://arxiv.org/abs/2604.23366).

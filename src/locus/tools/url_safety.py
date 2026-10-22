@@ -76,7 +76,7 @@ _BLOCKED_HOSTNAMES: frozenset[str] = frozenset(
 # (IMDS) — the single most common SSRF target.
 _ALWAYS_BLOCKED_IPS: frozenset[ipaddress.IPv4Address | ipaddress.IPv6Address] = frozenset(
     {
-        ipaddress.ip_address("169.254.169.254"),  # AWS / GCP / Azure / OCI / DO
+        ipaddress.ip_address("169.254.169.254"),  # AWS / GCP / Azure / DO
         ipaddress.ip_address("169.254.170.2"),  # AWS ECS task-role metadata
         ipaddress.ip_address("169.254.169.253"),  # Azure IMDS wire server
         ipaddress.ip_address("fd00:ec2::254"),  # AWS metadata (IPv6)

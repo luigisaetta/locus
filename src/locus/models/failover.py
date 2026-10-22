@@ -8,7 +8,7 @@ Locus's exception hierarchy in :mod:`locus.core.errors` tells callers
 *what went wrong*. This module tells them *what to do about it*.
 
 Given an arbitrary exception raised by any model provider (OpenAI,
-Anthropic, OCI GenAI, Ollama, …) the :func:`classify` entry point
+Anthropic, …) the :func:`classify` entry point
 returns a frozen :class:`FailoverDecision` with:
 
 - a :class:`FailoverReason` (a stable, loggable enum value) and

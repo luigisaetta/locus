@@ -1,32 +1,40 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Notebook 42: MCP integration — publish and consume tools across processes.
+"""Notebook 45: MCP integration — wire support tooling into an agent.
 
 MCP (Model Context Protocol) is the open standard that lets AI
-assistants call tools running in a different process. Locus speaks
-both sides of it.
+assistants call tools running in a different process — exactly how a
+support desk wires its order system, help center, and billing services
+into an agent without bundling them. Locus speaks both sides of it.
 
-- Publish a Locus agent as an MCP server — tools and the agent's own
-  ``run_agent`` become MCP methods.
-- Connect a Locus agent to an external MCP server and use its tools as
-  ordinary ``@tool``-decorated callables.
+- Publish a Locus support agent as an MCP server — tools and the
+  agent's own ``run_agent`` become MCP methods.
+- Connect a Locus agent to an external MCP server (an order system, a
+  knowledge base) and use its tools as ordinary ``@tool``-decorated
+  callables.
 - Convert tool schemas in both directions
   (``locus_tool_to_mcp`` / ``mcp_tool_to_locus``).
 - Handle ``tools/list`` and ``tools/call`` requests programmatically.
+- A **refund-eligibility probe** exposed as an MCP tool: it reads order
+  signals (days since delivery, item condition, order value), a
+  deterministic classifier returns an ``EligibilityVerdict``, and a
+  grounding step either ships a grounded eligibility decision or abstains
+  when signal coverage is too low.
 
-OCI GenAI drives the agent by default. The MCP layer is transport-only
-— the same agent works against any provider.
+The configured provider drives the agent. The MCP layer is transport-only
+— the same agent works against any provider. All tool outputs here are
+mock data (invented orders, fixed signals) — no live order system.
 
 Run it:
-    # OCI GenAI is the default — auto-detected from ~/.oci/config.
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_47_mcp_integration.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_45_mcp_integration.py
 
     # Offline:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_47_mcp_integration.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_45_mcp_integration.py
 
 Prerequisites:
-- An OCI profile with GenAI access, or set ``LOCUS_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 - Optional: ``pip install fastmcp`` to exercise live request handling.
 
@@ -37,15 +45,25 @@ import ast
 import asyncio
 import json
 import operator as _op
+from collections.abc import Mapping
 
 # Import shared config for model
 from config import get_model, print_config
+from pydantic import BaseModel
 
 from locus.agent import Agent
 from locus.integrations.fastmcp import (
     LocusMCPServer,
     create_mcp_server,
     locus_tool_to_mcp,
+)
+from locus.reasoning.gsar import (
+    Claim,
+    Decision,
+    EvidenceType,
+    Partition,
+    decide,
+    gsar_score,
 )
 from locus.tools import tool
 
@@ -82,51 +100,110 @@ def _safe_math_eval(expression: str) -> float:
 
 
 # =============================================================================
-# Part 1: Three ordinary Locus tools. Nothing MCP-specific about them yet.
+# Part 1: Three ordinary Locus support tools. Nothing MCP-specific yet.
+#         All data is mock — invented order ids, canned articles.
 # =============================================================================
 
 
 @tool
-def get_weather(city: str) -> str:
-    """Get the current weather for a city."""
-    weather_data = {
-        "new york": {"temp": 72, "condition": "sunny"},
-        "london": {"temp": 55, "condition": "cloudy"},
-        "tokyo": {"temp": 68, "condition": "partly cloudy"},
+def order_status(order_id: str) -> str:
+    """Look up the shipping status for an order."""
+    order_data = {
+        "ORD-1001": {"status": "delivered", "days_ago": 2},
+        "ORD-1002": {"status": "in_transit", "days_ago": 0},
+        "ORD-1003": {"status": "delivered", "days_ago": 45},
     }
-    data = weather_data.get(city.lower(), {"temp": 70, "condition": "unknown"})
-    return f"Weather in {city}: {data['temp']}°F, {data['condition']}"
+    data = order_data.get(order_id, {"status": "not_found", "days_ago": 0})
+    return f"Order {order_id}: {data['status']} ({data['days_ago']} days ago)"
 
 
 @tool
-def search_database(query: str, limit: int = 5) -> list[dict]:
-    """Search the database for matching records."""
+def search_help_articles(query: str, limit: int = 5) -> list[dict]:
+    """Search the help center for matching articles."""
     return [
-        {"id": 1, "title": f"Result for '{query}' - Item 1"},
-        {"id": 2, "title": f"Result for '{query}' - Item 2"},
+        {"id": 1, "title": f"Help article for '{query}' - Article 1"},
+        {"id": 2, "title": f"Help article for '{query}' - Article 2"},
     ][:limit]
 
 
 @tool
 def calculate(expression: str) -> str:
-    """Evaluate a mathematical expression."""
+    """Evaluate a mathematical expression (e.g. a prorated-refund formula)."""
     try:
         return str(_safe_math_eval(expression))
     except (ValueError, SyntaxError, ZeroDivisionError):
         return "Error: Invalid expression"
 
 
-def example_locus_tools():
-    print("=== Part 1: Locus Tools ===\n")
+# The expected signal schema for a refund-eligibility check: days since
+# delivery, an item-condition score, and the order value. Real desks read
+# these from the order/returns system; here they are fixed mock numbers so
+# the notebook stays offline and deterministic.
+_ELIGIBILITY_SIGNALS = ("days_since_delivery", "item_condition_score", "order_value_usd")
 
-    print("Tool: get_weather")
-    print(f"  Name: {get_weather.name}")
-    print(f"  Description: {get_weather.description}")
-    print(f"  Parameters: {json.dumps(get_weather.parameters, indent=4)}")
+
+class EligibilityVerdict(BaseModel):
+    """A refund-eligibility decision plus its confidence and coverage."""
+
+    decision: str
+    reason: str
+    confidence: float
+    signal_coverage: float
+
+
+def _classify_eligibility(signals: Mapping[str, float]) -> EligibilityVerdict:
+    """Deterministic mock eligibility classifier (no model file, no network).
+
+    Maps an order-signal vector to a refund decision over a fixed rule.
+    ``signal_coverage`` is the fraction of the expected schema actually
+    present — low coverage yields low confidence so the grounding step
+    abstains rather than promising a refund.
+    """
+    coverage = sum(1 for s in _ELIGIBILITY_SIGNALS if s in signals) / len(_ELIGIBILITY_SIGNALS)
+    # Inside the 30-day window and returned in good condition: a clean refund.
+    within_window = signals.get("days_since_delivery", 9e9) <= 30
+    good_condition = signals.get("item_condition_score", 0) >= 0.8
+    eligible = within_window and good_condition
+    return EligibilityVerdict(
+        decision="refund" if eligible else "manual_review",
+        reason="within window, good condition" if eligible else "needs an agent to review",
+        confidence=round(0.9 * coverage, 4),
+        signal_coverage=round(coverage, 4),
+    )
+
+
+@tool
+def check_refund_eligibility(signals_json: str) -> str:
+    """Check refund eligibility from order signals.
+
+    Pass a JSON object of order signals (days_since_delivery,
+    item_condition_score, order_value_usd). Returns the classifier verdict
+    as JSON. Read-only assessment — it never issues the refund itself.
+    """
+    try:
+        signals = {k: float(v) for k, v in json.loads(signals_json).items()}
+    except (ValueError, TypeError):
+        return '{"error": "signals_json must be a JSON object of numbers"}'
+    return _classify_eligibility(signals).model_dump_json()
+
+
+def example_locus_tools():
+    print("=== Part 1: Locus Support Tools ===\n")
+
+    print("Tool: order_status")
+    print(f"  Name: {order_status.name}")
+    print(f"  Description: {order_status.description}")
+    print(f"  Parameters: {json.dumps(order_status.parameters, indent=4)}")
 
     print("\nDirect execution:")
-    result = get_weather("Tokyo")
-    print(f"  get_weather('Tokyo') = {result}")
+    result = order_status("ORD-1001")
+    print(f"  order_status('ORD-1001') = {result}")
+
+    print("\nTool: check_refund_eligibility (refund-eligibility probe)")
+    elig = check_refund_eligibility(
+        '{"days_since_delivery": 2, "item_condition_score": 0.95, "order_value_usd": 60}'
+    )
+    print(f"  check_refund_eligibility(full signals) = {elig}")
     print()
 
 
@@ -138,14 +215,15 @@ def example_locus_tools():
 def example_tool_conversion():
     print("=== Part 2: Tool Conversion ===\n")
 
-    mcp_schema = locus_tool_to_mcp(get_weather)
+    mcp_schema = locus_tool_to_mcp(order_status)
 
     print("Locus tool converted to MCP schema:")
     print(json.dumps(mcp_schema, indent=2))
     print()
 
     print("MCP tools can be converted to Locus tools using mcp_tool_to_locus()")
-    print("This allows using external MCP server tools in Locus agents.")
+    print("This lets a Locus agent use tools from external MCP servers —")
+    print("an order system, a returns service, a knowledge base — without bundling them.")
     print()
 
 
@@ -162,13 +240,16 @@ def example_mcp_server():
 
     agent = Agent(
         model=model,
-        tools=[get_weather, search_database, calculate],
-        system_prompt="You are a helpful assistant with access to weather, search, and calculator tools.",
+        tools=[order_status, search_help_articles, calculate, check_refund_eligibility],
+        system_prompt=(
+            "You are a customer-support assistant with order status lookup, help-center "
+            "search, a refund calculator, and a refund-eligibility probe."
+        ),
     )
 
     server = create_mcp_server(
         agent=agent,
-        name="locus-assistant",
+        name="locus-support-desk",
         version="1.0.0",
     )
 
@@ -182,7 +263,9 @@ def example_mcp_server():
     print()
 
     print("The server exposes:")
-    print("  - All agent tools (get_weather, search_database, calculate)")
+    print(
+        "  - All agent tools (order_status, search_help_articles, calculate, check_refund_eligibility)"
+    )
     print("  - run_agent(prompt) - Run the full agent")
     print("  - run_agent_stream(prompt) - Run with streaming")
     print()
@@ -213,11 +296,11 @@ async def example_mcp_requests():
 
     agent = Agent(
         model=model,
-        tools=[get_weather, calculate],
-        system_prompt="You are helpful.",
+        tools=[order_status, calculate],
+        system_prompt="You are a customer-support assistant.",
     )
 
-    server = LocusMCPServer(agent=agent, name="test-server")
+    server = LocusMCPServer(agent=agent, name="test-support-server")
 
     list_request = {"method": "tools/list", "params": {}}
     list_response = await server.handle_request(list_request)
@@ -229,13 +312,13 @@ async def example_mcp_requests():
     call_request = {
         "method": "tools/call",
         "params": {
-            "name": "get_weather",
-            "arguments": {"city": "London"},
+            "name": "order_status",
+            "arguments": {"order_id": "ORD-1002"},
         },
     }
     call_response = await server.handle_request(call_request)
 
-    print("Request: tools/call (get_weather)")
+    print("Request: tools/call (order_status)")
     print(f"Response: {json.dumps(call_response, indent=2)}")
     print()
 
@@ -248,13 +331,14 @@ async def example_mcp_requests():
 def example_mcp_client():
     print("=== Part 5: MCP Client ===\n")
 
-    print("MCPClient allows Locus agents to use tools from external MCP servers.")
+    print("MCPClient lets Locus agents use tools from external MCP servers —")
+    print("e.g. your team's order system or returns service running out of process.")
     print()
 
     print("Example usage:")
     print("""
-    # Connect to an MCP server
-    client = MCPClient(server_command=["python", "weather_server.py"])
+    # Connect to a support-tools MCP server
+    client = MCPClient(server_command=["python", "orders_server.py"])
     await client.connect()
 
     # List available tools
@@ -262,7 +346,7 @@ def example_mcp_client():
     print(f"Available tools: {tools}")
 
     # Call a tool
-    result = await client.call_tool("get_weather", {"city": "Paris"})
+    result = await client.call_tool("order_status", {"order_id": "ORD-1001"})
     print(f"Result: {result}")
 
     # Convert MCP tools to Locus tools
@@ -272,7 +356,7 @@ def example_mcp_client():
     agent = Agent(
         model=model,
         tools=locus_tools,  # Tools from the MCP server!
-        system_prompt="Use the available tools.",
+        system_prompt="Resolve tickets with the available tools.",
     )
 
     # Close connection
@@ -301,18 +385,18 @@ async def example_complete_integration():
 
     agent = Agent(
         model=model,
-        tools=[get_weather, search_database, calculate],
-        system_prompt="""You are a helpful assistant.
+        tools=[order_status, search_help_articles, calculate],
+        system_prompt="""You are a customer-support assistant.
 Use the available tools to answer questions:
-- get_weather: Check weather in cities
-- search_database: Search for information
-- calculate: Do math calculations""",
+- order_status: Check the shipping status of an order
+- search_help_articles: Search help-center articles
+- calculate: Do prorated-refund math""",
     )
 
-    server = create_mcp_server(agent, name="multi-tool-assistant")
+    server = create_mcp_server(agent, name="support-desk-assistant")
 
     print(f"Created MCP server: {server.name}")
-    print(f"Agent tools: {[t.name for t in [get_weather, search_database, calculate]]}")
+    print(f"Agent tools: {[t.name for t in [order_status, search_help_articles, calculate]]}")
     print()
 
     if not has_fastmcp:
@@ -338,7 +422,7 @@ Use the available tools to answer questions:
             "method": "tools/call",
             "params": {
                 "name": "run_agent",
-                "arguments": {"prompt": "What's the weather in Tokyo?"},
+                "arguments": {"prompt": "What's the status of ORD-1001?"},
             },
         }
     )
@@ -350,16 +434,98 @@ Use the available tools to answer questions:
 
 
 # =============================================================================
-# Part 7: Practical notes — tool design, errors, security, performance.
+# Part 7: The eligibility probe over MCP — read order signals, classify, then
+#         ground the verdict (or abstain on low coverage). The grounding step
+#         only "ships" a refund decision when it rests on tool evidence; thin
+#         inference abstains. All numbers are mock.
+# =============================================================================
+
+
+def _ground_eligibility(partition: Partition) -> tuple[float, Decision]:
+    """Score the evidence partition and turn it into a proceed/abstain call."""
+    score = gsar_score(partition)
+    return score, decide(score)
+
+
+async def example_eligibility_probe():
+    print("=== Part 7: Refund-Eligibility Probe ===\n")
+
+    # Expose the probe as an MCP tool alongside the support tools.
+    print("Tool:", check_refund_eligibility.name)
+    print(f"  Description: {check_refund_eligibility.description}\n")
+
+    order_id = "ORD-1001"
+
+    # Full signal coverage: days since delivery, item condition, and order
+    # value all read. The probe call is the tool-output evidence; the
+    # verdict's typed fields are specific data lifted from that output.
+    full = {"days_since_delivery": 2.0, "item_condition_score": 0.95, "order_value_usd": 60.0}
+    verdict = _classify_eligibility(full)
+    print(f"Order signals (full): {full}")
+    print(
+        f"  Verdict: {verdict.decision} — {verdict.reason} "
+        f"(confidence={verdict.confidence}, coverage={verdict.signal_coverage})"
+    )
+
+    grounded = Partition(
+        grounded=[
+            Claim(
+                text=f"Returns probe of {order_id} read days_since_delivery="
+                f"{full['days_since_delivery']}, condition={full['item_condition_score']}.",
+                type=EvidenceType.TOOL_MATCH,
+                evidence_refs=[f"tool:check_refund_eligibility:{order_id}:full"],
+            ),
+            Claim(
+                text=f"Classifier mapped the signal vector to '{verdict.decision}'.",
+                type=EvidenceType.SPECIFIC_DATA,
+                evidence_refs=["classifier:refund_rules:row=within_window"],
+            ),
+        ],
+    )
+    score, call = _ground_eligibility(grounded)
+    print("  ground_eligibility (full coverage):")
+    if call == Decision.PROCEED:
+        print(f"    SHIP  S={score:.4f}  decision={verdict.decision}")
+    else:
+        print(f"    ABSTAIN  S={score:.4f}  ({call.name})")
+
+    # Low coverage: only days_since_delivery was observable, so the classifier
+    # returns low confidence. The thin inference does not clear the bar — the
+    # grounding step abstains rather than promising a refund.
+    sparse = {"days_since_delivery": 2.0}
+    weak_verdict = _classify_eligibility(sparse)
+    print(f"\nOrder signals (sparse): {sparse}")
+    print(
+        f"  Verdict coverage={weak_verdict.signal_coverage}, confidence={weak_verdict.confidence}"
+    )
+    ungrounded = Partition(
+        ungrounded=[
+            Claim(
+                text=f"Order {order_id} is probably '{weak_verdict.decision}'.",
+                type=EvidenceType.INFERENCE,
+            ),
+        ],
+    )
+    score2, call2 = _ground_eligibility(ungrounded)
+    print("  ground_eligibility (low coverage):")
+    if call2 == Decision.PROCEED:
+        print(f"    SHIP  S={score2:.4f}  decision={weak_verdict.decision}")
+    else:
+        print(f"    ABSTAIN  S={score2:.4f}  ({call2.name})")
+    print()
+
+
+# =============================================================================
+# Part 8: Practical notes — tool design, errors, safety, performance.
 # =============================================================================
 
 
 def example_best_practices():
-    print("=== Part 7: Best Practices ===\n")
+    print("=== Part 8: Best Practices ===\n")
 
     print("1. Tool Design")
     print("-" * 40)
-    print("   - Use clear, descriptive tool names")
+    print("   - Use clear, descriptive tool names (order_status, not lookup)")
     print("   - Write detailed docstrings (they become descriptions)")
     print("   - Use type hints for parameters")
     print("   - Return strings or JSON-serializable data")
@@ -372,19 +538,19 @@ def example_best_practices():
     print("   - Include helpful error messages")
     print()
 
-    print("3. Security")
+    print("3. Safety")
     print("-" * 40)
-    print("   - Validate all inputs")
-    print("   - Limit what tools can access")
-    print("   - Use hooks for additional validation")
-    print("   - Don't expose sensitive operations")
+    print("   - Validate all inputs — tool output from an order system is untrusted")
+    print("   - Limit what tools can access; read-only lookups by default")
+    print("   - Use hooks for additional validation and audit logging")
+    print("   - Don't expose refund or account-mutating operations over MCP")
     print()
 
     print("4. Performance")
     print("-" * 40)
     print("   - Keep tools focused and fast")
     print("   - Use async for I/O operations")
-    print("   - Consider caching for repeated calls")
+    print("   - Consider caching for repeated order lookups")
     print()
 
 
@@ -395,7 +561,7 @@ def example_best_practices():
 
 async def main():
     print("=" * 60)
-    print("Notebook 42: MCP Integration")
+    print("Notebook 45: MCP Integration")
     print("=" * 60)
     print()
 
@@ -408,10 +574,11 @@ async def main():
     await example_mcp_requests()
     example_mcp_client()
     await example_complete_integration()
+    await example_eligibility_probe()
     example_best_practices()
 
     print("=" * 60)
-    print("Done. Next: notebook 42 — playbooks.")
+    print("Done. Next: notebook 46 — playbooks.")
     print("=" * 60)
 
 

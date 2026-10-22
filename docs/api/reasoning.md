@@ -1,5 +1,12 @@
 # Reasoning
 
+Self-evaluation primitives for agents — reflexion (critique and retry),
+grounding (checking claims against evidence), causal chains, and GSAR's
+typed grounding scores.
+
+For the concepts, start with [Reasoning](../concepts/reasoning.md) and
+[GSAR typed grounding](../concepts/gsar.md).
+
 ## Reflexion
 
 ::: locus.reasoning.reflexion.Reflector

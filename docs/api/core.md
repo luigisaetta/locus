@@ -6,6 +6,9 @@ import from `locus.core` directly — the re-exports at the package root
 but the typed protocols, error classes, and control-flow helpers below
 are the foundation underneath every API.
 
+For the concepts, start with [Errors](../concepts/errors.md) and
+[State](../concepts/state.md), which also explains the reducers below.
+
 ## Configuration
 
 ::: locus.core.config.LocusSettings
@@ -54,6 +57,14 @@ for, e.g., a checkpoint miss vs. a model throttle.
 ::: locus.core.errors.ToolNotFoundError
 ::: locus.core.errors.ToolValidationError
 
+### Reasoning errors
+
+Raised only when `GSARConfig.fail_on_low_score` is set. The default is off — a
+judgment is information, and most callers want to weigh it. Turn it on for a
+pipeline that must not ship an un-grounded answer at all.
+
+::: locus.core.errors.GSARValidationError
+
 ### Checkpoint errors
 
 ::: locus.core.errors.CheckpointError
@@ -83,7 +94,7 @@ The agent loop also uses `interrupt()` for human-in-the-loop pauses.
 ::: locus.core.command.is_command
 ::: locus.core.command.normalize_node_output
 
-### Interrupt (HITL)
+### Interrupt (human-in-the-loop)
 
 ::: locus.core.interrupt.interrupt
 ::: locus.core.interrupt.InterruptException

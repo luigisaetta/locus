@@ -4,25 +4,47 @@ build-backend = "hatchling.build"
 
 [project]
 name = "locus-sdk"
-version = "0.2.0"
-description = "Multi-agent workflows for Python — stream them, branch them, pause for a human, resume next week. Built on Oracle Generative AI."
+version = "3.0.0"
+description = "The agent framework where the model never holds the trigger — every consequential action clears your policy first, waits for a human when it matters, and lands on a record you can verify. Build on it, or put it around the agent you already have."
 readme = "README.md"
 license = "UPL-1.0"
+license-files = ["LICENSE", "LICENSE.txt", "THIRD_PARTY_LICENSES.txt"]
 requires-python = ">=3.11"
 authors = [
-    { name = "Federico Kamelhar" },
+    { name = "Oracle and/or its affiliates" },
 ]
+# Ordered by the job a searcher is actually trying to do. The gate terms come
+# first on purpose: people arrive looking for "how do I stop my agent doing X
+# in production", not for another agent framework.
 keywords = [
+    "human-in-the-loop",
+    "hitl",
+    "agent-approvals",
+    "tool-approval",
+    "tool-authorization",
+    "guardrails",
+    "audit-trail",
+    "policy-engine",
+    "ai-safety",
+    "agent-security",
     "agents",
+    "agent-framework",
+    "agentic",
     "ai",
     "llm",
+    "multi-agent",
     "orchestration",
+    "cognitive-router",
+    "rag",
+    "grounding",
+    "gsar",
+    "safety",
     "pydantic",
     "react",
     "reflexion",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Universal Permissive License (UPL)",
     "Operating System :: OS Independent",
@@ -32,24 +54,15 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
     "Typing :: Typed",
 ]
 
 dependencies = [
     # Capped at <1.0: httpx 1.0.dev3 drops the top-level ``httpx.Auth``
-    # re-export, which breaks ``OCIRequestSigner`` and ``BearerAuth``
-    # (both subclass ``httpx.Auth``). Lift the cap after porting those
-    # two classes to the 1.0 auth API.
+    # re-export, which ``BearerAuth`` (and other auth helpers) subclass.
+    # Lift the cap after porting those to the 1.0 auth API.
     "httpx>=0.27,<1.0",
-    # Capped at <1.2: starlette 1.2.0 (2026-05-28) makes its TestClient
-    # require ``httpx2`` instead of ``httpx``; collection-time imports
-    # in ``tests/unit/test_a2a_protocol.py`` and
-    # ``tests/unit/test_server_app_full.py`` raise
-    # ``StarletteDeprecationWarning`` → ``ModuleNotFoundError``. The
-    # ``httpx<1.0`` pin above already prevents installing ``httpx2``
-    # (which is httpx 2.x), so the only sane cap here is starlette
-    # itself. Lift together with the httpx cap.
-    "starlette<1.4",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "typing-extensions>=4.0",
@@ -57,23 +70,23 @@ dependencies = [
 
 [project.optional-dependencies]
 # Model providers — every provider class under src/locus/models/native/
-# and src/locus/models/providers/ has a matching extra here. Keep this
-# list in sync when adding a new provider.
-openai = ["openai>=1.50"]
+# has a matching extra here. Keep this list in sync when adding a provider.
+# openai 3.x moved to the httpx2 client; the OCI V1 transport signs requests
+# through an httpx.Auth hook, so the SDK stays on the httpx-based 2.x line
+# until that transport is ported. The lock resolves to 2.41.
+openai = ["openai>=1.50,<3"]
 anthropic = ["anthropic>=0.40"]
-ollama = ["ollama>=0.3"]
 # OCI Generative AI speaks the OpenAI Chat Completions wire protocol;
 # locus.models.providers.oci.openai_compat lazy-imports the `openai`
 # client at request time (`client` property). Without it in the extra,
 # `pip install "locus-sdk[oci]"` boots fine but every .complete() call
 # raises ModuleNotFoundError. Pin alongside the [openai] extra.
-oci = ["oci>=2.173.0", "openai>=1.50"]
+oci = ["oci>=2.173.0", "openai>=1.50,<3"]
 
 # All LLM / model providers — short alias for pip discoverability.
 llm = [
-    "openai>=1.50",
+    "openai>=1.50,<3",
     "anthropic>=0.40",
-    "ollama>=0.3",
     "oci>=2.173.0",
 ]
 
@@ -88,7 +101,7 @@ telemetry = [
 mcp = ["mcp>=1.0"]
 
 # Drop-in HTTP server (FastAPI app for AgentServer + SSE streaming).
-# Pulled in production deployments via ``pip install "locus-sdk[oci,server]"``.
+# Pulled in production deployments via ``pip install "locus-sdk[server]"``.
 server = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
@@ -100,6 +113,55 @@ redis = ["redis>=5.0"]
 postgresql = ["asyncpg>=0.29"]
 mysql = ["mysql-connector-python>=9.0"]
 opensearch = ["opensearch-py>=2.4"]
+# S3 / MinIO / R2 object-storage checkpointer (src/locus/memory/backends/s3.py).
+s3 = ["boto3>=1.34"]
+
+# boto3 alone. The AWS cloud-posture tools that used it ship in the separate
+# locus-sdk-security package (packages/locus-sdk-security/).
+aws = ["boto3>=1.34"]
+
+# Amazon Bedrock models (src/locus/models/native/bedrock.py). Same single
+# dependency as the other AWS extras: credentials come from boto3's standard
+# chain, so there is nothing else to install or configure.
+bedrock = ["boto3>=1.34"]
+
+# Security-domain tooling — red-team probes, SOC triage, intel / SIEM / EDR /
+# scanner / fingerprint / AWS posture adapters — is a separate, opt-in package
+# in this repo (packages/locus-sdk-security/, imported as ``locus_security``).
+# It is not published to PyPI, so there is no extra for it: install it from
+# the repository.
+
+# Browser tools (src/locus/tools/browser.py). After installing, fetch a browser
+# with `playwright install chromium`.
+browser = ["playwright>=1.45"]
+
+# Signed audit trails (src/locus/control/audit.py) — Ed25519 signatures over
+# each record so an export verifies from public keys alone. Unsigned trails
+# need nothing.
+audit = ["cryptography>=42"]
+
+# Durable agent runs on Temporal (src/locus/durable/temporal.py).
+temporal = ["temporalio>=1.7"]
+
+# Gemini Live realtime voice sessions (src/locus/voice/gemini.py).
+gemini = ["google-genai>=1.30"]
+
+# Durable agent runs on DBOS (src/locus/durable/dbos.py).
+dbos = ["dbos>=2.0"]
+
+# NVIDIA OpenShell sandboxes as a coding-harness workspace
+# (src/locus/harness/openshell.py). Only the client constructors import it; a
+# caller that passes its own client needs nothing from it.
+openshell = ["openshell>=0.1.2,<0.2"]
+
+# Mem0 agent-memory manager (src/locus/memory/managers/mem0.py) — the
+# portable, self-hostable long-term memory backend.
+mem0 = ["mem0ai>=0.1"]
+
+# All checkpoint backends. `pip install locus-sdk[checkpoints]` is the
+# one-shot install for durable thread state across every backend.
+# Oracle Database 26ai: checkpointers, versioned saver, store, vector store,
+# in-DB chunker/embeddings and the ADB loader all ride the thin driver.
 oracledb = ["oracledb>=2.2.0"]
 
 # Oracle's official agent-memory client. Used by the
@@ -108,14 +170,12 @@ oracledb = ["oracledb>=2.2.0"]
 # 26.x line so a breaking 27.0 doesn't auto-upgrade through pip.
 agentmemory = ["oracleagentmemory>=26.4.0,<27"]
 
-# All checkpoint backends + Oracle's agent-memory client. `pip install
-# locus-sdk[checkpoints]` is the Oracle-flavoured one-shot install for
-# both durable thread state and the Oracle-native agent-memory path.
 checkpoints = [
     "redis>=5.0",
     "asyncpg>=0.29",
     "mysql-connector-python>=9.0",
     "opensearch-py>=2.4",
+    "boto3>=1.34",
     "oracledb>=2.2.0",
     "oci>=2.173.0",
     "oracleagentmemory>=26.4.0,<27",
@@ -123,24 +183,38 @@ checkpoints = [
 
 # RAG vector stores — one extra per store under src/locus/rag/stores/
 # that needs a runtime dep. Keep in sync.
-pgvector = ["asyncpg>=0.29"]
+# numpy is PgMemory's HRR encoding: without it rows are stored with no vector
+# and recall degrades to a substring match.
+pgvector = ["asyncpg>=0.29", "numpy>=1.26"]
+qdrant = ["qdrant-client>=1.9"]
+chroma = ["chromadb>=0.5"]
 
-# Full RAG stack — every vector store Locus ships. Use this if you
-# want to pick a store at runtime rather than installing one up front.
+# Cohere direct API (rerank + embeddings) and a local cross-encoder
+# reranker. Neither requires any cloud vendor SDK.
+cohere = ["cohere>=5.0"]
+rerank-local = ["sentence-transformers>=3.0"]
+rerank = ["cohere>=5.0", "sentence-transformers>=3.0"]
+
+# Full RAG stack — every vector store + embedder + reranker Locus ships.
+# Use this if you want to pick a store at runtime rather than up front.
 rag = [
     "asyncpg>=0.29",
     "opensearch-py>=2.4",
     "oracledb>=2.2.0",
     "oci>=2.173.0",
-    "openai>=1.50",
+    "qdrant-client>=1.9",
+    "chromadb>=0.5",
+    "openai>=1.50,<3",
+    "cohere>=5.0",
+    "sentence-transformers>=3.0",
 ]
 
 # Full SDK — all providers and backends.
 sdk = [
-    "openai>=1.50",
+    "openai>=1.50,<3",
     "anthropic>=0.40",
-    "ollama>=0.3",
-    "oci>=2.173.0",
+    "cohere>=5.0",
+    "sentence-transformers>=3.0",
     "opentelemetry-api>=1.20",
     "opentelemetry-sdk>=1.20",
     "opentelemetry-exporter-otlp>=1.20",
@@ -151,14 +225,33 @@ sdk = [
     "asyncpg>=0.29",
     "mysql-connector-python>=9.0",
     "opensearch-py>=2.4",
+    "boto3>=1.34",
+    "qdrant-client>=1.9",
+    "chromadb>=0.5",
+    "mem0ai>=0.1",
+    "oci>=2.173.0",
     "oracledb>=2.2.0",
+    "oracleagentmemory>=26.4.0,<27",
+]
+
+# Documentation site (mkdocs + Material + mkdocstrings). The API reference
+# imports the package, so install the SDK alongside: ``pip install -e ".[docs]"``.
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.27",
 ]
 
 # Development
 dev = [
     "hatch>=1.12",
     "pre-commit>=3.8",
-    "ruff>=0.8",
+    # Kept in lockstep with .pre-commit-config.yaml (ruff-pre-commit v0.15.0).
+    # An open `>=` let CI float to 0.16, which formats Markdown code blocks and
+    # adds rules (ISC004, PLR0917) the tree has never been checked against — so
+    # a commit green on its PR went red on main with no source change. Bump this
+    # and the pre-commit rev together, in their own change.
+    "ruff>=0.15,<0.16",
     "mypy>=1.13",
     "pytest>=9.0.3",
     "pytest-asyncio>=0.24",
@@ -170,43 +263,34 @@ dev = [
     # rather than in ``[dependency-groups].dev`` so a plain
     # ``pip install -e ".[dev]"`` (used by CI and contributors) covers
     # the entire test surface.
+    # Capped at <1.4: starlette 1.2.0 (2026-05-28) makes its TestClient
+    # require ``httpx2`` instead of ``httpx``, so collection-time imports in
+    # ``tests/unit/test_a2a_protocol.py`` and ``test_server_app_full.py``
+    # raise ``StarletteDeprecationWarning`` → ``ModuleNotFoundError``. The
+    # ``httpx<1.0`` core pin already prevents installing ``httpx2``, so the
+    # only sane cap is starlette itself. Lift together with the httpx cap.
+    # Test-only: nothing under ``src/`` imports starlette, and the ``server``
+    # extra gets it transitively via fastapi.
+    "starlette<1.4",
     "fastmcp>=3.2.0",     # MCP server tests in tests/unit/test_fastmcp.py
     "pyyaml>=6.0.3",      # Playbook YAML loader tests
     "redis>=7.1.0",       # Redis checkpointer tests
     "sqlalchemy>=2.0.46", # PostgreSQL checkpointer schema tests
+    "moto>=5.0",          # mock S3 for tests/unit/test_memory_backends_s3.py
+    "cryptography>=42",   # signed audit trail tests in tests/unit/test_signed_audit.py
+    "temporalio>=1.7",    # durable run tests in tests/unit/test_temporal_durable.py
+    "dbos>=2.0",          # durable run tests in tests/unit/test_dbos_durable.py
 ]
 
-# Docs
-docs = [
-    "mkdocs>=1.6",
-    "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.27",
-]
+[project.scripts]
+locus = "locus.cli:main"
+locus-runner = "locus.runner.main:main"
 
 [project.urls]
-Homepage = "https://github.com/oracle-samples/locus"
-Documentation = "https://github.com/oracle-samples/locus#readme"
-Repository = "https://github.com/oracle-samples/locus"
-Issues = "https://github.com/oracle-samples/locus/issues"
-
-# =============================================================================
-# uv Configuration
-# =============================================================================
-
-[tool.uv]
-# Security overrides for transitive deps whose upstreams pin them below the
-# patched version. There is no clean upgrade path: the latest `oci` (2.179)
-# still caps `cryptography` < 48, and `oracleagentmemory` (alpha, pinned < 27)
-# caps `litellm`/`aiohttp`. We force the patched versions to clear the
-# advisories — litellm (critical), cryptography (high), aiohttp. Drop each
-# entry once its upstream relaxes the cap. NOTE: oci uses cryptography for
-# request signing — verify OCI auth against cryptography 48 before relying on
-# this in production; CI unit tests mock OCI and won't exercise live signing.
-override-dependencies = [
-    "litellm>=1.84.0",
-    "cryptography>=48.0.1",
-    "aiohttp>=3.14.1",
-]
+Homepage = "https://github.com/oracle/locus"
+Documentation = "https://locusagents.oracle.com/"
+Repository = "https://github.com/oracle/locus"
+Issues = "https://github.com/oracle/locus/issues"
 
 # =============================================================================
 # Hatch Configuration
@@ -220,7 +304,9 @@ include = [
     "/src",
     "/tests",
     "/README.md",
+    "/LICENSE",
     "/LICENSE.txt",
+    "/NOTICE",
     "/THIRD_PARTY_LICENSES.txt",
 ]
 
@@ -231,34 +317,52 @@ include = [
 # ``locus.server.*``, ``locus.a2a.*``, and ``locus.integrations.*``.
 # Without these, mypy reports "Untyped decorator makes function ..."
 # on every FastAPI ``@app.get/.post`` and on MCP imports.
-features = ["dev", "server", "mcp", "openai", "anthropic", "oci"]
+features = ["dev", "server", "mcp", "openai", "anthropic", "oci", "oracledb", "rag", "s3", "mem0"]
+
+# The security-domain tooling is its own distribution in this repo. Install it
+# into the dev environment (editable) so one ``hatch run check`` lints, types
+# and tests both.
+[tool.hatch.envs.default.workspace]
+members = ["packages/locus-sdk-security"]
 
 [tool.hatch.envs.default.scripts]
 # Default test target = unit tests only (deterministic, no external deps).
 # Integration tests need credentials / live services and are run via
 # `test-integration` or `test-all` when those are available.
-test = "pytest {args:tests/unit}"
-test-integration = "pytest {args:tests/integration}"
-test-all = "pytest {args:tests}"
-test-cov = "pytest --cov=src/locus --cov-report=term-missing --cov-report=html --cov-report=json {args:tests/unit}"
+test = "pytest {args:tests/unit packages/locus-sdk-security/tests/unit}"
+# Check every Python snippet in README.md / examples/README.md against the
+# installed SDK. Also runs as a unit test, so CI gates it either way; this
+# is the fast local loop when editing docs.
+snippets = "python scripts/check_doc_snippets.py {args}"
+# The version is asserted in four documents no tool keeps in agreement.
+# Run this before tagging — CI runs it too, in the lint job.
+release-check = "python scripts/check_release_consistency.py {args}"
+test-integration = "pytest {args:tests/integration packages/locus-sdk-security/tests/integration}"
+test-all = "pytest {args:tests packages/locus-sdk-security/tests}"
+test-cov = "pytest --cov=src/locus --cov=packages/locus-sdk-security/src/locus_security --cov-report=term-missing --cov-report=html --cov-report=json {args:tests/unit packages/locus-sdk-security/tests/unit}"
 # Refresh the per-file coverage baseline (commit the resulting
 # ``scripts/coverage_baseline.json``).
 cov-baseline-update = [
-    "pytest --cov=src/locus --cov-report=json {args:tests/unit}",
+    "pytest --cov=src/locus --cov=packages/locus-sdk-security/src/locus_security --cov-report=json {args:tests/unit packages/locus-sdk-security/tests/unit}",
     "python scripts/coverage_ratchet.py --update",
 ]
-test-fast = "pytest -n auto {args:tests/unit}"
-lint = "ruff check src tests examples"
-lint-fix = "ruff check --fix src tests examples"
-format = "ruff format src tests examples"
-format-check = "ruff format --check src tests examples"
-typecheck = "mypy src/locus"
+test-fast = "pytest -n auto {args:tests/unit packages/locus-sdk-security/tests/unit}"
+lint = "ruff check src tests examples packages"
+lint-fix = "ruff check --fix src tests examples packages"
+format = "ruff format src tests examples packages"
+format-check = "ruff format --check src tests examples packages"
+typecheck = "mypy src/locus packages/locus-sdk-security/src/locus_security"
 # CI gate: every check the project enforces, in one command. A clean run
-# of `hatch run check` is what `_lint.yml` runs.
+# of `hatch run check` is what `_lint.yml` runs. The trailing ``test-cov``
+# runs the deterministic unit suite under coverage and FAILS the whole
+# command when unit line+branch coverage drops below ``fail_under`` (95%)
+# in ``[tool.coverage.report]`` — so the org-wide ≥95% gate is enforced
+# locally and in CI by a bare ``hatch run check``.
 check = [
     "format-check",
     "lint",
     "typecheck",
+    "test-cov",
 ]
 all = [
     "format",
@@ -267,24 +371,27 @@ all = [
     "test",
 ]
 
+[tool.hatch.envs.docs]
+features = ["docs", "openai"]
+[tool.hatch.envs.docs.scripts]
+serve = "mkdocs serve {args}"
+build = "mkdocs build --strict {args}"
+# Validates every ```python block on the site against the installed SDK.
+snippets = "python scripts/check_snippets.py {args:docs}"
+# The captured output on the notebook pages, re-run against this checkout.
+outputs = "python scripts/notebook_output.py {args:--check}"
+
 [tool.hatch.envs.test]
 features = [
     "dev",
-    "openai", "anthropic", "ollama", "oci",
+    "openai", "anthropic",
     "telemetry", "mcp", "server",
-    "redis", "postgresql", "mysql", "opensearch", "oracledb",
-    "pgvector",
+    "redis", "postgresql", "mysql", "opensearch", "s3",
+    "pgvector", "qdrant", "chroma", "cohere", "rerank-local", "mem0",
 ]
 
 [[tool.hatch.envs.test.matrix]]
 python = ["3.11", "3.12", "3.13", "3.14"]
-
-[tool.hatch.envs.docs]
-features = ["docs"]
-
-[tool.hatch.envs.docs.scripts]
-serve = "mkdocs serve"
-build = "mkdocs build"
 
 # =============================================================================
 # Ruff Configuration
@@ -293,7 +400,7 @@ build = "mkdocs build"
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "packages/locus-sdk-security/src"]
 
 [tool.ruff.lint]
 select = [
@@ -409,20 +516,26 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# The grounding benchmark is a `python -m locus.reasoning.grounding_eval` CLI —
+# printing its report is the point.
+"src/locus/reasoning/grounding_eval.py" = ["T201"]
+# Same for the rogue challenge (`python -m locus.rogue`): it is a terminal
+# demo whose whole output — banner, per-attempt verdict, scoreboard, audit
+# dump — is printed. It ships inside the package so it runs from an install
+# rather than a clone.
+"src/locus/rogue/*.py" = ["T201"]
+# The overhead benchmark is a CLI whose entire output is the report it
+# prints, and it shells out to `sys.executable` to time a cold import — the
+# only way to measure a cost that is paid once per process.
+"benchmarks/*.py" = ["T201", "S603"]
 "examples/checkpointer_examples.py" = ["ALL"]
 "examples/config.py" = ["F821", "RET503"]
+"packages/*/examples/config.py" = ["F821", "RET503"]
 "examples/notebook_11_swarm_multiagent.py" = ["F821"]
 "examples/notebook_05_agent_hooks.py" = ["PLE2510"]
 "examples/projects/**/*.py" = ["PLE2510"]
-"workbench/scripts/*.py" = ["EXE001", "EXE005"]
-"workbench/backend/runner.py" = [
-    "ASYNC240", # os.path in async — wallet-path resolution, fast/local
-    "PTH111",   # os.path.expanduser — OCI / wallet config paths
-    "S608",     # SQL built from hardcoded demo-table identifiers
-    "SLF001",   # _last_run_state read after agent.run() exhausts —
-                # mirrors what agent.run_sync does internally
-]
-"tests/**/*.py" = [
+# ``**/`` so the workspace packages' tests/ and examples/ get the same rules.
+"**/tests/**/*.py" = [
     "ARG",     # unused arguments in fixtures
     "FBT",     # boolean trap in tests
     "PLR2004", # magic values
@@ -441,7 +554,7 @@ ignore = [
     "T201",    # print — diagnostic output in integration tests
     "BLE001",  # blind except — test fixtures swallow env-setup errors on purpose
     "PTH110",  # os.path.exists — idiomatic in conftest skip-gates
-    "PTH111",  # os.path.expanduser — idiomatic for ~/.oci/config probing
+    "PTH111",  # os.path.expanduser — idiomatic for local config probing
     "S108",    # /tmp/... test strings — path construction, not real I/O
     "S324",    # md5 — non-security fingerprinting in test helpers
     "S603",    # subprocess — integration tests invoke example scripts intentionally
@@ -450,8 +563,8 @@ ignore = [
     "ASYNC230", # async open() — fine in tests, simpler than aiofiles round-trip
     "ASYNC240", # pathlib in async tests — fine, trio.Path/anyio.path overkill
 ]
-"examples/**/*.py" = [
-    "S608",     # Oracle notebooks construct SQL from validated identifiers
+"**/examples/**/*.py" = [
+    "S608",     # some notebooks construct SQL from validated identifiers
     "T201",     # print — notebooks/examples intentionally use print
     "DTZ005",   # datetime.now without tz — fine for demo UX
     "BLE001",   # blind except — simplified error handling in examples
@@ -479,6 +592,9 @@ ignore = [
     "S603",    # subprocess call — runner intentionally execs notebooks
     "BLE001",  # blind except — runner reports failures generically
 ]
+"src/locus/cli.py" = [
+    "T201",    # print — the locus command's output is its interface
+]
 "src/locus/memory/backends/**/*.py" = [
     "S608",    # SQL built from validated identifiers (regex-checked at init)
     "PYI063",  # PEP 570 positional-only — `__context` is Pydantic's spelling
@@ -491,11 +607,11 @@ ignore = [
     "S608",    # SQL built from validated identifiers (regex-checked at init)
     "PYI063",  # PEP 570 positional-only — `__context` is Pydantic's spelling
 ]
+"tests/integration/test_pg_memory.py" = [
+    "S608",    # SQL built from a constant test table name, not user input
+]
 "src/locus/agent/agent.py" = [
     "SLF001",  # Private attr access for internal state (_has_unverified_writes)
-]
-"src/locus/_oracle_pool_cache.py" = [
-    "SLF001",  # this helper IS the private-state plumbing — by design
 ]
 "src/locus/agent/initializer.py" = [
     "SLF001",  # Extracted constructor body — its job is to populate
@@ -508,13 +624,13 @@ ignore = [
     "SLF001",  # Private member access for agent integration
 ]
 "src/locus/rag/**/*.py" = [
-    "ASYNC230", # Blocking I/O in async — OCI SDK is sync, wrapped in executor
-    "ASYNC240", # Path methods in async — OCI SDK file reads are fast/local
+    "ASYNC230", # Blocking I/O in async — some client SDKs are sync, wrapped in executor
+    "ASYNC240", # Path methods in async — local file reads are fast/local
     "F841",     # Unused vars in multimodal processing pipelines
     "FURB110",  # Ternary vs or — readability preference
     "PTH108",   # os.unlink vs Path.unlink — temp file cleanup
-    "PTH111",   # os.path.expanduser — OCI config paths
-    "S608",     # SQL built from validated identifiers — see _oracle_filter / chunkers
+    "PTH111",   # os.path.expanduser — local config paths
+    "S608",     # SQL built from validated identifiers (pgvector store)
     "UP042",    # str+Enum — needed for serialization compat
 ]
 "src/locus/core/interrupt.py" = [
@@ -537,12 +653,25 @@ ignore = [
     "S608",    # SQL from validated identifiers
     "PYI063",  # PEP 570 positional-only
 ]
+
+# Docs-site tooling (mkdocs hooks + their tests), ported from the former docs
+# repository with its own, lighter lint profile.
+"hooks/*.py" = [
+    "B023",    # closures over the loop variable are consumed inside the same iteration
+]
+"tests/docs/*.py" = [
+    "PT018",   # compound asserts read better in these table-driven checks
+    "RUF043",  # literal regex patterns in pytest.raises(match=...)
+]
+"src/locus/_oracle_pool_cache.py" = [
+    "SLF001",  # this helper IS the private-state plumbing — by design
+]
 "src/locus/memory/backends/oci_bucket.py" = [
     "FURB162", # Timezone replacement — OCI API returns specific format
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["locus"]
+known-first-party = ["locus", "locus_security"]
 force-single-line = false
 lines-after-imports = 2
 
@@ -594,22 +723,30 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = [
     "openai.*",
-    "google.*",
     "oci.*",
+    "oracledb.*",
+    "oracleagentmemory.*",
+    "google.*",
     "requests.*",
     "portkey_ai.*",
     "mcp.*",
     "anthropic.*",
-    "ollama.*",
-    "oracledb.*",
     "opensearchpy.*",
     "redis.*",
     "asyncpg.*",
     "mysql.*",
-    "oracleagentmemory.*",
     "fastapi.*",
     "uvicorn.*",
     "whisper.*",
+    # Optional integration deps (lazy-imported).
+    "boto3.*",
+    "botocore.*",
+    "qdrant_client.*",
+    "chromadb.*",
+    "cohere.*",
+    "sentence_transformers.*",
+    "mem0.*",
+    "moto.*",
     # Optional deps for ``locus.rag.multimodal`` — only loaded inside
     # try/except for users who want OCR / PDF / image / audio extraction.
     "pytesseract.*",
@@ -617,7 +754,25 @@ module = [
     "pypdf.*",
     "PyPDF2.*",
     "pdf2image.*",
+    # Browser tools (``locus.tools.browser``) import Playwright lazily.
+    "playwright.*",
+    "google.genai",
+    "google.genai.*",
+    # The coding harness's OpenShell backend imports it lazily.
+    "openshell",
+    "openshell.*",
 ]
+ignore_missing_imports = true
+
+# numpy ships type stubs, but some numpy/Python combinations make mypy abort
+# with a stub parse error ("errors prevented further checking" in
+# numpy/__init__.pyi) — seen on the 3.13/3.14 CI runners. numpy is only a
+# transitive dependency (chromadb / torch / scikit-learn), never part of
+# Locus's typed surface, so skip analyzing it entirely.
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true
 ignore_missing_imports = true
 
 # Modules with dynamic types from external SDKs — relaxed checking.
@@ -642,8 +797,8 @@ warn_required_dynamic_aliases = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-testpaths = ["tests"]
-pythonpath = ["src"]
+testpaths = ["tests", "packages/locus-sdk-security/tests"]
+pythonpath = ["src", "packages/locus-sdk-security/src"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = [
@@ -668,19 +823,22 @@ filterwarnings = [
 # =============================================================================
 
 [tool.coverage.run]
-source = ["src/locus"]
+source = ["src/locus", "packages/locus-sdk-security/src/locus_security"]
 branch = true
 parallel = true
 omit = [
     "src/locus/__about__.py",
     # External integrations requiring database/API connections
     "src/locus/rag/stores/opensearch.py",
-    "src/locus/rag/stores/oracle.py",
     "src/locus/rag/stores/pgvector.py",
     "src/locus/rag/embeddings/openai.py",
     "src/locus/memory/backends/opensearch.py",
-    "src/locus/memory/backends/oracle.py",
     "src/locus/memory/backends/oci_bucket.py",
+    # PgMemory needs a live Postgres+pgvector; covered by integration tests.
+    "src/locus/memory/store_backends/postgresql.py",
+    # PgCheckpointer likewise: its unit tests pin the statements it sends, and
+    # tests/integration/test_pg_checkpointer.py covers it on a real Postgres.
+    "src/locus/memory/backends/pg_checkpointer.py",
 ]
 
 [tool.coverage.report]
@@ -697,7 +855,7 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@overload",
 ]
-fail_under = 90
+fail_under = 95
 show_missing = true
 
 # Note: ``[dependency-groups]`` (PEP 735) was previously used here but
@@ -705,3 +863,30 @@ show_missing = true
 # now in the ``[project.optional-dependencies].dev`` extra above. Kept
 # this comment as a marker so a future ``hatch sync`` doesn't reintroduce
 # the duplicate.
+
+# =============================================================================
+# Workspace
+# =============================================================================
+
+# The security-domain tooling ships as its own distribution from this repo
+# (``packages/locus-sdk-security/``). It depends on locus-sdk; resolve
+# both sides locally.
+[tool.uv]
+# Security overrides for transitive deps whose upstreams pin them below the
+# patched version: the `oci` SDK caps `cryptography` < 48 and
+# `oracleagentmemory` (alpha, pinned < 27) caps `litellm`/`aiohttp`. Force the
+# patched versions to clear the advisories; drop each entry once its upstream
+# relaxes the cap. NOTE: oci uses cryptography for request signing — unit tests
+# mock OCI, so live signing against cryptography 48+ is verified by the
+# integration suite, not CI.
+override-dependencies = [
+    "litellm>=1.84.0",
+    "cryptography>=48.0.1",
+    "aiohttp>=3.14.1",
+]
+
+[tool.uv.workspace]
+members = ["packages/locus-sdk-security"]
+
+[tool.uv.sources]
+locus-sdk-security = { workspace = true }

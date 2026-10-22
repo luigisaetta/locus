@@ -134,35 +134,3 @@ class TestBaseEmbedding:
         """Test dimension property."""
         embedder = MockEmbedding(dimension=512)
         assert embedder.dimension == 512
-
-
-class TestOCIEmbeddingsConfig:
-    """Tests for OCI Embeddings configuration."""
-
-    def test_import(self):
-        """Test OCI embeddings can be imported."""
-        from locus.rag.embeddings.oci import OCIEmbeddingConfig, OCIEmbeddingModel
-
-        config = OCIEmbeddingConfig(
-            model_id=OCIEmbeddingModel.COHERE_EMBED_ENGLISH_V3.value,
-            profile_name="TEST",
-        )
-
-        assert config.model_id == "cohere.embed-english-v3.0"
-        assert config.profile_name == "TEST"
-
-    def test_model_dimensions(self):
-        """Test model dimension hint mapping (renamed from MODEL_DIMENSIONS).
-
-        The map is now a hint table - models not present in it auto-detect
-        their dimension via a probe call at first use. Keys are the model_id
-        string values rather than enum members.
-        """
-        from locus.rag.embeddings.oci import MODEL_DIMENSION_HINTS, OCIEmbeddingModel
-
-        assert MODEL_DIMENSION_HINTS[OCIEmbeddingModel.COHERE_EMBED_ENGLISH_V3.value] == 1024
-        assert MODEL_DIMENSION_HINTS[OCIEmbeddingModel.COHERE_EMBED_MULTILINGUAL_V3.value] == 1024
-        assert MODEL_DIMENSION_HINTS[OCIEmbeddingModel.COHERE_EMBED_ENGLISH_LIGHT_V3.value] == 384
-        assert (
-            MODEL_DIMENSION_HINTS[OCIEmbeddingModel.COHERE_EMBED_MULTILINGUAL_LIGHT_V3.value] == 384
-        )

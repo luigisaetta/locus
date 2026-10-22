@@ -48,6 +48,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
+from locus.core.media import estimate_tokens
 from locus.memory.conversation import ConversationManager
 
 
@@ -64,11 +65,10 @@ __all__ = ["LLMCompactor"]
 #: Default char/4 heuristic — matches the fallback in
 #: ``locus.core.state.AgentState._estimate_total_tokens``.
 def _char_count_tokens(msg: Message) -> int:
-    content = msg.content or ""
     tool_calls_chars = 0
     for call in msg.tool_calls or ():
         tool_calls_chars += len(call.name or "") + len(str(call.arguments or ""))
-    return (len(content) + tool_calls_chars) // 4
+    return estimate_tokens(msg.content) + tool_calls_chars // 4
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +133,14 @@ class LLMCompactor(ConversationManager):
             to a token count. Default is a char/4 heuristic.
         preserve_system: Keep the first system message verbatim at the
             head of the returned list. Default ``True``.
+        slide_step: Granularity, in messages, of the two cuts this makes on
+            every request once over the trigger: where tool output starts
+            being kept and where the kept tail starts. With ``1`` both move
+            by one message per request, so an earlier message changes on
+            every request and a provider's prompt cache never serves what
+            follows it. A larger step moves them only at multiples of it,
+            leaving the request's start byte-identical in between (the tail
+            then keeps up to ``slide_step - 1`` fewer messages).
     """
 
     def __init__(
@@ -146,6 +154,7 @@ class LLMCompactor(ConversationManager):
         tool_output_ttl_turns: int = 10,
         token_counter: Callable[[Message], int] | None = None,
         preserve_system: bool = True,
+        slide_step: int = 1,
     ) -> None:
         if context_length < 1:
             raise ValueError("context_length must be positive")
@@ -157,6 +166,8 @@ class LLMCompactor(ConversationManager):
             raise ValueError("tail_token_fraction must be in (0, 1)")
         if tool_output_ttl_turns < 0:
             raise ValueError("tool_output_ttl_turns must be non-negative")
+        if slide_step < 1:
+            raise ValueError("slide_step must be at least 1")
 
         self.summarize_fn = summarize_fn
         self.context_length = context_length
@@ -166,6 +177,7 @@ class LLMCompactor(ConversationManager):
         self.tool_output_ttl_turns = tool_output_ttl_turns
         self._token_counter = token_counter or _char_count_tokens
         self.preserve_system = preserve_system
+        self.slide_step = slide_step
         self._last_summary: str | None = None
 
     # ------------------------------------------------------------------
@@ -235,7 +247,7 @@ class LLMCompactor(ConversationManager):
         result.append(summary_msg)
         result.extend(head)
         result.extend(tail)
-        return result
+        return _repair_boundaries(result, messages)
 
     def __repr__(self) -> str:
         return (
@@ -269,6 +281,9 @@ class LLMCompactor(ConversationManager):
         # placeholders. A "turn" here is a single message — good enough for
         # our purposes and avoids encoding a notion of assistant-user pairs.
         cutoff = max(0, len(messages) - self.tool_output_ttl_turns)
+        # Whole steps only: the stubbed range then grows a step at a time
+        # rather than by one message per request.
+        cutoff -= cutoff % self.slide_step
         out: list[Message] = []
         for idx, msg in enumerate(messages):
             if idx < cutoff and msg.role == Role.TOOL:
@@ -301,7 +316,12 @@ class LLMCompactor(ConversationManager):
                 break
             running += toks
             keep += 1
-        return list(rest[-keep:]) if keep else []
+        # Start the tail on a step boundary (counted from the front, which
+        # does not move), keeping at least the newest message.
+        start = len(rest) - keep
+        start += -start % self.slide_step
+        start = min(start, len(rest) - 1) if keep else len(rest)
+        return list(rest[start:]) if keep else []
 
     def _compact_without_llm(self, messages: list[Message]) -> list[Message]:
         """Sync / fallback path — pre-prune + budget-adjusted tail."""
@@ -322,7 +342,52 @@ class LLMCompactor(ConversationManager):
         if overlap:
             tail = tail[overlap:]
         out.extend(tail)
-        return out
+        return _repair_boundaries(out, messages)
+
+
+def _repair_boundaries(kept: list[Message], original: list[Message]) -> list[Message]:
+    """Make a cut conversation one a provider will accept.
+
+    A head/tail cut lands on a message count or a token budget, not a turn
+    boundary, so it can separate an assistant's ``tool_calls`` from the tool
+    messages answering them, and a provider rejects either half on its own.
+    Tool results whose call was cut are dropped, and so is an assistant call
+    whose results were cut, unless it is the last message: a paused run's
+    held call legitimately has no result yet. Dropping one can orphan the
+    other, so this repeats until nothing changes. When no user turn survives,
+    the opening request is re-attached after the system messages, as
+    :class:`~locus.memory.conversation.SlidingWindowManager` does.
+    """
+    from locus.core.messages import Role
+
+    repaired = list(kept)
+    while True:
+        calls = {tc.id for m in repaired if m.role == Role.ASSISTANT for tc in m.tool_calls}
+        answered = {m.tool_call_id for m in repaired if m.role == Role.TOOL and m.tool_call_id}
+        last = len(repaired) - 1
+        survivors = [
+            m
+            for i, m in enumerate(repaired)
+            if not (m.role == Role.TOOL and m.tool_call_id not in calls)
+            and not (
+                m.role == Role.ASSISTANT
+                and m.tool_calls
+                and i != last
+                and any(tc.id not in answered for tc in m.tool_calls)
+            )
+        ]
+        if len(survivors) == len(repaired):
+            break
+        repaired = survivors
+
+    if not any(m.role == Role.USER for m in repaired):
+        opening = next((m for m in original if m.role == Role.USER), None)
+        if opening is not None:
+            at = 0
+            while at < len(repaired) and repaired[at].role == Role.SYSTEM:
+                at += 1
+            repaired.insert(at, opening)
+    return repaired
 
 
 def _is_async(fn: object) -> bool:

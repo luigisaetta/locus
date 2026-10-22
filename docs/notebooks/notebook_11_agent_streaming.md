@@ -4,10 +4,19 @@
 think, call tools, and terminate — live, in order. This is what lets you
 build progress bars, dashboards, audit logs, and SSE endpoints.
 
+This notebook follows a data-privacy scenario: triaging data-subject
+access requests (DSARs) under GDPR Art. 15. The agent extracts PII,
+checks consent, classifies requests, and files reports — all on
+fabricated subjects (`*.example` domains, 555-01xx phone numbers).
+
 What you'll learn:
 
 - The event types: `ThinkEvent`, `ToolStartEvent`, `ToolCompleteEvent`,
-  `TerminateEvent`, plus model chunk events.
+  `TerminateEvent`.
+- Event-level streaming by default — the assistant's text arrives in one
+  piece when a step completes — and token-level output with
+  `stream_tokens=True`, which adds `ModelChunkEvent`s as the model emits
+  text (see `example_token_streaming` in the source below).
 - Filtering with `isinstance(event, EventType)`.
 - Building a live console UI from the stream.
 - Rolling event counts into per-run metrics.
@@ -20,14 +29,14 @@ Run it:
 .venv/bin/python examples/notebook_11_agent_streaming.py
 ```
 
-The default provider is OCI Generative AI (canonical id:
-`openai.gpt-4.1` or `meta.llama-3.3-70b-instruct`). For offline runs set
-`LOCUS_MODEL_PROVIDER=mock`; OpenAI, Anthropic and Ollama also work.
+The default provider is the bundled mock model. Set `LOCUS_MODEL_PROVIDER`
+to openai / anthropic for a live model. For offline runs keep
+`LOCUS_MODEL_PROVIDER=mock`.
 
-Prerequisite: notebook 09.
+Prerequisite: the agent-basics notebook.
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_11_agent_streaming.py"
-```
+````

@@ -89,13 +89,13 @@ class TestSkillFromContent:
             "---\n"
             "name: s\n"
             "description: d.\n"
-            "license: Apache-2.0\n"
+            "license: UPL-1.0\n"
             "compatibility: locus>=1\n"
             "metadata:\n  author: acme\n"
             "---\nBody"
         )
         skill = Skill.from_content(content)
-        assert skill.license == "Apache-2.0"
+        assert skill.license == "UPL-1.0"
         assert skill.compatibility == "locus>=1"
         assert skill.metadata == {"author": "acme"}
 

@@ -1,31 +1,11 @@
 # RAG
 
-Locus's RAG stack is built around **Oracle Database 26ai** as the default
-backend. The 26ai engine ships native `VECTOR(N, FLOAT32)` columns, the
-`VECTOR_DISTANCE` SQL function, and the in-database
-`DBMS_VECTOR_CHAIN` primitives for embedding generation and chunking —
-so the full retrieve-augment loop can live inside the database next to
-the source data, without copying vectors out to a sidecar service.
+Retrieval-augmented generation (RAG): Locus's RAG stack is built
+around pluggable embedders and vector stores behind one interface. The `BaseVectorStore` / `BaseEmbedding`
+contracts are identical across backends so you can swap stores with a
+one-line import change.
 
-OpenSearch, pgvector, and the in-memory store are also supported as
-alternates; the `BaseVectorStore` / `BaseEmbedding` contracts are
-identical across backends so you can swap stores with a one-line import
-change.
-
-## Oracle 26ai
-
-The Oracle-native path. `OracleVectorStore` opens an async pool against
-an Autonomous Database wallet, auto-creates a `VECTOR(N, FLOAT32)`
-table on first use, and serves cosine / dot / Euclidean similarity via
-`VECTOR_DISTANCE`. `OracleInDBEmbeddings` and `OracleInDBChunker` run
-the embedding and chunking entirely inside the database via
-`DBMS_VECTOR_CHAIN`, eliminating the round-trip to an external embed
-service. `OracleADBLoader` ingests documents directly from ADB tables.
-
-::: locus.rag.stores.oracle.OracleVectorStore
-::: locus.rag.embeddings.oracle_indb.OracleInDBEmbeddings
-::: locus.rag.chunkers.oracle_indb.OracleInDBChunker
-::: locus.rag.loaders.oracle.OracleADBLoader
+For the concepts, start with [RAG](../concepts/rag.md).
 
 ## Retriever
 
@@ -37,16 +17,16 @@ The unified interface — combines an embedder and a store into the
 
 ## Embeddings
 
-`OCIEmbeddings` is the default external embedder against OCI GenAI's
-Cohere V3 (1024 dims, English) and V4 (multilingual) endpoints.
-`OpenAIEmbeddings` covers the `text-embedding-3-*` family. For
-production on Oracle 26ai prefer `OracleInDBEmbeddings` (above) so the
-vectors stay in the database.
+`OCIEmbeddings` runs Cohere's `embed-*` models on OCI Generative AI;
+`OpenAIEmbeddings` covers the `text-embedding-3-*` family;
+`CohereEmbeddings` wraps Cohere's direct embeddings API. `OracleInDBEmbeddings`
+(below) embeds *inside* Oracle Database 26ai.
 
 ### Providers
 
 ::: locus.rag.embeddings.oci.OCIEmbeddings
 ::: locus.rag.embeddings.openai.OpenAIEmbeddings
+::: locus.rag.embeddings.cohere.CohereEmbeddings
 
 ### Embeddings base contract
 
@@ -57,14 +37,31 @@ vectors stay in the database.
 
 ## Vector stores
 
-### Alternate backends
+### Backends
 
-Use these when you can't run on Oracle 26ai — otherwise prefer the
-`OracleVectorStore` block above.
-
-::: locus.rag.stores.opensearch.OpenSearchVectorStore
-::: locus.rag.stores.pgvector.PgVectorStore
+::: locus.rag.stores.oracle.OracleVectorStore
 ::: locus.rag.stores.memory.InMemoryVectorStore
+::: locus.rag.stores.pgvector.PgVectorStore
+::: locus.rag.stores.opensearch.OpenSearchVectorStore
+::: locus.rag.stores.qdrant.QdrantVectorStore
+::: locus.rag.stores.chroma.ChromaVectorStore
+
+### Oracle Database 26ai
+
+The Oracle-native path. `OracleVectorStore` opens an async pool against
+an Autonomous Database wallet, auto-creates a `VECTOR(N, FLOAT32)`
+table on first use, and serves cosine / dot / Euclidean similarity via
+`VECTOR_DISTANCE`. `OracleInDBEmbeddings` and `OracleInDBChunker` run
+the embedding and chunking entirely inside the database via
+`DBMS_VECTOR_CHAIN`, eliminating the round-trip to an external embed
+service. `OracleADBLoader` ingests documents directly from ADB tables.
+Sync companions (`OracleSyncVectorStore`, `OracleSyncInDBEmbeddings`,
+`OracleSyncInDBChunker`, `OracleSyncADBLoader`) wrap the same classes for
+synchronous code. All need the `oracledb` extra.
+
+::: locus.rag.embeddings.oracle_indb.OracleInDBEmbeddings
+::: locus.rag.chunkers.oracle_indb.OracleInDBChunker
+::: locus.rag.loaders.oracle.OracleADBLoader
 
 ### Vector store base contract
 
@@ -76,12 +73,16 @@ Use these when you can't run on Oracle 26ai — otherwise prefer the
 
 ## Reranker
 
-Re-score candidates after the initial vector search. Cohere V4 rerank
-is the production default; the `Reranker` Protocol lets you plug in any
-scorer.
+Re-score candidates after the initial vector search. The `Reranker`
+Protocol lets you plug in any scorer; three implementations ship:
+`CrossEncoderReranker` (local, offline), `CohereReranker` (Cohere's
+direct rerank API) and `OCICohereReranker` (Cohere `rerank-v3.5` /
+`rerank-v4.0` served by OCI Generative AI).
 
 ::: locus.rag.reranker.base.Reranker
-::: locus.rag.reranker.cohere_oci.CohereReranker
+::: locus.rag.reranker.cross_encoder.CrossEncoderReranker
+::: locus.rag.reranker.cohere.CohereReranker
+::: locus.rag.reranker.cohere_oci.OCICohereReranker
 
 ## Multimodal processing
 

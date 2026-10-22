@@ -32,6 +32,10 @@ class ToolCall(BaseModel):
         default_factory=dict,
         description="Arguments to pass to the tool",
     )
+    malformed_arguments: str | None = Field(
+        default=None,
+        description="The provider's raw argument text when it was not valid JSON",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -62,6 +66,18 @@ class ToolResult(BaseModel):
     content: str = Field(..., description="String result from the tool")
     error: str | None = Field(default=None, description="Error message if tool failed")
     duration_ms: float | None = Field(default=None, description="Execution time in milliseconds")
+    structured_content: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Machine-readable output returned alongside the text (e.g. MCP "
+            "structuredContent). Never sent to the model; surfaced on "
+            "ToolCompleteEvent."
+        ),
+    )
+    content_blocks: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Non-text content blocks (images, resources) in the tool protocol's shape.",
+    )
 
     @property
     def success(self) -> bool:
@@ -124,10 +140,20 @@ class Message(BaseModel):
 
     @classmethod
     def tool(cls, result: ToolResult) -> Message:
-        """Create a tool result message."""
+        """Create a tool result message.
+
+        A failed result carries its error INTO the content: ``error`` lives
+        only on ``ToolResult`` and never crosses the wire, so without this a
+        raising tool showed the model an empty string — the model retried
+        or, worse, answered as if the call had succeeded, and only event
+        consumers ever learned why it failed.
+        """
+        content = result.content
+        if result.error and not content:
+            content = f"Error: {result.error}"
         return cls(
             role=Role.TOOL,
-            content=result.content,
+            content=content,
             tool_call_id=result.tool_call_id,
             name=result.name,
         )

@@ -3,45 +3,54 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
-"""Notebook 59: Procurement approval with tiered human gates.
+"""Notebook 64: Customer-support concession approval with risk-tiered gates.
 
-Real procurement workflows have a threshold-based escalation chain::
+Before a support agent can grant a costly concession — a refund, a
+service credit, a goodwill gesture, a contract-level make-good — the
+request has to clear a tier-based escalation chain. The more it costs
+and the more precedent it sets, the more approvals it takes: a blanket
+"yes" to every angry customer drains margin and trains customers to
+escalate, so larger concessions climb the ladder::
 
-    Request submitted
+    Ticket intake (case history on file)
        │
        ▼
-    Justifier  (drafts business justification)
+    Ticket analyst  (summarises what the customer is asking for and why)
        │
        ▼
-    Vendor analyst  (validates vendor + pricing)
+    Impact analyst  (concession cost + precedent risk + churn downside)
        │
        ▼
-    Tier router   ── < $1k     ──> auto-approve
-                  ── $1k-$10k  ──> manager approval (interrupt)
-                  ── $10k-$100k──> manager + finance approval (two interrupts)
-                  ── > $100k   ──> manager + finance + CFO approval (three interrupts)
+    Risk-tier router ── score < 25 ──> auto-approve (small credit, low cost)
+                     ── 25–49     ──> support-manager approval (interrupt)
+                     ── 50–74     ──> manager + billing approval (two interrupts)
+                     ── >= 75     ──> manager + billing + director approval (three interrupts)
        │
        ▼
-    PO generator  (emits structured PurchaseOrder)
+    Decision recorder  (emits structured ConcessionDecision)
 
 Each approval gate is a separate interrupt() so a reviewer can come back
-to it later. The workflow ends with a typed PurchaseOrder Pydantic model
-that can be filed into an ERP without parsing.
+to it later. The terminal node is SCRIBE, the support org's case
+recorder: it emits a typed ConcessionDecision Pydantic model that files
+into the concessions ledger without parsing. A large concession spends
+real money and sets a precedent other customers will cite, so the impact
+step is where you weigh the customer's standing and lifetime value
+against the cost of the make-good and the downside of a denial.
 
-- Tier router is a plain conditional edge — no DSL, no policy file.
+- Risk-tier router is a plain conditional edge — no DSL, no policy file.
 - Each gate is its own node — easy to add a tier, easy to re-order,
   easy to swap a human gate for an automated rule.
-- output_schema=PurchaseOrder keeps the terminal artifact typed.
+- output_schema=ConcessionDecision keeps SCRIBE's terminal artifact typed.
 
 Run it
-    # Default: OCI Generative AI auto-detected from ~/.oci/config
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_64_procurement_approval.py
 
     # Offline / no credentials:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_64_procurement_approval.py
 
-    # Pin a strong-enough model for the structured PurchaseOrder schema:
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_64_procurement_approval.py
+    # Pin a strong-enough model for the structured ConcessionDecision schema:
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_64_procurement_approval.py
 """
 
 from __future__ import annotations
@@ -61,15 +70,15 @@ from locus.multiagent.graph import END, START, StateGraph
 # Data shape for the terminal artifact.
 
 
-class PurchaseOrder(BaseModel):
-    """Final structured artifact filed into ERP."""
+class ConcessionDecision(BaseModel):
+    """Final structured artifact filed into the customer-concessions ledger."""
 
     request_id: str
-    vendor: str
-    item: str
-    amount_usd: float
-    business_justification: str
-    vendor_assessment: str
+    customer: str
+    concession: str
+    risk_score: float
+    ticket_summary: str
+    impact_assessment: str
     approvals: list[str] = Field(description="ordered list of approver titles")
     approved_at: str
     status: str = Field(description="approved | denied")
@@ -79,14 +88,18 @@ class PurchaseOrder(BaseModel):
 
 
 PROMPTS = {
-    "justify": (
-        "You are a procurement analyst. Given an item and use-case, write a "
-        "two-sentence business justification."
+    "ticket": (
+        "You are a customer-support triage analyst. Given a support ticket "
+        "excerpt, write a two-sentence summary of what the customer is asking "
+        "for and the reason they give."
     ),
-    "vendor": (
-        "You are a vendor-risk analyst. Given a vendor name and an item, write "
-        "a one-paragraph assessment covering: financial stability, data-handling "
-        "posture (if applicable), and pricing reasonableness for this category."
+    "impact": (
+        "You are a customer-support concession assessor. Given a customer and "
+        "the remedy they are requesting, write a one-paragraph assessment "
+        "covering: the cost of the concession to the business, the precedent "
+        "risk (will granting it set an expectation other customers will cite), "
+        "the customer's standing and lifetime value, and the downside if the "
+        "concession is denied (churn, escalation, public complaint)."
     ),
 }
 
@@ -94,7 +107,7 @@ PROMPTS = {
 def _make_agent(role: str, model: Any) -> Agent:
     return Agent(
         config=AgentConfig(
-            agent_id=f"proc-{role}",
+            agent_id=f"concession-{role}",
             model=model,
             system_prompt=PROMPTS[role],
             max_iterations=2,
@@ -114,28 +127,33 @@ async def _run(agent: Agent, prompt: str) -> str:
 # Graph nodes.
 
 
-async def justify(state: dict[str, Any]) -> dict[str, Any]:
-    agent = _make_agent("justify", state["__model__"])
-    text = await _run(agent, f"Item: {state['item']}\nUse-case: {state['use_case']}")
-    return {"justification": text}
+async def summarize_ticket(state: dict[str, Any]) -> dict[str, Any]:
+    agent = _make_agent("ticket", state["__model__"])
+    text = await _run(
+        agent,
+        f"Customer: {state['customer']}\nTicket excerpt: {state['ticket']}",
+    )
+    return {"ticket_summary": text}
 
 
-async def assess_vendor(state: dict[str, Any]) -> dict[str, Any]:
-    agent = _make_agent("vendor", state["__model__"])
-    text = await _run(agent, f"Vendor: {state['vendor']}\nItem: {state['item']}")
-    return {"vendor_assessment": text}
+async def assess_impact(state: dict[str, Any]) -> dict[str, Any]:
+    agent = _make_agent("impact", state["__model__"])
+    text = await _run(
+        agent, f"Customer: {state['customer']}\nRequested remedy: {state['concession']}"
+    )
+    return {"impact_assessment": text}
 
 
-def tier_router(state: dict[str, Any]) -> str:
-    """Route by amount; each tier picks up the prior tier's approvals."""
-    amt = float(state.get("amount_usd", 0.0))
-    if amt < 1_000:
+def risk_tier_router(state: dict[str, Any]) -> str:
+    """Route by risk score; each tier picks up the prior tier's approvals."""
+    score = float(state.get("risk_score", 0.0))
+    if score < 25:
         return "auto"
-    if amt < 10_000:
+    if score < 50:
         return "manager"
-    if amt < 100_000:
-        return "finance"
-    return "cfo"
+    if score < 75:
+        return "billing"
+    return "director"
 
 
 async def approve_manager(state: dict[str, Any]) -> dict[str, Any]:
@@ -144,42 +162,45 @@ async def approve_manager(state: dict[str, Any]) -> dict[str, Any]:
             "type": "approval",
             "tier": "manager",
             "question": (
-                f"Manager approval needed for ${state['amount_usd']:,.2f} "
-                f"({state['vendor']} — {state['item']}). Approve?"
+                f"Support-manager approval needed at risk score "
+                f"{state['risk_score']:.0f}/100 "
+                f"({state['customer']} — {state['concession']}). Approve?"
             ),
             "options": ["yes", "no"],
         }
     )
-    return _record_decision(state, "Manager", decision)
+    return _record_decision(state, "Support Manager", decision)
 
 
-async def approve_finance(state: dict[str, Any]) -> dict[str, Any]:
+async def approve_billing(state: dict[str, Any]) -> dict[str, Any]:
     decision = interrupt(
         {
             "type": "approval",
-            "tier": "finance",
+            "tier": "billing",
             "question": (
-                f"Finance approval needed for ${state['amount_usd']:,.2f} "
-                f"({state['vendor']}). Approve?"
+                f"Billing approval needed at risk score {state['risk_score']:.0f}/100 "
+                f"({state['customer']}). Approve?"
             ),
             "options": ["yes", "no"],
         }
     )
-    return _record_decision(state, "Finance Director", decision)
+    return _record_decision(state, "Billing Lead", decision)
 
 
-async def approve_cfo(state: dict[str, Any]) -> dict[str, Any]:
+async def approve_director(state: dict[str, Any]) -> dict[str, Any]:
     decision = interrupt(
         {
             "type": "approval",
-            "tier": "cfo",
+            "tier": "director",
             "question": (
-                f"CFO approval needed for ${state['amount_usd']:,.2f} ({state['vendor']}). Approve?"
+                f"Support-director approval needed at risk score "
+                f"{state['risk_score']:.0f}/100 "
+                f"({state['customer']}). Approve?"
             ),
             "options": ["yes", "no"],
         }
     )
-    return _record_decision(state, "CFO", decision)
+    return _record_decision(state, "Support Director", decision)
 
 
 def _record_decision(state: dict[str, Any], role: str, decision: str) -> dict[str, Any]:
@@ -191,143 +212,150 @@ def _record_decision(state: dict[str, Any], role: str, decision: str) -> dict[st
 
 
 def gate_after_manager(state: dict[str, Any]) -> str:
-    """A denial at any tier jumps straight to the PO node (status=denied)."""
+    """A denial at any tier jumps straight to the decision node (status=denied)."""
     if state.get("status") == "denied":
-        return "emit_po"
-    amt = float(state.get("amount_usd", 0.0))
-    if amt >= 10_000:
-        return "approve_finance"
-    return "emit_po"
+        return "record_decision"
+    score = float(state.get("risk_score", 0.0))
+    if score >= 50:
+        return "approve_billing"
+    return "record_decision"
 
 
-def gate_after_finance(state: dict[str, Any]) -> str:
+def gate_after_billing(state: dict[str, Any]) -> str:
     if state.get("status") == "denied":
-        return "emit_po"
-    amt = float(state.get("amount_usd", 0.0))
-    if amt >= 100_000:
-        return "approve_cfo"
-    return "emit_po"
+        return "record_decision"
+    score = float(state.get("risk_score", 0.0))
+    if score >= 75:
+        return "approve_director"
+    return "record_decision"
 
 
 async def auto_approve(state: dict[str, Any]) -> dict[str, Any]:
-    return {"approvals": ["AUTO (under threshold)"], "status": "pending"}
+    return {"approvals": ["AUTO (low cost tier)"], "status": "pending"}
 
 
-async def emit_po(state: dict[str, Any]) -> dict[str, Any]:
-    """Build the PO via Agent.output_schema=PurchaseOrder.
+async def record_decision(state: dict[str, Any]) -> dict[str, Any]:
+    """SCRIBE writes the record via Agent.output_schema=ConcessionDecision.
 
     Routing through an Agent with output_schema means the artifact is a
     typed Pydantic instance — the workflow can POST it directly to the
-    ERP without parsing.
+    concessions ledger without parsing.
     """
     import asyncio as _asyncio
 
     final_status = "approved" if state.get("status") != "denied" else "denied"
     agent = Agent(
         config=AgentConfig(
-            agent_id="po-emitter",
+            agent_id="scribe-decision-recorder",
             model=state["__model__"],
             system_prompt=(
-                "You are a procurement-ops officer producing a PurchaseOrder. "
-                "Use the supplied fields verbatim. Don't invent vendors or amounts."
+                "You are a customer-support case officer producing a "
+                "ConcessionDecision. Use the supplied fields verbatim. Don't "
+                "invent customers or scores."
             ),
-            output_schema=PurchaseOrder,
+            output_schema=ConcessionDecision,
             max_iterations=2,
             max_tokens=300,
         )
     )
     prompt = (
         f"Request: {state.get('request_id')}\n"
-        f"Vendor: {state['vendor']}\n"
-        f"Item: {state['item']}\n"
-        f"Amount: {float(state['amount_usd'])}\n"
+        f"Customer: {state['customer']}\n"
+        f"Concession: {state['concession']}\n"
+        f"Risk score: {float(state['risk_score'])}\n"
         f"Status: {final_status}\n"
         f"Approvals: {state.get('approvals', [])}\n"
-        f"Justification: {state.get('justification', '')[:200]}\n"
-        f"Vendor assessment: {state.get('vendor_assessment', '')[:200]}\n\n"
-        "Emit the PurchaseOrder."
+        f"Ticket summary: {state.get('ticket_summary', '')[:200]}\n"
+        f"Impact assessment: {state.get('impact_assessment', '')[:200]}\n\n"
+        "Emit the ConcessionDecision."
     )
     last_exc: BaseException | None = None
     result = None
     for attempt in range(3):
         try:
-            result = await _asyncio.to_thread(agent.run_sync, prompt)
+            result = await agent.arun(prompt)
             break
-        except Exception as exc:  # noqa: BLE001 — retry transient OCI flakiness
+        except Exception as exc:  # noqa: BLE001 — retry transient provider flakiness
             last_exc = exc
             await _asyncio.sleep(0.5 * (attempt + 1))
     if result is None:
         raise RuntimeError(
-            f"PO emitter failed after 3 attempts. Last error: {last_exc!r}"
+            f"Decision recorder failed after 3 attempts. Last error: {last_exc!r}"
         ) from last_exc
-    po = result.parsed
-    if po is None:
+    decision = result.parsed
+    if decision is None:
         raise RuntimeError(
-            "PO emitter returned no parsed PurchaseOrder. The configured model "
-            "could not honor the JSON schema. Use a stronger model "
-            "(e.g. openai.gpt-4o, openai.gpt-5, anthropic.claude-3-5-sonnet) "
-            f"for notebook 58. Raw output: {result.message!r}"
+            "Decision recorder returned no parsed ConcessionDecision. The "
+            "configured model could not honor the JSON schema. Use a stronger "
+            "model (e.g. openai.gpt-4o, openai.gpt-5, anthropic.claude-3-5-sonnet) "
+            f"for notebook 64. Raw output: {result.message!r}"
         )
-    return {"purchase_order": po}
+    return {"concession_decision": decision}
 
 
-# Build the procurement graph.
+# Build the concession-review graph.
 
 
-def build_procurement_graph() -> StateGraph:
-    g = StateGraph(name="procurement-approval")
-    g.add_node("justify", justify)
-    g.add_node("assess_vendor", assess_vendor)
+def build_review_graph() -> StateGraph:
+    g = StateGraph(name="concession-approval-review")
+    g.add_node("summarize_ticket", summarize_ticket)
+    g.add_node("assess_impact", assess_impact)
     g.add_node("auto_approve", auto_approve)
     g.add_node("approve_manager", approve_manager)
-    g.add_node("approve_finance", approve_finance)
-    g.add_node("approve_cfo", approve_cfo)
-    g.add_node("emit_po", emit_po)
+    g.add_node("approve_billing", approve_billing)
+    g.add_node("approve_director", approve_director)
+    g.add_node("record_decision", record_decision)
 
-    g.add_edge(START, "justify")
-    g.add_edge("justify", "assess_vendor")
+    g.add_edge(START, "summarize_ticket")
+    g.add_edge("summarize_ticket", "assess_impact")
     g.add_conditional_edges(
-        "assess_vendor",
-        tier_router,
+        "assess_impact",
+        risk_tier_router,
         targets={
             "auto": "auto_approve",
             "manager": "approve_manager",
-            "finance": "approve_manager",
-            "cfo": "approve_manager",
+            "billing": "approve_manager",
+            "director": "approve_manager",
         },
     )
-    g.add_edge("auto_approve", "emit_po")
+    g.add_edge("auto_approve", "record_decision")
     g.add_conditional_edges(
         "approve_manager",
         gate_after_manager,
-        targets={"approve_finance": "approve_finance", "emit_po": "emit_po"},
+        targets={
+            "approve_billing": "approve_billing",
+            "record_decision": "record_decision",
+        },
     )
     g.add_conditional_edges(
-        "approve_finance",
-        gate_after_finance,
-        targets={"approve_cfo": "approve_cfo", "emit_po": "emit_po"},
+        "approve_billing",
+        gate_after_billing,
+        targets={
+            "approve_director": "approve_director",
+            "record_decision": "record_decision",
+        },
     )
-    g.add_edge("approve_cfo", "emit_po")
-    g.add_edge("emit_po", END)
+    g.add_edge("approve_director", "record_decision")
+    g.add_edge("record_decision", END)
     return g
 
 
 # Driver.
 
 
-def _print_po(po: PurchaseOrder | None) -> None:
-    print("\nPurchase order:")
+def _print_decision(d: ConcessionDecision | None) -> None:
+    print("\nConcession decision:")
     print("-" * 60)
-    if po is None:
+    if d is None:
         print("(missing)")
         return
-    print(f"  Request:        {po.request_id}")
-    print(f"  Status:         {po.status}")
-    print(f"  Vendor:         {po.vendor}")
-    print(f"  Item:           {po.item}")
-    print(f"  Amount:         ${po.amount_usd:,.2f}")
-    print(f"  Approvals:      " + (" → ".join(po.approvals) if po.approvals else "(none)"))
-    print(f"  Justification:  {po.business_justification[:120]}")
+    print(f"  Request:        {d.request_id}")
+    print(f"  Status:         {d.status}")
+    print(f"  Customer:       {d.customer}")
+    print(f"  Concession:     {d.concession}")
+    print(f"  Risk score:     {d.risk_score:.0f}/100")
+    print(f"  Approvals:      " + (" → ".join(d.approvals) if d.approvals else "(none)"))
+    print(f"  Ticket:         {d.ticket_summary[:120]}")
 
 
 async def _drive(graph: StateGraph, initial: dict[str, Any], answers: list[str]) -> Any:
@@ -341,37 +369,65 @@ async def _drive(graph: StateGraph, initial: dict[str, Any], answers: list[str])
         print(f"  ⏸  [{payload.get('tier', '?')}] {payload.get('question')}")
         print(f"  ▶  Reviewer responds: {answer!r}")
         result = await graph.execute(
-            Command(resume=answer, update={**result.final_state, "__model__": initial["__model__"]})
+            Command(
+                resume=answer,
+                update={**result.final_state, "__model__": initial["__model__"]},
+            )
         )
     return result
 
 
 async def main() -> None:
-    print("Notebook 59: Procurement approval with tiered human gates")
+    print("Notebook 64: Customer-support concession approval with risk-tiered gates")
     print("=" * 60)
 
     model = get_model()
-    graph = build_procurement_graph()
+    graph = build_review_graph()
 
+    # (request, customer, concession, risk score, ticket excerpt)
     scenarios = [
-        ("REQ-1001", "Acme Corp", "USB hubs (10x)", 280.00, "office equipment refresh"),
-        ("REQ-1002", "DataDog", "APM annual subscription", 9_500.00, "production observability"),
-        ("REQ-1003", "Salesforce", "Sales Cloud (50 seats, 1 yr)", 75_000.00, "GTM ramp"),
-        ("REQ-1004", "Oracle", "Exadata cloud — 12-month commit", 480_000.00, "DB platform"),
+        (
+            "CS-1001",
+            "Dana R. (Starter plan)",
+            "$15 account credit for a late shipping notification",
+            12.0,
+            "Polite first-time complaint; order arrived two days late; asks for a small credit.",
+        ),
+        (
+            "CS-1002",
+            "Marco T. (Pro plan)",
+            "one-month subscription refund after a billing double-charge",
+            38.0,
+            "Charged twice this cycle; wants the duplicate month refunded; otherwise happy customer.",
+        ),
+        (
+            "CS-1003",
+            "Acme Studio (Team plan, 40 seats)",
+            "full annual refund plus a goodwill credit after repeated outages",
+            62.0,
+            "Three outages this quarter; threatening to switch; asking to unwind the annual contract.",
+        ),
+        (
+            "CS-1004",
+            "Globex Corp (Enterprise, $480k ARR)",
+            "SLA-breach service credit and a contract make-good after a data-export failure",
+            88.0,
+            "Missed an SLA-bound export during their fiscal close; legal CC'd; demanding a contract concession.",
+        ),
     ]
 
-    for req_id, vendor, item, amt, use_case in scenarios:
-        print(f"\n--- {req_id}: ${amt:,.2f} — {vendor} — {item} ---")
+    for req_id, customer, concession, score, ticket in scenarios:
+        print(f"\n--- {req_id}: risk {score:.0f}/100 — {customer} — {concession} ---")
         initial = {
             "request_id": req_id,
-            "vendor": vendor,
-            "item": item,
-            "amount_usd": amt,
-            "use_case": use_case,
+            "customer": customer,
+            "concession": concession,
+            "risk_score": score,
+            "ticket": ticket,
             "__model__": model,
         }
         result = await _drive(graph, initial, ["yes", "yes", "yes"])
-        _print_po(result.final_state.get("purchase_order"))
+        _print_decision(result.final_state.get("concession_decision"))
 
 
 if __name__ == "__main__":

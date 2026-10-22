@@ -34,10 +34,14 @@ Every event inherits from `LocusEvent` and carries:
 | `event_type` | `Literal[...]` | Discriminator string — `"think"`, `"tool_start"`, etc. |
 | `timestamp` | `datetime` | UTC, populated at emit time. |
 
-Events are **frozen** Pydantic models. A hook can read every field;
-it cannot mutate one. To steer a run, use the explicit method on the
-event (`event.cancel()`, `event.replace_arguments(...)`) — the intent
-is visible in code review.
+The streaming events on this page are **frozen** Pydantic models. A
+consumer can read every field; mutating one raises `ValidationError`.
+Steering is a separate surface: the **hook** events (`locus.hooks`,
+a `ProtectedEvent` family) let a hook steer by **assigning** to a
+writable field — `event.cancel = True` (or a reason string),
+`event.retry = True`, `event.arguments = {...}`. There are no
+`cancel()` / `retry()` / `replace_arguments()` methods; assigning to a
+read-only field raises `AttributeError`. See [Hooks](hooks.md).
 
 ## Core events
 
@@ -48,11 +52,13 @@ The model emitted reasoning, optionally with tool calls.
 | Field | Meaning |
 |---|---|
 | `iteration` | ReAct turn index (0-based) |
-| `reasoning` | The model's chain-of-thought, if the provider exposed it |
+| `reasoning` | The assistant's text for this turn (also readable as `content`). If the provider returns reasoning in a separate channel, that text is used instead. `None` on a turn with tool calls and no text |
 | `tool_calls` | Tool calls the model decided to make this turn |
 
-Render this as a "thinking…" bubble. Most providers return `None`
-unless extended thinking is enabled (Claude 4 / o-series).
+One fires per ReAct turn, on every provider. This is where interim
+assistant text arrives on the streaming path; the final answer
+arrives on `TerminateEvent.final_message`, and token-by-token deltas
+on `ModelChunkEvent` (opt-in via `stream_tokens=True`).
 
 ### `ToolStartEvent`
 
@@ -84,7 +90,10 @@ Always check `error` first — a non-`None` `error` means `result` is
 ### `ModelChunkEvent`
 
 One streamed chunk from the LLM provider — the granularity that
-drives token-by-token rendering.
+drives token-by-token rendering. It fires only when you pass
+`stream_tokens=True`, as in `agent.run(prompt, stream_tokens=True)`;
+without the flag no chunk events arrive, and the turn's text comes
+through on `ThinkEvent` and `TerminateEvent.final_message` instead.
 
 | Field | Meaning |
 |---|---|
@@ -96,7 +105,12 @@ drives token-by-token rendering.
 
 ### `ModelCompleteEvent`
 
-A full model response was received (paired with the chunks above).
+Defined in `locus.core.events` and listed in its `AllEvents` union,
+but `agent.run()` does not emit it — with or without
+`stream_tokens=True`. Each turn's text arrives on `ThinkEvent`, the
+final answer on `TerminateEvent.final_message`, and the run's
+cumulative token usage on `TerminateEvent.usage` (`None` when the
+provider reported no usage).
 
 | Field | Meaning |
 |---|---|
@@ -105,7 +119,7 @@ A full model response was received (paired with the chunks above).
 | `usage` | `{"input_tokens": ..., "output_tokens": ...}` |
 | `stop_reason` | Provider-specific stop reason |
 
-Telemetry hooks key off `usage` for cost tracking.
+For cost tracking from the event stream, read `TerminateEvent.usage` instead.
 
 ### `ReflectEvent`
 
@@ -158,6 +172,7 @@ The run finished.
 | `final_confidence` | Reflexion confidence at end of run |
 | `total_tool_calls` | Distinct tool invocations |
 | `final_message` | The assistant's last text, if any |
+| `usage` | Cumulative token usage for the run: `{"prompt_tokens": ..., "completion_tokens": ..., "total_tokens": ...}`, or `None` when the provider reported no usage (read that as unmetered, not zero) |
 
 Always emitted exactly once per run.
 
@@ -172,39 +187,74 @@ running.
 | `SpecialistCompleteEvent` | Specialist returned a result |
 | `OrchestratorDecisionEvent` | Orchestrator picked its next step (`invoke_specialist`, `correlate`, `summarize`, `finalize`) |
 
+`SpecialistStartEvent`/`SpecialistCompleteEvent` pair on
+`specialist_id`, so you can attribute each phase to the agent that
+ran it:
+
+```python
+phase = {}  # specialist id → wall-clock ms
+
+async for event in orchestrator.run("Order dispute on ord-4821: verify the order, reprice, refund if owed."):
+    match event:
+        case SpecialistStartEvent(specialist_id=s, task=t):
+            print(f"→ {s}: {t}")
+        case SpecialistCompleteEvent(specialist_id=s, duration_ms=d):
+            phase[s] = d
+        case ToolCompleteEvent(tool_name="issue_refund", error=None):
+            print("   ↳ refund fired")  # which specialist? the last Start was 'refund'
+
+# {'verify': 1840, 'pricing': 6120, 'refund': 410}
+```
+
 See [Multi-agent](multi-agent.md).
 
 ## Causal-reasoning events
 
-When `causal=True`, the agent emits node and edge events as the graph
-grows.
+The cause-effect graph (`build_causal_chain()`) has a pair of typed
+events for surfacing graph growth to a streaming consumer. They're part
+of the `AllEvents` union in `locus.core.events` and rendered by the console handler; emit them
+from your own wiring as you add nodes and edges.
 
-| Event | Fired when |
+| Event | Represents |
 |---|---|
-| `CausalNodeEvent` | A new entity entered the cause-effect graph (root cause / symptom / intermediate) |
-| `CausalEdgeEvent` | A causal link was added between two nodes |
+| `CausalNodeEvent` | A new entity in the cause-effect graph (root cause / symptom / intermediate) |
+| `CausalEdgeEvent` | A causal link between two nodes |
 
 ## Hook events
 
-`BeforeInvocationEvent`, `AfterInvocationEvent`, `BeforeToolCallEvent`,
-`AfterToolCallEvent` — emitted *to hooks* around the same lifecycle
-points the user-visible events come from. See [Hooks](hooks.md).
+Hooks do not receive the frozen classes on this page. A
+`HookProvider` gets its own write-protected event family from
+`locus.hooks`: `BeforeModelCallEvent` (writable `messages`),
+`AfterModelCallEvent` (writable `retry`, `response`),
+`BeforeToolCallEvent` (writable `arguments`, `cancel`) and
+`AfterToolCallEvent` (writable `retry`, `result`).
+
+Import them from the `locus.hooks` package — the same two tool-call
+names also exist in `locus.core.events` (and are re-exported by
+`locus.hooks.events`), but only the `locus.hooks.provider` versions
+are what the loop passes to a hook. The invocation boundary has no
+event object: `on_before_invocation(prompt, state)` and
+`on_after_invocation(state, success)` receive plain arguments, and the
+`BeforeInvocationEvent` / `AfterInvocationEvent` classes in
+`locus.core.events` are never emitted. See [Hooks](hooks.md).
 
 ## Common gotchas
 
 | Symptom | Likely cause |
 |---|---|
 | `match` is non-exhaustive at the type checker | Add a `case _: pass` fallthrough or handle the missing variant. |
+| No `ModelChunkEvent`s arrive | `stream_tokens=True` was not passed to `agent.run()`. |
 | `ModelChunkEvent.content` is `None` | Tool-call-only chunk. Guard with `if event.content:`. |
 | `TerminateEvent` never arrives | Generator was cancelled mid-stream. Check the consumer for exceptions. |
-| Hook tried to mutate `event.tool_name` and got `ValidationError` | Frozen by design — use `event.replace_arguments(...)` or `event.cancel()` instead. |
+| Tried to mutate a streaming event field and got `ValidationError` | Streaming events are frozen by design. To steer, do it on the hook event by assigning a writable field — `event.cancel = True`, `event.retry = True`, or `event.arguments = {...}`. |
 
 ## Source
 
-- [`locus.core.events`](https://github.com/oracle-samples/locus/blob/main/src/locus/core/events.py) — every event class.
+- [`locus.core.events`](https://github.com/oracle/locus/blob/main/src/locus/core/events.py) — every event class.
+- [`locus.hooks.provider`](https://github.com/oracle/locus/blob/main/src/locus/hooks/provider.py) — the write-protected hook events.
 
 ## See also
 
 - [Streaming](streaming.md) — how to consume the event stream.
-- [Hooks](hooks.md) — observe the same events from inside the loop.
+- [Hooks](hooks.md) — observe and steer the same lifecycle points from inside the loop.
 - [Agent server](server.md) — re-emit events over Server-Sent Events.

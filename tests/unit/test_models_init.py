@@ -46,24 +46,6 @@ class TestModelsLazyImports:
 
         assert OpenAIConfig is not None
 
-    def test_lazy_import_oci_model(self):
-        """Test lazy import of OCIModel."""
-        from locus.models import OCIModel
-
-        assert OCIModel is not None
-
-    def test_lazy_import_oci_config(self):
-        """Test lazy import of OCIConfig."""
-        from locus.models import OCIConfig
-
-        assert OCIConfig is not None
-
-    def test_lazy_import_oci_auth_type(self):
-        """Test lazy import of OCIAuthType."""
-        from locus.models import OCIAuthType
-
-        assert OCIAuthType is not None
-
     def test_lazy_import_unknown_raises(self):
         """Test that unknown attribute raises AttributeError."""
         from locus import models

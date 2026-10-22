@@ -19,7 +19,7 @@ Key concepts:
 - Retrieve-then-rerank: cheaply over-fetch from the vector store
   (e.g. top-50), then rerank against the query and keep the top-N
   (e.g. top-5). Feed the top-N to the LLM as grounded context.
-- ``CohereReranker(model="cohere.rerank-v4.0-fast", ...)`` calls OCI
+- ``OCICohereReranker(model="cohere.rerank-v4.0-fast", ...)`` calls OCI
   GenAI's on-demand rerank-v4 endpoint. Same auth surface as embeddings.
 - ``RAGRetriever(embedder=..., store=..., reranker=...,
   rerank_candidate_pool=N)`` is the one wiring change — the retriever
@@ -50,7 +50,7 @@ import asyncio
 import os
 
 from locus.rag import (
-    CohereReranker,
+    OCICohereReranker,
     OCIEmbeddings,
     OracleVectorStore,
     RAGRetriever,
@@ -148,7 +148,7 @@ async def main() -> None:
     )
 
     # Retrieve-then-rerank — over-fetch + Cohere V4 cross-encoder.
-    reranker = CohereReranker(
+    reranker = OCICohereReranker(
         # Cohere Reranker V4 fast on OCI GenAI on-demand.
         model="cohere.rerank-v4.0-fast",
         compartment_id=compartment,

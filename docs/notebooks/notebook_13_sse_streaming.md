@@ -1,9 +1,10 @@
 # SSE Streaming
 
-Server-Sent Events is the simplest way to push live agent updates from a
-Python backend to a browser. Locus ships two handlers that turn the
-agent event stream into SSE wire format: a buffered `SSEHandler` for
-tests and a queue-based `AsyncSSEHandler` for production streaming.
+Server-Sent Events is the simplest way to push live payment-review
+updates from a Python backend to a payments operations dashboard. Locus
+ships two handlers that turn the agent event stream into SSE wire format:
+a buffered `SSEHandler` for tests and a queue-based `AsyncSSEHandler` for
+production streaming.
 
 What you'll learn:
 
@@ -27,6 +28,6 @@ if you want a uniform offline setup across notebooks.
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_13_sse_streaming.py"
-```
+````

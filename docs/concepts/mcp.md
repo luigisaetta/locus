@@ -1,27 +1,31 @@
 # MCP — Model Context Protocol
 
-The [Model Context Protocol](https://modelcontextprotocol.io) is an
-Anthropic-spec interop standard for tools. Define a tool once,
-expose it over MCP, and any MCP-compatible client (Claude Desktop,
-Cline, Strands, another agent built with Oracle Generative AI –
-Multi-Agent Locus SDK) can call it. Or consume tools from existing
-MCP servers (filesystem, git, postgres, github, sequential-thinking)
-without writing any glue.
+Build a tool once — issue a refund, roll out a deploy, enrich an
+IOC (indicator of compromise — an IP, domain, or file hash) — and let
+any agent call it. [MCP](https://modelcontextprotocol.io)
+is the wire for that: wrap a function like `lookup_order` or `issue_refund`
+in an MCP server, and any MCP client (Claude Desktop, Cline, a Locus
+agent, your own tooling) invokes it without bespoke glue. The same SDK
+also *consumes* existing MCP servers — a billing service, a
+case-management server, a threat-intel feed — so your agent can reach
+tools it didn't ship.
 
-**The SDK speaks MCP both ways**. That's a deliberate differentiator —
-most agent frameworks consume MCP servers but don't expose their own
-tools as MCP. Round-trip means an SDK-built agent can be either side
-of the conversation.
+**The SDK speaks MCP both ways**. `MCPClient` turns a remote
+server's tools into SDK tools, and `LocusMCPServer` publishes every
+tool on an agent (plus `run_agent` / `run_agent_stream`) over stdio,
+HTTP, or SSE. Round-trip means a Locus-built
+agent can be either side: pull data from a billing server *and*
+serve its own refund tools back to the operator's desktop.
 
 ## When to use MCP
 
 | You want… | Use MCP |
 |---|---|
-| Your SDK agent to use Anthropic's published filesystem / git / postgres servers | ✓ — `MCPClient` |
-| Your `@tool` library to be callable by Claude Desktop / Cline / other agents | ✓ — `LocusMCPServer` |
-| Two SDK agents to share tools across processes / machines | ✓ — works, but [A2A](multi-agent/a2a.md) is the better protocol |
+| Your SDK agent to use an external billing / case-management / threat-intel MCP server | ✓ — `MCPClient` |
+| Your `lookup_order` / `issue_refund` library callable by Claude Desktop / Cline / other agents | ✓ — `LocusMCPServer` |
+| Two SDK agents to share side-effecting tools across processes / machines | ✓ — works, but [A2A](multi-agent/a2a.md) is the better protocol |
 | In-process multi-agent — share tools by importing | use the [tools](tools.md) directly, not MCP |
-| Reproducible tests | use [Ollama](providers/ollama.md) + plain `@tool` — MCP adds I/O |
+| Reproducible tests | use a mock model + plain `@tool` — MCP adds I/O |
 
 ## Getting started — consume an MCP server
 
@@ -34,57 +38,71 @@ pip install "locus-sdk[mcp]"
 ### 2. Spawn the server and wrap it with `MCPClient`
 
 ```python
+import asyncio
 from locus.integrations.fastmcp import MCPClient
 
-# Spawn Anthropic's filesystem server as a subprocess (stdio transport):
-fs = MCPClient.stdio(
-    command=["npx", "-y", "@modelcontextprotocol/server-filesystem", "/data"],
-)
+
+async def main():
+    # Point MCPClient at a threat-intel MCP server launched over stdio:
+    ti = MCPClient(server_command=["python", "-m", "ti_feed.mcp_server"])
+    await ti.connect()
+
+
+asyncio.run(main())
 ```
 
-`MCPClient.stdio` runs the subprocess, opens an MCP session over its
-stdin/stdout, and discovers what tools the server exposes.
+`MCPClient(server_command=[...])` describes a stdio MCP server;
+`await ti.connect()` spawns the subprocess, opens an MCP session over
+its stdin/stdout, and prepares tool discovery. (For an HTTP server, pass
+`base_url=` instead of `server_command=`.)
 
 ### 3. Pass the tools straight into an Agent
 
 ```python
 from locus.agent import Agent
+
+# Discover the server's tools and convert them to SDK tools:
+mcp_tools = ti.to_locus_tools(await ti.list_tools())
+
 agent = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[*fs.tools()],          # MCP tools become SDK tools
-    system_prompt="You can read files in /data.",
+    model="{{ locus_example_model }}",
+    tools=[*mcp_tools],           # MCP tools become SDK tools
+    system_prompt="Triage the alert. Enrich every indicator before you act.",
 )
-result = agent.run_sync("Summarise the README in /data.")
+result = agent.run_sync("Is 198.51.100.23 a known malicious endpoint?")
 ```
 
-`fs.tools()` returns a list of SDK `Tool` objects with full
-schemas, descriptions, and call-through plumbing. The agent doesn't
+`await ti.list_tools()` returns the server's tool descriptors; passing
+them through `ti.to_locus_tools(...)` produces SDK `Tool` objects with
+full schemas, descriptions, and call-through plumbing. The agent doesn't
 know they're MCP — they look like any other `@tool`.
 
 ### Side effects in the host process — use hooks, not wrappers
 
-A common shape for MCP integrators: the *real* effect of a tool call
-lives in the host process (an HTTP response queue, a transaction batch,
-a UI command stream), not inside the tool body that returns a string to
-the model. The instinct is to wrap each MCP tool with a per-tool
-`@tool` that calls `_action_queue().append(...)` before returning.
+A common shape for MCP integrators: the *real* effect of a
+side-effecting call lives in the host process (a case log, a ticketing
+batch, a console command stream), not inside the tool body that
+returns a string to the model. The instinct is to wrap each MCP tool
+with a per-tool `@tool` that calls `_case_log().append(...)` before
+returning.
 
-Don't. Use a single `HookProvider` instead:
+Don't. Use a single `HookProvider` instead — one log over every
+tool, so a post-hoc review can replay exactly what the agent did:
 
 ```python
 from locus.hooks.provider import HookPriority, HookProvider
 
-class MCPActionQueueHook(HookProvider):
-    """Mirror every tool call into a host-side queue, keyed by call id."""
+class MCPCallLogHook(HookProvider):
+    """Mirror every tool call into a case log, keyed by call id."""
 
     priority = HookPriority.BUSINESS_DEFAULT
 
-    def __init__(self, queue: list[dict]) -> None:
-        self._queue = queue
+    def __init__(self, call_log: list[dict]) -> None:
+        self._call_log = call_log
 
     async def on_after_tool_call(self, event):
         if event.error is None:
-            self._queue.append({
+            self._call_log.append({
                 "id": event.tool_call_id,
                 "tool": event.tool_name,
                 "args": event.arguments,
@@ -93,36 +111,47 @@ class MCPActionQueueHook(HookProvider):
 
 agent = Agent(
     model=...,
-    tools=[*mcp_client.tools()],   # all 24 MCP tools, untouched
-    hooks=[MCPActionQueueHook(queue)],
+    # every MCP-sourced tool, untouched
+    tools=[*mcp_client.to_locus_tools(await mcp_client.list_tools())],
+    hooks=[MCPCallLogHook(call_log)],
 )
 ```
 
 One hook covers every MCP-sourced tool. The `tool_call_id` correlates
-with the model's `tool_calls[].id`, so parallel tool calls don't get
+with the model's `tool_calls[].id`, so parallel enrichments don't get
 mixed up. See [hooks](hooks.md#on_after_tool_call-what-the-event-carries)
-for the full event surface.
+for the full event surface. Note this list is a faithful trace for
+replay, not a tamper-evident record — for decisions an auditor must
+trust, route the action through the hash-chained
+[`AuditTrail`](agentic-ai-security.md) (each entry commits to the one
+before it, so editing any record breaks verification).
 
 ## Getting started — expose your tools as MCP
 
-### 1. Wrap a tool list in `LocusMCPServer`
+### 1. Wrap an agent in `LocusMCPServer`
+
+`LocusMCPServer` exposes a Locus **agent** (and the tools registered on
+it) over MCP. Build the agent with the tools you want to publish:
 
 ```python
+from locus.agent import Agent
 from locus.integrations.fastmcp import LocusMCPServer
 
-server = LocusMCPServer(tools=[search_vendors, submit_po])
+agent = Agent(model="{{ locus_example_model }}", tools=[lookup_order, issue_refund])
+server = LocusMCPServer(agent=agent, name="billing-tools")
 ```
 
 ### 2. Pick a transport
 
 ```python
-server.run_stdio()                    # for desktop clients
-server.run_http(port=7400)            # for HTTP MCP clients
+server.run(transport="stdio")         # for desktop clients (default)
+server.run(transport="http")          # for HTTP MCP clients
 ```
 
-`run_stdio()` is what Claude Desktop, Cline, and most MCP clients
-expect. `run_http()` runs an HTTP MCP server (transport + JSON-RPC)
-that any HTTP MCP client can reach.
+`run(transport="stdio")` is what Claude Desktop, Cline, and most MCP
+clients expect. `run(transport="http")` runs an HTTP MCP server
+(transport + JSON-RPC) that any HTTP MCP client can reach. The supported
+transports are `"stdio"`, `"http"`, `"sse"`, and `"streamable-http"`.
 
 ### 3. Point a client at it
 
@@ -131,15 +160,15 @@ For Claude Desktop, edit `~/Library/Application Support/Claude/claude_desktop_co
 ```json
 {
   "mcpServers": {
-    "my-locus-tools": {
+    "billing-tools": {
       "command": "python",
-      "args": ["-m", "my_package.mcp_server"]
+      "args": ["-m", "billing_tools.mcp_server"]
     }
   }
 }
 ```
 
-Restart Claude Desktop. Your `search_vendors` and `submit_po` tools
+Restart Claude Desktop. Your `lookup_order` and `issue_refund` tools
 appear in the model's tool list.
 
 ## What you get out of the box
@@ -156,51 +185,69 @@ would.
 | Transport | Use case |
 |---|---|
 | **stdio** — process pipes | Desktop clients (Claude Desktop, Cline). The MCP server is spawned as a subprocess. |
-| **HTTP** — JSON-RPC over POST | Browser-side or networked clients. Good for shared tool servers. |
+| **HTTP** — JSON-RPC over POST | Networked clients. Good for a shared tool server the whole team reaches. |
 
-### Idempotency carries through
+### Idempotency is per-run, not cross-client
 
-A tool tagged `@tool(idempotent=True)` keeps that semantic when
-exposed via MCP. The dedup happens SDK-side; the MCP client
-doesn't need to know.
+The `idempotent=True` dedup is a property of a single agent's ReAct loop
+— it suppresses a *repeated* call within one run (see
+[idempotency](idempotency.md)). It does **not** carry across MCP: tools
+the SDK consumes from a remote MCP server are wrapped with
+`idempotent=False`, and the MCP server wrapper invokes each tool
+directly, so two separate clients firing the same call will each run it.
+If you need exactly-once across clients, enforce it in the tool body
+(e.g. an idempotency key checked against your own store).
 
 ## Round-trip example
 
-A common shape: an SDK agent A consumes a filesystem MCP server,
-*and* exposes its own tools as MCP for another agent B to consume:
+A common shape: a support agent A consumes an external billing
+MCP server, *and* exposes its own refund tools as MCP for a
+case-management agent B to consume:
 
 ```python
-# Agent A — consumes filesystem, exposes its own analytics tools
-fs = MCPClient.stdio(command=[...])      # consumer side
-analytics = LocusMCPServer(              # producer side
-    tools=[summarise_csv, plot_histogram],
-)
-analytics.run_http(port=7400, in_background=True)
+# Agent A — consumes billing data, exposes its own refund tools
+billing = MCPClient(server_command=[...])     # consumer side
+await billing.connect()
 
 agent_a = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[*fs.tools(), summarise_csv, plot_histogram],
+    model="{{ locus_example_model }}",
+    tools=[*billing.to_locus_tools(await billing.list_tools()), lookup_order, issue_refund],
 )
+
+# Producer side — publish agent_a's own tools back over MCP.
+# server.run(transport="http") blocks, so run it on its own thread/process.
+refunds = LocusMCPServer(agent=agent_a, name="refunds")
+refunds.run(transport="http")
 ```
 
 Same `MCPClient` API on the consumer side, same `LocusMCPServer` on
 the producer side, same tool definitions. The transport is an
 implementation detail.
 
+## Governed MCP — hand the capability, not the authority
+
+Exposing a tool over MCP gives a remote agent — a Claude or GPT client, a separate
+orchestrator — the ability to call it. What keeps that safe: **the admission gate
+lives inside the action, not the transport.** Build the tool so its body routes the
+write through `admit()` / `ctx.actions.execute`, and a remote agent gets the
+*capability* to ask without the *authority* to skip your `ControlPolicy` — the
+write still clears policy (and, in production, a human) and still lands in your
+audit trail.
+
 ## Common gotchas
 
 | Symptom | Likely cause |
 |---|---|
 | `MCP server failed to start` | The MCP server subprocess crashed before establishing the session. Run the command manually to see the error. |
-| `Tool 'X' not found in MCP discovery` | The server exposes a different name than you expected. Print `[t.name for t in fs.tools()]` to see the actual list. |
+| `Tool 'X' not found in MCP discovery` | The server exposes a different name than you expected. Print `[t["name"] for t in await ti.list_tools()]` to see the actual list. |
 | `Schema validation failed on call` | MCP tool returned an arg type that doesn't match its declared schema. Common with hand-written MCP servers; the standard ones are fine. |
 | Claude Desktop doesn't show your SDK tools | `claude_desktop_config.json` not picked up — check the file lives at the right path and Claude has been restarted. |
-| Hangs on `MCPClient.stdio` startup | The MCP subprocess is waiting for input on stdin (some servers expect a handshake). Pass `wait_for_init=True` and a timeout. |
+| Hangs on `await ti.connect()` | The MCP subprocess is waiting for input on stdin (some servers expect a handshake) or never finished its init. Run the `server_command` manually to see what it prints, and wrap `connect()` in `asyncio.wait_for(..., timeout=...)`. |
 
 ## Source and notebook
 
-- [`locus.integrations.fastmcp`](https://github.com/oracle-samples/locus/blob/main/src/locus/integrations/fastmcp.py) — built on FastMCP.
-- [`notebook_45_mcp_integration.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_45_mcp_integration.py) — consumer + producer end-to-end.
+- [`locus.integrations.fastmcp`](https://github.com/oracle/locus/blob/main/src/locus/integrations/fastmcp.py) — built on FastMCP.
+- [`notebook_45_mcp_integration.py`](https://github.com/oracle/locus/blob/main/examples/notebook_45_mcp_integration.py) — consumer + producer end-to-end.
 
 ## See also
 

@@ -1,19 +1,18 @@
 # Evaluation
 
 An agent that worked yesterday may not work today — the model
-changed, a tool was renamed, the prompt got a one-line tweak. Oracle
-Generative AI – Multi-Agent Locus SDK ships a small evaluation harness
-so regressions become **failing tests**, not customer tickets.
+changed, a tool was renamed, the prompt got a one-line tweak. Locus ships a small evaluation harness
+so regressions become **failing tests**, not silent failures in production.
 
 ```python
 from locus.evaluation import EvalCase, EvalRunner
 
 cases = [
     EvalCase(
-        name="weather_lookup",
-        prompt="What's the weather in NYC?",
-        expected_tools=["get_weather"],
-        expected_output_contains=["temperature", "New York"],
+        name="order_lookup",
+        prompt="Look up order ord-4821.",
+        expected_tools=["lookup_order"],
+        expected_output_contains=["status", "ord-4821"],
         max_iterations=5,
     ),
 ]
@@ -30,7 +29,7 @@ print(report.summary())
 | You're swapping models (gpt-4o → gpt-5, llama-3.3 → llama-4) | **yes — same suite, two providers, diff the report** |
 | You're debating "is the agent better than last week?" | **yes — nightly soak with `n=20` per case to see variance** |
 | One-shot exploration, scratch agent | no — overhead's not worth it |
-| Heavy LLM-as-judge needed (open-ended quality) | the harness covers structural checks; pair it with a custom judge tool for free-text grading |
+| Heavy LLM-as-judge needed (open-ended quality) | **yes — set a `rubric` on the case and give the runner an `LLMJudge` ([below](#llm-as-judge-for-open-ended-quality))** |
 
 ## Getting started
 
@@ -42,19 +41,19 @@ print(report.summary())
 ```python
 from locus.evaluation import EvalCase
 
-books_real = EvalCase(
-    name="books_real_flight",
-    prompt="Book TK-12 for customer C-42.",
-    expected_tools=["book_flight"],
-    expected_output_contains=["TK-12", "booked"],
+refunds_eligible = EvalCase(
+    name="refunds_eligible_order",
+    prompt="Refund order ord-4821 — return approved.",
+    expected_tools=["issue_refund"],
+    expected_output_contains=["ord-4821", "refunded"],
     max_iterations=4,
 )
 
 rejects_unknown = EvalCase(
-    name="rejects_unknown_flight",
-    prompt="Book ZZ-999.",
+    name="rejects_unknown_order",
+    prompt="Refund order zz-999.",
     expected_output_contains=["not found"],
-    expected_output_not_contains=["booked", "confirmed"],
+    expected_output_not_contains=["refunded"],
 )
 ```
 
@@ -64,13 +63,13 @@ rejects_unknown = EvalCase(
 from locus.evaluation import EvalRunner
 
 runner = EvalRunner(agent=agent)
-report = runner.run([books_real, rejects_unknown])
+report = runner.run([refunds_eligible, rejects_unknown])
 
 print(report.summary())
 # Eval Report: 2/2 passed (avg score: 1.00)
 # Total duration: 4321ms
-#   [PASS] books_real_flight (score: 1.00, 1872ms)
-#   [PASS] rejects_unknown_flight (score: 1.00, 2449ms)
+#   [PASS] refunds_eligible_order (score: 1.00, 1872ms)
+#   [PASS] rejects_unknown_order (score: 1.00, 2449ms)
 ```
 
 `run()` returns an `EvalReport` — a Pydantic model with per-case
@@ -123,29 +122,43 @@ runner.run(smoke)
 ## LLM-as-judge for open-ended quality
 
 The built-in checks are structural ("did the right tool fire?", "did
-the answer mention 'temperature'?"). For free-text quality
-("is this answer empathetic?", "is the explanation correct?"), wrap a
-judge model as a tool and key on its verdict:
+the answer mention 'reputation'?"). For free-text quality
+("is the triage rationale sound?", "is the finding correctly grounded?"),
+write a `rubric` on the case and give the runner an `LLMJudge`:
 
 ```python
-from locus.tools.decorator import tool
+import asyncio
 
-@tool
-def judge(answer: str) -> dict:
-    """LLM-graded quality verdict (0.0–1.0 + reasoning)."""
-    return judge_model.run_sync(f"Grade this answer: {answer}").message
+from locus.evaluation import EvalCase, EvalRunner, LLMJudge
+from locus.models import get_model
 
-# Then in the case:
-EvalCase(
-    name="empathetic_response",
-    prompt="My order is late and I'm upset.",
-    expected_tools=["judge"],
-    expected_output_contains=["sorry"],  # at minimum
+case = EvalCase(
+    name="sound_triage_rationale",
+    prompt="Explain why alert SOC-4821 is a false positive.",
+    expected_output_contains=["benign"],  # structural checks still run
+    rubric="Passes if it names the evidence that makes the alert benign.",
 )
+
+judge = LLMJudge(model=get_model("{{ locus_example_model }}"))
+runner = EvalRunner(agent=agent, judge=judge)
+report = asyncio.run(runner.arun([case]))
 ```
 
-A future SDK release may bundle a typed judge directly into
-`EvalCase`; for today, this pattern is the path.
+Grading requires `await runner.arun(cases)` — the judge is a model call,
+and `run()` is synchronous. `run()` never reads `rubric` at all, so a
+rubric case passed to it is scored on its structural checks alone and
+can report green with the rubric silently unevaluated. On `arun()`, a
+rubric case with no judge configured fails loudly instead, under a
+`rubric:no_judge_configured` check.
+
+On a graded case, `EvalResult.score` is the judge's 0–1 score, not the
+fraction of checks passed. A judge reply that cannot be parsed yields
+`Verdict(unparseable=True)` and is recorded as a failing
+`judge_unparseable:...` check rather than a silent pass. Use a different
+model from the one under test where you can — a model grading its own
+output is measuring self-consistency, not correctness. `LLMJudge` and
+`Verdict` are documented in the
+[evaluation API reference](../api/evaluation.md#grading-an-answer-that-has-no-single-right-string).
 
 ## Common gotchas
 
@@ -153,13 +166,24 @@ A future SDK release may bundle a typed judge directly into
 |---|---|
 | Case passes locally, fails in CI | Model output varies between runs. Pin the model id, lower `temperature`, run with `n=5` and look at variance. |
 | `max_duration_ms` flakes | Cold-start network latency. Use a wall-clock budget at the suite level, not per-case, or bump the per-case budget by 2×. |
-| `expected_tools` reports failure even though the tool ran | Case-sensitive name match — `book_flight` != `Book_Flight`. |
+| `expected_tools` reports failure even though the tool ran | Case-sensitive name match — `issue_refund` != `Issue_Refund`. |
 | Score is 0.5 every time | One of two checks is consistently failing. Read `result.checks` — it carries the full pass/fail map. |
+
+## Evals are audit evidence
+
+The runner drives the same agent through the same loop as production, so
+an eval run is made of the same typed events — and any admission
+decisions land on the same hash-chained `AuditTrail` (each entry commits
+to the one before it, so editing any record breaks verification) the
+gate always writes. A passing eval is audit evidence, not a screenshot. For
+grounded-claim scoring — did each claim survive contact with its
+evidence? — pair the structural checks here with the
+[GSAR evaluation layer](gsar.md).
 
 ## Source and notebook
 
-- [`notebook_55_evaluation.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_55_evaluation.py) — runnable end-to-end suite.
-- [`locus.evaluation.framework`](https://github.com/oracle-samples/locus/blob/main/src/locus/evaluation/framework.py) — `EvalCase`, `EvalRunner`, `EvalReport`.
+- [`notebook_55_evaluation.py`](https://github.com/oracle/locus/blob/main/examples/notebook_55_evaluation.py) — runnable end-to-end suite.
+- [`locus.evaluation.framework`](https://github.com/oracle/locus/blob/main/src/locus/evaluation/framework.py) — `EvalCase`, `EvalRunner`, `EvalReport`.
 
 ## See also
 

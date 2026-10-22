@@ -67,7 +67,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, Field, SecretStr
 
@@ -246,7 +246,7 @@ class OracleCheckpointSaver(BaseModel):
                 **params,
             )
 
-        return await get_pool(self, _build)
+        return cast("oracledb.AsyncConnectionPool", await get_pool(self, _build))
 
     def _checkpoints_ddl(self) -> str:
         return (

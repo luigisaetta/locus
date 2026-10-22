@@ -27,8 +27,9 @@ from locus.observability.router_events import (
     emit_runnable_failed,
 )
 from locus.router.compiler import CognitiveCompiler
+from locus.router.explain import RoutingExplanation
 from locus.router.goal_frame import GoalFrame
-from locus.router.runnable import RunnableResult
+from locus.router.runnable import Runnable, RunnableResult
 
 
 if TYPE_CHECKING:
@@ -52,7 +53,7 @@ class Router:
         policy, and model.
     on_frame:
         Optional callback fired right after a frame is extracted. Useful
-        for telemetry / workbench display.
+        for telemetry / UI display.
     """
 
     def __init__(
@@ -90,7 +91,55 @@ class Router:
             self._on_frame(parsed)
         return parsed
 
-    async def dispatch(self, user_input: str, run_id: str | None = None) -> RunnableResult:
+    async def explain(
+        self,
+        user_input: str,
+        frame: GoalFrame | None = None,
+    ) -> RoutingExplanation:
+        """Say what the router would choose, and why. Nothing is executed.
+
+        One model call, for the frame — pass ``frame`` to spend none at all.
+        Selection, ranking and the policy check are pure functions of the
+        frame and the registry, so everything after extraction is free and
+        deterministic.
+
+        Returns the evidence the compiler computes and discards: every
+        protocol that was ruled out and which of the three gates stopped it,
+        the survivors in rank order with the terms that ordered them, and the
+        policy verdict.
+
+            >>> e = await router.explain("Delete every record older than 7 years")
+            >>> e.selected_protocol
+            'approval_gated_execution'
+            >>> e.requires_approval
+            True
+
+        This is the read-only sibling of :meth:`dispatch`; use
+        :meth:`compile` when you want the topology that would be built.
+        """
+        goal_frame = frame if frame is not None else await self.extract(user_input)
+        return self.compiler.explain(goal_frame, goal=user_input)
+
+    async def compile(
+        self,
+        user_input: str,
+        frame: GoalFrame | None = None,
+    ) -> Runnable:
+        """Build the topology without running it.
+
+        The compiler has always separated building from executing; this is
+        the front door for it, so a caller does not have to reach through
+        ``router.compiler`` and construct a frame by hand.
+        """
+        goal_frame = frame if frame is not None else await self.extract(user_input)
+        return await self.compiler.compile(goal_frame)
+
+    async def dispatch(
+        self,
+        user_input: str,
+        run_id: str | None = None,
+        frame: GoalFrame | None = None,
+    ) -> RunnableResult:
         """Extract a frame, compile a runnable, execute it.
 
         ``run_id`` scopes every emitted :class:`StreamEvent` to one
@@ -99,6 +148,15 @@ class Router:
         Slack thread, etc.) should pass one in. The id is also
         attached to the :class:`RunnableResult` raw payload so
         downstream callers can correlate without re-parsing the bus.
+
+        ``frame`` pins a pre-extracted :class:`GoalFrame` and skips the
+        extractor entirely. This is the resume seam: a governed dispatch
+        that parked on a hold must replay under the SAME frame a human's
+        approval was granted against — a live extractor re-reading the
+        goal can frame it differently, select a different protocol, and
+        re-hold what was already approved, forever. The pinned frame
+        still flows through ``on_frame`` and the event bus, so consumers
+        see an identical stream either way.
         """
         rid = run_id or str(uuid4())
         # Pin the run_id on the current asyncio context so any
@@ -107,7 +165,12 @@ class Router:
         # threading the id through every signature.
         token = set_run_id(rid)
         try:
-            frame = await self.extract(user_input, run_id=rid)
+            if frame is None:
+                frame = await self.extract(user_input, run_id=rid)
+            else:
+                await emit_frame_extracted(rid, frame)
+                if self._on_frame is not None:
+                    self._on_frame(frame)
             runnable = await self.compiler.compile(frame, run_id=rid)
             protocol_id = getattr(runnable, "protocol_id", "?")
             inner = getattr(runnable, "inner", None)

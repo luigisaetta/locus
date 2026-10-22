@@ -2,12 +2,18 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 """
-Notebook 26: agent-to-agent handoff with a structured context payload.
+Notebook 25: Support tier escalation — L1 → L2 → L3 handoff with typed context.
 
-A handoff is one agent saying "I'm done, please take this further." The
-source agent packages the task, its findings, and an explicit reason
-into a typed ``HandoffContext`` so the target inherits the full work
-state — not just a string.
+A handoff is one support agent saying "I'm done, please take this further."
+The source agent packages the ticket, its findings, and an explicit reason
+into a typed ``HandoffContext`` so the next tier inherits the full case
+state — not just a string. No re-asking the customer, no lost context.
+
+The running case is a classic support tier escalation: a customer reports
+that a paid subscription was charged twice but only one plan is active. The
+ticket walks L1 → L2 → L3, with billing-system lookups and account history
+gathered along the way. The typed chain is also the audit trail — every
+transfer, reason, and confidence value is recorded for the QA review.
 
 - ``HandoffContext`` carries the source/target ids, original task,
   conversation summary, findings dict, confidence, instructions, and the
@@ -19,23 +25,22 @@ state — not just a string.
   ``max_handoff_chain`` cap (prevents loops), and records every transfer
   for inspection or replay.
 - ``manager.chain_handoff([a, b, c], task)`` walks the chain end-to-end
-  with each agent inheriting the previous one's findings.
+  with each tier inheriting the previous one's findings.
 
 Run it:
-    .venv/bin/python examples/notebook_31_agent_handoff.py
+    .venv/bin/python examples/notebook_25_agent_handoff.py
 
-The default provider is OCI Generative AI. With ``~/.oci/config``
-present the agents talk to a live OCI model (canonical pick:
-``openai.gpt-4.1`` or ``meta.llama-3.3-70b-instruct``). Set
+The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
+(or anthropic) and the matching credentials to use a live model. Set
 ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 This notebook fires ~9 handoffs serially, so it can use Locus's "Model B"
 slot — a second, typically cheaper model id read from ``LOCUS_MODEL_ID_B``
-— for the triage seat. With Model B unset, the slot collapses to Model A.
+— for the L1 front-line seat. With Model B unset, the slot collapses to Model A.
 
 Prerequisites:
-- Notebook 08 (Agent basics).
-- Notebook 25 (Swarm) for the unsupervised counterpoint.
+- Notebook 06 (Agent basics).
+- Notebook 24 (Swarm) for the unsupervised counterpoint.
 """
 
 import asyncio
@@ -60,65 +65,65 @@ def _banner(label: str, dt: float, prompt_tok: int = 0, completion_tok: int = 0)
 
 async def main():
     print("=" * 60)
-    print("Notebook 26: agent-to-agent handoff with structured context")
+    print("Notebook 25: Support tier escalation — typed L1 → L2 → L3 handoffs")
     print("=" * 60)
     print()
     print_config()
 
     # =========================================================================
-    # Part 1: build the agent pool and wire allowed handoff paths
+    # Part 1: build the support tiers and wire allowed escalation paths
     # =========================================================================
     print("\n=== Part 1: Creating Handoff Agents ===\n")
 
-    triage_agent = create_handoff_agent(
-        name="Triage Agent",
-        description="Initial assessment and routing of issues",
-        system_prompt="You are a triage agent. Assess issues and route to specialists.",
+    l1_agent = create_handoff_agent(
+        name="L1 Support Agent",
+        description="First-line ticket triage and routing",
+        system_prompt="You are an L1 support agent. Triage tickets and route them to specialists.",
     )
 
-    technical_agent = create_handoff_agent(
-        name="Technical Specialist",
-        description="Deep technical analysis and debugging",
-        system_prompt="You are a technical specialist. Perform detailed analysis.",
+    l2_specialist = create_handoff_agent(
+        name="L2 Support Specialist",
+        description="Deep investigation of escalated tickets",
+        system_prompt="You are an L2 support specialist. Perform detailed analysis of escalations.",
     )
 
-    escalation_agent = create_handoff_agent(
-        name="Escalation Manager",
-        description="Handles critical issues requiring senior attention",
-        system_prompt="You are an escalation manager. Handle critical issues.",
+    l3_manager = create_handoff_agent(
+        name="L3 Escalation Manager",
+        description="Handles confirmed issues requiring senior authority",
+        system_prompt="You are an L3 escalation manager. Direct the resolution of confirmed issues.",
     )
 
     print("Created agents:")
-    print(f"  - {triage_agent.name} (id: {triage_agent.id})")
-    print(f"  - {technical_agent.name} (id: {technical_agent.id})")
-    print(f"  - {escalation_agent.name} (id: {escalation_agent.id})")
+    print(f"  - {l1_agent.name} (id: {l1_agent.id})")
+    print(f"  - {l2_specialist.name} (id: {l2_specialist.id})")
+    print(f"  - {l3_manager.name} (id: {l3_manager.id})")
 
-    triage_agent.can_delegate_to = [technical_agent.id]
-    triage_agent.can_escalate_to = [escalation_agent.id]
-    technical_agent.can_escalate_to = [escalation_agent.id]
+    l1_agent.can_delegate_to = [l2_specialist.id]
+    l1_agent.can_escalate_to = [l3_manager.id]
+    l2_specialist.can_escalate_to = [l3_manager.id]
 
     print("\nHandoff paths:")
-    print("  Triage -> Technical (delegation)")
-    print("  Triage -> Escalation (escalation)")
-    print("  Technical -> Escalation (escalation)")
+    print("  L1 -> L2 (delegation)")
+    print("  L1 -> L3 (escalation)")
+    print("  L2 -> L3 (escalation)")
 
-    # The triage seat reads from Locus's "Model B" slot
+    # The L1 front-line seat reads from Locus's "Model B" slot
     # (env: LOCUS_MODEL_ID_B). Set a cheaper/faster model there to cut
     # round-trip latency; falls back to Model A when unset.
     triage_model = get_model_b(max_tokens=2000)
     model = get_model(max_tokens=2000)
-    triage_with_model = triage_agent.with_model(triage_model)
+    l1_with_model = l1_agent.with_model(triage_model)
     smoke_ctx = HandoffContext(
         source_agent_id="user",
-        target_agent_id=triage_agent.id,
+        target_agent_id=l1_agent.id,
         reason=HandoffReason.SPECIALIZATION,
-        original_task="Smoke test the triage agent",
+        original_task="Smoke test the L1 front-line seat",
         conversation_summary="Need a one-line confirmation the agent is alive.",
         confidence=0.5,
-        instructions="Reply 'triage agent online'.",
+        instructions="Reply 'L1 support online'.",
     )
     t0 = time.perf_counter()
-    smoke_result = await triage_with_model.receive_handoff(smoke_ctx)
+    smoke_result = await l1_with_model.receive_handoff(smoke_ctx)
     _banner("Part 1", time.perf_counter() - t0)
     print(f"  Smoke output: {(smoke_result.output or '')[:120]}")
 
@@ -128,19 +133,19 @@ async def main():
     print("\n=== Part 2: Handoff Context ===\n")
 
     context = HandoffContext(
-        source_agent_id=triage_agent.id,
-        target_agent_id=technical_agent.id,
+        source_agent_id=l1_agent.id,
+        target_agent_id=l2_specialist.id,
         reason=HandoffReason.SPECIALIZATION,
-        original_task="Investigate slow API response times",
-        conversation_summary="User reported 5s response times. Initial check shows normal CPU.",
+        original_task="Investigate a duplicate subscription charge reported by a customer",
+        conversation_summary="Customer was billed twice this month but only one plan is active.",
         findings={
-            "api_latency_p99": "5200ms",
-            "cpu_usage": "45%",
-            "memory_usage": "62%",
+            "customer_id": "CUST-48213",
+            "charges_this_cycle": "2",
+            "active_subscriptions": "1",
         },
         confidence=0.4,
-        instructions="Focus on database query performance",
-        handoff_chain=[triage_agent.id],
+        instructions="Determine whether the second charge was a genuine duplicate or a retry",
+        handoff_chain=[l1_agent.id],
     )
 
     print("Handoff Context:")
@@ -163,10 +168,10 @@ async def main():
 
     for reason in HandoffReason:
         descriptions = {
-            HandoffReason.SPECIALIZATION: "Target has better capabilities for this task",
-            HandoffReason.ESCALATION: "Issue needs higher authority or expertise",
-            HandoffReason.DELEGATION: "Sub-task delegation to another agent",
-            HandoffReason.COMPLETION: "Task completed, returning to parent",
+            HandoffReason.SPECIALIZATION: "Target has better capabilities for this ticket",
+            HandoffReason.ESCALATION: "Issue needs a higher tier or more authority",
+            HandoffReason.DELEGATION: "Sub-task delegated to another support agent",
+            HandoffReason.COMPLETION: "Work completed, returning to parent",
             HandoffReason.FAILURE: "Agent failed, trying another approach",
         }
         print(f"  {reason.value}: {descriptions[reason]}")
@@ -177,7 +182,7 @@ async def main():
     print("\n=== Part 4: Handoff Manager ===\n")
 
     manager = create_handoff_manager(
-        agents=[triage_agent, technical_agent, escalation_agent],
+        agents=[l1_agent, l2_specialist, l3_manager],
         max_chain=5,
     )
 
@@ -187,17 +192,17 @@ async def main():
 
     for agent_id in list(manager.agents):
         manager.agents[agent_id] = manager.agents[agent_id].with_model(model)
-    state_smoke = AgentState(agent_id=triage_agent.id).with_message(
-        Message.user("DB latency spiked to 5s, cpu normal.")
+    state_smoke = AgentState(agent_id=l1_agent.id).with_message(
+        Message.user("Customer says they were charged twice but only have one active plan.")
     )
     t0 = time.perf_counter()
     mgr_result = await manager.execute_handoff(
-        source_agent=triage_agent,
-        target_agent_id=technical_agent.id,
-        task="Diagnose the latency spike",
+        source_agent=l1_agent,
+        target_agent_id=l2_specialist.id,
+        task="Investigate the duplicate subscription charge",
         reason=HandoffReason.SPECIALIZATION,
         state=state_smoke,
-        findings={"p99_ms": 5000},
+        findings={"related_tickets": 3},
     )
     _banner("Part 4", time.perf_counter() - t0)
     print(f"  Manager handoff output: {(mgr_result.output or '')[:160]}")
@@ -208,20 +213,24 @@ async def main():
     print("\n=== Part 5: Creating Handoffs ===\n")
 
     state = AgentState(
-        agent_id=triage_agent.id,
-        tool_history=("check_metrics", "query_logs"),
+        agent_id=l1_agent.id,
+        tool_history=("lookup_account", "query_billing"),
     )
-    state = state.with_message(Message.user("API is slow"))
-    state = state.with_message(Message.assistant("I'll investigate the API performance."))
+    state = state.with_message(Message.user("I was charged twice for my subscription this month"))
+    state = state.with_message(
+        Message.assistant("I'll triage the ticket and pull your billing history.")
+    )
 
     handoff_context = await manager.create_handoff(
-        source_agent=triage_agent,
-        target_agent_id=technical_agent.id,
-        task="Investigate slow API response times",
+        source_agent=l1_agent,
+        target_agent_id=l2_specialist.id,
+        task="Investigate duplicate subscription charge for CUST-48213",
         reason=HandoffReason.SPECIALIZATION,
         state=state,
-        findings={"initial_metrics": "Normal CPU, high DB latency"},
-        instructions="Focus on database performance",
+        findings={
+            "initial_triage": "Two charges on the same plan; second has a different invoice id"
+        },
+        instructions="Determine whether a refund is warranted and which charge to reverse",
     )
 
     print("Created handoff:")
@@ -238,16 +247,16 @@ async def main():
     print("the chain demo in Part 7 for back-to-back execution.")
 
     # =========================================================================
-    # Part 7: chain_handoff — walk Triage -> Technical -> Escalation
+    # Part 7: chain_handoff — walk L1 -> L2 -> L3
     # =========================================================================
     print("\n=== Part 7: Chain Handoffs ===\n")
 
-    manager.agents[triage_agent.id] = triage_agent.with_model(triage_model)
-    manager.agents[escalation_agent.id] = escalation_agent.with_model(model)
+    manager.agents[l1_agent.id] = l1_agent.with_model(triage_model)
+    manager.agents[l3_manager.id] = l3_manager.with_model(model)
 
     chain_results = await manager.chain_handoff(
-        agent_chain=[triage_agent.id, technical_agent.id, escalation_agent.id],
-        task="Critical production outage affecting all users",
+        agent_chain=[l1_agent.id, l2_specialist.id, l3_manager.id],
+        task="Enterprise customer threatening to churn over repeated billing errors — needs a goodwill credit",
         initial_state=state,
     )
 
@@ -272,41 +281,41 @@ async def main():
     # =========================================================================
     print("\n=== Part 9: Common Handoff Patterns ===\n")
 
-    print("Pattern 1: Triage -> Specialist")
-    print("  A generalist agent assesses and routes to domain experts")
+    print("Pattern 1: L1 Triage -> Specialist")
+    print("  A generalist agent assesses tickets and routes to domain experts")
     print()
 
     print("Pattern 2: Hierarchical Escalation")
-    print("  L1 -> L2 -> L3 support escalation chain")
+    print("  L1 -> L2 -> L3 support tier escalation chain")
     print()
 
     print("Pattern 3: Parallel Specialists")
-    print("  Multiple specialists analyze in parallel, results aggregated")
+    print("  Billing and technical agents work in parallel, results aggregated")
     print()
 
     print("Pattern 4: Return with Findings")
-    print("  Specialist completes work and returns to coordinator")
+    print("  Specialist completes work and returns to the escalation manager")
     print()
 
     print("Pattern 5: Failover")
-    print("  If one agent fails, handoff to backup agent")
+    print("  If one support agent fails, handoff to a backup agent")
 
     # =========================================================================
     # Part 10: things to keep in mind
     # =========================================================================
     print("\n=== Part 10: Best Practices ===\n")
 
-    print("1. Keep handoff contexts focused — transfer only relevant info.")
-    print("2. Set max_chain to prevent infinite loops.")
-    print("3. Give the target agent explicit instructions, not just the task.")
+    print("1. Keep handoff contexts focused — transfer only case-relevant details.")
+    print("2. Set max_chain to prevent infinite escalation loops.")
+    print("3. Give the next tier explicit instructions, not just the ticket.")
     print("4. Track confidence through the chain so you can audit decay.")
     print("5. Pick the right HandoffReason — it drives prompt templating.")
-    print("6. Preserve key findings — don't drop them mid-chain.")
-    print("7. Watch manager.history during debugging.")
+    print("6. Preserve key findings — don't make the customer repeat themselves.")
+    print("7. manager.history is your audit trail for the QA review.")
 
     # =========================================================================
     print("\n" + "=" * 60)
-    print("Next: Notebook 27 — Orchestrator Pattern")
+    print("Next: Notebook 26 — Orchestrator Pattern")
     print("=" * 60)
 
 

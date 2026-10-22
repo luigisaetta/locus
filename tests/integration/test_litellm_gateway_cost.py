@@ -35,10 +35,10 @@ import pytest
 
 _GATEWAY_URL = os.environ.get("LITELLM_GATEWAY_URL", "").rstrip("/")
 _MASTER_KEY = os.environ.get("LITELLM_GATEWAY_KEY", "")
-_GATEWAY_MODEL = os.environ.get("LITELLM_GATEWAY_MODEL", "oci-cohere-command")
+_GATEWAY_MODEL = os.environ.get("LITELLM_GATEWAY_MODEL", "gpt-4o-mini")
 # A second alias the test issues virtual keys against to drill into
 # /global/spend/models. The default mirrors the sample config.yaml.
-_GATEWAY_MODEL_B = os.environ.get("LITELLM_GATEWAY_MODEL_B", "oci-grok")
+_GATEWAY_MODEL_B = os.environ.get("LITELLM_GATEWAY_MODEL_B", "gpt-4.1-mini")
 
 # How long to wait for the gateway's async spend-log flusher (default
 # ~10s; we give it slack on overloaded laptops). Configurable so this
@@ -175,7 +175,7 @@ def test_spend_log_entry_carries_token_counts_and_cost():
     assert latest["total_tokens"] > 0, "completion produced zero tokens"
     assert latest["spend"] > 0, (
         "completion produced tokens but spend=0 — LiteLLM's pricing "
-        "table may be missing an entry for the upstream OCI model"
+        "table may be missing an entry for the upstream model"
     )
 
 
@@ -257,9 +257,9 @@ def test_global_spend_keys_aggregates_per_virtual_key():
 
 def test_global_spend_models_aggregates_per_model():
     """`/global/spend/models` shows spend rolled up by *upstream model*
-    (the resolved OCI catalog id, not the gateway alias). Used by
-    platform teams to answer 'what did Cohere Command cost across all
-    teams this week?'."""
+    (the resolved catalog id, not the gateway alias). Used by platform
+    teams to answer 'what did model X cost across all teams this
+    week?'."""
     vkey = _issue_virtual_key(metadata={"test": "spend-models", "run": uuid.uuid4().hex[:8]})
 
     _make_completion(vkey, content="Capital of Brazil? One word.")
@@ -273,9 +273,9 @@ def test_global_spend_models_aggregates_per_model():
     resp.raise_for_status()
     models = resp.json()
     assert isinstance(models, list)
-    # At least one OCI model has non-zero spend on it by the time this
+    # At least one model has non-zero spend on it by the time this
     # test runs (this or an earlier test will have driven traffic to
-    # ``oci-cohere-command``'s upstream).
+    # the configured alias's upstream).
     non_zero = [m for m in models if m.get("total_spend", 0) > 0]
     assert non_zero, "/global/spend/models has no rows with non-zero spend"
 

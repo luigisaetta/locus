@@ -301,13 +301,13 @@ class TestFilesystemTools:
 
 
 class TestCreateDeepagentFilesystem:
-    def _stub_oci(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("OCI_PROFILE", "DEFAULT")
+    def _stub_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     def test_filesystem_off_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        self._stub_oci(monkeypatch)
+        self._stub_env(monkeypatch)
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             reflexion=False,
@@ -319,9 +319,9 @@ class TestCreateDeepagentFilesystem:
         assert "read_file" not in names
 
     def test_enable_filesystem_attaches_six_tools(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        self._stub_oci(monkeypatch)
+        self._stub_env(monkeypatch)
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             enable_filesystem=True,
@@ -344,9 +344,9 @@ class TestCreateDeepagentFilesystem:
         """Without an explicit backend, the FS tools must work in-memory
         with StateBackend semantics — write then read should round-trip
         within a single agent's tool list, with no disk side effect."""
-        self._stub_oci(monkeypatch)
+        self._stub_env(monkeypatch)
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             enable_filesystem=True,
@@ -368,11 +368,11 @@ class TestCreateDeepagentFilesystem:
         assert not os.path.exists("/scratch/x.md")
 
     def test_explicit_backend_is_honored(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        self._stub_oci(monkeypatch)
+        self._stub_env(monkeypatch)
         custom = StateBackend()
         custom.write("/seed.md", "preloaded")
         agent = create_deepagent(
-            model="oci:openai.gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             tools=[],
             system_prompt="be helpful",
             enable_filesystem=True,

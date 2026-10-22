@@ -1,10 +1,11 @@
 # Skills
 
 A Skill (the AgentSkills.io shape) bundles a name, a description, and
-a block of instructions. The `SkillsPlugin` exposes a catalog of
-skills to the agent and only injects the full instructions once the
-agent activates a specific one. Progressive disclosure keeps the
-system prompt small and the agent focused.
+a block of instructions — a vetted payments-ops procedure such as
+dispute triage or refund-policy review. The `SkillsPlugin` exposes a
+catalog of skills to the agent and only injects the full instructions
+once the agent activates a specific one. Progressive disclosure keeps
+the system prompt small and the payments agent focused.
 
 - `Skill` — built in code or loaded from a `SKILL.md` file with YAML
   front-matter.
@@ -17,10 +18,10 @@ system prompt small and the agent focused.
 
 ## Run it
 
-OCI GenAI is the default — the notebook harness picks it when `~/.oci/config` exists (set `OCI_PROFILE` to choose a non-default profile):
+The bundled mock model is the default; set `LOCUS_MODEL_PROVIDER` for a live provider:
 
 ```bash
-LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_48_skills.py
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_48_skills.py
 ```
 
 Offline:
@@ -31,13 +32,14 @@ LOCUS_MODEL_PROVIDER=mock python examples/notebook_48_skills.py
 
 ## Prerequisites
 
-- An OCI profile with GenAI access, or `LOCUS_MODEL_PROVIDER` set to
+- An OpenAI or Anthropic API key, or `LOCUS_MODEL_PROVIDER` set to
   `openai` / `anthropic` / `mock`.
 - Optional: an `examples/skills/` directory with one or more
-  `SKILL.md` files for Part 2 to find.
+  `SKILL.md` files for Part 2 to find (e.g. dispute-triage,
+  refund-policy, fraud-scoring, ledger-query).
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_48_skills.py"
-```
+````

@@ -1,9 +1,12 @@
 # Agent Yield Bridge
 
-Every `Agent.run` is decorated with `@_bus_bridge` so the nine typed
-events it yields get republished on the bus as `agent.*` events when a
-`run_context` is open. No hook registration, no config flag — the
-bridge is always there; it only fires when telemetry is active.
+Every event an agent yields is republished on the bus automatically as
+an `agent.*` event whenever a `run_context` is open — no hook
+registration, no config flag. Under the hood, `Agent.run` is decorated
+with `@_bus_bridge`; the bridge is always there and only fires when
+telemetry is active. The scenario is a data-privacy review agent, whose
+tool calls are the part DPOs and auditors care about most: every
+dataset the reviewer inspects shows up in the run stream.
 
 Event mapping::
 
@@ -23,11 +26,13 @@ Event mapping::
 - How nine yielded `LocusEvent` types map to `agent.*` bus events.
 - Tool-call telemetry with `span_id` pairing —
   `agent.tool.started` and `agent.tool.completed` share an id so
-  consumers can compute durations without subtracting timestamps.
+  consumers can compute durations without subtracting timestamps. Each
+  tool span is one auditable review step (classify a field's
+  sensitivity, count PII records in a dataset).
 - Token usage from `result.metrics` — the canonical source for cost
-  meters and budget enforcers.
+  meters and budget enforcers on always-on privacy-review automation.
 
-Run it (OCI Generative AI is the default — the notebook harness picks it when `~/.oci/config` exists; set `OCI_PROFILE` to choose a non-default profile):
+Run it (defaults to the bundled mock model; set `LOCUS_MODEL_PROVIDER` to `openai` / `anthropic` for a live model):
 
     python examples/notebook_60_agent_yield_bridge.py
 
@@ -37,6 +42,6 @@ Offline:
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_60_agent_yield_bridge.py"
-```
+````

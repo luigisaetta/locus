@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Grounded findings, as routed by locus.control.grounded.ground_finding:
+    score    = gsar_score(partition)   only the partition is scored; the candidate's
+                                       title, severity, asset ... are carried, never scored
+               grounded + complementary claims count for the finding,
+               ungrounded + contradicted claims count against it,
+               each claim weighted by its EvidenceType (locus.reasoning.gsar)
+    decision = decide(score)           proceed at or above the proceed threshold,
+                                       otherwise regenerate or replan (never abstain)
+    proceed             -> Evidence    carries gsar_score + evidence_refs flattened from the claims
+    regenerate / replan -> Abstention  carries decision, gsar_score, candidate_title, reason
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 412" role="img" aria-labelledby="title desc">
+  <title id="title">Grounded findings</title>
+  <desc id="desc">ground_finding takes a candidate finding and a partition of its claims. Only the partition is scored: grounded and complementary claims count for the finding, ungrounded and contradicted claims count against it, and each claim is weighted by its evidence type. The candidate's title, severity and asset are never scored: an Evidence carries all of them, an Abstention keeps only the title. If the score clears the proceed threshold, the decision is proceed and the result is an Evidence that ships with its score and evidence references. Otherwise the decision is regenerate or replan, and the result is an Abstention that withholds the finding and records why. An Evidence is built only on the proceed path.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the claims: a partition in four buckets -->
+  <g class="lane">
+    <rect x="30" y="120" width="324" height="202" rx="14"/>
+    <text class="lane-title" x="46" y="144">Partition of claims</text>
+  </g>
+  <g class="node">
+    <rect x="46" y="158" width="142" height="58" rx="12"/>
+    <text x="117" y="177">grounded</text>
+    <text class="sub" x="117" y="198">counts for</text>
+  </g>
+  <g class="node">
+    <rect x="196" y="158" width="142" height="58" rx="12"/>
+    <text x="267" y="177">complementary</text>
+    <text class="sub" x="267" y="198">counts for</text>
+  </g>
+  <g class="node">
+    <rect x="46" y="226" width="142" height="58" rx="12"/>
+    <text x="117" y="245">ungrounded</text>
+    <text class="sub" x="117" y="266">counts against</text>
+  </g>
+  <g class="node">
+    <rect x="196" y="226" width="142" height="58" rx="12"/>
+    <text x="267" y="245">contradicted</text>
+    <text class="sub" x="267" y="266">counts against</text>
+  </g>
+  <text class="note" x="192" y="306">each claim weighted by its evidence type</text>
+
+  <!-- candidate -> ground_finding: carried into the result, never scored -->
+  <path class="edge" marker-end="url(#ah)" d="M354,59 L504,59 C526,59 540,73 540,95 L540,190"/>
+  <rect class="label-bg" x="362" y="70" width="136" height="20" rx="4"/>
+  <text class="label" x="430" y="80">carried, not scored</text>
+
+  <!-- partition -> ground_finding -->
+  <path class="edge" marker-end="url(#ah)" d="M354,221 L446,221"/>
+  <rect class="label-bg" x="372" y="232" width="56" height="20" rx="4"/>
+  <text class="label" x="400" y="242">scored</text>
+
+  <!-- ground_finding -> Evidence -->
+  <path class="edge" marker-end="url(#ah)" d="M632,221 L748,221"/>
+  <rect class="label-bg" x="658" y="232" width="64" height="20" rx="4"/>
+  <text class="label" x="690" y="242">proceed</text>
+
+  <!-- ground_finding -> Abstention -->
+  <path class="edge" marker-end="url(#ah)" d="M540,250 L540,293 C540,315 554,329 576,329 L748,329"/>
+  <rect class="label-bg" x="592" y="340" width="140" height="20" rx="4"/>
+  <text class="label" x="662" y="350">regenerate or replan</text>
+
+  <g class="node">
+    <rect x="30" y="30" width="324" height="58" rx="12"/>
+    <text x="192" y="49">Candidate finding</text>
+    <text class="sub" x="192" y="70">title · severity · asset</text>
+  </g>
+  <g class="node primary">
+    <rect x="448" y="192" width="184" height="58" rx="12"/>
+    <text x="540" y="211">ground_finding()</text>
+    <text class="sub" x="540" y="232">score ≥ threshold?</text>
+  </g>
+  <g class="node allow">
+    <rect x="750" y="192" width="180" height="58" rx="12"/>
+    <text x="840" y="211">Evidence</text>
+    <text class="sub" x="840" y="232">ships · score + refs</text>
+  </g>
+  <g class="node abstain">
+    <rect x="750" y="300" width="180" height="58" rx="12"/>
+    <text x="840" y="319">Abstention</text>
+    <text class="sub" x="840" y="340">withheld · reason</text>
+  </g>
+
+  <text class="note" x="480" y="394">An Evidence is built only on proceed; below the threshold the finding is withheld, and the Abstention says why.</text>
+</svg>

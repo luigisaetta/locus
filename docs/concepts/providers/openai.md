@@ -1,7 +1,6 @@
 # OpenAI
 
-The OpenAI provider connects Oracle Generative AI – Multi-Agent Locus
-SDK directly to OpenAI's API (`api.openai.com`). It's what you reach
+The OpenAI provider connects Locus directly to OpenAI's API (`api.openai.com`). It's what you reach
 for when you want **the latest OpenAI model the day it ships** without
 going through any gateway, translation layer, or middleware.
 
@@ -15,8 +14,6 @@ code, you're talking to GPT-5 or the o-series reasoning models.
 | GPT-5, GPT-4o, or any latest OpenAI release | ✓ |
 | The o-series reasoning models (`o3`, `o4-mini`) | ✓ |
 | To go through Azure / Portkey / LiteLLM / vLLM | ✓ — same class, different `base_url` |
-| Claude or Llama | use [Anthropic](anthropic.md) or [OCI](oci.md) instead |
-| To run on Oracle infrastructure | use [OCI](oci.md) — you'll get the same OpenAI models without a separate key |
 
 ## Getting started
 
@@ -32,7 +29,7 @@ That's the only setup. The SDK reads the env var on import.
 
 ```python
 from locus.agent import Agent
-agent = Agent(model="openai:gpt-5.5", system_prompt="You are helpful.")
+agent = Agent(model="openai:gpt-5.5", system_prompt="You are a support agent.")
 ```
 
 The string `"openai:gpt-5.5"` does two things: tells the SDK to use
@@ -42,9 +39,9 @@ the OpenAI provider (`openai:` prefix), and which model id to call
 ### 3. Run it
 
 ```python
-result = agent.run_sync("What is two plus two?")
+result = agent.run_sync("Summarise open orders for customer 4821.")
 print(result.message)
-# → 'Four.'
+# → 'Customer 4821 has two open orders — ord-4821 (refund under review) and ord-4907 (shipped).'
 ```
 
 Done. Streaming, tool calls, structured output — all of it works
@@ -54,27 +51,55 @@ without further configuration.
 
 ### Chat completions across the GPT family
 
-Every chat-shaped OpenAI model: `gpt-4o`, `gpt-4.1`, `gpt-5`, `gpt-5.5`,
-`gpt-image-1`. Vision input (image URLs / base64), audio input, and
+Every chat-shaped OpenAI model: `gpt-4o`, `gpt-4.1`, `gpt-5`, `gpt-5.5`.
+Vision input (image URLs / base64), audio input, and
 function calling work the same way you'd use them on the OpenAI SDK
 directly — the SDK just normalises the events the model emits.
+
+Image *generation* (`gpt-image-1`) is a separate provider, not a chat
+model — see [Multi-modal providers](../multi-modal-providers.md).
 
 ### Reasoning models — the o-series
 
 `o1`, `o3`, `o4-mini` route through the same `Agent(model="openai:o3")`
 call. They're slower and more expensive but think before they answer.
-The SDK surfaces the model's thinking blocks as `ThinkEvent`s so your
-UI can show "thinking…" without parsing the response yourself.
+The SDK detects these models and adapts the request automatically —
+it sends `max_completion_tokens` instead of `max_tokens` and drops the
+`temperature` / `top_p` sampling params the o-series rejects.
 
 ```python
-agent = Agent(
-    model="openai:o3",
-    model_config={"reasoning_effort": "high"},   # low | medium | high
-)
+agent = Agent(model="openai:o3", system_prompt="You are a support agent.")
 ```
 
-`reasoning_effort` is OpenAI's knob for how long the model spends
-thinking. Default is `medium`.
+Each turn's assistant message is surfaced as a `ThinkEvent` (carrying
+`response.message.content`) so your UI can show the model's working as
+it goes. Note: OpenAI does not return separate reasoning traces over the
+API, so the `ThinkEvent` carries the model's normal per-turn message
+text, not hidden chain-of-thought.
+
+### The gpt-5.6 family and the Responses API
+
+`OpenAIModel` speaks both OpenAI wire APIs. `api="auto"` (the default) sends
+chat-completions for everything except model ids starting with `gpt-5.6`
+(`gpt-5.6-sol`, `-terra`, `-luna`): that family rejects function tools on
+chat-completions whenever reasoning is active, so Locus routes it to
+`/v1/responses`. Auto-routing fires only when no `base_url` is passed to the
+model. With a custom `base_url` the request stays on chat-completions, because
+an OpenAI-compatible gateway typically does not serve the Responses path. A
+gateway set only through the `OPENAI_BASE_URL` environment variable is not
+detected, so pass `base_url` explicitly or set `api="chat_completions"`.
+
+Force either wire API with `api="responses"` / `api="chat_completions"`. It is
+a model argument, not an agent one, so `Agent(..., api=...)` raises. Build the
+model first, or pass it through `model_kwargs` with the string form
+(`Agent(model="openai:gpt-5.6-sol", model_kwargs={"api": "responses"})`):
+
+```python
+from locus.agent import Agent
+from locus.models import get_model
+
+agent = Agent(model=get_model("openai:gpt-5.6-sol", api="responses"))
+```
 
 ### Real SSE streaming
 
@@ -83,7 +108,7 @@ deltas, the SDK turns them into `ModelChunkEvent`s, your `async for`
 loop reads them as they arrive — no buffering, no fake chunking.
 
 ```python
-async for event in agent.run("Write a haiku about latency."):
+async for event in agent.run("Summarise the history of order ord-4821."):
     if isinstance(event, ModelChunkEvent) and event.content:
         print(event.content, end="", flush=True)
 ```
@@ -101,17 +126,17 @@ concurrently via the `ConcurrentExecutor`).
 ```python
 from pydantic import BaseModel
 
-class Answer(BaseModel):
+class Finding(BaseModel):
     summary: str
     confidence: float
 
 agent = Agent(
     model="openai:gpt-5.5",
-    output_schema=Answer,
+    output_schema=Finding,
     system_prompt="Reply as JSON matching the schema.",
 )
-result = agent.run_sync("Was the meeting productive?")
-print(result.parsed)        # Answer(summary='...', confidence=0.83)
+result = agent.run_sync("Was order ord-4821 charged twice?")
+print(result.parsed)        # Finding(summary='...', confidence=0.83)
 ```
 
 Under the hood, the SDK sends an OpenAI `response_format` with the
@@ -132,16 +157,44 @@ OpenAI-compatible endpoint:
 | **vLLM** | Self-hosted inference for open models with the OpenAI shape | `http://localhost:8000/v1` |
 | **together.ai / fireworks / groq** | Hosted open-model inference at OpenAI-shape | their published `/v1` |
 
+Build an `OpenAIModel` with the `base_url` (and `api_key`) you want and
+hand it to the agent:
+
 ```python
+from locus.agent import Agent
+from locus.models.native.openai import OpenAIModel
+
 agent = Agent(
-    model="openai:gpt-4o",
-    model_config={"base_url": "https://api.portkey.ai/v1"},
+    model=OpenAIModel(model="gpt-4o", base_url="https://api.portkey.ai/v1"),
 )
 ```
 
 The `api_key` your `OPENAI_API_KEY` provides is forwarded — for Azure
 that's the Azure resource key, for Portkey it's the Portkey virtual
 key, etc.
+
+## Handling sensitive data
+
+Provider traffic carries whatever your tools touch — customer PII,
+order data, internal hostnames — plus any untrusted user input that
+entered the conversation. Two defaults keep it out of the wrong places:
+
+- **Tool args/results aren't traced by default.** `record_arguments` and
+  `record_results` are off, so order records and account details don't
+  leak into your tracing backend unless you opt in (and verify its
+  retention and access controls first). See [Observability](../observability.md).
+- **Redact before the reply leaves the box.** An `OutputFilterHook`
+  strips PII or blocks topics in the model's output, so nothing
+  untrusted round-trips into a downstream ticket or chat.
+
+Every model call and tool invocation still lands on the typed SSE event
+stream — the faithful trace you forward to your logging backend — and
+admission decisions land on the hash-chained
+[`AuditTrail`](../agentic-ai-security.md) (hash-chained: each entry
+commits to the one before it, so editing any record breaks
+verification). Routing through a gateway (Azure / Portkey /
+LiteLLM) keeps your `OPENAI_API_KEY` off the egress path when policy
+requires it.
 
 ## Common gotchas
 
@@ -151,14 +204,13 @@ key, etc.
 | `429 Rate limit exceeded` | OpenAI quota; `ModelRetryHook` (if installed) retries with backoff |
 | `model_not_found` | Model id doesn't exist for your tier — check `https://platform.openai.com/docs/models` |
 | Empty `tool_calls` | Model decided not to call a tool; check the system prompt |
-| `reasoning_effort` rejected | Only valid for o-series models, not GPT-4o / GPT-5 |
+| `temperature`/`top_p` rejected on o-series | The SDK drops these for reasoning models automatically; remove any manual override that re-adds them |
 
 ## Source
 
-[`OpenAIModel` in `src/locus/models/native/openai.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/models/native/openai.py)
+[`OpenAIModel` in `src/locus/models/native/openai.py`](https://github.com/oracle/locus/blob/main/src/locus/models/native/openai.py)
 
 ## See also
 
 - [Models overview](../models.md) — the full provider tree.
 - [Anthropic](anthropic.md) — Claude family direct.
-- [OCI Generative AI](oci.md) — same OpenAI models without a separate key, on Oracle infrastructure.

@@ -5,7 +5,7 @@
 """Speech provider protocol — text-to-speech + speech-to-text.
 
 A single provider type covers both directions because most production
-backends (OpenAI Audio, Google STT/TTS, OCI Speech) ship them as one
+backends (OpenAI Audio, Google STT/TTS) ship them as one
 SDK and you typically wire them together.
 """
 
@@ -14,6 +14,8 @@ from __future__ import annotations
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
+
+from locus.core.loop_bound import loop_bound
 
 
 class SynthesizedAudio(BaseModel):
@@ -105,14 +107,14 @@ class OpenAISpeechProvider:
         self._client: Any = None
 
     def _get_client(self) -> Any:
-        if self._client is None:
-            import openai
 
-            self._client = openai.AsyncOpenAI(
-                api_key=self._api_key,
-                base_url=self._base_url,
-            )
-        return self._client
+        def build() -> Any:
+            import openai  # noqa: PLC0415
+
+            return openai.AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+
+        # Bound to the loop that built it — see locus.core.loop_bound.
+        return loop_bound(self, "_client", build)
 
     async def speak(
         self,

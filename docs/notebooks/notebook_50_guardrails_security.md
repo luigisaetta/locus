@@ -11,7 +11,7 @@ so the safety policy is exercised live, not described in the abstract.
 - Tool allowlist vs denylist.
 - Stacked hooks via `HookRegistry` plus a separate `ContentFilterHook`.
 
-Run it (OCI Generative AI is the default — the notebook harness picks it when `~/.oci/config` exists; set `OCI_PROFILE` to choose a non-default profile):
+Run it (defaults to the bundled mock model; set `LOCUS_MODEL_PROVIDER` to `openai` / `anthropic` for a live model):
 
     python examples/notebook_50_guardrails_security.py
 
@@ -19,12 +19,12 @@ Offline / no credentials:
 
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_50_guardrails_security.py
 
-Pin a specific OCI model:
+Pin a specific model:
 
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_50_guardrails_security.py
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_50_guardrails_security.py
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_50_guardrails_security.py"
-```
+````

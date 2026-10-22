@@ -6,26 +6,222 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
 from locus.core.events import ModelChunkEvent
-from locus.core.messages import Message, ToolCall
+from locus.core.loop_bound import loop_bound
+from locus.core.media import (
+    EARLIER_IMAGE_OMITTED,
+    ImagePart,
+    has_images,
+    images,
+    recent_image_positions,
+    split_content,
+    strip_images,
+)
+from locus.core.messages import Message, Role, ToolCall
 from locus.models.base import ModelConfig, ModelResponse
 
 
 if TYPE_CHECKING:
     import openai
 
+logger = logging.getLogger(__name__)
+
+#: Chat templates treat a user message that is *only* a tool-response wrapper as
+#: part of a multi-step tool exchange rather than as the user's query.
+_TOOL_RESPONSE_OPEN = "<tool_response>"
+_TOOL_RESPONSE_CLOSE = "</tool_response>"
+
+
+#: The tool a Responses ``computer_call`` is routed to (see :mod:`locus.tools.computer`).
+COMPUTER_TOOL_NAME = "computer"
+
+#: Argument carrying a ``computer_call`` item's id, so a turn rebuilt without its
+#: raw output items can still replay the call.
+COMPUTER_ITEM_ID_ARG = "openai_item_id"
+
+#: A 1x1 transparent PNG: the screenshot sent back for a computer call that did
+#: not run (refused, held or failed), with the reason alongside as text.
+_BLANK_PNG_URL = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+)
+
+
+def _join_system(first: Any, extra: str | None) -> str:
+    """The opening system message's text with another leading system message appended."""
+    parts = [p for p in (first if isinstance(first, str) else "", extra or "") if p]
+    return "\n\n".join(parts)
+
+
+def _int_field(holder: Any, name: str) -> int | None:
+    value = holder.get(name) if isinstance(holder, dict) else getattr(holder, name, None)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _chat_usage(usage: Any) -> tuple[dict[str, int], float | None]:
+    """A chat-completions ``usage`` block in Locus's keys, and the cost it reports.
+
+    ``cached_tokens`` (OpenAI, DeepSeek, OpenRouter: the prompt tokens served
+    from the provider's prefix cache) and OpenRouter's ``cache_write_tokens``
+    are kept under those names: they are part of ``prompt_tokens``, unlike
+    Anthropic's ``cache_read_input_tokens``, so the two must not be added up as
+    if they were the same thing. OpenRouter also reports what the call cost
+    (``usage.cost``, USD); it is returned apart because usage counts tokens.
+    """
+    out: dict[str, int] = {}
+    prompt = _int_field(usage, "prompt_tokens")
+    completion = _int_field(usage, "completion_tokens")
+    if prompt is None or completion is None:
+        return out, None
+    out["prompt_tokens"] = prompt
+    out["completion_tokens"] = completion
+    details = (
+        usage.get("prompt_tokens_details")
+        if isinstance(usage, dict)
+        else getattr(usage, "prompt_tokens_details", None)
+    )
+    if details is not None:
+        for name in ("cached_tokens", "cache_write_tokens"):
+            value = _int_field(details, name)
+            if value:
+                out[name] = value
+    cost = usage.get("cost") if isinstance(usage, dict) else getattr(usage, "cost", None)
+    if isinstance(cost, bool) or not isinstance(cost, int | float):
+        cost = None
+    return out, (float(cost) if cost is not None else None)
+
+
+def _computer_call_arguments(item: dict[str, Any]) -> dict[str, Any]:
+    """The tool arguments for a dumped ``computer_call`` item."""
+    arguments: dict[str, Any] = {}
+    for key in ("action", "actions"):
+        if item.get(key) is not None:
+            arguments[key] = item[key]
+    if item.get("pending_safety_checks"):
+        arguments["pending_safety_checks"] = item["pending_safety_checks"]
+    if item.get("id"):
+        arguments[COMPUTER_ITEM_ID_ARG] = item["id"]
+    return arguments
+
+
+def _computer_calls(messages: list[Message]) -> dict[str, list[dict[str, Any]]]:
+    """Call id -> pending safety checks, for every computer call in ``messages``."""
+    calls: dict[str, list[dict[str, Any]]] = {}
+    for msg in messages:
+        if msg.role != Role.ASSISTANT:
+            continue
+        raw_items = msg.metadata.get(RESPONSES_ITEMS_METADATA_KEY)
+        for item in raw_items if isinstance(raw_items, list) else []:
+            if isinstance(item, dict) and item.get("type") == "computer_call":
+                calls[str(item.get("call_id") or "")] = list(
+                    item.get("pending_safety_checks") or []
+                )
+        for tc in msg.tool_calls:
+            if _is_computer_tool_call(tc):
+                calls.setdefault(tc.id, list(tc.arguments.get("pending_safety_checks") or []))
+    return calls
+
+
+def _is_computer_tool_call(tc: ToolCall) -> bool:
+    return tc.name == COMPUTER_TOOL_NAME and COMPUTER_ITEM_ID_ARG in tc.arguments
+
+
+def _tool_output_items(
+    msg: Message,
+    computer_calls: dict[str, list[dict[str, Any]]],
+    *,
+    send_images: bool,
+) -> list[dict[str, Any]]:
+    """Responses input items for one tool result.
+
+    A computer call's result is a ``computer_call_output`` carrying the latest
+    screenshot; its pending safety checks are acknowledged only when the result
+    has a screenshot, which is to say the action ran. Any text in the result
+    follows as a user note. Other tools send a ``function_call_output``, with
+    image parts when the result embeds images.
+    """
+    call_id = msg.tool_call_id or ""
+    content = msg.content or ""
+    text = "\n".join(part for part in split_content(content) if isinstance(part, str)).strip()
+    if call_id in computer_calls:
+        shots = images(content)
+        output: dict[str, Any] = {
+            "type": "computer_call_output",
+            "call_id": call_id,
+            "output": {
+                "type": "computer_screenshot",
+                "image_url": shots[-1].data_url if shots and send_images else _BLANK_PNG_URL,
+            },
+        }
+        if shots and computer_calls[call_id]:
+            output["acknowledged_safety_checks"] = computer_calls[call_id]
+        result = [output]
+        if text:
+            result.append({"role": "user", "content": f"[computer result] {text}"})
+        return result
+    if not has_images(content):
+        return [{"type": "function_call_output", "call_id": call_id, "output": content}]
+    if not send_images:
+        return [
+            {
+                "type": "function_call_output",
+                "call_id": call_id,
+                "output": strip_images(content, EARLIER_IMAGE_OMITTED),
+            }
+        ]
+    parts: list[dict[str, Any]] = [
+        {"type": "input_text", "text": part}
+        if isinstance(part, str)
+        else {"type": "input_image", "image_url": part.data_url}
+        for part in split_content(content)
+    ]
+    return [{"type": "function_call_output", "call_id": call_id, "output": parts}]
+
+
+#: What a chat-completions tool message says in place of an image that follows
+#: in the next user message.
+_IMAGE_FOLLOWS = "[image attached in the next message]"
+
+
+def _user_parts(content: str, *, responses: bool) -> list[dict[str, Any]]:
+    """A user turn with embedded images as content parts, text and images in order."""
+    if responses:
+        return [
+            {"type": "input_text", "text": part}
+            if isinstance(part, str)
+            else {"type": "input_image", "image_url": part.data_url}
+            for part in split_content(content)
+        ]
+    return [
+        {"type": "text", "text": part}
+        if isinstance(part, str)
+        else {"type": "image_url", "image_url": {"url": part.data_url}}
+        for part in split_content(content)
+    ]
+
+
+def _tool_images_turn(parts: list[ImagePart]) -> dict[str, Any]:
+    """The user message carrying the images a batch of tool results returned."""
+    content: list[dict[str, Any]] = [
+        {"type": "text", "text": "[Images returned by the tool calls above]"}
+    ]
+    content.extend({"type": "image_url", "image_url": {"url": p.data_url}} for p in parts)
+    return {"role": "user", "content": content}
+
 
 def _decode_tool_arguments(raw: str | None) -> dict[str, Any]:
     """Decode the ``tc.function.arguments`` payload into a dict.
 
     Most providers send a JSON object string like ``'{"q": "Tokyo"}'``. A few
-    (notably some OCI Llama deployments) double-encode it so ``json.loads``
+    (notably some non-OpenAI deployments) double-encode it so ``json.loads``
     yields a string that itself parses back to the dict — try once more before
     giving up. Returns ``{}`` on any unrecoverable error.
     """
@@ -47,18 +243,277 @@ def _decode_tool_arguments(raw: str | None) -> dict[str, Any]:
     return {}
 
 
+def _malformed_tool_arguments(raw: str | None) -> str | None:
+    """The raw argument text when it is not JSON at all, else ``None``."""
+    if not raw:
+        return None
+    try:
+        json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    return None
+
+
+def _strip_model_namespace(name: str) -> str:
+    """Drop a leading purely-alphabetic namespace segment.
+
+    Namespaced model ids (``openai.gpt-5``, ``vendor.model-…``) are treated
+    the same as native OpenAI names. Native ids start with a token containing
+    digits/hyphens (``gpt-5``, ``o1-…``) so the strip is a no-op for them.
+    """
+    head, sep, rest = name.partition(".")
+    if sep and head.isalpha():
+        return rest
+    return name
+
+
+#: Long-stable Chat Completions fields, used only if introspecting the
+#: ``openai`` package fails.
+_FALLBACK_OPENAI_PARAMS = frozenset(
+    {
+        "logit_bias",
+        "logprobs",
+        "metadata",
+        "n",
+        "parallel_tool_calls",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "service_tier",
+        "stop",
+        "store",
+        "stream_options",
+        "tool_choice",
+        "top_logprobs",
+        "user",
+    }
+)
+
+
+def _openai_param_names() -> frozenset[str]:
+    """Every field the Chat Completions API accepts, per the ``openai`` package.
+
+    Read from the SDK's own request TypedDicts rather than hand-listed, so a
+    parameter OpenAI adds is forwardable the day the dependency is bumped —
+    a hand-maintained list is a list that goes stale and quietly blocks
+    functionality the server already supports.
+    """
+    try:
+        import typing
+
+        from openai.types.chat import completion_create_params as _params
+
+        names: set[str] = set()
+        for cls_name in (
+            "CompletionCreateParamsBase",
+            "CompletionCreateParamsNonStreaming",
+            "CompletionCreateParamsStreaming",
+        ):
+            cls = getattr(_params, cls_name, None)
+            if cls is not None:
+                names |= set(typing.get_type_hints(cls).keys())
+        if names:
+            return frozenset(names)
+    except (ImportError, AttributeError, TypeError, NameError):  # pragma: no cover
+        logger.debug("could not introspect openai request params", exc_info=True)
+    # Introspection failed (openai moved its request types). Fall back to the
+    # long-stable parameters rather than returning nothing, which would silently
+    # block every passthrough instead of just the newest fields.
+    return _FALLBACK_OPENAI_PARAMS
+
+
+#: Parameters this provider owns. Everything else in ``_OPENAI_PARAMS`` is
+#: forwarded verbatim from the caller.
+_RESERVED_PARAMS = frozenset(
+    {
+        "model",
+        "messages",
+        "stream",
+        "tools",
+        "max_tokens",
+        "max_completion_tokens",
+        "temperature",
+        "top_p",
+        "frequency_penalty",
+        "presence_penalty",
+    }
+)
+
+_OPENAI_PARAMS = _openai_param_names()
+
+
+#: Long-stable Responses API fields, used only if introspecting the
+#: ``openai`` package fails.
+_FALLBACK_RESPONSES_PARAMS = frozenset(
+    {
+        "background",
+        "include",
+        "instructions",
+        "max_tool_calls",
+        "metadata",
+        "parallel_tool_calls",
+        "previous_response_id",
+        "prompt_cache_key",
+        "reasoning",
+        "safety_identifier",
+        "service_tier",
+        "store",
+        "stream_options",
+        "text",
+        "tool_choice",
+        "top_logprobs",
+        "truncation",
+        "user",
+    }
+)
+
+
+def _responses_param_names() -> frozenset[str]:
+    """Every field the Responses API accepts, per the ``openai`` package.
+
+    Mirrors :func:`_openai_param_names`: read from the SDK's own request
+    TypedDicts rather than hand-listed, so a parameter OpenAI adds is
+    forwardable the day the dependency is bumped.
+    """
+    try:
+        import typing
+
+        from openai.types.responses import response_create_params as _params
+
+        names: set[str] = set()
+        for cls_name in (
+            "ResponseCreateParamsBase",
+            "ResponseCreateParamsNonStreaming",
+            "ResponseCreateParamsStreaming",
+        ):
+            cls = getattr(_params, cls_name, None)
+            if cls is not None:
+                names |= set(typing.get_type_hints(cls).keys())
+        if names:
+            return frozenset(names)
+    except (ImportError, AttributeError, TypeError, NameError):  # pragma: no cover
+        logger.debug("could not introspect openai responses request params", exc_info=True)
+    # Introspection failed (openai moved its request types). Fall back to the
+    # long-stable parameters rather than returning nothing, which would
+    # silently block every passthrough instead of just the newest fields.
+    return _FALLBACK_RESPONSES_PARAMS
+
+
+#: Parameters the Responses request builder owns or translates from their
+#: chat-completions names. Everything else in ``_RESPONSES_PARAMS`` is
+#: forwarded verbatim from the caller.
+_RESPONSES_RESERVED_PARAMS = frozenset(
+    {
+        "model",
+        "input",
+        "messages",
+        "stream",
+        "tools",
+        "max_tokens",
+        "max_completion_tokens",
+        "max_output_tokens",
+        "temperature",
+        "top_p",
+        "frequency_penalty",
+        "presence_penalty",
+        "reasoning_effort",
+        "response_format",
+    }
+)
+
+_RESPONSES_PARAMS = _responses_param_names()
+
+#: Model families served only by the Responses API. GPT-5.6 rejects function
+#: tools on chat-completions whenever reasoning is active — the API 400s with
+#: "Function tools with reasoning_effort are not supported … use /v1/responses
+#: or set reasoning_effort to 'none'" — and disabling reasoning defeats the
+#: family's purpose, so ``api="auto"`` routes these to ``/v1/responses``.
+_RESPONSES_ONLY_PREFIXES = ("gpt-5.6",)
+
+#: ``Message.metadata`` key under which the Responses path stashes the raw
+#: output items of an assistant turn (reasoning items with their
+#: ``encrypted_content``, function_call items, message items — in order).
+#: On the next turn ``_convert_messages_responses`` replays them verbatim,
+#: which is the documented stateless (``store=False``) pattern: reasoning
+#: models require the reasoning item that preceded a function call to come
+#: back with it, and a reconstruction from ``Message`` fields alone cannot
+#: supply that.
+RESPONSES_ITEMS_METADATA_KEY = "openai_responses_items"
+
+
+def _dump_output_item(item: Any) -> dict[str, Any] | None:
+    """Serialise a Responses output item for verbatim replay next turn.
+
+    The openai SDK's output items are Pydantic models; ``model_dump`` with
+    ``exclude_none`` yields exactly the wire shape the API accepts back as
+    input. Returns ``None`` for anything that can't be dumped — the item is
+    then simply not replayed rather than poisoning the next request.
+    """
+    dump = getattr(item, "model_dump", None)
+    if not callable(dump):
+        return None
+    try:
+        dumped = dump(mode="json", exclude_none=True)
+    except (TypeError, ValueError):
+        logger.debug("could not serialise responses output item", exc_info=True)
+        return None
+    return dumped if isinstance(dumped, dict) else None
+
+
+def _text_format_from_response_format(response_format: dict[str, Any]) -> dict[str, Any]:
+    """Translate a chat-completions ``response_format`` to a Responses ``text`` param.
+
+    Chat nests the schema under ``json_schema``; the Responses API flattens
+    it into ``text.format``. ``json_object`` / ``text`` formats carry over
+    unchanged.
+    """
+    if response_format.get("type") == "json_schema":
+        inner = response_format.get("json_schema")
+        if isinstance(inner, dict):
+            fmt: dict[str, Any] = {"type": "json_schema"}
+            for key in ("name", "schema", "strict", "description"):
+                if key in inner:
+                    fmt[key] = inner[key]
+            return {"format": fmt}
+    return {"format": dict(response_format)}
+
+
 class OpenAIConfig(ModelConfig):
     """Configuration for OpenAI models."""
 
     model: str = "gpt-4o"
     max_tokens: int = 4096
-    temperature: float = 0.7
-    top_p: float = 0.9
+    # ``None`` means "do not send this parameter" — the server's own default
+    # applies. That matters for self-hosted models: vLLM reads temperature /
+    # top_p from the model's ``generation_config.json``, and a value we send
+    # unasked silently overrides what the model ships as its recommendation.
+    temperature: float | None = 0.7
+    top_p: float | None = 0.9
     api_key: str | None = Field(default=None, description="OpenAI API key")
     base_url: str | None = Field(default=None, description="Custom API base URL")
     organization: str | None = Field(default=None, description="OpenAI organization ID")
+    default_headers: dict[str, str] | None = Field(
+        default=None,
+        description=(
+            "Headers sent on every request. A box runner sends "
+            "``Accept-Encoding: identity`` so the sandbox's guard can read the "
+            "usage in each response and meter the run."
+        ),
+    )
+    api: Literal["auto", "responses", "chat_completions"] = Field(
+        default="auto",
+        description=(
+            "Which OpenAI wire API to speak. 'chat_completions' is the classic "
+            "/v1/chat/completions path, 'responses' is /v1/responses. 'auto' "
+            "(the default) picks chat-completions except for model families "
+            "that require the Responses API (gpt-5.6-*) — and only against "
+            "api.openai.com itself: a custom base_url points at an "
+            "OpenAI-compatible gateway (Together, vLLM, LiteLLM) that does "
+            "not serve /v1/responses."
+        ),
+    )
 
-    # Production-safety knobs — match the OCI provider's posture so a
+    # Production-safety knobs — keep a resilient posture so a
     # transient 429 / 503 / connection drop doesn't immediately kill the
     # agent loop. The openai SDK's defaults are 2 retries / 600s timeout;
     # 3 retries / 120s is a tighter, more agent-friendly default with
@@ -74,19 +529,86 @@ class OpenAIConfig(ModelConfig):
         gt=0,
         description="Per-request timeout in seconds.",
     )
+    stream_reconnects: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Ask a streamed turn again when its connection drops part way, up to this many "
+            "times; the turn is then read whole before it is yielded. 0 (default) streams "
+            "live with no reconnect. On inside an NVIDIA OpenShell box (the box runner)."
+        ),
+    )
+    keepalive: bool = Field(
+        default=True,
+        description=(
+            "Reuse connections between requests. Off inside an NVIDIA OpenShell box: its "
+            "proxy closes a kept-alive tunnel once the box's policy generation moves on "
+            "(any new DNS mapping does), so a reused connection fails the next call."
+        ),
+    )
 
     # OpenAI-specific settings
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
     seed: int | None = None
     stop_sequences: list[str] = Field(default_factory=list)
+    stream_usage: bool = Field(
+        default=True,
+        description=(
+            "Ask a chat-completions stream for its usage chunk "
+            "(``stream_options={'include_usage': True}``). Without it OpenAI "
+            "sends no usage on a stream, so a streamed run cannot be metered "
+            "or held to ``max_cost_usd``. Set False only for an "
+            "OpenAI-compatible server that rejects the field."
+        ),
+    )
+    extra_body: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Provider-specific request fields merged into the request body. "
+            "OpenAI-compatible servers accept options the OpenAI schema has no "
+            "field for — vLLM's chat_template_kwargs (e.g. enable_thinking), "
+            "top_k, min_p, repetition_penalty. Without this they are "
+            "unreachable through the SDK."
+        ),
+    )
+
+
+#: First wait before a dropped stream is asked again; it doubles, capped at 4 s.
+STREAM_RECONNECT_BASE_DELAY = 0.5
+
+
+def _is_disconnect(exc: BaseException) -> bool:
+    """Whether ``exc`` is a dropped connection rather than an answer from the server.
+
+    ``openai.APIConnectionError`` (``APITimeoutError`` is one) and httpx transport errors
+    are; any HTTP status (``openai.APIStatusError``) is the server's answer and is not.
+    """
+    try:
+        import openai
+    except ImportError:  # pragma: no cover — the provider is installed with its extra
+        openai = None  # type: ignore[assignment]
+    if openai is not None:
+        if isinstance(exc, openai.APIStatusError):
+            return False
+        if isinstance(exc, openai.APIConnectionError):
+            return True
+    try:
+        import httpx
+    except ImportError:  # pragma: no cover
+        return False
+    return isinstance(exc, httpx.TransportError)
 
 
 class OpenAIModel(BaseModel):
     """
     OpenAI model provider.
 
-    Supports GPT-4o, GPT-4, o1, o3 models with streaming and tool calling.
+    Supports GPT-4o, GPT-4, o1, o3, gpt-5.x models with streaming and tool
+    calling. Speaks both OpenAI wire APIs: chat-completions (the default)
+    and the Responses API, selected via ``api=`` on the config or
+    automatically for model families that require it (gpt-5.6-*, which
+    reject function tools on chat-completions whenever reasoning is on).
 
     Example:
         >>> model = OpenAIModel(model="gpt-4o")
@@ -94,7 +616,84 @@ class OpenAIModel(BaseModel):
     """
 
     config: OpenAIConfig
+
+    def _apply_sampling(self, request_kwargs: dict[str, Any], call_kwargs: dict[str, Any]) -> None:
+        """Merge sampling parameters into a request, omitting unset ones.
+
+        ``temperature`` / ``top_p`` resolve to ``None`` when the caller wants
+        the server to decide — self-hosted models publish their own values in
+        ``generation_config.json``, and sending ours unasked overrides the
+        model's published recommendation.
+
+        Penalties are sent only when non-zero: some providers (Grok) reject the
+        parameter outright even at zero, and zero is the server default anyway.
+        """
+        temperature = call_kwargs.get("temperature", self.config.temperature)
+        if temperature is not None:
+            request_kwargs["temperature"] = temperature
+
+        top_p = call_kwargs.get("top_p", self.config.top_p)
+        if top_p is not None:
+            request_kwargs["top_p"] = top_p
+
+        freq = call_kwargs.get("frequency_penalty", self.config.frequency_penalty)
+        if freq != 0.0:
+            request_kwargs["frequency_penalty"] = freq
+
+        pres = call_kwargs.get("presence_penalty", self.config.presence_penalty)
+        if pres != 0.0:
+            request_kwargs["presence_penalty"] = pres
+
+    def _apply_passthrough(
+        self,
+        request_kwargs: dict[str, Any],
+        call_kwargs: dict[str, Any],
+        *,
+        allowed: frozenset[str] | None = None,
+        reserved: frozenset[str] | None = None,
+    ) -> None:
+        """Forward any other API parameter the caller supplied.
+
+        Without this the provider silently swallows most of the API: an agent
+        that needs ``tool_choice`` to force a tool, ``parallel_tool_calls`` to
+        serialise them, ``stream_options`` for usage during streaming, or
+        ``logprobs`` for confidence has no route to the server and has to drop
+        out of the SDK to a raw client. Anything not in the target API's
+        schema is ignored here — it belongs in ``extra_body``.
+
+        Defaults target Chat Completions; the Responses path passes its own
+        ``allowed`` / ``reserved`` sets.
+        """
+        if allowed is None:
+            allowed = _OPENAI_PARAMS
+        if reserved is None:
+            reserved = _RESERVED_PARAMS
+        for name, value in call_kwargs.items():
+            if name in reserved or name == "extra_body":
+                continue
+            if name in allowed and name not in request_kwargs:
+                request_kwargs[name] = value
+
+    def _apply_extra_body(
+        self, request_kwargs: dict[str, Any], call_kwargs: dict[str, Any]
+    ) -> None:
+        """Merge provider-specific body fields, per-call taking precedence.
+
+        Kept separate from sampling because it must apply to every model —
+        including the reasoning models that reject sampling parameters, which
+        still accept provider extensions.
+        """
+        merged: dict[str, Any] = {}
+        if self.config.extra_body:
+            merged.update(self.config.extra_body)
+        per_call = call_kwargs.get("extra_body")
+        if per_call:
+            merged.update(per_call)
+        if merged:
+            request_kwargs["extra_body"] = merged
+
     _client: openai.AsyncOpenAI | None = None
+    _client_loop: Any = None
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -138,18 +737,38 @@ class OpenAIModel(BaseModel):
         (429, 5xx, network resets) don't kill the agent loop on first
         try. The openai SDK retries with exponential backoff between
         attempts.
-        """
-        if self._client is None:
-            import openai
 
-            self._client = openai.AsyncOpenAI(
+        Bound to the event loop that built it: ``AsyncOpenAI`` wraps an
+        ``httpx`` pool, so a client cached across two loops fails on the second
+        with ``APIConnectionError: Connection error`` — which reads as a
+        provider outage and sends you to check your key and their status page.
+        See :func:`~locus.core.loop_bound.loop_bound`.
+        """
+
+        def build() -> openai.AsyncOpenAI:
+            import openai  # noqa: PLC0415
+
+            http_client = None
+            if not self.config.keepalive:
+                import sys  # noqa: PLC0415
+
+                # A fresh connection per request: nothing pooled can go stale. The limits
+                # come from the HTTP library this openai release's client is built on
+                # (httpx2 from openai 3.x, httpx before), whatever else is installed.
+                http_lib = sys.modules[openai.DefaultAsyncHttpxClient.__mro__[1].__module__]
+                limits = http_lib.Limits(max_keepalive_connections=0)
+                http_client = openai.DefaultAsyncHttpxClient(limits=limits)
+            return openai.AsyncOpenAI(
                 api_key=self.config.api_key,
                 base_url=self.config.base_url,
                 organization=self.config.organization,
+                default_headers=self.config.default_headers,
                 max_retries=self.config.max_retries,
                 timeout=self.config.request_timeout,
+                http_client=http_client,
             )
-        return self._client
+
+        return loop_bound(self, "_client", build)
 
     async def close(self) -> None:
         """Close the OpenAI client and release resources."""
@@ -166,13 +785,116 @@ class OpenAIModel(BaseModel):
         await self.close()
 
     def _convert_messages(self, messages: list[Message]) -> list[dict[str, Any]]:
-        """Convert Locus messages to OpenAI format."""
+        """Convert Locus messages to OpenAI format.
+
+        Leading system messages (the instructions, then a memory block placed
+        right after them) are joined into the one system message the request
+        opens with. A later system message is re-encoded as a user
+        note. The agent loop legitimately injects mid-run guidance as system
+        messages (grounding replans, repair prompts, iteration nudges), but
+        several OpenAI-compatible chat templates accept a system message only
+        in first position — vLLM serving Qwen rejects the request outright
+        with ``System message must be at the beginning``. That turns a normal
+        guided run into a hard 400 partway through, non-deterministically,
+        depending on whether the run happened to need guidance.
+
+        The text is preserved and clearly marked, so steering still works
+        while the request stays portable.
+
+        A request carrying no plain user turn gets one synthesised. The same
+        family of chat templates walks the history backwards looking for a
+        user message that is not itself a ``<tool_response>`` wrapper, and
+        raises ``No user query found in messages.`` when there is none —
+        Qwen3's template does this at the top of the render. Sub-calls that
+        legitimately omit the user turn (judge/summary/auxiliary passes built
+        from ``system + assistant + tool``) therefore 400 on a self-hosted
+        Qwen even though the same list is fine on api.openai.com.
+        """
         openai_messages: list[dict[str, Any]] = []
+        leading = True
+        # Chat-completions tool messages take text only, so a tool result's
+        # images travel in a user message after the batch of tool messages —
+        # the tool messages must stay contiguous behind their assistant turn.
+        # Only for a model that can see, and only the latest few results, as
+        # the other transports do; a text-only deployment keeps getting the
+        # placeholder, never an image part it would reject.
+        with_images = (
+            recent_image_positions([m.content if m.role == Role.TOOL else None for m in messages])
+            if self._sees_images()
+            else set()
+        )
+        held: list[ImagePart] = []
 
-        for msg in messages:
-            openai_messages.append(msg.to_openai_format())
+        for index, msg in enumerate(messages):
+            if held and msg.role != Role.TOOL:
+                openai_messages.append(_tool_images_turn(held))
+                held = []
+            entry = msg.to_openai_format()
+            if msg.role == Role.TOOL and has_images(msg.content):
+                if index in with_images:
+                    held.extend(images(msg.content))
+                    entry["content"] = strip_images(msg.content or "", _IMAGE_FOLLOWS)
+                else:
+                    entry["content"] = strip_images(msg.content or "")
+            elif msg.role == Role.USER and has_images(msg.content):
+                entry["content"] = _user_parts(msg.content or "", responses=False)
+            if msg.role == Role.SYSTEM and leading and openai_messages:
+                # A second leading system message (a recalled-memory block
+                # placed after the instructions) joins the system prompt, so
+                # the request still opens with exactly one system message.
+                first = openai_messages[0]
+                first["content"] = _join_system(first.get("content"), msg.content)
+                continue
+            if msg.role == Role.SYSTEM and not leading:
+                entry = {
+                    "role": "user",
+                    "content": f"[System guidance] {entry.get('content') or ''}",
+                }
+            leading = leading and msg.role == Role.SYSTEM
+            openai_messages.append(entry)
+        if held:
+            openai_messages.append(_tool_images_turn(held))
 
-        return openai_messages
+        return self._ensure_user_turn(openai_messages)
+
+    def _sees_images(self) -> bool:
+        """Whether this model accepts image parts, by its capability profile."""
+        from locus.models.profiles import profile_for  # noqa: PLC0415 — profiles imports metadata
+
+        return profile_for(self.config.model).vision
+
+    @classmethod
+    def _is_plain_user_turn(cls, entry: dict[str, Any]) -> bool:
+        """True when ``entry`` is a user message a chat template counts as the query."""
+        if entry.get("role") != "user":
+            return False
+        content = entry.get("content")
+        if not isinstance(content, str):
+            # Multi-part (image/audio) content is never a tool-response wrapper.
+            return content is not None
+        stripped = content.strip()
+        if not stripped:
+            return False
+        return not (
+            stripped.startswith(_TOOL_RESPONSE_OPEN) and stripped.endswith(_TOOL_RESPONSE_CLOSE)
+        )
+
+    @classmethod
+    def _ensure_user_turn(cls, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Guarantee at least one plain user turn, anchoring templates that need one.
+
+        Inserted after a leading system message so the system prompt keeps first
+        position — the sibling rule in the same templates.
+        """
+        if not entries or any(cls._is_plain_user_turn(e) for e in entries):
+            return entries
+
+        anchor = {
+            "role": "user",
+            "content": "[Continue] Continue from the conversation above.",
+        }
+        at = 1 if entries[0].get("role") == "system" else 0
+        return [*entries[:at], anchor, *entries[at:]]
 
     def _convert_tools(self, tools: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
         """Ensure tools are in OpenAI format."""
@@ -191,7 +913,7 @@ class OpenAIModel(BaseModel):
                     }
                 )
             else:
-                openai_tools.append(tool)
+                openai_tools.append({k: v for k, v in tool.items() if k != "native"})
 
         return openai_tools
 
@@ -200,16 +922,13 @@ class OpenAIModel(BaseModel):
         """Whether the model requires ``max_completion_tokens`` over ``max_tokens``.
 
         Detects the o1 / o3 / gpt-5* families. Tolerates a leading
-        purely-alphabetic namespace segment so OCI-style model ids
-        (``openai.gpt-5``, ``meta.llama-3.3-…``) are treated the same as
+        purely-alphabetic namespace segment so namespaced model ids
+        (``openai.gpt-5``, ``vendor.model-…``) are treated the same as
         native OpenAI names (``gpt-5.1-chat-latest``). Native ids start
         with a token containing digits/hyphens (``gpt-5``, ``o1-…``) so
         the namespace strip is a no-op for them.
         """
-        name = model.lower()
-        head, sep, rest = name.partition(".")
-        if sep and head.isalpha():
-            name = rest
+        name = _strip_model_namespace(model.lower())
         return any(name.startswith(prefix) for prefix in ("o1", "o3", "gpt-5"))
 
     @staticmethod
@@ -223,11 +942,39 @@ class OpenAIModel(BaseModel):
         of building the request body, even though they still use plain
         ``max_tokens``.
         """
-        name = model.lower()
-        head, sep, rest = name.partition(".")
-        if sep and head.isalpha():
-            name = rest
-        return "search-preview" in name
+        return "search-preview" in _strip_model_namespace(model.lower())
+
+    @staticmethod
+    def _requires_responses_api(model: str) -> bool:
+        """Whether the model family is served only by the Responses API.
+
+        The GPT-5.6 family (sol / terra / luna) rejects function tools on
+        chat-completions whenever reasoning is active: the API 400s with
+        "Function tools with reasoning_effort are not supported … To use
+        function tools, use /v1/responses or set reasoning_effort to
+        'none'". Setting effort to none defeats the family's purpose, so
+        these models route to ``/v1/responses`` under ``api="auto"``.
+        Tolerates a leading purely-alphabetic namespace segment like the
+        other family detectors.
+        """
+        name = _strip_model_namespace(model.lower())
+        return name.startswith(_RESPONSES_ONLY_PREFIXES)
+
+    def _use_responses_api(self) -> bool:
+        """Whether this instance's requests go to ``/v1/responses``.
+
+        Explicit config wins in both directions. ``auto`` selects the
+        Responses API only for families that require it AND only against
+        api.openai.com itself — a custom ``base_url`` points at an
+        OpenAI-compatible gateway (Together, vLLM, LiteLLM) that serves
+        chat-completions but not ``/v1/responses``, so auto-selection
+        must never fire there.
+        """
+        if self.config.api == "responses":
+            return True
+        if self.config.api == "chat_completions":
+            return False
+        return self.config.base_url is None and self._requires_responses_api(self.config.model)
 
     def _parse_response(self, response: Any) -> ModelResponse:
         """Parse OpenAI response to ModelResponse.
@@ -239,6 +986,22 @@ class OpenAIModel(BaseModel):
         msg = getattr(choice, "message", None)
 
         content = msg.content if msg is not None else None
+        # Reasoning models (Qwen/DeepSeek via vLLM, o-series, gpt-5)
+        # emit their chain of thought in a channel separate from
+        # ``content``. The exact field name varies by deployment:
+        # ``reasoning_content`` is the OpenAI-compatible / vLLM
+        # ``--reasoning-parser qwen`` convention, while some vLLM
+        # builds use ``reasoning``. Accept both so the CoT surfaces as
+        # ``ThinkEvent.reasoning`` regardless of server variant.
+        # The ``isinstance`` guard keeps MagicMock-heavy test stubs
+        # from leaking a Mock into the Pydantic ``reasoning`` field.
+        reasoning: str | None = None
+        if msg is not None:
+            for _field in ("reasoning_content", "reasoning"):
+                _candidate = getattr(msg, _field, None)
+                if isinstance(_candidate, str) and _candidate:
+                    reasoning = _candidate
+                    break
         tool_calls: list[ToolCall] = []
 
         if msg is not None and msg.tool_calls:
@@ -249,23 +1012,545 @@ class OpenAIModel(BaseModel):
                         id=tc.id,
                         name=tc.function.name,
                         arguments=arguments,
+                        malformed_arguments=_malformed_tool_arguments(tc.function.arguments),
                     )
                 )
 
         message = Message.assistant(content=content, tool_calls=tool_calls)
 
-        usage = {}
+        usage: dict[str, int] = {}
+        cost: float | None = None
         if response.usage:
-            usage = {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-            }
+            usage, cost = _chat_usage(response.usage)
+
+        # ``n>1`` costs the caller tokens for every candidate; keep the extras
+        # instead of discarding everything past choices[0].
+        candidates: list[Message] = []
+        for extra in getattr(response, "choices", [])[1:]:
+            extra_msg = getattr(extra, "message", None)
+            if extra_msg is None:
+                continue
+            extra_calls: list[ToolCall] = []
+            for tc in getattr(extra_msg, "tool_calls", None) or []:
+                extra_calls.append(
+                    ToolCall(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=_decode_tool_arguments(tc.function.arguments),
+                        malformed_arguments=_malformed_tool_arguments(tc.function.arguments),
+                    )
+                )
+            extra_content = getattr(extra_msg, "content", None)
+            if not isinstance(extra_content, str):
+                extra_content = None
+            candidates.append(Message.assistant(content=extra_content, tool_calls=extra_calls))
+
+        # Passed through as the provider shaped it — consumers of logprobs
+        # want the raw numbers, not a lossy normalisation.
+        logprobs = getattr(choice, "logprobs", None)
 
         return ModelResponse(
             message=message,
             usage=usage,
             stop_reason=choice.finish_reason,
+            reasoning=reasoning,
+            logprobs=logprobs,
+            candidates=candidates,
+            cost_usd=cost,
         )
+
+    # ------------------------------------------------------------------
+    # Responses API (/v1/responses)
+    # ------------------------------------------------------------------
+
+    def _convert_tools_responses(
+        self, tools: list[dict[str, Any]] | None
+    ) -> list[dict[str, Any]] | None:
+        """Convert tool schemas to the Responses API's flattened shape.
+
+        Chat-completions nests function tools under a ``function`` key; the
+        Responses API flattens ``name`` / ``description`` / ``parameters`` to
+        the top level. Bare Locus schemas (no ``type``) flatten directly;
+        built-in tools (``web_search`` etc.) and already-flattened entries
+        pass through unchanged.
+        """
+        if not tools:
+            return None
+
+        converted: list[dict[str, Any]] = []
+        for original in tools:
+            native = (original.get("native") or {}).get("openai_responses")
+            if isinstance(native, dict):
+                converted.append({k: v for k, v in native.items() if not k.startswith("_")})
+                continue
+            tool = {k: v for k, v in original.items() if k != "native"}
+            tool_type = tool.get("type")
+            function = tool.get("function")
+            if tool_type == "function" and isinstance(function, dict):
+                flattened: dict[str, Any] = {"type": "function"}
+                for key in ("name", "description", "parameters", "strict"):
+                    if key in function:
+                        flattened[key] = function[key]
+                converted.append(flattened)
+            elif tool_type is None:
+                converted.append({"type": "function", **tool})
+            else:
+                converted.append(tool)
+        return converted
+
+    def _convert_messages_responses(self, messages: list[Message]) -> list[dict[str, Any]]:
+        """Convert Locus messages to Responses API input items.
+
+        An assistant turn that the Responses path itself produced carries its
+        raw output items in ``metadata[RESPONSES_ITEMS_METADATA_KEY]`` —
+        those are replayed verbatim (reasoning items with their
+        ``encrypted_content``, function_call items, message items, in
+        order), which is what reasoning models require to continue a
+        tool-calling turn statelessly. Assistant turns without that
+        annotation (hand-built history, streamed turns) are reconstructed
+        from ``content`` / ``tool_calls``; the reconstructed function_call
+        items deliberately omit item ``id``s so the server does not try to
+        pair them with reasoning items it never received.
+
+        Leading system messages are joined into one, and a later system
+        message is re-encoded as a user note, exactly like the chat-completions path (see
+        :meth:`_convert_messages`), so mid-run guidance behaves the same on
+        both transports.
+        """
+        items: list[dict[str, Any]] = []
+        computer_calls = _computer_calls(messages)
+        with_images = recent_image_positions(
+            [m.content if m.role == Role.TOOL else None for m in messages]
+        )
+
+        leading = True
+
+        for index, msg in enumerate(messages):
+            was_leading = leading
+            leading = leading and msg.role == Role.SYSTEM
+            if msg.role == Role.ASSISTANT:
+                raw_items = msg.metadata.get(RESPONSES_ITEMS_METADATA_KEY)
+                if isinstance(raw_items, list):
+                    replay = [item for item in raw_items if isinstance(item, dict)]
+                    if replay:
+                        items.extend(replay)
+                        continue
+                if msg.content:
+                    items.append({"role": "assistant", "content": msg.content})
+                for tc in msg.tool_calls:
+                    if _is_computer_tool_call(tc):
+                        call: dict[str, Any] = {
+                            "type": "computer_call",
+                            "id": tc.arguments[COMPUTER_ITEM_ID_ARG],
+                            "call_id": tc.id,
+                            "status": "completed",
+                            "pending_safety_checks": tc.arguments.get("pending_safety_checks")
+                            or [],
+                        }
+                        for key in ("action", "actions"):
+                            if key in tc.arguments:
+                                call[key] = tc.arguments[key]
+                        items.append(call)
+                        continue
+                    items.append(
+                        {
+                            "type": "function_call",
+                            "call_id": tc.id,
+                            "name": tc.name,
+                            "arguments": json.dumps(tc.arguments),
+                        }
+                    )
+            elif msg.role == Role.TOOL:
+                items.extend(
+                    _tool_output_items(msg, computer_calls, send_images=index in with_images)
+                )
+            elif msg.role == Role.SYSTEM and was_leading and items:
+                items[0]["content"] = _join_system(items[0].get("content"), msg.content)
+            elif msg.role == Role.SYSTEM and not was_leading:
+                items.append(
+                    {
+                        "role": "user",
+                        "content": f"[System guidance] {msg.content or ''}",
+                    }
+                )
+            elif msg.role == Role.USER and has_images(msg.content):
+                items.append(
+                    {"role": "user", "content": _user_parts(msg.content or "", responses=True)}
+                )
+            else:
+                items.append({"role": msg.role.value, "content": msg.content or ""})
+
+        return items
+
+    def _build_responses_request(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None,
+        call_kwargs: dict[str, Any],
+        *,
+        stream: bool,
+    ) -> dict[str, Any]:
+        """Build a ``/v1/responses`` request mirroring the chat request shaping.
+
+        Chat-completions names are translated to their Responses equivalents
+        so callers (and the agent loop) don't need to know which transport is
+        active:
+
+        - ``max_tokens`` / ``max_completion_tokens`` → ``max_output_tokens``
+        - ``reasoning_effort`` → ``reasoning={"effort": …}`` (merged under an
+          explicit ``reasoning`` dict, which wins on conflict)
+        - ``response_format`` → ``text={"format": …}`` (json_schema flattened)
+        - chat-shaped ``tool_choice={"type": "function", "function": {…}}``
+          → the flattened Responses shape
+
+        Reasoning stays on: no effort is ever defaulted, so the server's own
+        default applies unless the caller asks for something else.
+
+        ``store`` defaults to ``False`` — the transport stays stateless like
+        chat-completions and nothing persists server-side. For reasoning
+        families, ``include=["reasoning.encrypted_content"]`` is then
+        requested so reasoning items can be replayed verbatim on the next
+        turn (see :meth:`_convert_messages_responses`).
+
+        Dropped, with no Responses equivalent: ``seed``, ``stop`` /
+        ``stop_sequences``, ``frequency_penalty`` / ``presence_penalty``.
+        """
+        request_kwargs: dict[str, Any] = {
+            "model": self.config.model,
+            "input": self._convert_messages_responses(messages),
+        }
+        if stream:
+            request_kwargs["stream"] = True
+
+        max_tokens_value = call_kwargs.get("max_tokens")
+        if max_tokens_value is None:
+            max_tokens_value = call_kwargs.get("max_completion_tokens")
+        if max_tokens_value is None:
+            max_tokens_value = self.config.max_tokens
+        request_kwargs["max_output_tokens"] = max_tokens_value
+
+        reasoning_family = self._uses_max_completion_tokens(self.config.model)
+        if not reasoning_family and not self._rejects_sampling_params(self.config.model):
+            # Reasoning families reject sampling controls on /v1/responses
+            # just as they do on chat-completions. Penalties are chat-only —
+            # the Responses API has no such fields — so only temperature /
+            # top_p apply here.
+            temperature = call_kwargs.get("temperature", self.config.temperature)
+            if temperature is not None:
+                request_kwargs["temperature"] = temperature
+            top_p = call_kwargs.get("top_p", self.config.top_p)
+            if top_p is not None:
+                request_kwargs["top_p"] = top_p
+
+        responses_tools = self._convert_tools_responses(tools)
+        if responses_tools:
+            request_kwargs["tools"] = responses_tools
+
+        # Reasoning controls. ``reasoning`` (Responses-native dict) wins;
+        # ``reasoning_effort`` (the chat-completions name) merges in so a
+        # caller can keep using one spelling across both transports.
+        reasoning = call_kwargs.get("reasoning")
+        effort = call_kwargs.get("reasoning_effort")
+        if isinstance(reasoning, dict):
+            merged_reasoning = dict(reasoning)
+            if effort is not None:
+                merged_reasoning.setdefault("effort", effort)
+            request_kwargs["reasoning"] = merged_reasoning
+        elif reasoning is not None:
+            request_kwargs["reasoning"] = reasoning
+        elif effort is not None:
+            request_kwargs["reasoning"] = {"effort": effort}
+
+        # Chat-shaped forced tool choice → flattened Responses shape. Other
+        # shapes ("auto" / "required" / already-flattened dicts) flow through
+        # the passthrough below unchanged.
+        tool_choice = call_kwargs.get("tool_choice")
+        if (
+            isinstance(tool_choice, dict)
+            and tool_choice.get("type") == "function"
+            and isinstance(tool_choice.get("function"), dict)
+        ):
+            request_kwargs["tool_choice"] = {
+                "type": "function",
+                "name": tool_choice["function"].get("name"),
+            }
+
+        # Structured output: translate ``response_format`` unless the caller
+        # supplied a Responses-native ``text`` param themselves.
+        response_format = call_kwargs.get("response_format")
+        if response_format is not None and "text" not in call_kwargs:
+            request_kwargs["text"] = _text_format_from_response_format(response_format)
+
+        store = call_kwargs.get("store", False)
+        request_kwargs["store"] = store
+        if store is False and reasoning_family and "include" not in call_kwargs:
+            request_kwargs["include"] = ["reasoning.encrypted_content"]
+
+        self._apply_passthrough(
+            request_kwargs,
+            call_kwargs,
+            allowed=_RESPONSES_PARAMS,
+            reserved=_RESPONSES_RESERVED_PARAMS,
+        )
+        self._apply_extra_body(request_kwargs, call_kwargs)
+        # A native tool can need a request option too (``computer_use_preview``
+        # needs ``truncation="auto"``); an explicit caller value wins.
+        for tool in tools or []:
+            native = (tool.get("native") or {}).get("openai_responses")
+            extra = native.get("_request") if isinstance(native, dict) else None
+            if isinstance(extra, dict):
+                for key, value in extra.items():
+                    request_kwargs.setdefault(key, value)
+
+        return request_kwargs
+
+    @staticmethod
+    def _responses_usage(response: Any) -> dict[str, int]:
+        """Map Responses usage onto the chat-completions key names.
+
+        ``input_tokens`` / ``output_tokens`` land as ``prompt_tokens`` /
+        ``completion_tokens`` so metering code sees one shape regardless of
+        transport. ``output_tokens`` already includes reasoning tokens —
+        which is what the caller is billed for.
+        """
+        usage_obj = getattr(response, "usage", None)
+        if usage_obj is None:
+            return {}
+        input_tokens = getattr(usage_obj, "input_tokens", None)
+        output_tokens = getattr(usage_obj, "output_tokens", None)
+        if isinstance(input_tokens, int) and isinstance(output_tokens, int):
+            return {"prompt_tokens": input_tokens, "completion_tokens": output_tokens}
+        return {}
+
+    @staticmethod
+    def _responses_stop_reason(response: Any, *, has_tool_calls: bool) -> str | None:
+        """Map Responses ``status`` onto chat-completions finish reasons.
+
+        The agent loop's termination logic keys on the chat vocabulary
+        (``stop`` / ``tool_calls`` / ``length`` / ``content_filter``), so the
+        Responses status is translated rather than passed through: a
+        completed turn with function calls is ``tool_calls``, an incomplete
+        turn that hit ``max_output_tokens`` is ``length``. Unrecognised
+        statuses (``failed``, ``cancelled``) surface as themselves.
+        """
+        status = getattr(response, "status", None)
+        if status == "completed":
+            return "tool_calls" if has_tool_calls else "stop"
+        if status == "incomplete":
+            details = getattr(response, "incomplete_details", None)
+            reason = getattr(details, "reason", None)
+            if reason == "max_output_tokens":
+                return "length"
+            return reason if isinstance(reason, str) else "incomplete"
+        return status if isinstance(status, str) else None
+
+    def _parse_responses_result(self, response: Any) -> ModelResponse:
+        """Parse a Responses API result to ModelResponse.
+
+        Output items map onto the SDK types as follows:
+
+        - ``message`` items: ``output_text`` parts join into
+          ``message.content`` (``refusal`` parts stand in when there is no
+          text, so a refusal is visible rather than an empty reply);
+        - ``function_call`` items: one :class:`ToolCall` each, with
+          ``call_id`` as the tool-call id so tool results round-trip;
+        - ``reasoning`` items: summary / reasoning texts join into
+          ``ModelResponse.reasoning``.
+
+        The raw output items are additionally stashed in the assistant
+        message's ``metadata`` (see :data:`RESPONSES_ITEMS_METADATA_KEY`)
+        whenever the turn contains more than plain text, so the next turn
+        can replay them verbatim.
+        """
+        text_parts: list[str] = []
+        refusal_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        tool_calls: list[ToolCall] = []
+        raw_items: list[dict[str, Any]] = []
+        needs_replay = False
+
+        for item in getattr(response, "output", None) or []:
+            item_type = getattr(item, "type", None)
+            if item_type == "message":
+                for part in getattr(item, "content", None) or []:
+                    part_type = getattr(part, "type", None)
+                    if part_type == "output_text":
+                        text = getattr(part, "text", None)
+                        if isinstance(text, str) and text:
+                            text_parts.append(text)
+                    elif part_type == "refusal":
+                        refusal = getattr(part, "refusal", None)
+                        if isinstance(refusal, str) and refusal:
+                            refusal_parts.append(refusal)
+            else:
+                needs_replay = True
+                if item_type == "function_call":
+                    tool_calls.append(
+                        ToolCall(
+                            id=getattr(item, "call_id", None) or "",
+                            name=getattr(item, "name", None) or "",
+                            arguments=_decode_tool_arguments(getattr(item, "arguments", None)),
+                        )
+                    )
+                elif item_type == "computer_call":
+                    dumped_call = _dump_output_item(item) or {}
+                    tool_calls.append(
+                        ToolCall(
+                            id=str(dumped_call.get("call_id") or ""),
+                            name=COMPUTER_TOOL_NAME,
+                            arguments=_computer_call_arguments(dumped_call),
+                        )
+                    )
+                elif item_type == "reasoning":
+                    # Reasoning summaries (and, on models that expose it,
+                    # raw reasoning text) surface as the chain of thought.
+                    for block in (getattr(item, "summary", None) or []) + (
+                        getattr(item, "content", None) or []
+                    ):
+                        text = getattr(block, "text", None)
+                        if isinstance(text, str) and text:
+                            reasoning_parts.append(text)
+            dumped = _dump_output_item(item)
+            if dumped is not None:
+                raw_items.append(dumped)
+
+        content = "".join(text_parts) or "".join(refusal_parts) or None
+        message = Message(
+            role=Role.ASSISTANT,
+            content=content,
+            tool_calls=tool_calls,
+            metadata={RESPONSES_ITEMS_METADATA_KEY: raw_items}
+            if needs_replay and raw_items
+            else {},
+        )
+
+        return ModelResponse(
+            message=message,
+            usage=self._responses_usage(response),
+            stop_reason=self._responses_stop_reason(response, has_tool_calls=bool(tool_calls)),
+            reasoning="\n\n".join(reasoning_parts) or None,
+        )
+
+    async def _complete_responses(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> ModelResponse:
+        """Complete a request over the Responses API."""
+        request_kwargs = self._build_responses_request(messages, tools, kwargs, stream=False)
+        response = await self.client.responses.create(**request_kwargs)
+        return self._parse_responses_result(response)
+
+    async def _stream_responses(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ModelChunkEvent]:
+        """Stream a response over the Responses API.
+
+        Emits the same :class:`ModelChunkEvent` sequence as the
+        chat-completions path: content deltas, reasoning deltas, one
+        tool-calls chunk once calls are complete, and a terminal ``done``
+        chunk carrying usage + stop reason. Usage needs no
+        ``stream_options`` opt-in here — the ``response.completed`` event
+        always carries it. Server-side tool events (web_search etc.) and
+        lifecycle events are ignored.
+        """
+        request_kwargs = self._build_responses_request(messages, tools, kwargs, stream=True)
+        stream = await self.client.responses.create(**request_kwargs)
+
+        # Function calls accumulate per output item id; argument deltas
+        # reference the item id, and the ``output_item.done`` payload is
+        # authoritative when present.
+        tool_calls_by_item: dict[str, dict[str, str]] = {}
+        final_usage: dict[str, int] | None = None
+        final_stop_reason: str | None = None
+
+        async for event in stream:
+            event_type = getattr(event, "type", None)
+
+            if event_type == "response.output_text.delta":
+                delta = getattr(event, "delta", None)
+                if isinstance(delta, str) and delta:
+                    yield ModelChunkEvent(content=delta)
+
+            elif event_type in (
+                "response.reasoning_summary_text.delta",
+                "response.reasoning_text.delta",
+            ):
+                delta = getattr(event, "delta", None)
+                if isinstance(delta, str) and delta:
+                    yield ModelChunkEvent(reasoning=delta)
+
+            elif event_type == "response.output_item.added":
+                item = getattr(event, "item", None)
+                if getattr(item, "type", None) == "function_call":
+                    item_id = getattr(item, "id", None) or f"item_{len(tool_calls_by_item)}"
+                    tool_calls_by_item[item_id] = {
+                        "id": getattr(item, "call_id", None) or "",
+                        "name": getattr(item, "name", None) or "",
+                        "arguments": getattr(item, "arguments", None) or "",
+                    }
+
+            elif event_type == "response.function_call_arguments.delta":
+                item_id = getattr(event, "item_id", None)
+                delta = getattr(event, "delta", None)
+                entry = tool_calls_by_item.get(item_id) if isinstance(item_id, str) else None
+                if entry is not None and isinstance(delta, str):
+                    entry["arguments"] += delta
+
+            elif event_type == "response.output_item.done":
+                item = getattr(event, "item", None)
+                if getattr(item, "type", None) == "computer_call":
+                    dumped_call = _dump_output_item(item) or {}
+                    tool_calls_by_item[str(dumped_call.get("id") or len(tool_calls_by_item))] = {
+                        "id": str(dumped_call.get("call_id") or ""),
+                        "name": COMPUTER_TOOL_NAME,
+                        "arguments": json.dumps(_computer_call_arguments(dumped_call)),
+                    }
+                elif getattr(item, "type", None) == "function_call":
+                    item_id = getattr(item, "id", None)
+                    entry = tool_calls_by_item.get(item_id) if isinstance(item_id, str) else None
+                    if entry is not None:
+                        for source, target in (
+                            ("call_id", "id"),
+                            ("name", "name"),
+                            ("arguments", "arguments"),
+                        ):
+                            value = getattr(item, source, None)
+                            if isinstance(value, str) and value:
+                                entry[target] = value
+
+            elif event_type in (
+                "response.completed",
+                "response.incomplete",
+                "response.failed",
+            ):
+                response_obj = getattr(event, "response", None)
+                if response_obj is not None:
+                    final_usage = self._responses_usage(response_obj) or None
+                    final_stop_reason = self._responses_stop_reason(
+                        response_obj, has_tool_calls=bool(tool_calls_by_item)
+                    )
+            # Everything else (created / in_progress / content_part /
+            # server-side tool events) carries nothing the chunk stream
+            # needs — skip.
+
+        if tool_calls_by_item:
+            yield ModelChunkEvent(
+                tool_calls=[
+                    ToolCall(
+                        id=entry["id"],
+                        name=entry["name"],
+                        arguments=_decode_tool_arguments(entry["arguments"]),
+                    )
+                    for entry in tool_calls_by_item.values()
+                ]
+            )
+
+        yield ModelChunkEvent(done=True, usage=final_usage, stop_reason=final_stop_reason)
 
     async def complete(
         self,
@@ -284,13 +1569,18 @@ class OpenAIModel(BaseModel):
         Returns:
             Model response with message and metadata
         """
+        if self._use_responses_api():
+            return await self._complete_responses(messages, tools, **kwargs)
+
         openai_messages = self._convert_messages(messages)
         openai_tools = self._convert_tools(tools)
 
         uses_completion_tokens = self._uses_max_completion_tokens(self.config.model)
         rejects_sampling = self._rejects_sampling_params(self.config.model)
 
-        max_tokens_value = kwargs.get("max_tokens", self.config.max_tokens)
+        max_tokens_value = kwargs.get("max_tokens")
+        if max_tokens_value is None:
+            max_tokens_value = self.config.max_tokens
 
         request_kwargs: dict[str, Any] = {
             "model": self.config.model,
@@ -303,19 +1593,7 @@ class OpenAIModel(BaseModel):
         else:
             request_kwargs["max_tokens"] = max_tokens_value
             if not rejects_sampling:
-                request_kwargs["temperature"] = kwargs.get("temperature", self.config.temperature)
-                request_kwargs["top_p"] = kwargs.get("top_p", self.config.top_p)
-                # Only send penalties when the user customized them. Some
-                # providers (Grok) reject the parameter outright, even at
-                # zero — server defaults are 0.0 anyway, so omitting the
-                # default value is functionally identical for those that
-                # accept it.
-                freq = kwargs.get("frequency_penalty", self.config.frequency_penalty)
-                if freq != 0.0:
-                    request_kwargs["frequency_penalty"] = freq
-                pres = kwargs.get("presence_penalty", self.config.presence_penalty)
-                if pres != 0.0:
-                    request_kwargs["presence_penalty"] = pres
+                self._apply_sampling(request_kwargs, kwargs)
 
         if openai_tools:
             request_kwargs["tools"] = openai_tools
@@ -331,6 +1609,9 @@ class OpenAIModel(BaseModel):
         response_format = kwargs.get("response_format")
         if response_format is not None:
             request_kwargs["response_format"] = response_format
+
+        self._apply_passthrough(request_kwargs, kwargs)
+        self._apply_extra_body(request_kwargs, kwargs)
 
         response = await self.client.chat.completions.create(**request_kwargs)
         return self._parse_response(response)
@@ -361,8 +1642,52 @@ class OpenAIModel(BaseModel):
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[ModelChunkEvent]:
+        """Stream a chat response.
+
+        With ``stream_reconnects`` (0 by default) each turn is read whole before any of it
+        is yielded, and a turn whose connection drops part way is asked again, up to that
+        many times. Partial output is never yielded, so the caller never sees half a turn
+        twice. Inside an NVIDIA OpenShell box a connection is cut whenever the box's policy
+        generation moves on (its first settings poll after start does so), and the OpenAI
+        client retries a request that failed but never a stream that broke after it began.
+        A refusal (an HTTP status, e.g. a guard's ``token_budget_exhausted``) is not retried.
         """
-        Stream a chat response.
+        if self.config.stream_reconnects <= 0:
+            async for event in self._stream_once(messages, tools, **kwargs):
+                yield event
+            return
+        attempt = 0
+        while True:
+            turn: list[ModelChunkEvent] = []
+            try:
+                async for event in self._stream_once(messages, tools, **kwargs):
+                    turn.append(event)
+            except Exception as exc:
+                if attempt >= self.config.stream_reconnects or not _is_disconnect(exc):
+                    raise
+                attempt += 1
+                delay = min(STREAM_RECONNECT_BASE_DELAY * (2 ** (attempt - 1)), 4.0)
+                logger.warning(
+                    "model stream dropped (%s); asking again in %.1fs (%d/%d)",
+                    type(exc).__name__,
+                    delay,
+                    attempt,
+                    self.config.stream_reconnects,
+                )
+                await asyncio.sleep(delay)
+                continue
+            for event in turn:
+                yield event
+            return
+
+    async def _stream_once(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ModelChunkEvent]:
+        """
+        Stream a chat response (one request).
 
         Args:
             messages: Conversation history
@@ -372,13 +1697,20 @@ class OpenAIModel(BaseModel):
         Yields:
             Streaming chunks with content and/or tool calls
         """
+        if self._use_responses_api():
+            async for event in self._stream_responses(messages, tools, **kwargs):
+                yield event
+            return
+
         openai_messages = self._convert_messages(messages)
         openai_tools = self._convert_tools(tools)
 
         uses_completion_tokens = self._uses_max_completion_tokens(self.config.model)
         rejects_sampling = self._rejects_sampling_params(self.config.model)
 
-        max_tokens_value = kwargs.get("max_tokens", self.config.max_tokens)
+        max_tokens_value = kwargs.get("max_tokens")
+        if max_tokens_value is None:
+            max_tokens_value = self.config.max_tokens
 
         request_kwargs: dict[str, Any] = {
             "model": self.config.model,
@@ -393,15 +1725,7 @@ class OpenAIModel(BaseModel):
             request_kwargs["max_tokens"] = max_tokens_value
         else:
             request_kwargs["max_tokens"] = max_tokens_value
-            request_kwargs["temperature"] = kwargs.get("temperature", self.config.temperature)
-            request_kwargs["top_p"] = kwargs.get("top_p", self.config.top_p)
-            # See note in complete() — same penalty conditional.
-            freq = kwargs.get("frequency_penalty", self.config.frequency_penalty)
-            if freq != 0.0:
-                request_kwargs["frequency_penalty"] = freq
-            pres = kwargs.get("presence_penalty", self.config.presence_penalty)
-            if pres != 0.0:
-                request_kwargs["presence_penalty"] = pres
+            self._apply_sampling(request_kwargs, kwargs)
 
         if openai_tools:
             request_kwargs["tools"] = openai_tools
@@ -419,12 +1743,48 @@ class OpenAIModel(BaseModel):
         if response_format is not None:
             request_kwargs["response_format"] = response_format
 
+        self._apply_passthrough(request_kwargs, kwargs)
+        self._apply_extra_body(request_kwargs, kwargs)
+
+        # Chat Completions reports usage on a stream only when asked via
+        # ``stream_options`` — without it the trailing usage chunk never
+        # arrives, the terminal ModelChunkEvent carries ``usage=None``, and
+        # the agent loop's token counters stay at zero for the whole run,
+        # so ``TerminateEvent.usage`` is None under ``stream_tokens=True``.
+        # complete() gets usage unconditionally; streaming must ask for it
+        # to stay meterable. ``setdefault`` after passthrough — a caller
+        # who sent their own ``stream_options`` keeps it verbatim.
+        if self.config.stream_usage:
+            request_kwargs.setdefault("stream_options", {"include_usage": True})
+
         # Track tool calls during streaming
         current_tool_calls: dict[int, dict[str, Any]] = {}
 
         stream = await self.client.chat.completions.create(**request_kwargs)
 
+        final_usage: dict[str, int] | None = None
+        final_cost: float | None = None
+        final_stop_reason: str | None = None
+        # The SERVED model, off the stream itself. Behind a router this can
+        # differ from the requested name (a fallback answers while the
+        # primary restarts), and it is what ModelChunkEvent.model carries.
+        served_model: str | None = None
+
         async for chunk in stream:
+            chunk_model = getattr(chunk, "model", None)
+            if isinstance(chunk_model, str) and chunk_model:
+                served_model = chunk_model
+            # When the caller asks for usage (``stream_options``), it arrives on
+            # a trailing chunk that carries no choices — so this has to be read
+            # before the empty-choices guard below, which would otherwise drop
+            # the only chunk that has it.
+            chunk_usage = getattr(chunk, "usage", None)
+            if chunk_usage is not None:
+                parsed_usage, parsed_cost = _chat_usage(chunk_usage)
+                if parsed_usage:
+                    final_usage = parsed_usage
+                    final_cost = parsed_cost
+
             if not chunk.choices:
                 continue
 
@@ -442,7 +1802,25 @@ class OpenAIModel(BaseModel):
 
             # Handle content
             if delta is not None and delta.content:
-                yield ModelChunkEvent(content=delta.content)
+                yield ModelChunkEvent(content=delta.content, model=served_model)
+
+            # Handle reasoning (chain-of-thought) deltas. Qwen / DeepSeek
+            # served via vLLM stream their CoT in a channel separate from
+            # ``content`` — ``delta.reasoning_content`` with
+            # ``--reasoning-parser qwen``, ``delta.reasoning`` on some
+            # builds. Accept both, as its own event so consumers can
+            # render it distinctly or accumulate it independently.
+            # The ``isinstance`` guard keeps MagicMock-heavy test stubs
+            # from leaking a Mock into ``ModelChunkEvent.reasoning``.
+            reasoning_delta: str | None = None
+            if delta is not None:
+                for _field in ("reasoning_content", "reasoning"):
+                    _candidate = getattr(delta, _field, None)
+                    if isinstance(_candidate, str) and _candidate:
+                        reasoning_delta = _candidate
+                        break
+            if reasoning_delta:
+                yield ModelChunkEvent(reasoning=reasoning_delta, model=served_model)
 
             # Handle tool calls
             if delta is not None and delta.tool_calls:
@@ -469,19 +1847,33 @@ class OpenAIModel(BaseModel):
                 if current_tool_calls:
                     tool_calls = []
                     for tc_data in current_tool_calls.values():
+                        raw = tc_data["arguments"]
                         try:
-                            arguments = (
-                                json.loads(tc_data["arguments"]) if tc_data["arguments"] else {}
-                            )
+                            arguments = json.loads(raw) if raw else {}
+                            malformed = None
                         except json.JSONDecodeError:
                             arguments = {}
+                            malformed = raw
                         tool_calls.append(
                             ToolCall(
                                 id=tc_data["id"],
                                 name=tc_data["name"],
                                 arguments=arguments,
+                                malformed_arguments=malformed,
                             )
                         )
-                    yield ModelChunkEvent(tool_calls=tool_calls)
+                    yield ModelChunkEvent(tool_calls=tool_calls, model=served_model)
 
-                yield ModelChunkEvent(done=True)
+                if isinstance(choice.finish_reason, str):
+                    final_stop_reason = choice.finish_reason
+
+        # Emitted after the loop rather than at ``finish_reason``: the usage
+        # chunk arrives *after* the choice that carries the finish reason, so
+        # closing early would report a turn we cannot yet meter.
+        yield ModelChunkEvent(
+            done=True,
+            usage=final_usage,
+            stop_reason=final_stop_reason,
+            model=served_model,
+            cost_usd=final_cost,
+        )

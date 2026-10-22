@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -74,6 +76,72 @@ class PlaybookEnforcer(BaseModel):
     )
 
     _violations: list[EnforcementViolation] = PrivateAttr(default_factory=list)
+    #: name -> Skill, for steps that name capabilities via `uses`. Empty means
+    #: a `uses` reference resolves to nothing and is therefore inert — never an
+    #: error, because a playbook may legitimately be enforced in a process that
+    #: does not carry the skill bodies.
+    _skills: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    def _used_skills(self, step: PlaybookStep) -> list[Any]:
+        return [self._skills[name] for name in step.uses if name in self._skills]
+
+    def effective_probes(self, step: PlaybookStep) -> list[Any]:
+        """The step's own probes plus those of every skill it is carried out with.
+
+        De-duplicated by name, step-declared first: a step may sharpen a skill's
+        generic probe for its own context, and the more specific declaration is
+        the one an author expects to win.
+        """
+        seen: dict[str, Any] = {}
+        for probe in step.required_probes:
+            seen.setdefault(probe.name, probe)
+        for skill in self._used_skills(step):
+            for probe in getattr(skill, "required_probes", ()) or ():
+                seen.setdefault(probe.name, probe)
+        return list(seen.values())
+
+    def adherence_score(self) -> float:
+        """How much of the declared evidence this run gathered, 0..1.
+
+        Lives HERE, not on the plan, because the evidence a step owes is its own
+        probes plus those of every skill it `uses`, and only the enforcer holds
+        the skills. The plan-level version counted step-declared probes alone
+        and reported 1.00 for a run whose violations said 1 of 3 matched.
+
+        Averaged over steps REACHED, not the whole playbook: a run still in
+        flight should not read as non-compliant for being unfinished, and a run
+        that stopped early is already reported by `unresolved_required_steps`.
+
+        Treat it as a floor, not a grade — see
+        ASSESSMENT-required-probes-critique.md. The violation list is the
+        artefact worth showing a person.
+        """
+        steps = {step.id: step for step in self.plan.playbook.steps}
+        covered = [
+            execution.probe_coverage(self.effective_probes(steps[step_id]))
+            for step_id, execution in self.plan.step_executions.items()
+            if step_id in steps
+        ]
+        return sum(covered) / len(covered) if covered else 1.0
+
+    def allowed_tools_for(self, step: PlaybookStep) -> set[str] | None:
+        """What this step may call, or None when it does not constrain calls.
+
+        THE reason `uses` had to exist before a skill's `allowed_tools` could
+        mean anything: a skill is prose folded into a system prompt, so on its
+        own there is no moment at which its allow-list applies. A step supplies
+        that moment. Outside a step that names it, a skill still constrains
+        nothing — which is honest, and is why this returns None rather than an
+        empty set when nothing is declared.
+        """
+        allowed: set[str] = set()
+        declared = False
+        for skill in self._used_skills(step):
+            tools = getattr(skill, "allowed_tools", None)
+            if tools:
+                declared = True
+                allowed.update(str(tool) for tool in tools)
+        return allowed if declared else None
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -83,6 +151,7 @@ class PlaybookEnforcer(BaseModel):
         playbook: Playbook,
         block_violations: bool = True,
         record_violations: bool = True,
+        skills: Mapping[str, Any] | None = None,
     ) -> PlaybookEnforcer:
         """Create an enforcer from a playbook.
 
@@ -90,16 +159,23 @@ class PlaybookEnforcer(BaseModel):
             playbook: The playbook to enforce
             block_violations: Whether to block violating tool calls
             record_violations: Whether to record violations
+            skills: name -> Skill, for steps that name capabilities via `uses`.
+                Omitted, those references resolve to nothing and constrain
+                nothing — a playbook may legitimately be enforced somewhere the
+                skill bodies are not loaded, and failing there would make the
+                enforcer refuse to run rather than enforce less.
 
         Returns:
             Configured PlaybookEnforcer
         """
         plan = PlaybookPlan(playbook=playbook)
-        return cls(
+        enforcer = cls(
             plan=plan,
             block_violations=block_violations,
             record_violations=record_violations,
         )
+        enforcer._skills = dict(skills or {})
+        return enforcer
 
     @property
     def violations(self) -> list[EnforcementViolation]:
@@ -156,6 +232,32 @@ class PlaybookEnforcer(BaseModel):
                 )
             return EnforcementResult(allowed=True)
 
+        # A skill's allow-list, enforced — inside the step that names it.
+        # Until `uses` existed there was no moment at which this could apply,
+        # so `allowed_tools` was parsed, printed into the prompt as a sentence,
+        # and gated by nothing. A step supplies the scope.
+        skill_allowed = self.allowed_tools_for(step)
+        if skill_allowed is not None and tool_name not in skill_allowed:
+            if self.plan.playbook.allow_extra_tools:
+                return EnforcementResult(allowed=True, current_step=step)
+            violation = self._maybe_record_violation(
+                violation_type="tool_outside_skill",
+                step_id=step.id,
+                tool_name=tool_name,
+                message=(
+                    f"{tool_name!r} is not among the tools the skill(s) "
+                    f"{', '.join(step.uses)} allow for step {step.id!r}: "
+                    f"{', '.join(sorted(skill_allowed))}"
+                ),
+                blocked=self.block_violations,
+            )
+            return EnforcementResult(
+                allowed=not self.block_violations,
+                violation=violation,
+                current_step=step,
+                hints=list(step.hints),
+            )
+
         # Check if tool is in expected tools
         if step.expected_tools and tool_name not in step.expected_tools:
             # Tool not expected for this step
@@ -209,13 +311,25 @@ class PlaybookEnforcer(BaseModel):
             current_step=step,
         )
 
-    def record_tool_call(self, tool_name: str) -> None:
-        """Record that a tool was called.
+    def record_tool_call(
+        self,
+        tool_name: str,
+        *,
+        arguments: Any = None,
+        result: Any = None,
+    ) -> None:
+        """Record that a tool was called, and what it looked at.
 
-        Updates the step execution tracking.
+        `arguments` and `result` are what the step's ``required_probes`` are
+        matched against. They are optional so every existing caller keeps
+        working — a caller that passes neither simply gathers no evidence, and
+        a step with probes will report them unmatched, which is the honest
+        answer rather than a silent pass.
 
         Args:
             tool_name: Name of the tool that was called
+            arguments: The call's arguments, searched for probe matches
+            result: The call's result, searched for probe matches
         """
         step = self.current_step
         if step is None:
@@ -234,6 +348,57 @@ class PlaybookEnforcer(BaseModel):
         step_exec.tool_calls.append(tool_name)
         step_exec.tool_call_count += 1
         self.plan.total_tool_calls += 1
+        self._match_probes(step, step_exec, tool_name, arguments, result)
+
+    @staticmethod
+    def _haystack(tool_name: str, arguments: Any, result: Any) -> str:
+        """What the agent ASKED FOR, lowercased. Deliberately not the answer.
+
+        Matching the result would let a probe be satisfied by data the agent
+        happened to receive rather than evidence it went and got — a tool asked
+        something else entirely can mention the string in passing, and the step
+        would score as covered. The claim being made is "the agent gathered the
+        required evidence", and seeking is the part the agent is responsible
+        for; receiving is partly luck.
+
+        `result` is accepted and ignored so callers need not change.
+
+        The tool NAME is included: a probe may reasonably name the instrument
+        rather than the target ("run the disk check"), and excluding it would
+        force every such probe to be written against argument text the author
+        cannot see.
+        """
+        del result  # see above — deliberately not evidence
+        parts = [tool_name]
+        for value in (arguments,):
+            if value is None:
+                continue
+            if isinstance(value, str):
+                parts.append(value)
+            else:
+                try:
+                    parts.append(json.dumps(value, default=str))
+                except (TypeError, ValueError):  # pragma: no cover — defensive
+                    parts.append(str(value))
+        return " ".join(parts).lower()
+
+    def _match_probes(
+        self,
+        step: PlaybookStep,
+        step_exec: StepExecution,
+        tool_name: str,
+        arguments: Any,
+        result: Any,
+    ) -> None:
+        """Mark any of the step's probes this call satisfied. Idempotent."""
+        if not self.effective_probes(step):
+            return
+        haystack = self._haystack(tool_name, arguments, result)
+        for probe in self.effective_probes(step):
+            if probe.name in step_exec.matched_probes:
+                continue
+            if probe.match.lower() in haystack:
+                step_exec.matched_probes.append(probe.name)
 
     def complete_current_step(self, result: str | None = None) -> bool:
         """Mark the current step as complete and advance.
@@ -257,6 +422,38 @@ class PlaybookEnforcer(BaseModel):
             )
 
         step_exec = self.plan.step_executions[step.id]
+        # Evidence first: a step that gathered less than it declared does not
+        # get to close quietly. Recorded as a violation like any other, so it
+        # reaches the same trace an out-of-shape call does — the point is that
+        # "the procedure was followed" stops meaning "the right tools were
+        # called" and starts meaning "the required evidence exists".
+        probes = self.effective_probes(step)
+        matched = set(step_exec.matched_probes)
+        unmatched = step_exec.unmatched_probes(probes)
+        if unmatched and self.record_violations:
+            self._violations.append(
+                EnforcementViolation(
+                    violation_type="evidence_incomplete",
+                    step_id=step.id,
+                    message=(
+                        f"step {step.id!r} completed without the evidence it requires: "
+                        f"{', '.join(unmatched)} "
+                        f"({len(matched & {p.name for p in probes})}/{len(probes)} matched)"
+                    ),
+                )
+            )
+        floor = step.min_tool_calls
+        if floor is not None and step_exec.tool_call_count < floor and self.record_violations:
+            self._violations.append(
+                EnforcementViolation(
+                    violation_type="insufficient_effort",
+                    step_id=step.id,
+                    message=(
+                        f"step {step.id!r} completed after {step_exec.tool_call_count} tool "
+                        f"call(s); it declares a floor of {floor}"
+                    ),
+                )
+            )
         step_exec.status = StepStatus.COMPLETED
         step_exec.completed_at = datetime.now(UTC)
         step_exec.result = result

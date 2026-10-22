@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  One orchestrator run, as locus.multiagent.orchestrator.Orchestrator.execute does it:
+    route      the orchestrator's model reads the task and every specialist's description,
+               and picks which specialists run, with a subtask for each
+               (no model: every specialist runs; a reply with no parseable json block:
+               the specialists it names by id, or every specialist if it names none)
+    invoke     the picked specialists run concurrently (asyncio.gather), capped by
+               max_parallel_specialists; each gets its subtask (the full task if the
+               model gave it none), plus the original task as context when the two
+               differ; each specialist answers in a single model turn under its own
+               system prompt; its tool schemas are sent but tool calls are not executed;
+               an empty reply is retried once; an exception becomes that specialist's
+               error result and the others carry on
+    correlate  the orchestrator's model correlates the findings (no model: concatenation)
+    summarize  the orchestrator's model writes one summary (no model: the correlation)
+    return     OrchestratorResult: the summary, every picked specialist's result (errors
+               included), the decisions
+  A single pass: nothing loops back to routing, and no specialist sees another's work.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 404" role="img" aria-labelledby="title desc">
+  <title id="title">The orchestrator pattern</title>
+  <desc id="desc">A task goes to the orchestrator, whose model picks which registered specialists run and gives each one a subtask; a specialist it does not pick does not run. The picked specialists, here Research and Data, run in parallel, up to max_parallel_specialists at a time, each with its own system prompt, and never talk to each other. Their results go back to the orchestrator, whose own model correlates the findings, summarizes them into one answer, and returns a result holding the summary and every picked specialist's result, errors included. It is a single pass: nothing loops back to routing, and a specialist that fails returns an error while the rest carry on.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <g class="lane">
+    <rect x="253" y="34" width="220" height="302" rx="14"/>
+    <text class="lane-title" x="267" y="54">Specialists · in parallel</text>
+  </g>
+
+  <!-- task -> orchestrator -->
+  <path class="edge" marker-end="url(#ah)" d="M93,128 L93,164"/>
+
+  <!-- orchestrator -> picked specialists -->
+  <path class="edge" marker-end="url(#ah)" d="M166,195 C216,195 216,99 265,99"/>
+  <path class="edge" marker-end="url(#ah)" d="M166,195 L265,195"/>
+  <rect class="label-bg" x="180" y="206" width="60" height="20" rx="4"/>
+  <text class="label" x="210" y="216">subtask</text>
+
+  <!-- picked specialists -> correlate -->
+  <path class="edge" marker-end="url(#ah)" d="M459,99 C509,99 509,195 558,195"/>
+  <path class="edge" marker-end="url(#ah)" d="M459,195 L558,195"/>
+  <rect class="label-bg" x="486" y="206" width="60" height="20" rx="4"/>
+  <text class="label" x="516" y="216">results</text>
+
+  <!-- correlate -> summarize -> result -->
+  <path class="edge" marker-end="url(#ah)" d="M704,195 L748,195"/>
+  <path class="edge" marker-end="url(#ah)" d="M825,224 L825,260"/>
+
+  <g class="node">
+    <rect x="20" y="70" width="146" height="58" rx="12"/>
+    <text x="93" y="89">Task</text>
+    <text class="sub" x="93" y="110">execute(task)</text>
+  </g>
+  <g class="node primary">
+    <rect x="20" y="166" width="146" height="58" rx="12"/>
+    <text x="93" y="185">Orchestrator</text>
+    <text class="sub" x="93" y="206">picks specialists</text>
+  </g>
+
+  <g class="node">
+    <rect x="267" y="70" width="192" height="58" rx="12"/>
+    <text x="363" y="89">Research</text>
+    <text class="sub" x="363" y="110">own system prompt</text>
+  </g>
+  <g class="node">
+    <rect x="267" y="166" width="192" height="58" rx="12"/>
+    <text x="363" y="185">Data</text>
+    <text class="sub" x="363" y="206">own system prompt</text>
+  </g>
+  <g class="node optional">
+    <rect x="267" y="262" width="192" height="58" rx="12"/>
+    <text x="363" y="281">Specialist</text>
+    <text class="sub" x="363" y="302">not picked</text>
+  </g>
+
+  <g class="node">
+    <rect x="560" y="166" width="144" height="58" rx="12"/>
+    <text x="632" y="185">Correlate</text>
+    <text class="sub" x="632" y="206">compares findings</text>
+  </g>
+  <g class="node">
+    <rect x="750" y="166" width="150" height="58" rx="12"/>
+    <text x="825" y="185">Summarize</text>
+    <text class="sub" x="825" y="206">one answer</text>
+  </g>
+  <g class="node end">
+    <rect x="750" y="262" width="150" height="58" rx="29"/>
+    <text x="825" y="281">Result</text>
+    <text class="sub" x="825" y="302">summary + findings</text>
+  </g>
+
+  <text class="note" x="460" y="366">The orchestrator's own model routes, correlates and summarizes, in one pass with no loop.</text>
+  <text class="note" x="460" y="387">Specialists never talk to each other, and one that fails returns an error while the rest carry on.</text>
+</svg>

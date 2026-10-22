@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Oracle and/or its affiliates.
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
@@ -67,16 +67,15 @@ def _make_stub_retriever() -> object:
 
 
 def _build_agent(monkeypatch: pytest.MonkeyPatch, **overrides):
-    """Build a deepagent against a stub OCI model registration.
+    """Build a deepagent against a stub model registration.
 
-    Mirrors the helper used in ``test_deepagent.py``: a fake ``OCI_PROFILE``
-    env var lets the registry resolve ``oci:`` model strings without
-    actually opening an OCI client (the client is lazy and never used in
-    these structural tests).
+    Mirrors the helper used in ``test_deepagent.py``: the registry
+    resolves model strings lazily, so no real client is opened in these
+    structural tests.
     """
-    monkeypatch.setenv("OCI_PROFILE", "DEFAULT")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     base = {
-        "model": "oci:openai.gpt-4o-mini",
+        "model": "openai:gpt-4o-mini",
         "system_prompt": "Answer questions.",
         "tools": [],
         "reflexion": False,

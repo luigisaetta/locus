@@ -1,29 +1,34 @@
 # Swarm
 
 A swarm is a peer-to-peer task pool. Agents pull tasks off a shared
-queue, run them, and may post follow-up tasks for any peer to pick up.
-**Nobody is in charge.**
+queue, run them, and write what they find to a shared context every
+peer reads. **Nobody is in charge.**
 
-![Swarm pattern — SharedContext task queue at top with multiple tasks, agents below pulling from queue and posting follow-up tasks back](../../img/patterns/swarm.svg){ .diagram }
+{{ locus_diagram swarm }}
 
 ## What it is
 
 Three pieces:
 
-- A **`SharedContext`** — a dict every agent reads and writes.
-- A **task queue** — agents pull from it; agents push to it.
-- N **agents** — each with its own tools and system prompt.
+- A **`SharedContext`** — a typed blackboard (findings, messages, and
+  task results) every agent reads and writes.
+- A **task queue** — agents pull from it; `add_task` (and task
+  decomposition) push to it.
+- N **`SwarmAgent`s** — each with its own `capabilities` tags and
+  system prompt.
 
-Each iteration, every available agent picks the next task it's
-qualified for, runs it, and may emit follow-up tasks. The swarm
-exits when the queue empties or `max_iterations` is hit.
+Each iteration, every agent claims the next task it's qualified for,
+runs it, writes its findings to the shared context, and claims again
+until nothing it can handle is pending. Agents never add tasks. The
+swarm exits when no task is pending or `max_iterations` is hit.
 
 ## When to use it
 
-- ✅ **Open-ended research** — no fixed plan; whatever an agent finds
-  may spawn new sub-tasks.
-- ✅ **Heterogeneous specialists** — each agent has different tools
-  but any of them can pick up the next task they're qualified for.
+- ✅ **Open-ended research** — the swarm's model can split the brief
+  into sub-tasks, and each agent sees what the others have already found.
+- ✅ **Heterogeneous specialists** — each agent has its own capability
+  tags and system prompt, and any of them can pick up the next task
+  they're qualified for.
 - ✅ **Long-running batch** — a queue depth + a max-iteration budget
   is the natural shape.
 - ✅ **No single coordinator should exist** — peer-to-peer is the
@@ -34,77 +39,100 @@ exits when the queue empties or `max_iterations` is hit.
 - ❌ The flow is actually **linear** → use [Composition](composition.md).
 - ❌ One agent should **decide** who runs → use [Orchestrator](orchestrator.md).
 - ❌ The **conversation transcript** should follow one role to another → use [Handoff](handoff.md).
-- ❌ You need **strict execution order** — swarms run agents concurrently
-  by design.
+- ❌ You need **strict execution order** — `priority` orders the queue,
+  but each agent works through every task it can handle before the next
+  agent starts, so a lower-priority task can run before a higher-priority one.
 
 ## Code
 
 ```python
-from locus.multiagent import Swarm
+import asyncio
+from locus.models import get_model
+from locus.multiagent import create_swarm, create_swarm_agent
 
-researcher = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[search_corpus, summarise],
-    system_prompt="You are a researcher. Read, summarise, post follow-ups.",
-)
-fact_checker = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[verify_claim, search_corpus],
-    system_prompt="You are a fact-checker. Verify claims, flag conflicts.",
-)
-writer = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[draft, revise],
-    system_prompt="You are a writer. Take vetted summaries, draft prose.",
-)
 
-swarm = Swarm(
-    agents=[researcher, fact_checker, writer],
-    shared_context={"topic": "Q3 launch", "audience": "exec summary"},
-    max_iterations=12,
-    initial_tasks=["read corpus", "summarise top sources"],
-)
+async def main():
+    model = get_model("{{ locus_example_model }}")
 
-result = swarm.run_sync()
-print(result.final_artefact)
+    scout = create_swarm_agent(
+        name="Scout",
+        capabilities=["search", "collect", "investigate"],
+        system_prompt="You are a research scout. Find sources, pull data, scope leads.",
+    )
+    analyst = create_swarm_agent(
+        name="Analyst",
+        capabilities=["analyze", "verify", "compare"],
+        system_prompt="You are an analyst. Verify claims, cross-check sources, quantify findings.",
+    )
+    writer = create_swarm_agent(
+        name="Writer",
+        capabilities=["write", "summarize", "document"],
+        system_prompt="You are a writer. Take confirmed findings, draft the report.",
+    )
+
+    swarm = create_swarm(
+        name="Research swarm",
+        agents=[scout, analyst, writer],
+        model=model,
+    )
+    swarm.max_iterations = 12
+
+    result = await swarm.execute(
+        initial_task="Research why checkout conversion dropped last week: collect data, verify causes, draft a report.",
+    )
+    print(result.summary)
+    for task in result.completed_tasks:
+        print(task.description, "→", task.status)
+
+
+asyncio.run(main())
 ```
 
-## How agents post follow-up tasks
+A `SwarmAgent` carries free-form `capabilities` tags (not a tool list);
+tasks are matched to agents by those tags. A task queued with `add_task`
+or `execute` can be claimed by any agent with a tag that appears in the
+task's description, or by an agent with no tags at all. `execute()` is
+async and returns a `SwarmResult` with `completed_tasks`, `failed_tasks`,
+a shared `context`, and a `summary`. The same shape runs an incident-response
+(IR) war room — a hunter, a forensics analyst, and a reporter pulling
+from one queue.
 
-Each agent's tool surface includes (implicitly) a `post_task(...)`
-mechanism. When an agent finishes, it can append new tasks to the
-shared queue:
+## How tasks enter the queue
+
+You can seed the queue directly with `add_task(...)` (each agent claims
+higher-`priority` tasks first), and `execute(decompose_tasks=True)` will
+also ask the swarm's model whether to break the initial task into sub-tasks:
 
 ```python
-# inside a tool the agent calls
-@tool
-def summarise_and_followup(text: str, ctx: ToolContext) -> dict:
-    summary = summarise(text)
-    if has_uncited_claims(summary):
-        ctx.swarm.post_task(f"verify claims in: {summary[:200]}…")
-    return {"summary": summary}
+swarm = create_swarm(name="Research swarm", agents=[scout, analyst, writer], model=model)
+
+swarm.add_task("Collect last week's conversion-funnel metrics", priority=10)
+swarm.add_task("Write the stakeholder status update", priority=3)
+
+result = await swarm.execute()
 ```
 
-The next iteration, any qualifying agent (here — the fact-checker)
-picks up that task.
+Each iteration, any qualifying agent claims the next task it's eligible
+for and works it, recording findings on the shared `context`.
 
 ## Termination
 
 Swarms stop when:
 
-- The queue empties **and** no agent emits new tasks, OR
-- `max_iterations` is hit, OR
-- A custom `terminate` condition matches (the swarm honours
-  [Termination algebra](../termination.md) the same way an `Agent` does).
+- No task is left pending, OR
+- `max_iterations` is hit. A pending task no agent can handle keeps the
+  swarm going until then, and ends up in neither `completed_tasks` nor
+  `failed_tasks`.
 
 ## Notebook
 
-[`notebook_24_swarm_multiagent.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_24_swarm_multiagent.py)
-— a three-agent research swarm with shared context.
+[`notebook_24_swarm_multiagent.py`](https://github.com/oracle/locus/blob/main/examples/notebook_24_swarm_multiagent.py)
+— a three-agent outage war room (mitigation, diagnostics, comms) with
+shared context.
 
 ## Source
 
-[`multiagent/swarm.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/multiagent/swarm.py)
+[`multiagent/swarm.py`](https://github.com/oracle/locus/blob/main/src/locus/multiagent/swarm.py)
 — `Swarm`, `SharedContext`.
 
 ## See also

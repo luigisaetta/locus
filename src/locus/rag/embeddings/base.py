@@ -95,7 +95,7 @@ class EmbeddingProvider(Protocol):
     semantic meaning, enabling similarity search.
 
     Example:
-        >>> embedder = OCIEmbeddings(model_id="cohere.embed-english-v3.0")
+        >>> embedder = OpenAIEmbeddings(model="text-embedding-3-small")
         >>> result = await embedder.embed("Hello world")
         >>> print(len(result.embedding))  # 1024
     """

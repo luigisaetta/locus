@@ -2,22 +2,21 @@
 
 Production model calls fail. Rate limits, gateway timeouts, transient
 5xx, occasional content-policy refusals on retryable inputs.
-Oracle Generative AI – Multi-Agent Locus SDK's retry posture is:
+Locus's retry posture is:
 **automate what's transient; surface what's not.**
 
 ## The default behaviour
 
-Out of the box, an `Agent(...)` with no retry hook still survives:
+Out of the box, an `Agent(...)` with **no retry hook does not retry
+model calls**. Model retries are hook-driven (a hook sets
+`event.retry = True` on the after-model-call event to trigger a
+re-invocation), so without `ModelRetryHook` a provider exception
+propagates: the loop exits and `result.stop_reason == "error"` (the
+underlying exception is re-raised). The error detail lands on
+`result.error`.
 
-- **Network errors** raised by the provider client are caught at the
-  Think node and retried once with exponential jitter.
-- **Rate-limit errors** (HTTP 429) honour the provider's
-  `Retry-After` header.
-- **Persistent failures** propagate as a `ModelError` and the loop
-  exits with `TerminateEvent(reason="ModelError")`.
-
-This minimum keeps a happy-path agent from falling over on a single
-flaky request without making you opt in.
+So if you want resilience to transient model failures, add the hook
+below — it's opt-in, not automatic.
 
 ## Configurable retry — `ModelRetryHook`
 
@@ -27,23 +26,32 @@ For production agents you usually want explicit policy:
 from locus.hooks.builtin.retry import ModelRetryHook
 from locus.agent import Agent
 agent = Agent(
-    model="oci:openai.gpt-5.5",
+    model="{{ locus_example_model }}",
     tools=[...],
     hooks=[
         ModelRetryHook(
-            max_attempts=3,
-            backoff="exponential",
-            initial_delay=0.5,         # seconds
+            max_retries=3,
+            initial_delay=0.5,         # seconds, first retry delay
             max_delay=8.0,
-            retry_on=("rate_limit", "server_error", "timeout"),
+            backoff_factor=2.0,        # exponential multiplier per attempt
+            retry_on_empty=True,       # retry when the model returns no content
         ),
     ],
 )
 ```
 
-The hook listens for `ModelErrorEvent` and returns `Retry()` from its
-handler if the policy says to. The router observes the directive and
-re-runs the Think node — same state, same messages, fresh model call.
+The hook implements `on_after_model_call`: it inspects the response and,
+when the model came back **empty** (no content *and* no tool calls),
+sets `event.retry = True` to trigger a re-invocation after an
+exponential-backoff delay. The runtime observes `event.retry` and
+re-runs the model call — same state, same messages, fresh request — up
+to `max_retries` times.
+
+!!! note "Scope: empty responses"
+    `ModelRetryHook` retries **empty model responses** — it is not a
+    generic HTTP-error/rate-limit retrier. For provider rate limits or
+    5xx, retry inside your model client or wrap the whole run (see
+    [When to widen the retry net](#when-to-widen-the-retry-net)).
 
 ## Tool-level retry
 
@@ -53,14 +61,15 @@ Three options:
 
 ```python
 @tool
-def lookup_inventory(sku: str) -> dict:
-    """Look up inventory for a SKU."""
-    return inventory.get(sku)
+def fetch_alert(alert_id: str) -> dict:
+    """Fetch the details of an alert."""
+    return alerts.get(alert_id)
 ```
 
-1. **Let the loop handle it.** When `lookup_inventory` raises, the SDK
-   captures the exception, returns a `ToolErrorEvent` to state, and
-   feeds the error message to the next Think. The model can then
+1. **Let the loop handle it.** When `fetch_alert` raises, the SDK
+   captures the exception, emits a `ToolCompleteEvent` with its `error`
+   field set (no separate error-event type), records the failure in
+   state, and feeds the error message to the next Think. The model can then
    *decide* whether to retry the call, try a different tool, or
    give up — same as a human would.
 
@@ -73,7 +82,7 @@ def lookup_inventory(sku: str) -> dict:
    @tool
    @retry(stop=stop_after_attempt(3),
           wait=wait_exponential(multiplier=0.5))
-   def lookup_inventory(sku: str) -> dict: ...
+   def fetch_alert(alert_id: str) -> dict: ...
    ```
 
 3. **Cooperative cancellation.** Long-running tools should poll for
@@ -90,11 +99,12 @@ second time, and the cached receipt is returned.
 
 ```python
 @tool(idempotent=True)
-def submit_po(vendor_id: str, amount_usd: float) -> dict: ...
+def issue_refund(order_id: str, amount: float) -> dict: ...
 ```
 
 This means you can let the model loop, panic, and retry without
-charging the customer twice. The Execute hash is `(tool_name,
+refunding the same order twice (or paging the on-call twice). The
+Execute hash is `(tool_name,
 kwargs)`, so semantically-different calls aren't accidentally
 deduped.
 
@@ -114,9 +124,9 @@ includes retry waits.
 
 | Scenario | Strategy |
 |---|---|
-| Flaky single calls | default `Agent(...)` retry is enough |
-| Predictable rate limits | `ModelRetryHook(max_attempts=5, retry_on=("rate_limit",))` |
-| Multi-region failover | `OCIChatCompletionsModel(endpoints=[primary, secondary])` |
+| Flaky empty completions | `ModelRetryHook(max_retries=5)` (retries empty responses) |
+| Predictable rate limits / 5xx | retry inside your model client, or wrap the run; `ModelRetryHook` does not cover these |
+| Provider / API-key failover | `CredentialPoolModel(pool=CredentialPool([...]), build_model=…)` rotates keys/endpoints on rate-limit or outage |
 | Customer-facing agents | wrap the *whole agent* in your own outer retry; the inner agent treats one client request = one run |
 
 ## See also

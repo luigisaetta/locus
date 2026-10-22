@@ -1,19 +1,23 @@
 # Observability
 
-Centralised in-process event bus + SSE telemetry. The `EventBus` is a
+Centralized in-process event bus + SSE telemetry. The `EventBus` is a
 singleton that fans `StreamEvent` instances scoped to a *run id* out
 to multiple consumers (Web SSE, CLI tail, JSON logs) from a single
 emission point.
 
 Publishers (router, agent loop hooks, custom user code) call `emit()`
 or `bus.publish()`; subscribers consume via `bus.subscribe(run_id)`.
-The workbench's SSE endpoint at `/api/events/{run_id}` is the public
+An SSE endpoint such as `/api/events/{run_id}` is the natural public
 HTTP wrapper around `EventBus.subscribe`.
 
 For the agent's typed `LocusEvent` stream (the thing
 `async for event in agent.run(...)` yields) see [Events](events.md);
 this page covers the **lower-level** observability bus that
 `LocusEvent`s are mirrored onto for cross-process consumption.
+
+For the concepts, start with
+[Observability](../concepts/observability.md#in-process-sse-eventbus)
+and [the SSE event catalogue](../concepts/sse-events.md).
 
 ## Event bus
 
@@ -29,7 +33,7 @@ this page covers the **lower-level** observability bus that
 
 ## Run context
 
-Scope events to a single cognitive dispatch via `run_context()` — a
+Scope events to a single run (e.g. one router dispatch) via `run_context()` — a
 context manager that sets and unsets the run id for the current task /
 coroutine.
 

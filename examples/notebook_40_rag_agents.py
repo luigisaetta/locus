@@ -1,40 +1,42 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Notebook 41: RAG agents — wire a retriever into an agent's tool set.
+"""Notebook 40: RAG agents — ATLAS, an on-call SRE copilot over the Index.
 
-Once you have a vector store full of documents (notebook 38 / 39), the
-next step is to let an agent reach into it. ``RAGRetriever.as_tool()``
-turns the retriever into an ordinary Locus tool that the agent picks
-up alongside any other ``@tool`` you define.
+Once you have a vector store full of runbooks (notebook 38 / 39), the
+next step is to let an agent reach into it — so an incident answer cites
+your internal runbooks instead of model memory. ATLAS is the platform
+team's on-call copilot; it reads the Index. ``RAGRetriever.as_tool()``
+turns the retriever into an ordinary Locus tool that ATLAS picks up
+alongside any other ``@tool`` you define.
 
 - ``retriever.as_tool(name, description)`` — convert a retriever into a
   callable tool for the agent.
-- Single-tool Q&A agent against a product knowledge base.
-- Mixed tool set — RAG search alongside a calculator and a date tool.
+- Single-tool Q&A copilot against an internal runbook KB.
+- Mixed tool set — runbook search alongside a calculator and a date tool
+  for rollout math.
 - Streaming events from the agent while it searches and answers.
+- An **answer-grounding gate**: before ATLAS ships remediation advice,
+  the GSAR scorer partitions its claims into grounded vs. ungrounded and
+  ``decide()`` says whether to proceed. When the answer is anchored in a
+  retrieved runbook chunk, it proceeds; when it is speculation, the same
+  call replans rather than guess — a hallucinated fix by construction
+  withheld.
 - Best-practice notes on chunk size, prompt design, and metadata
-  filters.
+  filters for ops corpora.
 
-Backend: ``OracleVectorStore`` is the default — Oracle Database 26ai's
-native ``VECTOR`` column and ``VECTOR_DISTANCE`` SQL function. Swap
-``_oracle_store`` for any other Locus vector store implementation
-(OpenSearch, pgvector, in-memory).
+Backend: the pure-Python ``InMemoryVectorStore`` keeps the demo dependency-free
+and runnable anywhere (even in a browser). Swap ``_make_store`` for any other
+Locus vector store implementation (pgvector, OpenSearch, Qdrant, Chroma) for a
+durable backend.
 
 Run it:
-    # OCI GenAI is the default — auto-detected from ~/.oci/config.
-    LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_46_rag_agents.py
+    export OPENAI_API_KEY=sk-...
+    python examples/notebook_40_rag_agents.py
 
-    # Offline (skips the live demo cleanly when env vars are missing):
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_46_rag_agents.py
-
-Prerequisites:
-    export ORACLE_DSN=mydb_low                   # tnsnames alias
-    export ORACLE_USER=locus_app
-    export ORACLE_PASSWORD='<app-password>'
-    export ORACLE_WALLET=~/.oci/wallets/mydb
-    export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if encrypted
-    export OCI_COMPARTMENT=ocid1.compartment.oc1..…
+    # Offline (the embedding-backed sections skip cleanly when the key is
+    # missing; the answer-grounding gate is pure-Python and always runs):
+    python examples/notebook_40_rag_agents.py
 """
 
 import ast
@@ -43,34 +45,17 @@ import operator as _op
 import os
 import sys
 
-from locus.rag import OracleVectorStore
-
-
-_REQUIRED_ENV = (
-    "ORACLE_DSN",
-    "ORACLE_USER",
-    "ORACLE_PASSWORD",
-    "ORACLE_WALLET",
-    "OCI_COMPARTMENT",
-)
+from locus.rag import InMemoryVectorStore
+from locus.reasoning.gsar import Claim, Decision, EvidenceType, Partition, decide, gsar_score
 
 
 def _missing_env() -> list[str]:
-    return [name for name in _REQUIRED_ENV if not os.environ.get(name)]
+    return [name for name in ("OPENAI_API_KEY",) if not os.environ.get(name)]
 
 
-def _oracle_store(suffix: str, dim: int) -> OracleVectorStore:
-    # One table per section so sections don't stomp on each other.
-    return OracleVectorStore(
-        dsn=os.environ["ORACLE_DSN"],
-        user=os.environ["ORACLE_USER"],
-        password=os.environ["ORACLE_PASSWORD"],
-        wallet_location=os.path.expanduser(os.environ["ORACLE_WALLET"]),
-        wallet_password=os.environ.get("ORACLE_WALLET_PASSWORD", ""),
-        table_name=f"locus_notebook_46_{suffix}",
-        dimension=dim,
-        distance_metric="COSINE",
-    )
+def _make_store(suffix: str, dim: int) -> InMemoryVectorStore:
+    # A fresh store per section so sections don't stomp on each other.
+    return InMemoryVectorStore(dimension=dim, distance_metric="cosine")
 
 
 _SAFE_MATH_BIN_OPS = {
@@ -111,7 +96,7 @@ def _safe_math_eval(expression: str) -> float:
 
 async def rag_as_tool():
     print("=" * 60)
-    print("Notebook 41: RAG as a Tool")
+    print("Notebook 40: RAG as a Tool")
     print("=" * 60)
 
     from locus.rag import RAGRetriever
@@ -120,24 +105,25 @@ async def rag_as_tool():
     if not embedder:
         return
 
-    store = _oracle_store(suffix="as_tool", dim=embedder.config.dimension)
+    store = _make_store(suffix="as_tool", dim=embedder.config.dimension)
     retriever = RAGRetriever(embedder=embedder, store=store)
 
+    # Internal runbook one-liners. All runbook ids and services are fictitious.
     knowledge = [
-        "Locus is a Python framework for building AI agents.",
-        "Locus supports multiple LLM providers including OpenAI and OCI GenAI.",
-        "Agents in Locus can use tools to interact with external systems.",
-        "RAG in Locus enables agents to search through documents.",
-        "Locus uses async/await for efficient concurrent operations.",
+        "RB-014 covers the checkout-api p99 latency regression after the 2.4.1 deploy; roll back via Argo.",
+        "RB-015 documents orders-db connection-pool exhaustion under peak load.",
+        "RB-016: the nightly billing batch OOMs when the dataset exceeds 8 GB; raise the memory limit.",
+        "RB-017: gateway ingress 502s trace to a misconfigured readiness probe.",
+        "RB-018: rotate the registry pull-secret after the expired-credential incident.",
     ]
 
-    print("Building knowledge base...")
+    print("Building the Index (internal runbooks)...")
     await retriever.add_documents(knowledge)
-    print(f"  Added {len(knowledge)} documents")
+    print(f"  Added {len(knowledge)} runbooks")
 
     search_tool = retriever.as_tool(
-        name="search_knowledge",
-        description="Search the knowledge base for information about Locus.",
+        name="search_runbooks",
+        description="Search the internal SRE runbook knowledge base.",
     )
 
     print(f"\nCreated tool: {search_tool.name}")
@@ -146,9 +132,9 @@ async def rag_as_tool():
     print("\n" + "-" * 40)
     print("Testing tool directly...")
 
-    result = await search_tool("What LLM providers does Locus support?")
+    result = await search_tool("Which runbook covers the checkout latency regression?")
 
-    print("\nQuery: 'What LLM providers does Locus support?'")
+    print("\nQuery: 'Which runbook covers the checkout latency regression?'")
     print(f"Results found: {result['total']}")
     for i, doc in enumerate(result["results"], 1):
         print(f"  {i}. Score: {doc['score']:.4f}")
@@ -156,13 +142,13 @@ async def rag_as_tool():
 
 
 # =============================================================================
-# Step 2: A small Q&A agent that grounds answers in product docs.
+# Step 2: A small Q&A copilot that grounds answers in internal runbooks.
 # =============================================================================
 
 
 async def simple_rag_agent():
     print("\n" + "=" * 60)
-    print("Notebook 41: Simple RAG Agent")
+    print("Notebook 40: ATLAS — On-Call SRE Copilot")
     print("=" * 60)
 
     from locus.agent import Agent
@@ -173,75 +159,78 @@ async def simple_rag_agent():
     if not embedder or not model:
         return
 
-    store = _oracle_store(suffix="simple", dim=embedder.config.dimension)
+    store = _make_store(suffix="simple", dim=embedder.config.dimension)
     retriever = RAGRetriever(embedder=embedder, store=store)
 
-    product_docs = [
+    runbook_docs = [
         """
-        ProductX is an enterprise data platform launched in 2024.
-        It supports real-time data processing at scale.
-        ProductX can handle up to 1 million events per second.
+        RB-014 / INC-2026-014 is a p99 latency regression in the
+        checkout-api service, opened in 2026. The 2.4.0 deploy introduced
+        an N+1 query in the pricing module. Customer-facing p99 climbed
+        from 180ms to 1.4s.
         """,
         """
-        ProductX pricing starts at $500/month for the starter plan.
-        The enterprise plan costs $5000/month and includes support.
-        All plans include a 30-day free trial.
+        Affected versions: checkout-api 2.4.0. Versions 2.3.x and earlier
+        are not affected because the pricing module was rewritten in 2.4.0.
+        Fixed in 2.4.1.
         """,
         """
-        ProductX integrates with popular tools like Kafka, Spark, and Flink.
-        It provides REST APIs for custom integrations.
-        SDKs are available for Python, Java, and Go.
+        Remediation: roll forward to checkout-api 2.4.1 or later. Interim
+        mitigation: roll back to 2.3.7 via Argo Rollouts and enable the
+        pricing query cache at the gateway.
         """,
         """
-        ProductX requires a minimum of 4 CPU cores and 8GB RAM.
-        For production, we recommend 16 cores and 32GB RAM.
-        Cloud deployment is available on AWS, GCP, and Oracle Cloud.
+        Detection: watch p99 latency on the checkout-api Grafana board.
+        The SLO alert fires above 800ms for 5 minutes. Regressed pods
+        first appeared in us-east since 2026-01-15; treat them as the
+        canary cohort to drain first.
         """,
     ]
 
-    print("Building product knowledge base...")
-    await retriever.add_documents(product_docs)
+    print("Building runbook knowledge base...")
+    await retriever.add_documents(runbook_docs)
 
     search_tool = retriever.as_tool(
-        name="search_product_docs",
-        description="Search ProductX documentation for information about features, pricing, requirements, and integrations.",
+        name="search_runbook_docs",
+        description="Search internal runbook documentation for affected versions, remediation, detection guidance, and rollout cohorts.",
     )
 
     agent = Agent(
         model=model,
         tools=[search_tool],
-        system_prompt="""You are a helpful product assistant for ProductX.
+        system_prompt="""You are ATLAS, the platform team's on-call SRE
+copilot. You answer over the Index — the internal runbook knowledge base.
 
-When users ask questions:
-1. Use the search_product_docs tool to find relevant information
-2. Answer based on the search results
+When responders ask questions:
+1. Use the search_runbook_docs tool to find relevant runbook content
+2. Answer based on the search results only
 3. Be concise and accurate
-4. If you can't find the answer, say so
+4. If the runbooks don't cover it, say so — never guess
 
-Always cite information from the documentation.""",
+Always cite the runbook text you relied on.""",
         max_iterations=3,
     )
 
     questions = [
-        "How much does ProductX cost?",
-        "What are the system requirements?",
+        "Which checkout-api versions are affected by the latency regression?",
+        "What is the recommended remediation?",
     ]
 
     for question in questions:
         print("\n" + "-" * 40)
-        print(f"User: {question}")
-        result = agent.run_sync(question)
-        print(f"Agent: {result.message}")
+        print(f"Responder: {question}")
+        result = await agent.arun(question)
+        print(f"Copilot: {result.message}")
 
 
 # =============================================================================
-# Step 3: Mixed tool set — RAG search + calculator + date.
+# Step 3: Mixed tool set — runbook search + calculator + date.
 # =============================================================================
 
 
 async def multi_tool_rag_agent():
     print("\n" + "=" * 60)
-    print("Notebook 41: Multi-Tool RAG Agent")
+    print("Notebook 40: ATLAS — Multi-Tool Rollout Copilot")
     print("=" * 60)
 
     from datetime import datetime
@@ -255,22 +244,22 @@ async def multi_tool_rag_agent():
     if not embedder or not model:
         return
 
-    store = _oracle_store(suffix="multi_tool", dim=embedder.config.dimension)
+    store = _make_store(suffix="multi_tool", dim=embedder.config.dimension)
     retriever = RAGRetriever(embedder=embedder, store=store)
 
-    finance_docs = [
-        "Company ABC reported revenue of $10.5 billion in Q3 2024.",
-        "Company ABC has 15,000 employees worldwide.",
-        "Company ABC stock price is currently $150 per share.",
-        "Company ABC was founded in 2010 in San Francisco.",
-        "Company ABC expects 15% revenue growth in 2025.",
+    rollout_docs = [
+        "The fleet runs 1200 checkout-api pods across three regions.",
+        "As of the last rollout, 350 pods remain on the regressed version 2.4.0.",
+        "Runbook RB-014 was opened on 2026-01-20.",
+        "Argo Rollouts drains roughly 50 pods per canary step per day.",
+        "The pricing query-cache mitigation is active on 100% of user-facing pods.",
     ]
 
-    await retriever.add_documents(finance_docs)
+    await retriever.add_documents(rollout_docs)
 
     @tool
     def calculate(expression: str) -> str:
-        """Evaluate a mathematical expression. Example: calculate('150 * 1000')"""
+        """Evaluate a mathematical expression. Example: calculate('350 / 1200 * 100')"""
         try:
             return f"Result: {_safe_math_eval(expression)}"
         except (ValueError, SyntaxError, ZeroDivisionError) as e:
@@ -282,17 +271,17 @@ async def multi_tool_rag_agent():
         return f"Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
 
     search_tool = retriever.as_tool(
-        name="search_company_info",
-        description="Search for information about Company ABC including financials, employees, and history.",
+        name="search_rollout_data",
+        description="Search rollout data for runbook RB-014 including pod counts, canary progress, and mitigations.",
     )
 
     agent = Agent(
         model=model,
         tools=[search_tool, calculate, get_current_date],
-        system_prompt="""You are a financial analyst assistant.
+        system_prompt="""You are a release-engineering analyst assistant.
 
 You have access to:
-- search_company_info: Search company documentation
+- search_rollout_data: Search fleet rollout documentation
 - calculate: Perform mathematical calculations
 - get_current_date: Get current date
 
@@ -301,16 +290,16 @@ Use tools as needed to answer questions accurately.""",
     )
 
     queries = [
-        "What is Company ABC's revenue?",
-        "If the stock price doubles, what would it be?",
-        "How old is Company ABC today?",
+        "How many pods are still on the regressed checkout-api version?",
+        "What percentage of the fleet is still regressed?",
+        "How many days has RB-014 been open as of today?",
     ]
 
     for query in queries:
         print("\n" + "-" * 40)
-        print(f"User: {query}")
-        result = agent.run_sync(query)
-        print(f"Agent: {result.message}")
+        print(f"Responder: {query}")
+        result = await agent.arun(query)
+        print(f"Copilot: {result.message}")
 
 
 # =============================================================================
@@ -320,7 +309,7 @@ Use tools as needed to answer questions accurately.""",
 
 async def rag_with_streaming():
     print("\n" + "=" * 60)
-    print("Notebook 41: RAG with Streaming")
+    print("Notebook 40: ATLAS with Streaming")
     print("=" * 60)
 
     from locus.agent import Agent
@@ -332,98 +321,179 @@ async def rag_with_streaming():
     if not embedder or not model:
         return
 
-    store = _oracle_store(suffix="streaming", dim=embedder.config.dimension)
+    store = _make_store(suffix="streaming", dim=embedder.config.dimension)
     retriever = RAGRetriever(embedder=embedder, store=store)
 
     docs = [
-        "The quick brown fox jumps over the lazy dog.",
-        "Machine learning models learn patterns from data.",
-        "Neural networks are inspired by biological neurons.",
+        "The AURORA migration moves stateful services onto the new us-east cluster.",
+        "AURORA cutover proceeds region by region inside the weekly freeze window.",
+        "In scope so far are the gateway and cache tiers; no customer-facing impact observed.",
     ]
     await retriever.add_documents(docs)
 
-    search_tool = retriever.as_tool(name="search", description="Search documents")
+    search_tool = retriever.as_tool(
+        name="search_changelog", description="Search change and rollout notes"
+    )
 
     agent = Agent(
         model=model,
         tools=[search_tool],
-        system_prompt="Search for information and provide helpful answers.",
+        system_prompt="Search the change notes and answer the responder's question.",
         max_iterations=2,
     )
 
-    print("Streaming agent response...\n")
+    print("Streaming copilot response...\n")
 
-    async for event in agent.run("What do neural networks do?"):
+    async for event in agent.run("Which tiers does the AURORA migration affect?"):
         if isinstance(event, ToolStartEvent):
             print(f"[Tool] Searching: {event.tool_name}...")
         elif isinstance(event, ToolCompleteEvent):
-            print(f"[Tool] Found {len(event.result.get('results', []))} results")
+            res = event.result
+            n = len(res.get("results", [])) if isinstance(res, dict) else len(str(res).splitlines())
+            print(f"[Tool] Found {n} result(s)")
         elif isinstance(event, ThinkEvent):
-            print(f"[Agent] {event.reasoning[:100]}...")
+            reasoning = event.reasoning or ""
+            print(f"[Agent] {reasoning[:100]}...")
 
 
 # =============================================================================
-# Step 5: Best-practice notes — chunking, prompt design, metadata filters.
+# Step 5: Answer-grounding gate — before ATLAS ships a remediation answer,
+#         the GSAR scorer partitions its claims into grounded vs. ungrounded
+#         and decide() picks proceed / regenerate / replan. A fix anchored
+#         in a retrieved runbook chunk proceeds; a hunch with no retrieved
+#         text replans rather than guess. Pure-Python — no embeddings or
+#         model needed, so it runs offline.
+# =============================================================================
+
+
+def answer_grounding_gate():
+    print("\n" + "=" * 60)
+    print("Notebook 40: Answer-grounding gate (GSAR decide)")
+    print("=" * 60)
+
+    # ATLAS drafted a remediation answer for INC-2026-014. Before it ships,
+    # we partition the answer's claims by where the evidence came from. A
+    # claim that points at a retrieved runbook chunk is grounded; a claim
+    # the model just inferred is ungrounded.
+    question = "What is the remediation for the checkout-api latency regression?"
+    print(f"Responder: {question}\n")
+
+    # Grounded case: every claim in the drafted answer traces to a retrieved
+    # runbook chunk and the deploy log that pinned the root cause — concrete,
+    # traceable evidence, so the answer ships.
+    grounded = Partition(
+        grounded=[
+            Claim(
+                text="RB-014 says to roll forward to checkout-api 2.4.1 to clear the regression.",
+                type=EvidenceType.TOOL_MATCH,
+                evidence_refs=["retriever:search_runbook_docs:doc=RB-014:offset=0"],
+            ),
+            Claim(
+                text="The interim mitigation is to roll back to 2.3.7 via Argo Rollouts.",
+                type=EvidenceType.SPECIFIC_DATA,
+                evidence_refs=["retriever:search_runbook_docs:doc=RB-014:offset=2"],
+            ),
+            Claim(
+                text="The 2.4.0 deploy introduced the N+1 query in the pricing module.",
+                type=EvidenceType.SIGNAL_MATCH,
+                evidence_refs=["deploy_log:service=checkout-api:rev=2.4.0"],
+            ),
+        ],
+    )
+    score = gsar_score(grounded)
+    decision = decide(score)
+    print("Grounded case (answer cites retrieved runbook chunks + deploy log):")
+    print(f"  S={score:.4f}  decision={decision.value}")
+    if decision is Decision.PROCEED:
+        print("  SHIP  — roll forward to 2.4.1; interim roll back to 2.3.7 via Argo.")
+        print(f"    evidence: {[r for c in grounded.grounded for r in c.evidence_refs]}")
+    else:
+        print("  HOLD  — answer not grounded enough to ship.")
+
+    # Speculative case: a hunch that the same fix applies to the unrelated
+    # orders-db incident, with no retrieved runbook text to point at. Under
+    # GSAR this is an ungrounded claim — decide() replans rather than ship a
+    # fabricated remediation.
+    speculative = Partition(
+        ungrounded=[
+            Claim(
+                text="The same 2.4.1 rollback probably fixes the orders-db pool exhaustion too.",
+                type=EvidenceType.INFERENCE,
+            ),
+        ],
+    )
+    maybe_score = gsar_score(speculative)
+    maybe_decision = decide(maybe_score)
+    print("\nSpeculative case (a hunch, no retrieved evidence):")
+    print(f"  S={maybe_score:.4f}  decision={maybe_decision.value}")
+    if maybe_decision is Decision.PROCEED:
+        print(f"  SHIP  — {speculative.ungrounded[0].text}")
+    else:
+        print("  HOLD  — replanning: cross-incident claim has no runbook support.")
+
+
+# =============================================================================
+# Step 6: Best-practice notes — chunking, prompt design, metadata filters.
 # =============================================================================
 
 
 async def rag_best_practices():
     print("\n" + "=" * 60)
-    print("Notebook 41: RAG Best Practices")
+    print("Notebook 40: RAG Best Practices for Ops KBs")
     print("=" * 60)
 
     print("""
-Best Practices for RAG Agents:
+Best Practices for On-Call RAG Copilots:
 
 1. CHUNK SIZE MATTERS
-   - Too small: Lose context
-   - Too large: Dilute relevance
+   - Too small: a runbook's affected-versions table loses its context
+   - Too large: dilute relevance across unrelated incidents
    - Recommended: 500-1000 characters with 50-100 overlap
 
 2. QUALITY OVER QUANTITY
-   - Clean your documents before indexing
+   - Clean runbooks before indexing
    - Remove boilerplate, headers, footers
-   - Keep source metadata for citations
+   - Keep source metadata (runbook id, incident id) for citations
 
 3. PROMPT ENGINEERING
    - Tell the agent when to search
-   - Instruct it to cite sources
-   - Handle "not found" gracefully
+   - Instruct it to cite runbook ids
+   - Handle "no runbook covers this" gracefully — never guess
 
 4. HYBRID APPROACHES
-   - Combine keyword + semantic search
-   - Use metadata filters to narrow scope
+   - Combine keyword (service name) + semantic search
+   - Use metadata filters (severity, service) to narrow scope
    - Rerank results for better precision
 
 5. EVALUATION
-   - Test with real user questions
+   - Test with real on-call questions
    - Measure retrieval relevance
    - Track answer quality over time
 
 6. PRODUCTION CONSIDERATIONS
-   - Use persistent vector stores (Oracle 26ai, OpenSearch, pgvector)
+   - Use persistent vector stores (pgvector, OpenSearch, Qdrant, Chroma)
    - Implement caching for embeddings
    - Monitor latency and costs
 """)
 
     # Example of good prompt engineering
     print("-" * 40)
-    print("Example System Prompt for RAG Agent:")
+    print("Example System Prompt for an Ops RAG Agent:")
     print("-" * 40)
     print("""
-You are a helpful assistant with access to a knowledge base.
+You are an on-call SRE copilot with access to the runbook knowledge base.
 
 INSTRUCTIONS:
 1. When asked a question, ALWAYS search the knowledge base first
 2. Base your answers ONLY on the search results
-3. If search returns no relevant results, say "I couldn't find information about that"
-4. Quote relevant passages when helpful
-5. If multiple documents are relevant, synthesize the information
+3. If search returns no relevant results, say "No runbook covers that"
+4. Quote relevant runbook passages when helpful
+5. If multiple runbooks are relevant, synthesize the information
 
 RESPONSE FORMAT:
 - Start with a direct answer
-- Provide supporting details from the documents
-- End with "Source: [document reference]" if applicable
+- Provide supporting details from the runbooks
+- End with "Source: [runbook id]" if applicable
 """)
 
 
@@ -435,23 +505,14 @@ RESPONSE FORMAT:
 def get_embedder():
     """Pick an embedder from whichever credentials are present."""
     if os.environ.get("OPENAI_API_KEY"):
-        from locus.rag.embeddings import OpenAIEmbeddings
+        from config import get_embedder
 
-        return OpenAIEmbeddings(model="text-embedding-3-small")
+        return get_embedder()
 
-    if os.path.exists(os.path.expanduser("~/.oci/config")):
-        try:
-            from locus.rag.embeddings import OCIEmbeddings
+    if os.environ.get("COHERE_API_KEY"):
+        from locus.rag.embeddings import CohereEmbeddings
 
-            return OCIEmbeddings(
-                model_id="cohere.embed-english-v3.0",
-                profile_name=os.getenv("LOCUS_OCI_PROFILE", os.getenv("OCI_PROFILE", "DEFAULT")),
-                auth_type=os.getenv("LOCUS_OCI_AUTH_TYPE", os.getenv("OCI_AUTH_TYPE", "api_key")),
-                compartment_id=os.getenv("LOCUS_OCI_COMPARTMENT", os.getenv("OCI_COMPARTMENT", "")),
-                service_endpoint=os.getenv("LOCUS_OCI_ENDPOINT", os.getenv("OCI_ENDPOINT", "")),
-            )
-        except Exception:
-            pass
+        return CohereEmbeddings(model="embed-english-v3.0")
 
     print("No embedding credentials found")
     return None
@@ -472,27 +533,27 @@ def get_model():
 async def main():
     missing = _missing_env()
     if missing:
-        print("\n--- Notebook 41: RAG agents on Oracle 26ai ---")
+        print("\n--- Notebook 40: ATLAS on-call SRE copilot ---")
         print(
-            "Required environment variables not set; skipping the live "
-            "demo so this file still runs cleanly in CI.\n"
+            "Embedding credentials not set; skipping the retrieval sections "
+            "so this file still runs cleanly in CI. The answer-grounding gate "
+            "below is pure-Python and runs anyway.\n"
         )
         for name in missing:
             print(f"  - {name}")
-        print(
-            "\nProvision an Autonomous Database 26ai + an OCI GenAI "
-            "compartment, then set the variables above and re-run."
-        )
-        return
+        print("\nSet OPENAI_API_KEY (for embeddings) to run ATLAS over the Index.")
+    else:
+        await rag_as_tool()
+        await simple_rag_agent()
+        await multi_tool_rag_agent()
+        await rag_with_streaming()
+        await rag_best_practices()
 
-    await rag_as_tool()
-    await simple_rag_agent()
-    await multi_tool_rag_agent()
-    await rag_with_streaming()
-    await rag_best_practices()
+    # Always run — the grounding gate needs no embeddings or model.
+    answer_grounding_gate()
 
     print("\n" + "=" * 60)
-    print("Done. Next: notebook 41 — MCP integration.")
+    print("Done. Next: notebook 45 — MCP integration.")
     print("=" * 60)
 
 

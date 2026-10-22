@@ -1,8 +1,10 @@
 # Plugins
 
-Plugins bundle hooks (and optionally tools) into one reusable object.
-Drop a plugin onto an agent and every relevant hook method runs
-automatically.
+Plugins bundle hooks (and optionally tools) into one reusable object —
+the natural way to ship a cloud-ops capability like resource-cost triage
+with its audit trail attached, so every right-sizing recommendation is
+attributable after the fact. Drop a plugin onto an agent and every
+relevant hook method runs automatically.
 
 - `Plugin` base class — subclass it, give it a `name`, decorate any
   method with `@hook` and the agent picks it up.
@@ -15,10 +17,10 @@ automatically.
 
 ## Run it
 
-OCI GenAI is the default — the notebook harness picks it when `~/.oci/config` exists (set `OCI_PROFILE` to choose a non-default profile):
+The bundled mock model is the default; set `LOCUS_MODEL_PROVIDER` for a live provider:
 
 ```bash
-LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_47_plugins.py
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_47_plugins.py
 ```
 
 Offline:
@@ -29,11 +31,11 @@ LOCUS_MODEL_PROVIDER=mock python examples/notebook_47_plugins.py
 
 ## Prerequisites
 
-- An OCI profile with GenAI access, or `LOCUS_MODEL_PROVIDER` set to
+- An OpenAI or Anthropic API key, or `LOCUS_MODEL_PROVIDER` set to
   `openai` / `anthropic` / `mock`.
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_47_plugins.py"
-```
+````

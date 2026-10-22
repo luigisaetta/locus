@@ -258,16 +258,28 @@ class TestGetModelIntegration:
             isolated_home,
             "[PROFILE_A]\nuser=u\n[PROFILE_B]\nuser=u\n",
         )
-        # OCI_PROFILE unset (isolated_home cleared it). Auto-detect picks OCI
-        # because the file has parseable profiles, then the resolver fails
-        # because there's no [DEFAULT] and no env override.
+        # OCI_PROFILE unset (isolated_home cleared it). The user explicitly
+        # asked for OCI, so the resolver's friendly error must surface rather
+        # than an opaque OCI SDK trace.
+        monkeypatch.setenv("LOCUS_MODEL_PROVIDER", "oci")
         self._patch_oci_v1_model(monkeypatch)
         with pytest.raises(RuntimeError) as exc:
             examples_config.get_model()
-        msg = str(exc.value)
-        assert "PROFILE_A" in msg
-        assert "PROFILE_B" in msg
-        assert "OCI_PROFILE" in msg
+        assert "OCI_PROFILE" in str(exc.value)
+        assert "PROFILE_A" in str(exc.value)
+
+    def test_multi_profile_no_default_auto_detect_falls_back_to_mock(
+        self, isolated_home, monkeypatch
+    ):
+        """Auto-detect never raises: an ambiguous config means "not pointed at OCI"."""
+        _write_oci_config(
+            isolated_home,
+            "[PROFILE_A]\nuser=u\n[PROFILE_B]\nuser=u\n",
+        )
+        monkeypatch.delenv("LOCUS_MODEL_PROVIDER", raising=False)
+        self._patch_oci_v1_model(monkeypatch)
+        assert examples_config._auto_detect_provider() == "mock"
+        assert isinstance(examples_config.get_model(), examples_config.MockModel)
 
     def test_no_config_falls_back_to_mock(self, isolated_home, monkeypatch):
         # No ~/.oci/config and no workload-identity env → auto-detect returns

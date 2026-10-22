@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The agent loop Agent runs, per locus/agent/runtime_loop.py (v2.16.0). Not
+  locus/loop/: that package is deprecated and Agent never used it.
+    every iteration starts with the termination checks   (runtime_loop.py:389-458)
+    think   -> execute   the model made tool calls
+    execute -> reflect   reflexion is configured and iteration % evaluate_every_n_iterations == 0  (:1204-1208)
+    execute -> think     otherwise
+    reflect -> think
+    think   -> ground    no tool calls, auto completion mode, grounding enabled  (:597-598)
+    think   -> done      no tool calls, auto completion mode
+    ground  -> done
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 380" role="img" aria-labelledby="title desc">
+  <title id="title">The agent loop</title>
+  <desc id="desc">Each iteration starts with the termination checks, which can end the run. Then Think: the model decides. If it made tool calls, Execute runs them; when Reflexion is configured and due, Reflect evaluates progress, otherwise control returns straight to Think, and Reflect also returns to Think. If the model made no tool calls, the answer can be grounded against the evidence gathered, and the run is done.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- outer arc: reflect -> think -->
+  <path class="edge" marker-end="url(#ah)" d="M607,124 C607,26 88,26 88,122"/>
+  <rect class="label-bg" x="296" y="41" width="112" height="20" rx="4"/>
+  <text class="label" x="352" y="51">next iteration</text>
+
+  <!-- inner arc: execute -> think -->
+  <path class="edge" marker-end="url(#ah)" d="M340,124 C340,78 122,78 122,122"/>
+  <rect class="label-bg" x="170" y="80" width="126" height="20" rx="4"/>
+  <text class="label" x="233" y="90">reflection not due</text>
+
+  <!-- think -> execute -->
+  <path class="edge" marker-end="url(#ah)" d="M180,153 L262,153"/>
+  <rect class="label-bg" x="186" y="164" width="72" height="20" rx="4"/>
+  <text class="label" x="222" y="174">tool calls</text>
+
+  <!-- execute -> reflect -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M420,153 L527,153"/>
+  <rect class="label-bg" x="424" y="164" width="100" height="20" rx="4"/>
+  <text class="label" x="474" y="174">reflection due</text>
+
+  <!-- think -> ground -->
+  <path class="edge" marker-end="url(#ah)" d="M105,182 C105,272 300,284 380,284"/>
+  <rect class="label-bg" x="150" y="258" width="104" height="20" rx="4"/>
+  <text class="label" x="202" y="268">no tool calls</text>
+
+  <!-- ground -> done -->
+  <path class="edge" marker-end="url(#ah)" d="M536,284 C700,284 820,270 820,184"/>
+
+  <g class="node primary">
+    <rect x="30" y="124" width="150" height="58" rx="12"/>
+    <text x="105" y="145">Think</text>
+    <text class="sub" x="105" y="166">model decides</text>
+  </g>
+  <g class="node">
+    <rect x="264" y="124" width="156" height="58" rx="12"/>
+    <text x="342" y="145">Execute</text>
+    <text class="sub" x="342" y="166">runs tool calls</text>
+  </g>
+  <g class="node optional">
+    <rect x="529" y="124" width="156" height="58" rx="12"/>
+    <text x="607" y="145">Reflect</text>
+    <text class="sub" x="607" y="166">if configured</text>
+  </g>
+  <g class="node optional">
+    <rect x="382" y="255" width="152" height="58" rx="12"/>
+    <text x="458" y="276">Ground</text>
+    <text class="sub" x="458" y="297">if enabled</text>
+  </g>
+  <g class="node end">
+    <rect x="745" y="124" width="150" height="58" rx="29"/>
+    <text x="820" y="145">Done</text>
+    <text class="sub" x="820" y="166">final answer</text>
+  </g>
+
+  <text class="note" x="460" y="358">Every iteration starts with the termination checks, which can end the run before Think.</text>
+</svg>

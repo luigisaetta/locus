@@ -6,11 +6,6 @@
 
 All configuration is via environment variables - nothing is hardcoded.
 
-Required for OCI tests:
-- OCI_PROFILE: OCI config profile name (REQUIRED)
-- OCI_AUTH_TYPE: Auth type - api_key, security_token, etc. (default: api_key)
-- OCI_COMPARTMENT_ID: Compartment OCID (optional, uses tenancy if not set)
-
 Required for OpenSearch tests:
 - OPENSEARCH_HOSTS: Comma-separated OpenSearch hosts (REQUIRED)
 - OPENSEARCH_USER: OpenSearch username (REQUIRED)
@@ -85,6 +80,15 @@ def get_opensearch_config():
     }
 
 
+@pytest.fixture
+def opensearch_config():
+    """OpenSearch configuration fixture. Skips test if env vars not set."""
+    try:
+        return get_opensearch_config()
+    except ValueError as e:
+        pytest.skip(str(e))
+
+
 def get_oracle_adb_config():
     """Get Oracle ADB configuration from environment.
 
@@ -119,15 +123,6 @@ def oci_config():
     """OCI configuration fixture. Skips test if OCI_PROFILE not set."""
     try:
         return get_oci_config()
-    except ValueError as e:
-        pytest.skip(str(e))
-
-
-@pytest.fixture
-def opensearch_config():
-    """OpenSearch configuration fixture. Skips test if env vars not set."""
-    try:
-        return get_opensearch_config()
     except ValueError as e:
         pytest.skip(str(e))
 

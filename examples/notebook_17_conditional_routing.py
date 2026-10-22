@@ -2,12 +2,14 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 """
-Pick the next node at runtime based on graph state.
+Notebook 17: Severity-based cloud incident escalation routing.
 
 A conditional edge is a function attached to a node. It runs after the
 node returns, looks at the current state, and picks the next node by
-name. That's all you need to express branching workflows, fallback
-paths, and LLM-decided routing.
+name. That's all a cloud ops team needs to express escalation policy:
+low-severity monitoring alerts auto-resolve, high-severity ones page an
+on-call SRE, and an LLM can sort raw alerts into families (compute,
+storage, network).
 
 - Binary and multi-way branching with `add_conditional_edges`.
 - Router function — receives state, returns a node name.
@@ -16,11 +18,13 @@ paths, and LLM-decided routing.
 - An LLM acting as the router for one node.
 
 Run it:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_23_conditional_routing.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_17_conditional_routing.py
 
-The default provider is OCI GenAI — auto-detected from ~/.oci/config.
-Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick an OCI model with
-LOCUS_MODEL_ID=openai.gpt-4.1 (or meta.llama-3.3-70b-instruct, etc.).
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER for a live provider.
+Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+provider: ollama, vllm, groq, together, openrouter, ...).
 """
 
 import asyncio
@@ -32,13 +36,13 @@ from locus.agent import Agent
 from locus.multiagent import END, START, StateGraph
 
 
-def _llm_call(
+async def _llm_call(
     prompt: str, *, system: str = "Reply in one short sentence.", max_tokens: int = 80
 ) -> str:
     """Run a one-shot Agent and print a timing/token banner. Used by every part."""
     agent = Agent(model=get_model(max_tokens=max_tokens), system_prompt=system)
     t0 = time.perf_counter()
-    res = agent.run_sync(prompt)
+    res = await agent.arun(prompt)
     dt = time.perf_counter() - t0
     print(
         f"  [model call: {dt:.2f}s · {res.metrics.prompt_tokens}→{res.metrics.completion_tokens} tokens]"
@@ -47,37 +51,37 @@ def _llm_call(
 
 
 # =============================================================================
-# Part 1: Binary branch
+# Part 1: Binary branch — page or auto-resolve
 # =============================================================================
 
 
 async def example_binary_routing():
     """Pick one of two downstream nodes based on a boolean in state."""
-    print("=== Part 1: Binary branch ===\n")
+    print("=== Part 1: Binary branch — page or auto-resolve ===\n")
 
     graph = StateGraph()
 
-    async def check_age(inputs):
-        age = inputs.get("age", 0)
-        return {"age": age, "is_adult": age >= 18}
+    async def check_confidence(inputs):
+        confidence = inputs.get("confidence", 0)
+        return {"confidence": confidence, "needs_human": confidence >= 80}
 
-    async def adult_path(inputs):
-        msg = _llm_call(
-            f"Write a one-line welcome message for an adult user (age "
-            f"{inputs.get('age')}) with full system access.",
+    async def escalate_path(inputs):
+        msg = await _llm_call(
+            f"Write a one-line escalation note for a cloud monitoring alert with "
+            f"{inputs.get('confidence')}% anomaly confidence that needs on-call SRE review.",
         )
-        return {"message": msg}
+        return {"disposition": msg}
 
-    async def minor_path(inputs):
-        msg = _llm_call(
-            f"Write a one-line welcome message for a minor user (age "
-            f"{inputs.get('age')}) that mentions parental guidance.",
+    async def auto_close_path(inputs):
+        msg = await _llm_call(
+            f"Write a one-line auto-resolve note for a cloud monitoring alert with only "
+            f"{inputs.get('confidence')}% anomaly confidence, mentioning it stays on record.",
         )
-        return {"message": msg}
+        return {"disposition": msg}
 
-    graph.add_node("check", check_age)
-    graph.add_node("adult", adult_path)
-    graph.add_node("minor", minor_path)
+    graph.add_node("check", check_confidence)
+    graph.add_node("escalate", escalate_path)
+    graph.add_node("auto_close", auto_close_path)
 
     graph.add_edge(START, "check")
 
@@ -86,79 +90,85 @@ async def example_binary_routing():
     # targets — optional mapping from router output to actual node ids
     graph.add_conditional_edges(
         "check",
-        lambda state: "adult" if state.get("is_adult") else "minor",
-        {"adult": "adult", "minor": "minor"},
+        lambda state: "escalate" if state.get("needs_human") else "auto_close",
+        {"escalate": "escalate", "auto_close": "auto_close"},
     )
 
-    graph.add_edge("adult", END)
-    graph.add_edge("minor", END)
+    graph.add_edge("escalate", END)
+    graph.add_edge("auto_close", END)
 
-    for age in [25, 15]:
-        result = await graph.execute({"age": age})
-        print(f"Age {age}: {result.final_state.get('message')}")
+    for confidence in [95, 40]:
+        result = await graph.execute({"confidence": confidence})
+        print(f"Confidence {confidence}%: {result.final_state.get('disposition')}")
     print()
 
 
 # =============================================================================
-# Part 2: Multi-way branch
+# Part 2: Multi-way branch — severity ladders
 # =============================================================================
 
 
 async def example_multiway_routing():
-    """One router function picks among four outcomes."""
-    print("=== Part 2: Multi-way branch ===\n")
+    """One router function picks among four severity handlers."""
+    print("=== Part 2: Multi-way branch — severity ladders ===\n")
 
     graph = StateGraph()
 
-    async def classify_ticket(inputs):
-        priority = inputs.get("priority", "low")
-        return {"priority": priority}
+    async def classify_alert(inputs):
+        severity = inputs.get("severity", "low")
+        return {"severity": severity}
 
     async def handle_critical(inputs):
-        line = _llm_call("In one short line, escalate a CRITICAL ticket. SLA 1 hour.")
-        return {"response": line, "sla": "1 hour"}
+        line = await _llm_call(
+            "In one short line, page the on-call SRE for a CRITICAL outage. SLA 15 min."
+        )
+        return {"response": line, "sla": "15 minutes"}
 
     async def handle_high(inputs):
-        line = _llm_call("In one short line, route a HIGH priority ticket. SLA 4 hours.")
-        return {"response": line, "sla": "4 hours"}
+        line = await _llm_call(
+            "In one short line, assign a HIGH alert to the platform team. SLA 1 hour."
+        )
+        return {"response": line, "sla": "1 hour"}
 
-    async def handle_normal(inputs):
-        line = _llm_call("In one short line, queue a NORMAL ticket. SLA 24 hours.")
+    async def handle_medium(inputs):
+        line = await _llm_call("In one short line, queue a MEDIUM alert for triage. SLA 24 hours.")
         return {"response": line, "sla": "24 hours"}
 
     async def handle_low(inputs):
-        line = _llm_call("In one short line, backlog a LOW ticket. SLA 1 week.")
+        line = await _llm_call(
+            "In one short line, batch a LOW alert for weekly review. SLA 1 week."
+        )
         return {"response": line, "sla": "1 week"}
 
-    graph.add_node("classify", classify_ticket)
+    graph.add_node("classify", classify_alert)
     graph.add_node("critical", handle_critical)
     graph.add_node("high", handle_high)
-    graph.add_node("normal", handle_normal)
+    graph.add_node("medium", handle_medium)
     graph.add_node("low", handle_low)
 
     graph.add_edge(START, "classify")
 
-    def priority_router(state):
-        priority = state.get("priority", "low")
-        if priority == "critical":  # noqa: SIM116 — explicit if/elif reads cleaner here
+    def severity_router(state):
+        severity = state.get("severity", "low")
+        if severity == "critical":  # noqa: SIM116 — explicit if/elif reads cleaner here
             return "critical"
-        elif priority == "high":
+        elif severity == "high":
             return "high"
-        elif priority == "medium":
-            return "normal"
+        elif severity == "medium":
+            return "medium"
         else:
             return "low"
 
-    graph.add_conditional_edges("classify", priority_router)
+    graph.add_conditional_edges("classify", severity_router)
 
     graph.add_edge("critical", END)
     graph.add_edge("high", END)
-    graph.add_edge("normal", END)
+    graph.add_edge("medium", END)
     graph.add_edge("low", END)
 
-    for priority in ["critical", "high", "medium", "low"]:
-        result = await graph.execute({"priority": priority})
-        print(f"{priority.upper()}: {result.final_state.get('response')}")
+    for severity in ["critical", "high", "medium", "low"]:
+        result = await graph.execute({"severity": severity})
+        print(f"{severity.upper()}: {result.final_state.get('response')}")
     print()
 
 
@@ -168,58 +178,64 @@ async def example_multiway_routing():
 
 
 async def example_chained_conditions():
-    """First check auth, then — if authenticated — check the user's role."""
+    """First check the alert source, then — if trusted — check the operator's role."""
     print("=== Part 3: Two routers in sequence ===\n")
 
     graph = StateGraph()
 
-    async def authenticate(inputs):
-        token = inputs.get("token", "")
-        is_valid = token == "secret123"  # noqa: S105 — notebook literal, not a real secret
-        return {"authenticated": is_valid}
+    async def validate_source(inputs):
+        webhook_key = inputs.get("webhook_key", "")
+        is_trusted = webhook_key == "webhook-key-123"  # noqa: S105 — notebook literal, not a secret
+        return {"trusted_source": is_trusted}
 
-    async def check_permissions(inputs):
-        role = inputs.get("role", "guest")
-        return {"is_admin": role == "admin"}
+    async def check_role(inputs):
+        role = inputs.get("role", "readonly")
+        return {"is_operator": role == "operator"}
 
-    async def admin_action(inputs):
-        line = _llm_call("In one line, log a successful admin operation.")
+    async def rollback_action(inputs):
+        line = await _llm_call(
+            "In one line, log that an operator rolled back the affected service."
+        )
         return {"result": line}
 
-    async def user_action(inputs):
-        line = _llm_call("In one line, log a successful regular-user operation.")
+    async def ticket_action(inputs):
+        line = await _llm_call(
+            "In one line, log that a read-only viewer opened a remediation ticket."
+        )
         return {"result": line}
 
-    async def access_denied(inputs):
-        line = _llm_call("In one line, politely decline an unauthenticated user.")
+    async def discard_alert(inputs):
+        line = await _llm_call(
+            "In one line, log that an alert from an untrusted webhook was discarded."
+        )
         return {"result": line}
 
-    graph.add_node("auth", authenticate)
-    graph.add_node("permissions", check_permissions)
-    graph.add_node("admin", admin_action)
-    graph.add_node("user", user_action)
-    graph.add_node("denied", access_denied)
+    graph.add_node("source", validate_source)
+    graph.add_node("role", check_role)
+    graph.add_node("rollback", rollback_action)
+    graph.add_node("ticket", ticket_action)
+    graph.add_node("discard", discard_alert)
 
-    graph.add_edge(START, "auth")
+    graph.add_edge(START, "source")
 
     graph.add_conditional_edges(
-        "auth", lambda s: "permissions" if s.get("authenticated") else "denied"
+        "source", lambda s: "role" if s.get("trusted_source") else "discard"
     )
-    graph.add_conditional_edges("permissions", lambda s: "admin" if s.get("is_admin") else "user")
+    graph.add_conditional_edges("role", lambda s: "rollback" if s.get("is_operator") else "ticket")
 
-    graph.add_edge("admin", END)
-    graph.add_edge("user", END)
-    graph.add_edge("denied", END)
+    graph.add_edge("rollback", END)
+    graph.add_edge("ticket", END)
+    graph.add_edge("discard", END)
 
     test_cases = [
-        {"token": "wrong", "role": "admin"},
-        {"token": "secret123", "role": "user"},
-        {"token": "secret123", "role": "admin"},
+        {"webhook_key": "forged", "role": "operator"},
+        {"webhook_key": "webhook-key-123", "role": "readonly"},
+        {"webhook_key": "webhook-key-123", "role": "operator"},
     ]
 
     for case in test_cases:
         result = await graph.execute(case)
-        print(f"Token: {case['token'][:6]}..., Role: {case['role']}")
+        print(f"Webhook key: {case['webhook_key'][:6]}..., Role: {case['role']}")
         print(f"  -> {result.final_state.get('result')}")
     print()
 
@@ -230,58 +246,60 @@ async def example_chained_conditions():
 
 
 async def example_default_route():
-    """Use `default` to catch router outputs not in the targets mapping."""
+    """Use `default` to catch alert families not in the targets mapping."""
     print("=== Part 4: Default fallback ===\n")
 
     graph = StateGraph()
 
     async def categorize(inputs):
-        category = inputs.get("category", "unknown")
-        return {"category": category}
+        family = inputs.get("family", "unknown")
+        return {"family": family}
 
-    async def handle_tech(inputs):
-        line = _llm_call("In one short line, name the team that handles technical issues.")
+    async def handle_compute(inputs):
+        line = await _llm_call("In one short line, name the team that handles compute alerts.")
         return {"handler": line}
 
-    async def handle_billing(inputs):
-        line = _llm_call("In one short line, name the team that handles billing issues.")
+    async def handle_storage(inputs):
+        line = await _llm_call("In one short line, name the team that handles storage alerts.")
         return {"handler": line}
 
-    async def handle_sales(inputs):
-        line = _llm_call("In one short line, name the team that handles sales inquiries.")
+    async def handle_network(inputs):
+        line = await _llm_call("In one short line, name the team that handles network alerts.")
         return {"handler": line}
 
     async def handle_other(inputs):
-        line = _llm_call("In one short line, name a generic support fallback team.")
+        line = await _llm_call(
+            "In one short line, name a generic on-call queue for unmatched alerts."
+        )
         return {"handler": line}
 
     graph.add_node("categorize", categorize)
-    graph.add_node("tech", handle_tech)
-    graph.add_node("billing", handle_billing)
-    graph.add_node("sales", handle_sales)
+    graph.add_node("compute", handle_compute)
+    graph.add_node("storage", handle_storage)
+    graph.add_node("network", handle_network)
     graph.add_node("other", handle_other)
 
     graph.add_edge(START, "categorize")
 
     graph.add_conditional_edges(
         "categorize",
-        lambda s: s.get("category", "other"),
+        lambda s: s.get("family", "other"),
         targets={
-            "tech": "tech",
-            "billing": "billing",
-            "sales": "sales",
+            "compute": "compute",
+            "storage": "storage",
+            "network": "network",
         },
         default="other",
     )
 
-    graph.add_edge("tech", END)
-    graph.add_edge("billing", END)
-    graph.add_edge("sales", END)
+    graph.add_edge("compute", END)
+    graph.add_edge("storage", END)
+    graph.add_edge("network", END)
     graph.add_edge("other", END)
 
-    for category in ["tech", "billing", "returns", "xyz"]:
-        result = await graph.execute({"category": category})
-        print(f"Category '{category}': {result.final_state.get('handler')}")
+    for family in ["compute", "storage", "database", "xyz"]:
+        result = await graph.execute({"family": family})
+        print(f"Alert family '{family}': {result.final_state.get('handler')}")
     print()
 
 
@@ -296,68 +314,79 @@ async def example_complex_routing():
 
     graph = StateGraph()
 
-    async def evaluate_order(inputs):
-        amount = inputs.get("amount", 0)
-        customer_type = inputs.get("customer_type", "regular")
-        items = inputs.get("items", 1)
+    async def evaluate_incident(inputs):
+        error_rate = inputs.get("error_rate", 0.0)
+        service_tier = inputs.get("service_tier", "standard")
+        instances = inputs.get("instances", 1)
 
         return {
-            "amount": amount,
-            "customer_type": customer_type,
-            "items": items,
-            "is_bulk": items > 10,
-            "is_vip": customer_type == "vip",
-            "is_large": amount > 1000,
+            "error_rate": error_rate,
+            "service_tier": service_tier,
+            "instances": instances,
+            "is_widespread": instances > 10,
+            "is_tier_zero": service_tier == "tier_zero",
+            "is_high_error": error_rate > 10.0,
         }
 
-    async def express_processing(inputs):
-        line = _llm_call("In one short line, confirm same-day express order processing.")
-        return {"processing": line, "eta": "Same day"}
+    async def page_oncall(inputs):
+        line = await _llm_call(
+            "In one short line, confirm the on-call incident commander was paged."
+        )
+        return {"routing": line, "response_window": "Immediate"}
 
-    async def priority_processing(inputs):
-        line = _llm_call("In one short line, confirm 1-2 day priority order processing.")
-        return {"processing": line, "eta": "1-2 days"}
+    async def priority_queue(inputs):
+        line = await _llm_call(
+            "In one short line, confirm the incident entered the priority queue."
+        )
+        return {"routing": line, "response_window": "4 hours"}
 
-    async def standard_processing(inputs):
-        line = _llm_call("In one short line, confirm 3-5 day standard order processing.")
-        return {"processing": line, "eta": "3-5 days"}
+    async def standard_queue(inputs):
+        line = await _llm_call(
+            "In one short line, confirm the incident entered the standard queue."
+        )
+        return {"routing": line, "response_window": "24 hours"}
 
-    graph.add_node("evaluate", evaluate_order)
-    graph.add_node("express", express_processing)
-    graph.add_node("priority", priority_processing)
-    graph.add_node("standard", standard_processing)
+    graph.add_node("evaluate", evaluate_incident)
+    graph.add_node("page", page_oncall)
+    graph.add_node("priority", priority_queue)
+    graph.add_node("standard", standard_queue)
 
     graph.add_edge(START, "evaluate")
 
-    def order_router(state):
-        is_vip = state.get("is_vip", False)
-        is_large = state.get("is_large", False)
-        is_bulk = state.get("is_bulk", False)
+    def incident_router(state):
+        is_tier_zero = state.get("is_tier_zero", False)
+        is_high_error = state.get("is_high_error", False)
+        is_widespread = state.get("is_widespread", False)
 
-        if is_vip and is_large:
-            return "express"
-        elif is_vip or is_large or is_bulk:
+        if is_tier_zero and is_high_error:
+            return "page"
+        elif is_tier_zero or is_high_error or is_widespread:
             return "priority"
         else:
             return "standard"
 
-    graph.add_conditional_edges("evaluate", order_router)
+    graph.add_conditional_edges("evaluate", incident_router)
 
-    graph.add_edge("express", END)
+    graph.add_edge("page", END)
     graph.add_edge("priority", END)
     graph.add_edge("standard", END)
 
     test_cases = [
-        {"amount": 500, "customer_type": "regular", "items": 2},
-        {"amount": 500, "customer_type": "vip", "items": 2},
-        {"amount": 2000, "customer_type": "regular", "items": 2},
-        {"amount": 2000, "customer_type": "vip", "items": 20},
+        {"error_rate": 2.5, "service_tier": "standard", "instances": 2},
+        {"error_rate": 2.5, "service_tier": "tier_zero", "instances": 2},
+        {"error_rate": 35.0, "service_tier": "standard", "instances": 2},
+        {"error_rate": 35.0, "service_tier": "tier_zero", "instances": 20},
     ]
 
     for case in test_cases:
         result = await graph.execute(case)
-        print(f"Order: ${case['amount']}, {case['customer_type']}, {case['items']} items")
-        print(f"  -> {result.final_state.get('processing')}: {result.final_state.get('eta')}")
+        print(
+            f"Incident: error rate {case['error_rate']}%, "
+            f"{case['service_tier']}, {case['instances']} instances"
+        )
+        print(
+            f"  -> {result.final_state.get('routing')}: {result.final_state.get('response_window')}"
+        )
     print()
 
 
@@ -375,16 +404,16 @@ async def example_llm_router():
     async def classify_with_llm(inputs):
         import time as _t
 
-        text = inputs.get("text", "")
+        alert = inputs.get("alert", "")
         agent = Agent(
             model=get_model(max_tokens=10),
             system_prompt=(
-                "Classify the user's message into exactly one of: "
-                "billing, tech, sales. Reply with just the single word."
+                "Classify the cloud alert into exactly one of: "
+                "compute, storage, network. Reply with just the single word."
             ),
         )
         t0 = _t.perf_counter()
-        result = agent.run_sync(text)
+        result = await agent.arun(alert)
         dt = _t.perf_counter() - t0
         print(
             f"  [model call: {dt:.2f}s · {result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]"
@@ -392,38 +421,38 @@ async def example_llm_router():
         label = result.message.strip().lower()
         # Defensive: clamp anything unexpected back onto a known label
         # so the conditional edge always finds a target.
-        if label not in {"billing", "tech", "sales"}:
-            label = "tech"
-        return {"category": label}
+        if label not in {"compute", "storage", "network"}:
+            label = "network"
+        return {"family": label}
 
-    async def billing(_inputs):
-        return {"handler": "Billing Department"}
+    async def compute(_inputs):
+        return {"handler": "Compute Platform Team"}
 
-    async def tech(_inputs):
-        return {"handler": "Tech Support Team"}
+    async def storage(_inputs):
+        return {"handler": "Storage Platform Team"}
 
-    async def sales(_inputs):
-        return {"handler": "Sales Team"}
+    async def network(_inputs):
+        return {"handler": "Network Platform Team"}
 
     graph.add_node("classify", classify_with_llm)
-    graph.add_node("billing", billing)
-    graph.add_node("tech", tech)
-    graph.add_node("sales", sales)
+    graph.add_node("compute", compute)
+    graph.add_node("storage", storage)
+    graph.add_node("network", network)
 
     graph.add_edge(START, "classify")
-    graph.add_conditional_edges("classify", lambda s: s["category"])
-    graph.add_edge("billing", END)
-    graph.add_edge("tech", END)
-    graph.add_edge("sales", END)
+    graph.add_conditional_edges("classify", lambda s: s["family"])
+    graph.add_edge("compute", END)
+    graph.add_edge("storage", END)
+    graph.add_edge("network", END)
 
     samples = [
-        "My invoice last month has a duplicate charge.",
-        "I want to compare your enterprise plans.",
-        "The dashboard keeps throwing a 500 error.",
+        "CPU pinned at 100% on autoscaling group web-asg for ten minutes.",
+        "Object store bucket prod-assets returning 503 SlowDown on PUT requests.",
+        "Cross-region VPC peering link dropping 4% of packets to eu-west-1.",
     ]
-    for text in samples:
-        result = await graph.execute({"text": text})
-        print(f"  '{text[:40]}…' → {result.final_state.get('handler')}")
+    for alert in samples:
+        result = await graph.execute({"alert": alert})
+        print(f"  '{alert[:40]}…' → {result.final_state.get('handler')}")
     print()
 
 
@@ -434,7 +463,7 @@ async def example_llm_router():
 
 async def main():
     print("=" * 60)
-    print("Notebook 18: Conditional routing")
+    print("Notebook 17: Severity-based cloud incident escalation routing")
     print("=" * 60)
     print()
 
@@ -446,7 +475,7 @@ async def main():
     await example_llm_router()
 
     print("=" * 60)
-    print("Next: Notebook 19 — State reducers")
+    print("Next: Notebook 18 — Merging telemetry findings with state reducers")
     print("=" * 60)
 
 

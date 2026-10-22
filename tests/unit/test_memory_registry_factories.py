@@ -106,33 +106,3 @@ class TestRealFactoryClosures:
         captured = _patch_adapter(monkeypatch, "opensearch_checkpointer")
         get_checkpointer("opensearch")
         assert "hosts" not in captured["kwargs"]
-
-    def test_oci_factory_splits_bucket_namespace(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        if "oci" not in list_checkpointers():
-            pytest.skip("oci backend not registered")
-        captured = _patch_adapter(monkeypatch, "oci_bucket_checkpointer")
-        get_checkpointer("oci:my-bucket/my-namespace")
-        assert captured["kwargs"]["bucket_name"] == "my-bucket"
-        assert captured["kwargs"]["namespace"] == "my-namespace"
-
-    def test_oci_factory_skips_when_no_slash(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        if "oci" not in list_checkpointers():
-            pytest.skip("oci backend not registered")
-        captured = _patch_adapter(monkeypatch, "oci_bucket_checkpointer")
-        get_checkpointer("oci:bucket-only")
-        # No slash → factory's ``"/" in config_hint`` is False → kwargs stays empty
-        assert "bucket_name" not in captured["kwargs"]
-
-    def test_oracle_factory_passes_database(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        if "oracle" not in list_checkpointers():
-            pytest.skip("oracle backend not registered")
-        captured = _patch_adapter(monkeypatch, "oracle_checkpointer")
-        get_checkpointer("oracle:mydb_high")
-        assert captured["kwargs"]["database"] == "mydb_high"
-
-    def test_oracle_factory_no_hint(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        if "oracle" not in list_checkpointers():
-            pytest.skip("oracle backend not registered")
-        captured = _patch_adapter(monkeypatch, "oracle_checkpointer")
-        get_checkpointer("oracle")
-        assert "database" not in captured["kwargs"]

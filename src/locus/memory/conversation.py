@@ -66,27 +66,67 @@ class SlidingWindowManager(ConversationManager):
     """
     Sliding window conversation manager - keeps last N messages.
 
-    Preserves the system message (if present) and the last N messages
-    from the conversation. This is a simple and effective strategy
-    for managing conversation length.
+    Preserves the system message (if present) and the last N messages from the
+    conversation. This is a simple and effective strategy for managing
+    conversation length.
+
+    When the window would retain **no user turn at all**, the opening request is
+    re-attached. That case is an agent loop — assistant/tool all the way down —
+    where the first user message is the task, and losing it leaves the model
+    working from a role description and a wall of tool output with no statement
+    of what it was asked to do. It reads as drift rather than as an error, and
+    on Qwen-family chat templates it fails outright with ``No user query found
+    in messages.``. Twenty tool round-trips reach the default window, so this is
+    the ordinary case for a tool-using agent, not an edge one.
+
+    A chat is left alone: while any user turn survives in the window, the newest
+    ones are the live context and the first is not privileged.
+
+    Only the *leading* system messages (the instructions, a memory block right
+    after them) are kept at the front. A system note the loop added mid-run
+    stays where it was written and leaves with the turns around it: moving it
+    to the front would change the start of every request after it, and a
+    provider's prompt cache serves only a byte-identical prefix.
+
+    For the same reason the window can slide in steps. With ``slide_step=1``
+    the oldest message goes on every request once the window is full, so the
+    history after the system prompt is different every time and nothing past
+    it is ever served from cache. A larger step drops that many messages at
+    once and then leaves the start alone until the window fills again: the
+    window holds between ``window_size - slide_step + 1`` and ``window_size``
+    messages, and all but one request in ``slide_step`` reuses the cache.
 
     Args:
         window_size: Maximum number of messages to keep (excluding system message)
-        preserve_system: Whether to preserve the system message at the start
+        preserve_system: Whether to preserve the leading system messages at the start
+        preserve_first_user: Whether to re-attach the opening user turn when the
+            window would otherwise contain none
+        slide_step: How many messages the window drops at a time once full.
     """
 
-    def __init__(self, window_size: int = 20, preserve_system: bool = True):
+    def __init__(
+        self,
+        window_size: int = 20,
+        preserve_system: bool = True,
+        preserve_first_user: bool = True,
+        slide_step: int = 1,
+    ):
         if window_size < 1:
             raise ValueError("window_size must be at least 1")
+        if not 1 <= slide_step <= window_size:
+            raise ValueError("slide_step must be between 1 and window_size")
         self.window_size = window_size
         self.preserve_system = preserve_system
+        self.preserve_first_user = preserve_first_user
+        self.slide_step = slide_step
 
     def apply(self, messages: list[Message]) -> list[Message]:
         """
         Apply sliding window to messages.
 
-        Keeps the system message (if preserve_system is True) and
-        the last window_size messages.
+        Keeps the system message (if preserve_system is True) and the last
+        window_size messages, re-attaching the opening user turn when the window
+        would otherwise retain none (see the class docstring).
         """
         if not messages:
             return []
@@ -96,8 +136,10 @@ class SlidingWindowManager(ConversationManager):
         result: list[Message] = []
         non_system_messages: list[Message] = []
 
+        leading = True
         for msg in messages:
-            if msg.role == Role.SYSTEM and self.preserve_system:
+            leading = leading and msg.role == Role.SYSTEM
+            if leading and self.preserve_system:
                 result.append(msg)
             else:
                 non_system_messages.append(msg)
@@ -105,7 +147,52 @@ class SlidingWindowManager(ConversationManager):
         # Keep only the last window_size messages
         before_count = len(non_system_messages)
         if before_count > self.window_size:
-            non_system_messages = non_system_messages[-self.window_size :]
+            anchor: Message | None = None
+            if self.preserve_first_user:
+                anchor = next(
+                    (m for m in non_system_messages if m.role == Role.USER),
+                    None,
+                )
+
+            # Drop whole steps, so the cut stays put until the window refills.
+            excess = before_count - self.window_size
+            drop = -(-excess // self.slide_step) * self.slide_step
+            non_system_messages = non_system_messages[drop:]
+
+            # The cut lands at a fixed offset, not a turn boundary, so it can
+            # fall between an assistant's tool_calls and the tool messages
+            # answering them. Those results are orphans the provider will
+            # reject, so drop them here rather than leaving the agent loop to
+            # strip them later.
+            def _drop_leading_orphans(window: list[Message]) -> list[Message]:
+                kept = {tc.id for m in window if m.role == Role.ASSISTANT for tc in m.tool_calls}
+                start = 0
+                while (
+                    start < len(window)
+                    and window[start].role == Role.TOOL
+                    and window[start].tool_call_id not in kept
+                ):
+                    start += 1
+                return window[start:]
+
+            non_system_messages = _drop_leading_orphans(non_system_messages)
+
+            # Re-attach the opening request only when the window kept no user
+            # turn at all. In a chat the newest user turns are the live context
+            # and the first one is not privileged; it is an agent loop —
+            # assistant/tool all the way down — that ends up with no user turn
+            # and therefore no statement of the task.
+            #
+            # Trimming orphans usually frees the slot; if it didn't, drop one
+            # more step from the front (the cut the next slide would make
+            # anyway) and re-normalise, since that drop can itself orphan the
+            # results that followed it.
+            if anchor is not None and not any(m.role == Role.USER for m in non_system_messages):
+                if len(non_system_messages) >= self.window_size:
+                    non_system_messages = _drop_leading_orphans(
+                        non_system_messages[self.slide_step :]
+                    )
+                non_system_messages.insert(0, anchor)
             from locus.observability.emit import (  # noqa: PLC0415
                 EV_MEMORY_CONVERSATION_PRUNED,
                 emit_sync,
@@ -115,14 +202,19 @@ class SlidingWindowManager(ConversationManager):
                 EV_MEMORY_CONVERSATION_PRUNED,
                 strategy="sliding_window",
                 window_size=self.window_size,
-                removed_count=before_count - self.window_size,
+                # Count what actually went, not what the raw slice implies:
+                # orphan trimming and the re-attached anchor both move this.
+                removed_count=before_count - len(non_system_messages),
             )
 
         result.extend(non_system_messages)
         return result
 
     def __repr__(self) -> str:
-        return f"SlidingWindowManager(window_size={self.window_size}, preserve_system={self.preserve_system})"
+        return (
+            f"SlidingWindowManager(window_size={self.window_size}, "
+            f"preserve_system={self.preserve_system}, slide_step={self.slide_step})"
+        )
 
 
 class SummarizingManager(ConversationManager):

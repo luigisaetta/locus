@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The control layer, as wired by locus.control.gate_tool and locus.control.admission (v2.16.0):
+    agent loop -> Action          a gated tool call; gate_tool resolves its Action (control/action.py)
+    Action     -> ControlPolicy   admit() calls approve(), strongest outcome wins (security/admit.py)
+    ControlPolicy -> AuditTrail   admit() records every decision, allowed or not, before acting
+    allow -> side effect          perform() is awaited only on allow
+    hold  -> approval store       on_refusal="interrupt": submit, pause the run (control/gate.py hold)
+    deny  -> not executed         a refusal is returned to the model; a deny never pauses
+    hold, on_refusal not interrupt "return": JSON refusal (approval_id if a store is given);
+                                  "raise": AdmissionError. Neither pauses (control/gate.py _refusal)
+    approval store -> side effect agent.resume(perform_dangling=True) re-issues the call; approved
+                                  goes through admit() again with approved_by, consumed before perform
+    approval store -> not executed a denied approval returns a refusal
+    agent loop <-> checkpointer   state saved before an interrupt is yielded, loaded on resume
+    agent loop -> grounding       optional judge of a final answer; a failed check injects replan
+                                  guidance and the loop continues (agent/runtime_loop.py)
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 440" role="img" aria-labelledby="title desc">
+  <title id="title">The control layer</title>
+  <desc id="desc">The agent loop calls a gated tool. The gate turns the call into an Action, and ControlPolicy decides it through admit, which records every decision on the AuditTrail, along with each approval request and verdict. On allow, the side effect runs. On hold, the call goes to the approval store and the run pauses. If a person approves, the resumed call is weighed again and the side effect runs unless the policy now denies it; if a person denies, it does not run. On deny, the side effect does not run and the model gets a refusal. A hold pauses the run only when the gate is set to interrupt and has an approval store; otherwise the call is refused. The agent loop saves and restores its state through a checkpointer, and optional grounding checks a final answer and sends it back for a replan when it fails.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- agent loop -> grounding -> agent loop -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M64,162 L64,88"/>
+  <rect class="label-bg" x="19" y="114" width="90" height="20" rx="4"/>
+  <text class="label" x="64" y="124">final answer</text>
+  <path class="edge dashed" marker-end="url(#ah)" d="M154,86 L154,160"/>
+  <rect class="label-bg" x="126" y="114" width="56" height="20" rx="4"/>
+  <text class="label" x="154" y="124">replan</text>
+
+  <!-- agent loop <-> checkpointer -->
+  <path class="edge" marker-start="url(#ah)" marker-end="url(#ah)" d="M109,222 L109,288"/>
+  <rect class="label-bg" x="56" y="245" width="106" height="20" rx="4"/>
+  <text class="label" x="109" y="255">save, restore</text>
+
+  <!-- agent loop -> action -> policy -->
+  <path class="edge" marker-end="url(#ah)" d="M194,191 L274,191"/>
+  <rect class="label-bg" x="199" y="202" width="72" height="20" rx="4"/>
+  <text class="label" x="235" y="212">gated call</text>
+  <path class="edge" marker-end="url(#ah)" d="M426,191 L484,191"/>
+
+  <!-- policy -> audit trail -->
+  <path class="edge" marker-end="url(#ah)" d="M566,220 L566,288"/>
+  <rect class="label-bg" x="513" y="245" width="106" height="20" rx="4"/>
+  <text class="label" x="566" y="255">every decision</text>
+
+  <!-- policy -> outcomes -->
+  <path class="edge allow" marker-end="url(#ah)" d="M646,176 C700,176 700,57 754,57"/>
+  <rect class="label-bg" x="677" y="106" width="46" height="20" rx="4"/>
+  <text class="label" x="700" y="116">allow</text>
+  <path class="edge hold" marker-end="url(#ah)" d="M646,191 L754,191"/>
+  <rect class="label-bg" x="680" y="181" width="40" height="20" rx="4"/>
+  <text class="label" x="700" y="191">hold</text>
+  <path class="edge deny" marker-end="url(#ah)" d="M646,206 C700,206 700,325 754,325"/>
+  <rect class="label-bg" x="679" y="256" width="42" height="20" rx="4"/>
+  <text class="label" x="700" y="266">deny</text>
+
+  <!-- approval store -> side effect / not executed -->
+  <path class="edge allow" marker-end="url(#ah)" d="M836,162 L836,88"/>
+  <rect class="label-bg" x="768" y="114" width="136" height="20" rx="4"/>
+  <text class="label" x="836" y="124">approved, on resume</text>
+  <path class="edge deny" marker-end="url(#ah)" d="M836,220 L836,294"/>
+  <rect class="label-bg" x="808" y="247" width="56" height="20" rx="4"/>
+  <text class="label" x="836" y="257">denied</text>
+
+  <g class="node optional">
+    <rect x="24" y="28" width="170" height="58" rx="12"/>
+    <text x="109" y="47">Grounding</text>
+    <text class="sub" x="109" y="68">checks the answer</text>
+  </g>
+  <g class="node">
+    <rect x="24" y="162" width="170" height="58" rx="12"/>
+    <text x="109" y="181">Agent loop</text>
+    <text class="sub" x="109" y="202">model proposes</text>
+  </g>
+  <g class="store node">
+    <path d="M184,298 L184,354 A75,8 0 0 1 34,354 L34,298 M34,298 A75,8 0 0 1 184,298 A75,8 0 0 1 34,298 Z"/>
+    <text x="109" y="324">Checkpointer</text>
+    <text class="sub" x="109" y="345">run state</text>
+  </g>
+
+  <g class="node">
+    <rect x="276" y="162" width="150" height="58" rx="12"/>
+    <text x="351" y="181">Action</text>
+    <text class="sub" x="351" y="202">labels the call</text>
+  </g>
+
+  <g class="node primary">
+    <rect x="486" y="162" width="160" height="58" rx="12"/>
+    <text x="566" y="181">ControlPolicy</text>
+    <text class="sub" x="566" y="202">admit() decides</text>
+  </g>
+  <g class="store node">
+    <path d="M641,298 L641,354 A75,8 0 0 1 491,354 L491,298 M491,298 A75,8 0 0 1 641,298 A75,8 0 0 1 491,298 Z"/>
+    <text x="566" y="324">AuditTrail</text>
+    <text class="sub" x="566" y="345">hash-chained</text>
+  </g>
+
+  <g class="node allow">
+    <rect x="756" y="28" width="160" height="58" rx="12"/>
+    <text x="836" y="47">Side effect</text>
+    <text class="sub" x="836" y="68">perform() runs</text>
+  </g>
+  <g class="node hold">
+    <rect x="756" y="162" width="160" height="58" rx="12"/>
+    <text x="836" y="181">Approval store</text>
+    <text class="sub" x="836" y="202">waits for a person</text>
+  </g>
+  <g class="node deny">
+    <rect x="756" y="296" width="160" height="58" rx="12"/>
+    <text x="836" y="315">Not executed</text>
+    <text class="sub" x="836" y="336">refusal to model</text>
+  </g>
+
+  <text class="note" x="470" y="398">A resumed call is weighed again, so an approval never overrides a deny.</text>
+  <text class="note" x="470" y="420">A hold pauses the run only with on_refusal="interrupt" and an approval store; otherwise it is refused.</text>
+</svg>

@@ -1,9 +1,32 @@
 # ReAct loop
 
-The low-level ReAct loop primitives. Most users should reach for the
-high-level `Agent` API (see [Agent](agent.md)) — these classes are for
-when you need to compose your own loop shape (different node order,
-custom routing, batched execution).
+!!! warning "Deprecated — removed in 3.0.0"
+
+    `locus.loop` is a second ReAct implementation, parallel to the one
+    [`Agent`](agent.md) runs, and `Agent` has never used it. Two
+    implementations of the same idea drift, and a bug fixed in one stays live
+    in the other. Nothing here is a capability `Agent` lacks.
+
+    Everything below still imports and works until 3.0.0, per the
+    [deprecation policy](https://github.com/oracle/locus/blob/main/DEPRECATION.md).
+    Each access emits `LocusDeprecationWarning`; to find them in your own code:
+
+    ```
+    python -W error::DeprecationWarning -m pytest
+    ```
+
+    | Instead of | Use |
+    |---|---|
+    | `ReActLoop`, `create_react_loop` | [`Agent`](agent.md) |
+    | `ReActLoopConfig` | [`AgentConfig`](agent.md) |
+    | `LoopRunner` | `await agent.arun(prompt)` |
+    | `BatchRunner` | [`EvalRunner`](evaluation.md) |
+    | `StreamingCollector` | `async for event in agent.run(prompt)` |
+    | `ConditionalRouter` | [`StateGraph`](multiagent.md) conditional edges |
+    | `ThinkNode` / `ExecuteNode` / `ReflectNode` | internal to `Agent`; hook them with [hooks](hooks.md) |
+
+The low-level ReAct (reason + act) loop primitives, kept here for reference
+while the deprecation runs.
 
 ## Loop
 

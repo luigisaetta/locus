@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING, Any, cast
 
@@ -18,6 +19,12 @@ if TYPE_CHECKING:
 
 class RedisConfig(BaseModel):
     """Configuration for Redis backend."""
+
+    # Reject unknown keys rather than absorbing them. The backends take
+    # **kwargs and splat them in here, so a misspelled or wrong-named
+    # parameter used to vanish silently — notebook 68 passed namespace=
+    # instead of prefix= and every run quietly shared one keyspace.
+    model_config = {"extra": "forbid"}
 
     url: str = "redis://localhost:6379"
     prefix: str = "locus:checkpoint:"
@@ -39,6 +46,10 @@ class RedisBackend(BaseModel):
 
     config: RedisConfig = Field(default_factory=RedisConfig)
     _client: Redis | None = None
+    #: The loop the cached client was built on, or ``None`` when the client
+    #: did not come from here — a caller (or a test) that assigns ``_client``
+    #: owns its lifecycle, and second-guessing that would discard it.
+    _client_loop: asyncio.AbstractEventLoop | None = None
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -47,8 +58,24 @@ class RedisBackend(BaseModel):
         super().__init__(config=config)
 
     async def _get_client(self) -> Redis:
-        """Get or create Redis client."""
-        if self._client is None:
+        """Get or create the Redis client for the running event loop.
+
+        ``redis.asyncio`` binds a client's connection pool to the loop that
+        created it, so a cached client is only usable inside that one loop.
+        Caching it on the instance alone means a second loop inherits a dead
+        pool and fails with ``Event loop is closed`` — which is not exotic:
+        FastAPI's ``TestClient`` runs each request through its own portal, and
+        anything calling ``asyncio.run()`` more than once hits it too. The
+        error surfaces from deep inside ``redis.asyncio``, so it reads as a
+        Redis outage rather than a lifecycle bug here.
+
+        Keying the cache on the loop leaves the single-loop case — every real
+        deployment — exactly as cheap as before, and rebuilds only when the
+        loop actually changed.
+        """
+        loop = asyncio.get_running_loop()
+        stale = self._client_loop is not None and self._client_loop is not loop
+        if self._client is None or stale:
             try:
                 from redis.asyncio import Redis
             except ImportError as e:
@@ -57,11 +84,15 @@ class RedisBackend(BaseModel):
                     "Install with: pip install locus[redis]"
                 ) from e
 
+            # Any previous client belongs to a loop that is gone. Dropping the
+            # reference is all that can safely be done — closing it would need
+            # its own loop, which is exactly what is no longer available.
             self._client = Redis.from_url(
                 self.config.url,
                 db=self.config.db,
                 decode_responses=True,
             )
+            self._client_loop = loop
         return self._client
 
     def _key(self, thread_id: str) -> str:
@@ -127,3 +158,4 @@ class RedisBackend(BaseModel):
         if self._client:
             await self._client.close()
             self._client = None
+            self._client_loop = None

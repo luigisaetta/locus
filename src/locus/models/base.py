@@ -82,6 +82,28 @@ class ModelResponse(BaseModel):
     # "resp_abc"}``) so the agent can thread it into the next
     # ``complete()`` call without resending the full history.
     provider_state: dict[str, Any] | None = None
+    # Chain-of-thought surfaced by reasoning models (OpenAI o-series,
+    # Qwen/DeepSeek via vLLM, Gemini thinking, etc.). Providers that
+    # ship reasoning in a channel separate from ``message.content`` set
+    # this; the agent loop prefers it for ``ThinkEvent.reasoning``.
+    reasoning: str | None = None
+    # Token log-probabilities, when the caller asked for them
+    # (``logprobs=True``). The shape is the provider's own — it is
+    # passed through rather than normalised, because the consumers of
+    # this (confidence gating, calibration) care about the raw numbers.
+    logprobs: Any | None = None
+    # Additional candidates when the caller asked for more than one
+    # (``n>1``). ``message`` remains the first choice, so single-candidate
+    # callers are unaffected; these are the rest, in the order returned.
+    candidates: list[Message] = Field(default_factory=list)
+    # Annotations from whatever produced this response on the client side —
+    # never sent to the model. ``FallbackChain`` records the tier that served
+    # the call under ``"fallback"`` (``{"tier", "model", "attempts"}``).
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    # What the provider says this call cost in USD, when it says (OpenRouter
+    # puts ``cost`` in the usage block). ``None`` means not reported, never
+    # free; the metadata price table remains the estimate then.
+    cost_usd: float | None = None
 
     @property
     def content(self) -> str | None:
@@ -114,8 +136,11 @@ class ModelConfig(BaseModel):
 
     model: str
     max_tokens: int = 4096
-    temperature: float = 0.7
-    top_p: float = 0.9
+    # ``None`` means "omit this parameter" so the server's own default applies.
+    # Self-hosted models publish their recommended sampling in
+    # generation_config.json; a value sent unasked silently overrides it.
+    temperature: float | None = 0.7
+    top_p: float | None = 0.9
     stop_sequences: list[str] = Field(default_factory=list)
 
     model_config = {"extra": "allow"}

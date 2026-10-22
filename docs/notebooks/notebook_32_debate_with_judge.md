@@ -1,9 +1,10 @@
 # Debate with Judge
 
-PRO and CON take turns arguing a resolution. After N rounds a Judge
-reads the full transcript and emits a typed `Verdict` — winner,
-confidence, key points, reasoning — that downstream systems (tickets,
-audit logs, databases) can consume directly.
+An INCIDENT advocate and a NOISE advocate take turns arguing over a
+cloud-monitoring alert. After N rounds a Judge reads the full transcript
+and emits a typed `Verdict` — call, confidence, key points, reasoning —
+that downstream systems (incident tooling, audit logs, on-call paging)
+can consume directly.
 
 This notebook covers:
 
@@ -18,13 +19,18 @@ This notebook covers:
   constrained-decoding support.
 
 ```text
-PRO r0 → CON r0 → PRO r1 → CON r1 → ... → judge → END
+incident r0 → noise r0 → incident r1 → noise r1 → ... → judge → END
 ```
+
+The judge's `Verdict.call` lands on `incident`, `noise`, or
+`inconclusive` — it only picks a side when one advocate clearly
+outargued the other, which keeps a two-agent debate from manufacturing
+false certainty about an ambiguous alert.
 
 ## Prerequisites
 
-- Notebook 14 (structured output).
-- Notebook 17 (basic graph).
+- Structured output.
+- Basic graph.
 
 ## Run
 
@@ -32,13 +38,13 @@ PRO r0 → CON r0 → PRO r1 → CON r1 → ... → judge → END
 python examples/notebook_32_debate_with_judge.py
 ```
 
-The default provider is OCI Generative AI. Pick a model that supports
-constrained JSON decoding (canonical: `openai.gpt-4.1` or
-`openai.gpt-5`). Under `LOCUS_MODEL_PROVIDER=mock` the notebook exits
-cleanly with setup instructions.
+The default provider is the bundled mock model. For this notebook pick a
+provider that supports constrained JSON decoding (e.g. `openai:gpt-4o`).
+Under `LOCUS_MODEL_PROVIDER=mock` the notebook exits cleanly with setup
+instructions.
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_32_debate_with_judge.py"
-```
+````

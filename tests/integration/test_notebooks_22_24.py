@@ -20,11 +20,7 @@ pytestmark = pytest.mark.integration
 
 def has_embedder_available() -> bool:
     """Check if an embedding provider is available."""
-    if os.environ.get("OPENAI_API_KEY"):
-        return True
-    if os.path.exists(os.path.expanduser("~/.oci/config")):
-        return True
-    return False
+    return bool(os.environ.get("OPENAI_API_KEY"))
 
 
 def get_embedder():
@@ -34,48 +30,20 @@ def get_embedder():
 
         return OpenAIEmbeddings(model="text-embedding-3-small")
 
-    if os.path.exists(os.path.expanduser("~/.oci/config")):
-        try:
-            from locus.rag.embeddings import OCIEmbeddings
-
-            return OCIEmbeddings(
-                model_id=os.getenv("OCI_EMBED_MODEL", "cohere.embed-english-v3.0"),
-                profile_name=os.getenv("OCI_PROFILE", "DEFAULT"),
-                auth_type=os.getenv("OCI_AUTH_TYPE", "api_key"),
-                compartment_id=os.getenv("OCI_COMPARTMENT", ""),
-                service_endpoint=os.getenv("OCI_ENDPOINT", ""),
-            )
-        except Exception:
-            pass
-
     return None
 
 
 def get_model():
     """Get LLM model based on available credentials.
 
-    OCI GenAI preferred (OCI_PROFILE + OCI_ENDPOINT), OpenAI fallback.
-    Model ID from OCI_MODEL_ID env var.
+    OpenAI when ``OPENAI_API_KEY`` is set; otherwise ``None``.
     """
-    if os.environ.get("OCI_PROFILE") and os.environ.get("OCI_ENDPOINT"):
-        try:
-            from locus.models.providers.oci import OCIModel
-
-            return OCIModel(
-                model_id=os.getenv("OCI_MODEL_ID", "openai.gpt-5.4"),
-                profile_name=os.environ["OCI_PROFILE"],
-                auth_type=os.getenv("OCI_AUTH_TYPE", "api_key"),
-                service_endpoint=os.environ["OCI_ENDPOINT"],
-                compartment_id=os.getenv("OCI_COMPARTMENT", ""),
-                max_tokens=256,
-            )
-        except Exception:
-            pass
-
     if os.environ.get("OPENAI_API_KEY"):
         from locus.models.native.openai import OpenAIModel
 
-        return OpenAIModel(model="gpt-4o-mini", max_tokens=256)
+        return OpenAIModel(
+            model=os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=256
+        )
 
     return None
 
@@ -271,30 +239,6 @@ class TestNotebook23RAGProviders:
         assert result.model == "text-embedding-3-small"
 
         await embedder.close()
-
-    @pytest.mark.asyncio
-    @pytest.mark.skipif(
-        not os.path.exists(os.path.expanduser("~/.oci/config")), reason="OCI not configured"
-    )
-    async def test_oci_cohere_embeddings(self):
-        """Test OCI Cohere embeddings."""
-        try:
-            from locus.rag.embeddings import OCIEmbeddings
-
-            embedder = OCIEmbeddings(
-                model_id=os.getenv("OCI_EMBED_MODEL", "cohere.embed-english-v3.0"),
-                profile_name=os.getenv("OCI_PROFILE", "DEFAULT"),
-                auth_type=os.getenv("OCI_AUTH_TYPE", "api_key"),
-                compartment_id=os.getenv("OCI_COMPARTMENT", ""),
-                service_endpoint=os.getenv("OCI_ENDPOINT", ""),
-            )
-
-            result = await embedder.embed("Test text")
-
-            assert result.embedding is not None
-            assert len(result.embedding) == 1024  # Cohere embed-v3 dimension
-        except Exception as e:
-            pytest.skip(f"OCI embeddings not available: {e}")
 
     @pytest.mark.asyncio
     async def test_embedder_config(self):

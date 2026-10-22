@@ -22,7 +22,7 @@ Usage::
     from locus import Agent
     from locus.streaming.structured import StructuredStream
 
-    agent = Agent(model="oci:openai.gpt-5-mini", output_schema=VendorList)
+    agent = Agent(model="openai:gpt-4o-mini", output_schema=VendorList)
 
     stream = StructuredStream(agent.run("Top 3 vendors."), schema=VendorList)
     async for partial in stream:

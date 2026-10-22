@@ -624,6 +624,37 @@ def opensearch_checkpointer(
     return StorageBackendAdapter(backend)
 
 
+def s3_checkpointer(
+    bucket: str,
+    prefix: str = "locus/checkpoints/",
+    **kwargs: Any,
+) -> BaseCheckpointer:
+    """
+    Create an S3-compatible object-storage-backed checkpointer.
+
+    Works against AWS S3, MinIO, Cloudflare R2, and any other
+    S3-compatible endpoint. ``S3Backend`` is a native ``BaseCheckpointer``;
+    this factory is a thin convenience alias for parity with the other
+    backend factories.
+
+    Args:
+        bucket: Bucket name
+        prefix: Object key prefix
+        **kwargs: Additional S3Backend options (endpoint_url, region_name,
+            aws_access_key_id, aws_secret_access_key)
+
+    Example:
+        >>> checkpointer = s3_checkpointer(
+        ...     bucket="my-checkpoints",
+        ...     endpoint_url="http://localhost:9000",  # MinIO
+        ... )
+        >>> agent = Agent(config=cfg, checkpointer=checkpointer)
+    """
+    from locus.memory.backends.s3 import S3Backend
+
+    return S3Backend(bucket=bucket, prefix=prefix, **kwargs)
+
+
 def oci_bucket_checkpointer(
     bucket_name: str,
     namespace: str,

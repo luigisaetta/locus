@@ -2,12 +2,15 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 """
-Chain agents, run them in parallel, or loop one until it's satisfied.
+Notebook 21: Composing data-privacy agents into pipelines.
 
-When the work decomposes cleanly into agent-shaped pieces, you don't
-need a full StateGraph. The three pipeline classes here are batteries-
-included composition primitives that take a list of Agent instances
-and orchestrate them for you.
+When privacy work decomposes cleanly into agent-shaped pieces — a
+PII-discovery summary feeding a privacy-impact write-up, two reviewers
+working the same processing activity in parallel — you don't need a full
+StateGraph. The three pipeline classes here are batteries-included
+composition primitives that take a list of Agent instances and
+orchestrate them for you. Scenario: a Data Protection Impact Assessment
+(DPIA) over a new customer-analytics dataset.
 
 - SequentialPipeline — each agent's output becomes the next agent's input.
 - ParallelPipeline — run agents concurrently, then merge their results.
@@ -15,11 +18,13 @@ and orchestrate them for you.
 - Helpers sequential() / parallel() / loop() exist for one-liners.
 
 Run it:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_27_composition.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_21_composition.py
 
-The default provider is OCI GenAI — auto-detected from ~/.oci/config.
-Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick an OCI model with
-LOCUS_MODEL_ID=openai.gpt-4.1 (or meta.llama-3.3-70b-instruct, etc.).
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER for a live provider.
+Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+provider: ollama, vllm, groq, together, openrouter, ...).
 """
 
 import asyncio
@@ -36,70 +41,82 @@ from locus.agent import (
 
 
 # =============================================================================
-# Part 1: Sequential — researcher then writer
+# Part 1: Sequential — PII discovery summary then privacy-impact write-up
 # =============================================================================
 
 
 async def example_sequential():
-    """Researcher gathers facts; writer turns them into prose."""
-    print("=== Part 1: Sequential — researcher then writer ===\n")
+    """PII analyst summarizes personal-data findings; report writer writes the DPIA prose."""
+    print("=== Part 1: Sequential — PII summary then privacy-impact write-up ===\n")
 
     model = get_model()
 
-    researcher = Agent(
+    pii_analyst = Agent(
         config=AgentConfig(
-            system_prompt="You are a researcher. Provide 3 key facts about the topic.",
+            system_prompt=(
+                "You are a PII-discovery analyst. From the data-inventory notes, list "
+                "the 3 most significant personal-data exposures."
+            ),
             max_iterations=3,
             model=model,
         )
     )
-    writer = Agent(
+    report_writer = Agent(
         config=AgentConfig(
-            system_prompt="You are a writer. Take the research and write a short paragraph.",
+            system_prompt=(
+                "You are a privacy-impact report writer. Take the personal-data "
+                "summary and write a short DPIA paragraph for the data protection officer."
+            ),
             max_iterations=3,
             model=model,
         )
     )
 
-    pipeline = SequentialPipeline(agents=[researcher, writer])
-    result = await pipeline.run("Benefits of regular exercise")
+    pipeline = SequentialPipeline(agents=[pii_analyst, report_writer])
+    result = await pipeline.run(
+        "Inventory of the customer_analytics table: stores full names, email "
+        "addresses, and precise geolocation; rows retained indefinitely with no "
+        "documented retention policy; exported nightly to a third-party vendor."
+    )
 
-    print(f"Stage 1 (Researcher): {result.outputs[0][:100]}...")
-    print(f"Stage 2 (Writer): {result.outputs[1][:100]}...")
+    print(f"Stage 1 (PII summary): {result.outputs[0][:100]}...")
+    print(f"Stage 2 (DPIA write-up): {result.outputs[1][:100]}...")
     print(f"Duration: {result.duration_ms:.0f}ms")
 
 
 # =============================================================================
-# Part 2: Parallel — pros vs cons in one call
+# Part 2: Parallel — privacy risks vs safeguards in one call
 # =============================================================================
 
 
 async def example_parallel():
-    """Two agents form independent perspectives; the pipeline merges them."""
-    print("\n=== Part 2: Parallel — pros vs cons in one call ===\n")
+    """Two agents assess the same processing activity independently; the pipeline merges them."""
+    print("\n=== Part 2: Parallel — privacy risks vs safeguards in one call ===\n")
 
     model = get_model()
 
-    pros = Agent(
+    risk_assessor = Agent(
         config=AgentConfig(
-            system_prompt="List 2 pros of the topic. Be concise.",
+            system_prompt="List 2 privacy risks this processing creates for data subjects. Be concise.",
             max_iterations=3,
             model=model,
         )
     )
-    cons = Agent(
+    safeguard_planner = Agent(
         config=AgentConfig(
-            system_prompt="List 2 cons of the topic. Be concise.",
+            system_prompt="List 2 safeguards that would reduce this privacy risk. Be concise.",
             max_iterations=3,
             model=model,
         )
     )
 
-    pipeline = ParallelPipeline(agents=[pros, cons])
-    result = await pipeline.run("Remote work for engineers")
+    pipeline = ParallelPipeline(agents=[risk_assessor, safeguard_planner])
+    result = await pipeline.run(
+        "Marketing team plans to enrich profiles with purchased third-party data"
+    )
 
-    print(f"Pros: {result.outputs[0][:100]}...")
-    print(f"Cons: {result.outputs[1][:100]}...")
+    print(f"Risks: {result.outputs[0][:100]}...")
+    print(f"Safeguards: {result.outputs[1][:100]}...")
     print(f"Merged: {result.final_output[:150]}...")
 
 
@@ -109,16 +126,17 @@ async def example_parallel():
 
 
 async def example_loop():
-    """LoopAgent re-runs the same agent, feeding back the previous output."""
+    """LoopAgent re-runs the same agent, feeding back the previous draft."""
     print("\n=== Part 3: Loop — iterate until APPROVED or max_loops ===\n")
 
     model = get_model()
 
-    improver = Agent(
+    response_hardener = Agent(
         config=AgentConfig(
             system_prompt=(
-                "You improve text quality. When the text is good enough, "
-                "include the word APPROVED at the end."
+                "You tighten data-subject access request (DSAR) response drafts. When "
+                "the draft is ready for the data protection officer, include the word "
+                "APPROVED at the end."
             ),
             max_iterations=3,
             model=model,
@@ -126,13 +144,16 @@ async def example_loop():
     )
 
     loop = LoopAgent(
-        agent=improver,
+        agent=response_hardener,
         condition=lambda output: "APPROVED" in output.upper(),
         max_loops=3,
-        loop_prompt="Improve this text. Say APPROVED when done:\n{previous_output}",
+        loop_prompt="Tighten this DSAR response. Say APPROVED when ready:\n{previous_output}",
     )
 
-    result = await loop.run("The quick brown fox jumps over the lazy dog.")
+    result = await loop.run(
+        "Subject jane.doe@example.com requests all data we hold; confirm the records "
+        "exported and the retention window applied."
+    )
     print(f"Iterations: {len(result.outputs)}")
     print(f"Final: {result.final_output[:100]}...")
 

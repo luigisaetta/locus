@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The second-path failure, as the gate weighs each call (locus.control.policy.approve):
+    send_invoice              labelled outbound communication; the label is in
+                              require_human_for, so approve() returns require_human (hold)
+    generate_invoice_qr_code  carries no label the policy names, so no label rule fires;
+                              with the policy's other checks clear (a verdict that meets
+                              require_verification_score, or the bar set to 0) it is
+                              allowed ("just rendering a code"). Under the stock
+                              ControlPolicy() bar of 0.8 with no verdict it would hold
+                              instead ("no verification provided").
+    hold  -> runs only once a named person approves (admit(..., approved_by=...))
+    allow -> runs at once; no person is asked
+  approve() matches Action.labels() (environment, kind, tags) against the policy.
+  The outcome a call reaches is never an input, so two routes to one outcome are
+  told apart only by how each call is described, never by where it leads.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 530" role="img" aria-labelledby="title desc">
+  <title id="title">The second-path failure</title>
+  <desc id="desc">An agent wants payment from a customer and has two tools that get it there. Send invoice, the send_invoice tool, is classified as outbound communication, so the gate holds it for a named person, and the customer can pay only once that person approves. Generate QR code, the generate_invoice_qr_code tool, matches no family on the list, so the gate allows it as just rendering a code, and the customer can pay a code for an invoice that was never sent, with no one asked. Both routes reach the same outcome. The gate weighs the labels a call carries, never the outcome it reaches.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- goal -> the two tools -->
+  <path class="edge" marker-end="url(#ah)" d="M320,78 C320,112 200,104 200,138"/>
+  <path class="edge" marker-end="url(#ah)" d="M400,78 C400,112 520,104 520,138"/>
+
+  <!-- tool -> verdict: what the classifier made of the call -->
+  <path class="edge hold" marker-end="url(#ah)" d="M200,198 L200,278"/>
+  <rect class="label-bg" x="118" y="228" width="164" height="20" rx="4"/>
+  <text class="label" x="200" y="238">outbound communication</text>
+  <path class="edge allow" marker-end="url(#ah)" d="M520,198 L520,278"/>
+  <rect class="label-bg" x="444" y="228" width="152" height="20" rx="4"/>
+  <text class="label" x="520" y="238">no family on the list</text>
+
+  <!-- verdict -> the same outcome -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M200,338 C200,382 320,374 320,418"/>
+  <rect class="label-bg" x="206" y="368" width="108" height="20" rx="4"/>
+  <text class="label" x="260" y="378">once approved</text>
+  <path class="edge" marker-end="url(#ah)" d="M520,338 C520,382 400,374 400,418"/>
+  <rect class="label-bg" x="410" y="368" width="100" height="20" rx="4"/>
+  <text class="label" x="460" y="378">no one asked</text>
+
+  <g class="node">
+    <rect x="260" y="20" width="200" height="58" rx="12"/>
+    <text x="360" y="39">Agent wants payment</text>
+    <text class="sub" x="360" y="60">from a customer</text>
+  </g>
+
+  <g class="node">
+    <rect x="95" y="140" width="210" height="58" rx="12"/>
+    <text x="200" y="159">Send invoice</text>
+    <text class="sub" x="200" y="180">send_invoice</text>
+  </g>
+  <g class="node primary">
+    <rect x="415" y="140" width="210" height="58" rx="12"/>
+    <text x="520" y="159">Generate QR code</text>
+    <text class="sub" x="520" y="180">generate_invoice_qr_code</text>
+  </g>
+
+  <g class="node hold">
+    <rect x="100" y="280" width="200" height="58" rx="12"/>
+    <text x="200" y="299">Hold</text>
+    <text class="sub" x="200" y="320">for a named person</text>
+  </g>
+  <g class="node allow">
+    <rect x="420" y="280" width="200" height="58" rx="12"/>
+    <text x="520" y="299">Allow</text>
+    <text class="sub" x="520" y="320">“just rendering a code”</text>
+  </g>
+
+  <g class="node end">
+    <rect x="260" y="420" width="200" height="58" rx="29"/>
+    <text x="360" y="439">Customer can pay</text>
+    <text class="sub" x="360" y="460">same outcome</text>
+  </g>
+
+  <text class="note" x="360" y="512">The gate weighs the labels a call carries, never the outcome it reaches.</text>
+</svg>

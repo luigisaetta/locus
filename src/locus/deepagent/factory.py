@@ -67,7 +67,7 @@ def wire_datastores(
     both research factories an identical ``datastores=`` surface. For each
     entry, a ``search_<name>`` tool is built via
     ``locus.rag.tools.create_rag_tool`` and a one-line routing hint is
-    appended to the returned prompt block. Mirrors the langchain-oci
+    appended to the returned prompt block. Mirrors a common deep-research
     ``create_deep_research_agent(datastores=...)`` contract so existing
     recipes translate 1:1.
 
@@ -169,7 +169,7 @@ def create_deepagent(
     """Construct a research-shaped ``locus.Agent``.
 
     Args:
-        model: A locus model string (``"oci:openai.gpt-5.5"``) or a
+        model: A locus model string (``"openai:gpt-4o"``) or a
             ``ModelProtocol`` instance built via
             ``locus.models.get_model``.
         tools: All tools the agent can call — MCP-derived,
@@ -234,7 +234,7 @@ def create_deepagent(
             is auto-wired via ``RAGRetriever.as_tool`` and appended to
             ``tools``, and a per-store description block is prepended
             to ``system_prompt`` so the model can route queries to the
-            right store. Mirrors the langchain-oci
+            right store. Mirrors a common deep-research
             ``create_deep_research_agent(datastores=...)`` shape.
         datastore_top_k: Default top-k for auto-wired datastore tools.
             Honored only when ``datastores`` is set and an entry doesn't
@@ -295,7 +295,10 @@ def create_deepagent(
     # ``max_tokens=`` it lands in **agent_kwargs and Agent() rejects
     # it loudly, which is the right failure shape — better than the
     # historical silent foot-gun.
-    base = ToolCalled(submit_tool) & ConfidenceMet(min_confidence)
+    # require_success: a submit tool that RAISES (a verifying gate rejecting
+    # fabricated claims) must not terminate the loop — the agent sees the
+    # rejection and keeps working.
+    base = ToolCalled(submit_tool, require_success=True) & ConfidenceMet(min_confidence)
     if total_token_budget is not None:
         termination = base | TokenLimit(total_token_budget) | MaxIterations(max_iterations)
     else:
@@ -382,6 +385,23 @@ def create_deepagent(
         kwargs["conversation_manager"] = conversation_manager
     if output_schema is not None:
         kwargs["output_schema"] = output_schema
+        # A typed terminal means the SUBMIT TOOL is the exit — in auto
+        # completion a chatty model's first no-tool-call turn would end the
+        # run and its message text would be parsed as the "result", bypassing
+        # the submit gate entirely (fabricated completions). Explicit mode
+        # makes the loop continue until the terminal (or a budget backstop).
+        kwargs["completion_mode"] = "explicit"
+        # …and the state machine's own name-match exits are disarmed. Explicit
+        # mode still terminates on any of AgentConfig.terminal_tools by NAME —
+        # no success check, no confidence gate — so a model calling the
+        # injected ``task_complete`` with a fabricated "success" would end the
+        # run around the verifying submit gate (observed live: the builder
+        # echoed a pending approval id as its "draft_id"). Naming the submit
+        # tool here would be just as unsafe — a REJECTED submit matches by
+        # name too. Empty set: the ONLY exits are the composable condition
+        # ``ToolCalled(submit_tool, require_success=True) & ConfidenceMet``
+        # and the hard iteration/budget backstops.
+        kwargs.setdefault("terminal_tools", set())
     if checkpointer is not None:
         kwargs["checkpointer"] = checkpointer
     # Forward per-completion output cap to the model. AgentConfig.max_tokens

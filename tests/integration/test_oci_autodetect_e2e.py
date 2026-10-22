@@ -120,18 +120,40 @@ class TestAutoDetectE2E:
         payload = json.loads(result.stdout)
         assert payload == {"provider": "oci", "profile": "BOAT-OC1"}
 
-    def test_multi_profile_no_default_returns_friendly_error(self, tmp_path):
+    def test_multi_profile_no_default_falls_back_to_mock(self, tmp_path):
+        """Auto-detect never guesses between profiles: ambiguous means mock."""
         _write_oci_config(
             tmp_path,
             "[ALPHA]\nuser=u\n[BETA]\nuser=u\n",
         )
         result = _run_harness_probe(tmp_path)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == {"provider": "mock"}
+
+    def test_multi_profile_no_default_returns_friendly_error_when_oci_is_asked_for(self, tmp_path):
+        _write_oci_config(
+            tmp_path,
+            "[ALPHA]\nuser=u\n[BETA]\nuser=u\n",
+        )
+        snippet = textwrap.dedent(
+            """
+            import importlib.util, json
+            spec = importlib.util.spec_from_file_location("harness", "examples/config.py")
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            try:
+                out = {"profile": mod._resolve_oci_profile()}
+            except RuntimeError as exc:
+                out = {"error": str(exc)}
+            print(json.dumps(out))
+            """
+        ).strip()
         # The probe catches RuntimeError and prints it as JSON, so
         # returncode is 0 — the subprocess didn't crash, the harness
         # raised the friendly error we want users to see.
+        result = _run_harness_probe(tmp_path, snippet=snippet)
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
-        assert payload["provider"] == "oci"
         assert "error" in payload
         assert "ALPHA" in payload["error"]
         assert "BETA" in payload["error"]

@@ -1,42 +1,41 @@
 # Agent Memory
 
-Give an agent a checkpointer and every conversation turn is persisted to
-a real database. Restart the process, attach a new agent to the same
-ADB and the same `thread_id`, and the conversation resumes — messages,
-tool history, confidence score and all.
+Give an agent a checkpointer and every conversation turn is saved under
+its `thread_id`. Call the agent again with that `thread_id` — or attach a
+new agent to the same store with the same `thread_id` — and the
+conversation resumes: messages,
+tool history, confidence score and all. With a durable backend, that
+holds across a process restart too.
 
 What you'll learn:
 
-- Building an `oracle_checkpointer` against an Autonomous Database 26ai.
-- Keying conversations with `thread_id`.
-- Writing a checkpoint after every iteration so a crash mid-tool-call
-  still recovers.
+- Building a `MemoryCheckpointer` and passing it to the agent.
+- Keying conversations with `thread_id` (one per conversation).
+- Writing a checkpoint after every iteration
+  (`checkpoint_every_n_iterations=1`), not only when a run finishes.
+- A second agent attaching to the same store and picking up the same
+  `thread_id`.
 - Loading the saved `AgentState` and inspecting it field by field.
-- Running many independent threads against a single ADB.
+- Running many independent threads against a single store.
 
-This notebook does not fall back to in-memory storage — Oracle is the
-only backend exercised here.
+This notebook uses `MemoryCheckpointer`, an in-memory store, so it runs
+with no setup; its state lasts only as long as the process. For a
+conversation that survives a restart, swap in a durable checkpointer —
+`FileCheckpointer`, or `redis_checkpointer()` /
+`postgresql_checkpointer()` — see [Checkpointers](../concepts/checkpointers.md).
 
 Run it:
 
 ```
-export ORACLE_DSN=mydb_low
-export ORACLE_USER=locus_app
-export ORACLE_PASSWORD='<app-password>'
-export ORACLE_WALLET=~/.oci/wallets/mydb
-export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if encrypted
-.venv/bin/python examples/notebook_08_agent_memory.py
+python examples/notebook_08_agent_memory.py
 ```
 
-If those env vars are unset the script prints a skip banner and exits
-0 — convenient for CI. The agent's model goes through the default OCI
-Generative AI provider (canonical id: `openai.gpt-4.1` or
-`meta.llama-3.3-70b-instruct`). For offline runs set
-`LOCUS_MODEL_PROVIDER=mock`; OpenAI, Anthropic and Ollama also work as
-the LLM.
+With `LOCUS_MODEL_PROVIDER` unset it uses the bundled mock model, so it
+needs no credentials. The agent's model goes through whichever
+provider you configure via `LOCUS_MODEL_PROVIDER` (`openai` / `anthropic`) for a live model; set `LOCUS_MODEL_PROVIDER=mock` for offline runs.
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_08_agent_memory.py"
-```
+````

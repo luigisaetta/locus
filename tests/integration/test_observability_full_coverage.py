@@ -313,7 +313,7 @@ class TestEventConstantsAreReachable:
     async def test_every_new_event_constant_is_a_string(self):
         """Smoke-check: each new EV_* constant exposed in
         ``locus.observability.emit`` is a non-empty string. Catches typos
-        in the event-name registry before the workbench renderer trips on
+        in the event-name registry before a renderer trips on
         them."""
         # ``locus.observability.emit`` resolves to the *function* via the
         # package's re-export — fetch the module from sys.modules.

@@ -6,35 +6,25 @@
 
 from __future__ import annotations
 
-import json
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from locus.core.loops import DEFAULT_READ_ONLY_TOOLS, ToolLoop, call_signature, detect_tool_loop
+from locus.core.media import estimate_tokens
 from locus.core.messages import Message, ToolCall
 
 
-def _tool_call_signature(tc: ToolCall) -> tuple[str, str]:
-    """Stable (name, args) signature used by the tool-loop detector.
+#: Anthropic's prices for prompt-cache traffic, as multiples of the input
+#: price: a write to the 5-minute cache and a read from it.
+_CACHE_WRITE_MULTIPLIER = 1.25
+_CACHE_READ_MULTIPLIER = 0.1
 
-    Loop detection must compare both the tool name and its arguments.
-    Same name with different arguments — paged discovery, sweeping a
-    list of inputs, retrying with a corrected parameter — is forward
-    progress, not a loop.
-
-    JSON with ``sort_keys=True`` canonicalizes dict argument order so
-    ``{"a": 1, "b": 2}`` matches ``{"b": 2, "a": 1}``. Falls back to a
-    sorted-items repr when arguments contain values json can't
-    serialize (rare; tool args are scalars/strings/lists/dicts in
-    practice).
-    """
-    try:
-        canonical = json.dumps(tc.arguments, sort_keys=True, default=str)
-    except (TypeError, ValueError):
-        canonical = repr(sorted(tc.arguments.items()))
-    return (tc.name, canonical)
+#: Kept under its old name for code that imported it from here.
+_tool_call_signature = call_signature
 
 
 class ToolExecution(BaseModel):
@@ -95,9 +85,16 @@ class AgentState(BaseModel):
     confidence_threshold: float = 0.85
     confidence_history: tuple[float, ...] = Field(default_factory=tuple)
 
-    # Tool loop detection
+    # Tool loop detection (see locus.core.loops)
     tool_history: tuple[str, ...] = Field(default_factory=tuple)
     tool_loop_threshold: int = 3
+    # Repeats a step made only of read-only tools needs; None = threshold + 1.
+    tool_loop_read_only_threshold: int | None = None
+    tool_loop_read_only_tools: frozenset[str] = DEFAULT_READ_ONLY_TOOLS
+    # (loop signature, reasoning steps at the time) for each loop the model
+    # was warned about, so one sighting gets one note. A loop stops the run
+    # only once it repeats past the point where it was warned about.
+    tool_loop_warnings: tuple[tuple[str, int], ...] = Field(default_factory=tuple)
 
     # Terminal tools
     terminal_tools: frozenset[str] = Field(
@@ -113,7 +110,25 @@ class AgentState(BaseModel):
     # other providers.
     cache_creation_tokens_used: int = 0
     cache_read_tokens_used: int = 0
+    # Prompt tokens an OpenAI-compatible provider served from its prefix cache
+    # (``prompt_tokens_details.cached_tokens``) and, where it says, wrote to it
+    # (OpenRouter's ``cache_write_tokens``). Unlike Anthropic's counters these
+    # are part of ``prompt_tokens_used``, not in addition to it.
+    cached_tokens_used: int = 0
+    cache_write_tokens_used: int = 0
+    # What the provider itself said the calls cost (OpenRouter's
+    # ``usage.cost``), summed over the calls that said; ``reported_cost_calls``
+    # counts them. Exact where the metadata-priced ``cost_usd_used`` is a list
+    # price that ignores caching and routing.
+    reported_cost_usd: float = 0.0
+    reported_cost_calls: int = 0
     token_budget: int | None = None
+    # Spend tracking. Prices come from model metadata (USD per million tokens);
+    # ``None`` means unknown, and an unknown price leaves ``cost_usd_used`` at 0.
+    input_price_per_mtok: float | None = None
+    output_price_per_mtok: float | None = None
+    cost_usd_used: float = 0.0
+    cost_budget_usd: float | None = None
 
     # Completion mode
     completion_mode: str = "auto"  # "auto" or "explicit"
@@ -253,12 +268,16 @@ class AgentState(BaseModel):
             }
         )
 
-    def with_token_usage(
+    def with_token_usage(  # noqa: PLR0913 — one keyword per counter a provider reports
         self,
         prompt_tokens: int,
         completion_tokens: int,
         cache_creation_tokens: int = 0,
         cache_read_tokens: int = 0,
+        *,
+        cached_tokens: int = 0,
+        cache_write_tokens: int = 0,
+        reported_cost_usd: float | None = None,
     ) -> AgentState:
         """Record token usage from a model response.
 
@@ -266,18 +285,60 @@ class AgentState(BaseModel):
         only when Anthropic returns prompt-cache stats on the response
         usage (i.e., the AnthropicModel was configured with
         ``prompt_cache=True``). Default 0 for other providers.
+        ``cached_tokens`` and ``cache_write_tokens`` are the OpenAI-style
+        counters, already inside ``prompt_tokens``. ``reported_cost_usd`` is
+        the provider's own figure for the call, when it gives one.
         """
-        return self.model_copy(
-            update={
-                "total_tokens_used": self.total_tokens_used + prompt_tokens + completion_tokens,
-                "prompt_tokens_used": self.prompt_tokens_used + prompt_tokens,
-                "completion_tokens_used": self.completion_tokens_used + completion_tokens,
-                "cache_creation_tokens_used": (
-                    self.cache_creation_tokens_used + cache_creation_tokens
-                ),
-                "cache_read_tokens_used": self.cache_read_tokens_used + cache_read_tokens,
-                "updated_at": datetime.now(UTC),
-            }
+        update: dict[str, Any] = {
+            "total_tokens_used": self.total_tokens_used + prompt_tokens + completion_tokens,
+            "prompt_tokens_used": self.prompt_tokens_used + prompt_tokens,
+            "completion_tokens_used": self.completion_tokens_used + completion_tokens,
+            "cache_creation_tokens_used": (self.cache_creation_tokens_used + cache_creation_tokens),
+            "cache_read_tokens_used": self.cache_read_tokens_used + cache_read_tokens,
+            "cached_tokens_used": self.cached_tokens_used + cached_tokens,
+            "cache_write_tokens_used": self.cache_write_tokens_used + cache_write_tokens,
+            "cost_usd_used": self.cost_usd_used
+            + (
+                self.cost_of(
+                    prompt_tokens,
+                    completion_tokens,
+                    cache_creation_tokens=cache_creation_tokens,
+                    cache_read_tokens=cache_read_tokens,
+                )
+                or 0.0
+            ),
+            "updated_at": datetime.now(UTC),
+        }
+        if reported_cost_usd is not None:
+            update["reported_cost_usd"] = self.reported_cost_usd + reported_cost_usd
+            update["reported_cost_calls"] = self.reported_cost_calls + 1
+        return self.model_copy(update=update)
+
+    def with_response_usage(
+        self, usage: Mapping[str, Any] | None, reported_cost_usd: float | None = None
+    ) -> AgentState:
+        """Record a model response's ``usage`` dict, every counter it carries."""
+        usage = usage or {}
+
+        def count(key: str) -> int:
+            value = usage.get(key, 0)
+            return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+        # Only a real number counts: a test double's attribute is not a price.
+        cost = (
+            float(reported_cost_usd)
+            if isinstance(reported_cost_usd, int | float)
+            and not isinstance(reported_cost_usd, bool)
+            else None
+        )
+        return self.with_token_usage(
+            count("prompt_tokens"),
+            count("completion_tokens"),
+            cache_creation_tokens=count("cache_creation_input_tokens"),
+            cache_read_tokens=count("cache_read_input_tokens"),
+            cached_tokens=count("cached_tokens"),
+            cache_write_tokens=count("cache_write_tokens"),
+            reported_cost_usd=cost,
         )
 
     # =========================================================================
@@ -285,43 +346,112 @@ class AgentState(BaseModel):
     # =========================================================================
 
     @property
-    def has_tool_loop(self) -> bool:
-        """Check if agent is stuck in a tool loop across iterations.
+    def priced(self) -> bool:
+        """Whether both prices are known, so spend can be measured."""
+        return self.input_price_per_mtok is not None and self.output_price_per_mtok is not None
 
-        Multiple calls to the same tool in one turn (parallel execution)
-        is normal. A loop is the same call signature — name **and**
-        arguments — repeating across consecutive iterations. Same name
-        with different arguments (paged discovery, sweeping inputs,
-        retrying with a corrected parameter) counts as forward progress
-        and is not a loop.
+    def cost_of(
+        self,
+        prompt_tokens: int,
+        completion_tokens: int,
+        *,
+        cache_creation_tokens: int = 0,
+        cache_read_tokens: int = 0,
+    ) -> float | None:
+        """USD for a call of this size, or ``None`` when the prices are unknown.
+
+        ``cache_creation_tokens`` and ``cache_read_tokens`` are the counts
+        Anthropic (and Bedrock) report beside ``prompt_tokens``, priced at
+        their published multiples of the input price: a write at 1.25x, a
+        read at 0.1x. Left out, as they were, a cached Claude run looked
+        almost free and a ``max_cost_usd`` never stopped it. OpenAI-style
+        ``cached_tokens`` are inside ``prompt_tokens`` and stay at the full
+        input price, since the discount differs by provider: that overstates
+        a cached call rather than understating it.
         """
-        # Need at least threshold iterations with reasoning steps
-        if len(self.reasoning_steps) < self.tool_loop_threshold:
+        if self.input_price_per_mtok is None or self.output_price_per_mtok is None:
+            return None
+        input_tokens = (
+            prompt_tokens
+            + cache_creation_tokens * _CACHE_WRITE_MULTIPLIER
+            + cache_read_tokens * _CACHE_READ_MULTIPLIER
+        )
+        return (
+            input_tokens * self.input_price_per_mtok
+            + completion_tokens * self.output_price_per_mtok
+        ) / 1_000_000
+
+    def would_exceed_cost_budget(self, max_output_tokens: int) -> bool:
+        """Whether the next call could cross the spend budget, at its worst case.
+
+        The worst case is the current conversation as input (a char/4 estimate)
+        plus ``max_output_tokens`` of output. Checked *before* the call, which is
+        what stops one large turn: a check after the call only stops the next one.
+        """
+        if self.cost_budget_usd is None:
             return False
+        prompt_estimate = sum(
+            estimate_tokens(m.content)
+            + sum(len(str(tc.arguments or "")) for tc in m.tool_calls) // 4
+            for m in self.messages
+        )
+        worst = self.cost_of(prompt_estimate, max_output_tokens)
+        return worst is not None and self.cost_usd_used + worst > self.cost_budget_usd
 
-        # Check if last N iterations all used the exact same call set,
-        # where "call set" = the multiset of (name, args) signatures
-        # invoked in that step. Frozenset collapses parallel-duplicate
-        # calls within a single step, but since duplicate calls within a
-        # step are themselves not a loop signal, that collapse is fine.
-        recent_steps = self.reasoning_steps[-self.tool_loop_threshold :]
-        call_sets: list[frozenset[tuple[str, str]]] = []
-        for step in recent_steps:
-            if step.tool_calls:
-                call_sets.append(frozenset(_tool_call_signature(tc) for tc in step.tool_calls))
-            else:
-                return False  # An iteration without tools = not looping
+    @property
+    def tool_loop(self) -> ToolLoop | None:
+        """The loop the run's last steps are in, or ``None`` (see :mod:`locus.core.loops`).
 
-        if len(call_sets) < self.tool_loop_threshold:
-            return False
+        A loop is the same step — calls by name and arguments, and their
+        results — repeated back to back, or the same short cycle of steps
+        repeated whole. Re-reading a file between other work, the same tool
+        with other arguments, and a repeat whose result changed are progress.
+        """
+        return detect_tool_loop(
+            self.reasoning_steps,
+            threshold=self.tool_loop_threshold,
+            read_only_threshold=self.tool_loop_read_only_threshold,
+            read_only_tools=self.tool_loop_read_only_tools,
+        )
 
-        # All iterations used the exact same (name, args) call set
-        return len(set(call_sets)) == 1
+    @property
+    def has_tool_loop(self) -> bool:
+        """Whether the run's last steps are a loop (warned about or not)."""
+        return self.tool_loop is not None
+
+    def tool_loop_warned(self, loop: ToolLoop) -> bool:
+        """Whether the model has already been warned about ``loop``."""
+        return any(sig == loop.signature for sig, _ in self.tool_loop_warnings)
+
+    def with_tool_loop_warning(self, loop: ToolLoop) -> AgentState:
+        """Record that the model was warned about ``loop`` at this step."""
+        warnings = (*self.tool_loop_warnings, (loop.signature, len(self.reasoning_steps)))
+        return self.model_copy(update={"tool_loop_warnings": warnings})
+
+    @property
+    def tool_loop_persists(self) -> bool:
+        """Whether the run's loop went on past the point where it is warned about.
+
+        This is what stops a run. The runtime warns the model when a loop
+        reaches its threshold (:meth:`with_tool_loop_warning`); the warning is
+        the model's chance to change approach, and one more repeat is the
+        model ignoring it.
+        """
+        loop = self.tool_loop
+        return loop is not None and loop.past_warning
 
     @property
     def last_tool_calls(self) -> list[ToolCall]:
-        """Get tool calls from the last assistant message."""
+        """Get tool calls from the last assistant message of the current turn.
+
+        The scan stops at the most recent user message: calls made before it
+        belong to an earlier turn, and treating them as "last" made a new turn
+        on a thread whose previous turn ended with a terminal tool stop
+        immediately with ``terminal_tool`` before the model saw the message.
+        """
         for msg in reversed(self.messages):
+            if msg.role.value == "user":
+                return []
             if msg.role.value == "assistant" and msg.tool_calls:
                 return list(msg.tool_calls)
         return []
@@ -351,6 +481,9 @@ class AgentState(BaseModel):
         if self.token_budget and self.total_tokens_used >= self.token_budget:
             return True, "token_budget"
 
+        if self.cost_budget_usd is not None and self.cost_usd_used >= self.cost_budget_usd:
+            return True, "cost_budget"
+
         # Terminal tool always stops (both modes)
         if self.called_terminal_tool:
             return True, "terminal_tool"
@@ -363,7 +496,7 @@ class AgentState(BaseModel):
         if self.confidence >= self.confidence_threshold:
             return True, "confidence_met"
 
-        if self.has_tool_loop:
+        if self.tool_loop_persists:
             return True, "tool_loop"
 
         if self.iteration > 0 and self._has_assistant_message() and not self.last_tool_calls:
@@ -386,12 +519,11 @@ class AgentState(BaseModel):
         """Total tokens used. Returns real count if tracked, else char/4 estimate."""
         if self.total_tokens_used > 0:
             return self.total_tokens_used
-        # Fallback: rough estimate at 4 chars per token
-        total_chars = sum(
-            len(m.content or "") + sum(len(str(tc.arguments)) for tc in m.tool_calls)
+        # Fallback: rough estimate at 4 chars per token, images counted as images
+        return sum(
+            estimate_tokens(m.content) + sum(len(str(tc.arguments)) for tc in m.tool_calls) // 4
             for m in self.messages
         )
-        return total_chars // 4
 
     def to_checkpoint(self) -> dict[str, Any]:
         """Serialize state for checkpointing."""

@@ -23,7 +23,7 @@ def register_provider(prefix: str, factory: Callable[..., ModelProtocol]) -> Non
     Register a model provider.
 
     Args:
-        prefix: Provider prefix (e.g., "openai", "oci")
+        prefix: Provider prefix (e.g., "openai", "anthropic")
         factory: Factory function that takes model name and kwargs
     """
     _PROVIDERS[prefix] = factory
@@ -37,7 +37,7 @@ def get_model(model_string: str, **kwargs: Any) -> ModelProtocol:
 
     Examples:
         - "openai:gpt-4o"
-        - "oci:cohere.command-r-plus"
+        - "anthropic:claude-sonnet-4-6"
 
     Args:
         model_string: Model identifier in "provider:model" format
@@ -70,7 +70,7 @@ def list_providers() -> list[str]:
 
 def _register_defaults() -> None:
     """Register default providers on import."""
-    # OpenAI (Oracle partnership)
+    # OpenAI
     try:
         from locus.models.native.openai import OpenAIModel
 
@@ -96,14 +96,45 @@ def _register_defaults() -> None:
     except ImportError:
         pass
 
-    # Ollama (local LLMs)
+    # Azure OpenAI — OpenAI's models, but deployment-named URLs, an
+    # ``api-key`` header and a required ``api-version``, so it cannot ride
+    # the OpenAI-compatible table either. Same ``openai`` dependency as the
+    # OpenAI provider; no new package.
     try:
-        from locus.models.native.ollama import OllamaModel
+        from locus.models.native.azure import AzureOpenAIModel
 
         register_provider(
-            "ollama",
-            lambda m, **kw: cast("ModelProtocol", OllamaModel(model=m, **kw)),
+            "azure",
+            lambda m, **kw: cast("ModelProtocol", AzureOpenAIModel(model=m, **kw)),
         )
+    except ImportError:
+        pass
+
+    # Amazon Bedrock — its own wire protocol, so it cannot ride the
+    # OpenAI-compatible table below. One Converse-API client covers every
+    # model on the service. boto3 is an optional extra and is imported
+    # lazily inside the model, so this registration costs nothing to
+    # anyone who never names a ``bedrock:`` model.
+    try:
+        from locus.models.native.bedrock import BedrockModel
+
+        register_provider(
+            "bedrock",
+            lambda m, **kw: cast("ModelProtocol", BedrockModel(model=m, **kw)),
+        )
+    except ImportError:
+        pass
+
+    # OpenAI-compatible endpoints — Ollama, vLLM, LM Studio, llama.cpp,
+    # LiteLLM, Groq, Together, OpenRouter, DeepSeek, Mistral, xAI, Fireworks,
+    # Cerebras, Perplexity, NVIDIA NIM, plus a generic ``openai-compatible``
+    # escape hatch. Each is OpenAIModel pointed at a different base_url, so
+    # none of them adds a client dependency; the routing table lives in
+    # locus.models.providers.
+    try:
+        from locus.models.providers import register_compatible_providers
+
+        register_compatible_providers()
     except ImportError:
         pass
 

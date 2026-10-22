@@ -1,8 +1,9 @@
 # Structured Output
 
 Get a Pydantic object back from a model call instead of a string you
-have to re-parse. Every part below fires a real model call and prints
-a `[model call: X.XXs · prompt→completion tokens]` banner.
+have to re-parse — a typed ticket update the rest of the help desk can
+route on. Every part below fires a real model call and prints a
+`[model call: X.XXs · prompt→completion tokens]` banner.
 
 - `extract_json` / `parse_structured` — pull JSON out of a model reply
   and validate it against a Pydantic schema (a typed model the LLM
@@ -16,10 +17,10 @@ a `[model call: X.XXs · prompt→completion tokens]` banner.
 
 ## Run it
 
-OCI GenAI is the default — the notebook harness picks it when `~/.oci/config` exists (set `OCI_PROFILE` to choose a non-default profile):
+The bundled mock model is the default; set `LOCUS_MODEL_PROVIDER` for a live provider:
 
 ```bash
-LOCUS_MODEL_ID=openai.gpt-4.1 python examples/notebook_35_structured_output.py
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_35_structured_output.py
 ```
 
 Offline:
@@ -30,14 +31,13 @@ LOCUS_MODEL_PROVIDER=mock python examples/notebook_35_structured_output.py
 
 ## Prerequisites
 
-- An OCI profile with GenAI access, or `LOCUS_MODEL_PROVIDER` pointed at
-  `openai` / `anthropic` / `mock`.
+- `LOCUS_MODEL_PROVIDER` pointed at `openai` / `anthropic` /
+  `mock`, with the matching credentials.
 - A model that supports constrained JSON decoding for Part 8. The
-  `check_structured_output_capable()` helper exits cleanly under mock or
-  Cohere R-series.
+  `check_structured_output_capable()` helper exits cleanly under mock.
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_35_structured_output.py"
-```
+````

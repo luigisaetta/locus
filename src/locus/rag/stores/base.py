@@ -117,7 +117,7 @@ class VectorStore(Protocol):
     fast similarity search.
 
     Example:
-        >>> store = OracleVectorStore(dsn="...")
+        >>> store = InMemoryVectorStore()
         >>> await store.add(doc)
         >>> results = await store.search(query_embedding, limit=5)
     """

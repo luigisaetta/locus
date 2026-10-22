@@ -2,25 +2,29 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 """
-Build a workflow as a graph of nodes that pass state to each other.
+Notebook 16: Data-subject-request triage pipeline as a graph.
 
 A StateGraph is a directed graph where each node is an async function
 that takes the current state in and returns updates to merge back. Use
-it when one Agent isn't enough — multi-step pipelines, branching
-logic, fan-out / fan-in, human approval gates.
+it when one Agent isn't enough — here we build a privacy-request triage
+pipeline (parse → enrich → verdict) plus the fan-out and streaming
+shapes a data-protection workflow needs. Scenario: data subject access
+request (DSAR) intake under GDPR Article 15.
 
-- Nodes and edges: nodes do work, edges describe order.
+- Nodes and edges: nodes do triage work, edges describe order.
 - START and END: the two sentinel node ids that frame execution.
 - Sequential, parallel, and conditional flow on the same primitives.
 - GraphResult: final state plus per-node status, timing, and ordering.
 - Streaming: emit progress events from inside a node with emit_custom.
 
 Run it:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_22_basic_graph.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_16_basic_graph.py
 
-The default provider is OCI GenAI — auto-detected from ~/.oci/config.
-Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick an OCI model with
-LOCUS_MODEL_ID=openai.gpt-4.1 (or meta.llama-3.3-70b-instruct, etc.).
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER for a live provider.
+Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+provider: ollama, vllm, groq, together, openrouter, ...).
 """
 
 import asyncio
@@ -32,13 +36,13 @@ from locus.agent import Agent
 from locus.multiagent import END, START, StateGraph
 
 
-def _llm_call(
+async def _llm_call(
     prompt: str, *, system: str = "Reply in one short sentence.", max_tokens: int = 80
 ) -> str:
     """Run a one-shot Agent and print a timing/token banner. Used by every part."""
     agent = Agent(model=get_model(max_tokens=max_tokens), system_prompt=system)
     t0 = time.perf_counter()
-    res = agent.run_sync(prompt)
+    res = await agent.arun(prompt)
     dt = time.perf_counter() - t0
     print(
         f"  [model call: {dt:.2f}s · {res.metrics.prompt_tokens}→{res.metrics.completion_tokens} tokens]"
@@ -52,81 +56,87 @@ def _llm_call(
 
 
 async def example_first_graph():
-    """The smallest possible graph: START -> greet -> END."""
+    """The smallest possible graph: START -> assess -> END."""
     print("=== Part 1: A one-node graph ===\n")
 
     graph = StateGraph()
 
-    async def greet(inputs):
-        name = inputs.get("name", "World")
-        ai_line = _llm_call(
-            f"Greet {name} warmly in one sentence.",
-            system="You are a friendly assistant.",
+    async def assess(inputs):
+        subject = inputs.get("subject", "(no subject)")
+        ai_line = await _llm_call(
+            f"Give a one-sentence first-pass privacy-request assessment of a message "
+            f"with the subject '{subject}'.",
+            system="You are a data-protection request-triage assistant.",
         )
-        return {"greeting": ai_line}
+        return {"assessment": ai_line}
 
-    graph.add_node("greet", greet)
-    graph.add_edge(START, "greet")
-    graph.add_edge("greet", END)
+    graph.add_node("assess", assess)
+    graph.add_edge(START, "assess")
+    graph.add_edge("assess", END)
 
-    result = await graph.execute({"name": "Alice"})
+    result = await graph.execute({"subject": "Please delete all data you hold about me"})
 
-    print("Input:   name = 'Alice'")
-    print(f"Output:  greeting = '{result.final_state.get('greeting')}'")
+    print("Input:   subject = 'Please delete all data you hold about me'")
+    print(f"Output:  assessment = '{result.final_state.get('assessment')}'")
     print(f"Success: {result.success}")
     print()
 
 
 # =============================================================================
-# Part 2: A sequence of nodes
+# Part 2: A sequence of nodes — parse → enrich → verdict
 # =============================================================================
 
 
 async def example_sequence():
-    """Chain three nodes; each node's return value merges into shared state."""
-    print("=== Part 2: A sequence of nodes ===\n")
+    """Chain three triage nodes; each node's return value merges into shared state."""
+    print("=== Part 2: A sequence of nodes — parse → enrich → verdict ===\n")
 
     graph = StateGraph()
 
-    async def validate(inputs):
-        text = inputs.get("text", "")
+    async def parse(inputs):
+        request = inputs.get("request", "")
         return {
-            "text": text.strip(),
-            "is_valid": len(text.strip()) > 0,
+            "request": request.strip(),
+            "has_content": len(request.strip()) > 0,
         }
 
-    async def transform(inputs):
-        text = inputs.get("text", "")
+    async def enrich(inputs):
+        request = inputs.get("request", "")
         return {
-            "uppercase": text.upper(),
-            "word_count": len(text.split()),
+            "mentions_special_category": "health record" in request,
+            "token_count": len(request.split()),
         }
 
-    async def summarize(inputs):
-        wc = inputs.get("word_count")
-        ai = _llm_call(
-            f"In one short sentence, comment on a text with {wc} words "
-            f"that was {'valid' if inputs.get('is_valid') else 'invalid'}.",
+    async def verdict(inputs):
+        tc = inputs.get("token_count")
+        ai = await _llm_call(
+            f"In one short sentence, give a triage verdict for a {tc}-token DSAR "
+            f"that {'does' if inputs.get('mentions_special_category') else 'does not'} "
+            "mention special-category personal data.",
         )
         return {
-            "summary": f"{wc} words, valid={inputs.get('is_valid')} — {ai}",
+            "verdict": f"{tc} tokens, special_category={inputs.get('mentions_special_category')} — {ai}",
         }
 
-    graph.add_node("validate", validate)
-    graph.add_node("transform", transform)
-    graph.add_node("summarize", summarize)
+    graph.add_node("parse", parse)
+    graph.add_node("enrich", enrich)
+    graph.add_node("verdict", verdict)
 
-    graph.add_edge(START, "validate")
-    graph.add_edge("validate", "transform")
-    graph.add_edge("transform", "summarize")
-    graph.add_edge("summarize", END)
+    graph.add_edge(START, "parse")
+    graph.add_edge("parse", "enrich")
+    graph.add_edge("enrich", "verdict")
+    graph.add_edge("verdict", END)
 
-    result = await graph.execute({"text": "  hello world  "})
+    result = await graph.execute(
+        {"request": "  please export my health record and contact details  "}
+    )
 
-    print("Input:     text = '  hello world  '")
-    print(f"Validated: is_valid = {result.final_state.get('is_valid')}")
-    print(f"Uppercase: {result.final_state.get('uppercase')}")
-    print(f"Summary:   {result.final_state.get('summary')}")
+    print("Input:    request = '  please export my health record and contact details  '")
+    print(f"Parsed:   has_content = {result.final_state.get('has_content')}")
+    print(
+        f"Enriched: mentions_special_category = {result.final_state.get('mentions_special_category')}"
+    )
+    print(f"VerificationResult:  {result.final_state.get('verdict')}")
     print()
 
 
@@ -136,39 +146,44 @@ async def example_sequence():
 
 
 async def example_state_flow():
-    """Print what each node receives so you can watch state grow."""
+    """Print what each node receives so you can watch the request state grow."""
     print("=== Part 3: How state accumulates ===\n")
 
     graph = StateGraph()
 
-    async def step_a(inputs):
-        print(f"  Step A receives: {list(inputs.keys())}")
-        return {"a_output": "from A", "value": 10}
+    async def intake(inputs):
+        print(f"  Intake receives:    {list(inputs.keys())}")
+        return {"intake_note": "request ingested", "exposure_score": 10}
 
-    async def step_b(inputs):
-        print(f"  Step B receives: {list(inputs.keys())}")
-        value = inputs.get("value", 0)
-        return {"b_output": "from B", "doubled": value * 2}
+    async def correlate(inputs):
+        print(f"  Correlate receives: {list(inputs.keys())}")
+        exposure = inputs.get("exposure_score", 0)
+        # Two requests from the same data subject double the working exposure score.
+        return {"correlate_note": "matched a sibling request", "combined_exposure": exposure * 2}
 
-    async def step_c(inputs):
-        print(f"  Step C receives: {list(inputs.keys())}")
-        doubled = inputs.get("doubled", 0)
-        ai = _llm_call(
-            f"Briefly comment on a graph that doubled the value to {doubled}.",
+    async def score(inputs):
+        print(f"  Score receives:     {list(inputs.keys())}")
+        combined = inputs.get("combined_exposure", 0)
+        ai = await _llm_call(
+            f"Comment on a triage pipeline that raised a request's exposure score to {combined}.",
         )
-        return {"c_output": "from C", "final": doubled + 5, "ai_comment": ai}
+        return {
+            "score_note": "final score issued",
+            "final_exposure": combined + 5,
+            "ai_comment": ai,
+        }
 
-    graph.add_node("step_a", step_a)
-    graph.add_node("step_b", step_b)
-    graph.add_node("step_c", step_c)
+    graph.add_node("intake", intake)
+    graph.add_node("correlate", correlate)
+    graph.add_node("score", score)
 
-    graph.add_edge(START, "step_a")
-    graph.add_edge("step_a", "step_b")
-    graph.add_edge("step_b", "step_c")
-    graph.add_edge("step_c", END)
+    graph.add_edge(START, "intake")
+    graph.add_edge("intake", "correlate")
+    graph.add_edge("correlate", "score")
+    graph.add_edge("score", END)
 
     print("Executing graph...")
-    result = await graph.execute({"initial_data": True})
+    result = await graph.execute({"request_id": "DSAR-1042"})
 
     print("\nFinal state:")
     for key, value in result.final_state.items():
@@ -183,63 +198,66 @@ async def example_state_flow():
 
 
 async def example_parallel():
-    """Three independent nodes run concurrently, then converge in one."""
+    """Three independent enrichment nodes run concurrently, then converge in one."""
     print("=== Part 4: Fan-out and fan-in ===\n")
 
     graph = StateGraph()
     graph.config.parallel = True
 
-    async def analyze_sentiment(inputs):
-        text = inputs.get("text", "")
-        label = _llm_call(
-            f"Classify the sentiment of '{text}' as positive, negative, or "
-            "neutral. Reply with one word.",
-            system="Output one of: positive | negative | neutral. Nothing else.",
+    async def classify_sensitivity(inputs):
+        record = inputs.get("record", "")
+        label = await _llm_call(
+            f"Classify the sensitivity of the data in '{record}' as high, medium, or "
+            "low. Reply with one word.",
+            system="Output one of: high | medium | low. Nothing else.",
             max_tokens=10,
         )
-        return {"sentiment": label.lower()}
+        return {"sensitivity": label.lower()}
 
-    async def count_words(inputs):
-        text = inputs.get("text", "")
+    async def count_identifiers(inputs):
+        record = inputs.get("record", "")
         await asyncio.sleep(0.1)
-        return {"word_count": len(text.split())}
+        return {"identifier_count": record.count("@") + record.count("id:")}
 
-    async def detect_language(inputs):
+    async def check_consent(inputs):
         await asyncio.sleep(0.1)
-        return {"language": "en"}
+        # Mock consent-ledger lookup — invented data, clearly fake.
+        return {"consent_status": "withdrawn-no-active-basis"}
 
     async def combine_results(inputs):
         return {
-            "analysis": {
-                "sentiment": inputs.get("sentiment"),
-                "words": inputs.get("word_count"),
-                "lang": inputs.get("language"),
+            "enrichment": {
+                "sensitivity": inputs.get("sensitivity"),
+                "identifiers": inputs.get("identifier_count"),
+                "consent": inputs.get("consent_status"),
             }
         }
 
-    graph.add_node("sentiment", analyze_sentiment)
-    graph.add_node("words", count_words)
-    graph.add_node("language", detect_language)
+    graph.add_node("sensitivity", classify_sensitivity)
+    graph.add_node("identifiers", count_identifiers)
+    graph.add_node("consent", check_consent)
     graph.add_node("combine", combine_results)
 
-    graph.add_edge(START, "sentiment")
-    graph.add_edge(START, "words")
-    graph.add_edge(START, "language")
+    graph.add_edge(START, "sensitivity")
+    graph.add_edge(START, "identifiers")
+    graph.add_edge(START, "consent")
 
-    graph.add_edge("sentiment", "combine")
-    graph.add_edge("words", "combine")
-    graph.add_edge("language", "combine")
+    graph.add_edge("sensitivity", "combine")
+    graph.add_edge("identifiers", "combine")
+    graph.add_edge("consent", "combine")
 
     graph.add_edge("combine", END)
 
     import time
 
     start = time.time()
-    result = await graph.execute({"text": "This is a great example!"})
+    result = await graph.execute(
+        {"record": "subject id:8842 email jordan@example.com phone +1-555-0100"}
+    )
     elapsed = (time.time() - start) * 1000
 
-    print("Input: 'This is a great example!'")
-    print(f"Analysis: {result.final_state.get('analysis')}")
+    print("Input: 'subject id:8842 email jordan@example.com phone +1-555-0100'")
+    print(f"Enrichment: {result.final_state.get('enrichment')}")
     print(f"Time: {elapsed:.0f}ms (parallel nodes run concurrently)")
     print()
 
@@ -255,16 +273,18 @@ async def example_results():
 
     graph = StateGraph()
 
-    async def process(inputs):
-        v = inputs.get("value", 0)
-        comment = _llm_call(f"In one sentence, comment on doubling {v}.")
-        return {"processed": True, "result": v * 2, "comment": comment}
+    async def normalize(inputs):
+        v = inputs.get("raw_score", 0)
+        comment = await _llm_call(
+            f"In one sentence, comment on normalizing a raw exposure score of {v}."
+        )
+        return {"normalized": True, "exposure_score": v * 2, "comment": comment}
 
-    graph.add_node("process", process)
-    graph.add_edge(START, "process")
-    graph.add_edge("process", END)
+    graph.add_node("normalize", normalize)
+    graph.add_edge(START, "normalize")
+    graph.add_edge("normalize", END)
 
-    result = await graph.execute({"value": 21})
+    result = await graph.execute({"raw_score": 21})
 
     print("GraphResult fields:")
     print(f"  .success         = {result.success}")
@@ -291,30 +311,32 @@ async def example_streaming():
 
     graph = StateGraph()
 
-    async def step1(inputs):
+    async def enrich(inputs):
         # emit_custom — push an arbitrary payload onto the event stream
-        # while the node is still running. Useful for long-running steps.
-        await emit_custom({"phase": "starting", "value": inputs.get("x", 0)})
-        ai = _llm_call(
-            f"In one sentence, congratulate someone who reached {inputs.get('x', 0) * 2}.",
+        # while the node is still running. Useful for long-running lookups.
+        await emit_custom({"phase": "starting", "record_count": inputs.get("records", 0)})
+        ai = await _llm_call(
+            f"In one sentence, narrate a discovery pass that grew the matched-record list "
+            f"to {inputs.get('records', 0) * 2} entries.",
         )
         await emit_custom({"phase": "halfway"})
-        return {"y": inputs.get("x", 0) * 2, "ai": ai}
+        return {"matched_records": inputs.get("records", 0) * 2, "ai": ai}
 
-    async def step2(inputs):
-        ai = _llm_call(
-            f"In one short sentence, narrate adding 10 to {inputs.get('y', 0)}.",
+    async def report(inputs):
+        ai = await _llm_call(
+            f"In one short sentence, narrate adding 10 redaction notes to "
+            f"{inputs.get('matched_records', 0)} records in a DSAR response pack.",
         )
-        return {"z": inputs.get("y", 0) + 10, "ai": ai}
+        return {"report_entries": inputs.get("matched_records", 0) + 10, "ai": ai}
 
-    graph.add_node("step1", step1)
-    graph.add_node("step2", step2)
-    graph.add_edge(START, "step1")
-    graph.add_edge("step1", "step2")
-    graph.add_edge("step2", END)
+    graph.add_node("enrich", enrich)
+    graph.add_node("report", report)
+    graph.add_edge(START, "enrich")
+    graph.add_edge("enrich", "report")
+    graph.add_edge("report", END)
 
     print("Streaming UPDATES + CUSTOM events as they arrive:")
-    async for event in graph.stream({"x": 21}, mode=StreamMode.UPDATES):
+    async for event in graph.stream({"records": 21}, mode=StreamMode.UPDATES):
         if event.mode == StreamMode.CUSTOM:
             print(f"  [CUSTOM]  {event.node_id}: {event.data}")
         else:
@@ -336,13 +358,15 @@ async def example_graph_with_llm():
     async def ai_summarize(inputs):
         import time as _t
 
-        topic = inputs.get("topic", "")
+        activity = inputs.get("activity", "")
         agent = Agent(
             model=get_model(max_tokens=80),
-            system_prompt="You write one-sentence factual summaries.",
+            system_prompt="You write one-sentence factual summaries for DPO handover notes.",
         )
         t0 = _t.perf_counter()
-        result = agent.run_sync(f"Summarize the topic '{topic}' in one sentence.")
+        result = await agent.arun(
+            f"Summarize the processing activity '{activity}' in one sentence."
+        )
         dt = _t.perf_counter() - t0
         print(
             f"  [model call: {dt:.2f}s · {result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]"
@@ -353,7 +377,9 @@ async def example_graph_with_llm():
     graph.add_edge(START, "summarize")
     graph.add_edge("summarize", END)
 
-    result = await graph.execute({"topic": "Oracle Cloud Generative AI"})
+    result = await graph.execute(
+        {"activity": "marketing analytics joining email opens to CRM profiles"}
+    )
     print(f"AI summary: {result.final_state.get('summary')}")
     print()
 
@@ -365,7 +391,7 @@ async def example_graph_with_llm():
 
 async def main():
     print("=" * 60)
-    print("Notebook 17: Basic graph")
+    print("Notebook 16: Data-subject-request triage pipeline as a graph")
     print("=" * 60)
     print()
 
@@ -378,7 +404,7 @@ async def main():
     await example_graph_with_llm()
 
     print("=" * 60)
-    print("Next: Notebook 18 — Conditional routing")
+    print("Next: Notebook 17 — Routing requests by privacy risk")
     print("=" * 60)
 
 

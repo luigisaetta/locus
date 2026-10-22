@@ -1,13 +1,14 @@
 # Hooks
 
-A hook is a callback the agent calls at six fixed moments in a run:
-before / after the run starts, before / after each model call, before /
-after each tool call. Everything that should happen *around* the
+A hook is a callback the agent calls at eight fixed moments in a run:
+before / after the run starts, before / after each loop iteration,
+before / after each model call, before / after each tool call.
+Everything that should happen *around* the
 agent's primary task — logging, OpenTelemetry traces, retry, guardrails,
 PII redaction, an LLM-as-judge approval gate on tool calls — lives in
 a hook.
 
-You can use the ones Oracle Generative AI – Multi-Agent Locus SDK
+You can use the ones Locus
 ships (covers most production needs out of the box) or write your own
 — a hook is a small subclass with the methods it cares about.
 
@@ -22,7 +23,7 @@ ships (covers most production needs out of the box) or write your own
 | Add a tool to the registry | use [`tools=[...]` on Agent](tools.md) |
 | Change the system prompt mid-run | hooks can read state but not mutate the prompt; use a [skill](skills.md) instead |
 
-## The six lifecycle phases
+## The eight lifecycle phases
 
 A hook can subscribe to any of these. Each method receives a typed,
 write-protected event object.
@@ -31,6 +32,8 @@ write-protected event object.
 |---|---|---|
 | `on_before_invocation` | once, when `agent.run()` starts | initialise per-run state, open spans |
 | `on_after_invocation` | once, after the agent finishes | flush metrics, close spans |
+| `on_iteration_start` | at the top of each loop iteration | per-iteration budgets, step counters |
+| `on_iteration_end` | at the bottom of each loop iteration | per-iteration accounting, early termination |
 | `on_before_model_call` | before each request to the model | redact PII, count tokens |
 | `on_after_model_call` | after each response from the model | log usage, retry on empty |
 | `on_before_tool_call` | before each tool body runs | guardrails, audit, approval gates |
@@ -95,8 +98,8 @@ the *real* side effect lives in the host process, not in the tool body.
 
 ```python
 agent = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[search, book_flight],
+    model="{{ locus_example_model }}",
+    tools=[lookup_order, issue_refund],
     hooks=[AuditHook()],
 )
 ```
@@ -120,14 +123,14 @@ from locus.hooks.builtin import (
 )
 
 agent = Agent(
-    model="oci:openai.gpt-5.5",
+    model="{{ locus_example_model }}",
     tools=[...],
     hooks=[
         StructuredLoggingHook(),       # JSON logs at every phase
         TelemetryHook(),               # OTel spans + metrics + histograms
-        ModelRetryHook(max_retries=3), # backoff on empty / rate-limited responses
+        ModelRetryHook(max_retries=3), # backoff on empty model responses
         GuardrailsHook(),              # PII / SQL / XSS / command-injection
-        SteeringHook(approver=second_model),  # LLM-as-judge tool approval
+        SteeringHook(model=judge_model),  # LLM-as-judge tool approval
     ],
 )
 ```
@@ -145,10 +148,17 @@ you want the API surface but no actual export (useful for tests).
 
 ### `ModelRetryHook`
 
-Backoff retries on empty model responses, rate-limit errors, and
-transient connection failures. Configurable `max_retries` and
-`backoff_seconds`. Doesn't intercept your tool calls — only the
-model layer.
+Backoff retries on **empty model responses** — a reply with no content
+and no tool calls. Configurable `max_retries`, `initial_delay`,
+`max_delay`, and `backoff_factor`. Doesn't intercept your tool calls —
+only the model layer.
+
+!!! warning "It does not retry errors"
+    `on_after_model_call` has no exception handling, so rate limits,
+    5xx responses, and connection failures are **not** retried here.
+    Those are handled inside the provider client instead — the OpenAI
+    and Anthropic models take `max_retries` and `request_timeout` of
+    their own. See [Retry strategies](retry.md).
 
 ### `GuardrailsHook` / `ContentFilterHook`
 
@@ -159,14 +169,18 @@ redact at the boundary.
 
 ### `SteeringHook` — LLM-as-judge tool approval
 
-A *second model* sees each tool call before it runs and votes
-"approve / reject / rewrite". Use this when the cost of a wrong tool
-call is higher than the cost of a second model round-trip.
+A *second model* evaluates each tool call before it runs and emits
+one of `PROCEED / GUIDE / INTERRUPT` (allow, cancel with feedback, or
+pause for a human). Use this when the cost of a wrong tool call is
+higher than the cost of a second model round-trip. The `model=` is a
+model instance, not a provider string:
 
 ```python
+from locus.models import AnthropicModel
+
 agent = Agent(
     ...,
-    hooks=[SteeringHook(approver="oci:openai.gpt-5.5")],
+    hooks=[SteeringHook(model=AnthropicModel(model="claude-sonnet-4-6"))],
 )
 ```
 
@@ -178,7 +192,7 @@ setup.
 
 Reach for the named constants in `HookPriority` —
 `HookPriority.SECURITY_MAX`, `HookPriority.OBSERVABILITY_MIN`,
-`HookPriority.BUSINESS_LOGIC_MIN`, etc. — so the intent is obvious in
+`HookPriority.BUSINESS_MIN`, etc. — so the intent is obvious in
 code review. The underlying number bands are:
 
 | Range | Intended use |
@@ -190,16 +204,19 @@ code review. The underlying number bands are:
 
 ## Write-protected events — by design
 
-Event objects are frozen Pydantic models. You **cannot** accidentally
-mutate them from a hook — try and you get a `ValidationError`. The
-methods that *do* let hooks steer the agent (`event.cancel()`,
-`event.retry()`, `event.replace_arguments(...)`) are explicit and
-named for what they do, so the intent is unambiguous in a review:
+Event objects are `ProtectedEvent` instances with a custom
+`__setattr__`: each event declares a small `_writable` set, and writing
+any other field raises `AttributeError`. The fields that *do* let hooks
+steer the agent are plain attribute assignments — on
+`BeforeToolCallEvent` you can set `event.arguments` (rewrite the inputs)
+and `event.cancel` (skip the call); on `AfterToolCallEvent` you can set
+`event.result` and `event.retry`. Setting `cancel` to a string records
+the reason:
 
 ```python
 async def on_before_tool_call(self, event):
     if "DROP TABLE" in str(event.arguments):
-        event.cancel(reason="SQL injection blocked by GuardrailsHook")
+        event.cancel = "SQL injection blocked by GuardrailsHook"
 ```
 
 Compare to a callback-based system where any code can monkey-patch
@@ -211,17 +228,16 @@ any field; this is intentionally tight.
 |---|---|
 | Hook never fires | Forgot to pass it on `Agent(hooks=[...])`. The `HookRegistry` only sees what you register. |
 | Hook fires in the wrong order | Set `priority` explicitly. The default priority is intentionally mid-range so security hooks always come before yours. |
-| `ValidationError: cannot mutate frozen instance` | You tried to write `event.foo = bar`. Hooks observe, not mutate; use the explicit steering methods. |
+| `AttributeError: Cannot set 'foo' … read-only` | You tried to write a non-writable field. Only the documented steering fields are assignable (`arguments`/`cancel` on before-tool, `result`/`retry` on after-tool); everything else is observe-only. |
 | `on_after_tool_call` doesn't see the result | The tool raised. Check `event.error` instead of `event.result`. |
-| `on_after_tool_call` doesn't see the arguments / call id | Pre-`0.2.0b4` event payload. Upgrade — `event.arguments` and `event.tool_call_id` were added so hooks can build host-side action queues without a separate `before`-hook stash. |
 | Telemetry spans aren't exported | `TelemetryHook` needs an OTel exporter configured upstream — see [Observability](observability.md). |
 
 ## Source and examples
 
-- [`HookProvider` and `HookOrchestrator`](https://github.com/oracle-samples/locus/blob/main/src/locus/hooks/provider.py)
-- [Built-in hooks](https://github.com/oracle-samples/locus/tree/main/src/locus/hooks/builtin)
-- [`notebook_12_agent_hooks.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_12_agent_hooks.py) — write your first hook.
-- [`notebook_14_hooks_advanced.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_14_hooks_advanced.py) — guardrails + steering, end to end.
+- [`HookProvider` and `HookOrchestrator`](https://github.com/oracle/locus/blob/main/src/locus/hooks/provider.py)
+- [Built-in hooks](https://github.com/oracle/locus/tree/main/src/locus/hooks/builtin)
+- [`notebook_12_agent_hooks.py`](https://github.com/oracle/locus/blob/main/examples/notebook_12_agent_hooks.py) — write your first hook.
+- [`notebook_14_hooks_advanced.py`](https://github.com/oracle/locus/blob/main/examples/notebook_14_hooks_advanced.py) — guardrails + steering, end to end.
 
 ## See also
 

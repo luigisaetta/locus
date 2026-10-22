@@ -1,66 +1,45 @@
-# Emergent Routing
+# Notebook 34: emergent incident routing — the model picks the specialist protocol
 
-[Notebook 53](notebook_58_cognitive_router.md) covers the default
-deterministic router: the LLM fills a typed `GoalFrame`, then
-`_rank_key` picks a protocol via a four-element tuple comparison.
+The default router (Notebook 58) is deterministic: the LLM fills a
+``GoalFrame``, then ``_rank_key`` picks a protocol via tuple
+comparison. Reproducible, auditable, rule-based — exactly what an
+on-call lead wants from an incident router.
 
 This notebook covers the opt-in second mode. When multiple protocols
-pass the filter, an `LLMProtocolPicker` asks the model to make the
-last-mile choice and records its rationale on the
-`router.protocol.selected` event.
+pass the filter — say a latency regression that could go to the
+service-mesh specialist or the capacity-planning specialist — an
+``LLMProtocolPicker`` asks the model to make the last-mile choice and
+records its rationale on the ``router.protocol.selected`` event. Moving
+*only* the disambiguation step to the model keeps the routing audit
+trail intact, which matters when the router itself can fan work out to
+agents that touch production infrastructure.
 
-## When to reach for it
+- Filtering, policy gating, capability binding, and builder dispatch
+  stay rule-based. Only the disambiguation step moves to the model.
+- The picker short-circuits when only one candidate survives the
+  filter — no extra LLM call, no extra token spend.
+- If the picker raises or returns an unknown protocol id, the compiler
+  falls back to ``_rank_key`` and emits
+  ``router.protocol.picker_fallback`` so the degradation is
+  observable.
+- The same five on-call requests run through both routers side by
+  side. Rows marked ``≠`` are where the two modes disagreed.
 
-The rule-based ranker is the right default — reproducible, auditable,
-free of model latency. Use the emergent picker when:
+Run it:
+    .venv/bin/python examples/notebook_34_emergent_routing.py
 
-- Custom protocols are registered alongside the built-ins and the
-  cost/complexity heuristic doesn't capture their actual fit.
-- You want the model's **rationale** captured as part of the audit
-  trail.
-- The frame's `primary_goal` is one where multiple protocols qualify
-  (e.g. `COMPARE` → both `specialist_fanout` and `debate`) and the
-  pick depends on something the frame alone doesn't encode.
+The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
+(or anthropic) and the matching credentials to use a live model. Set
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs — the picker will
+emerge with its mock rationale.
 
-## What stays rule-based
+Prerequisites:
 
-The picker is strictly limited to disambiguation. The compiler still:
-
-1. **Filters candidates** by `handles`, `risk_max`, and
-   `requires_capabilities` before the picker sees anything.
-2. **Short-circuits** when only one candidate survives — no LLM call,
-   no extra tokens.
-3. **Falls back** to `_rank_key` if the picker raises or returns an
-   unknown id; emits `router.protocol.picker_fallback` so the
-   degradation is observable.
-4. **Runs PolicyGate** after the pick — same risk/approval gating
-   regardless of which mode chose the protocol.
-
-## Run
-
-```bash
-python examples/notebook_34_emergent_routing.py
-```
-
-The default provider is OCI Generative AI. With `~/.oci/config`
-present both routers talk to a live OCI model; canonical picks are
-`openai.gpt-4.1` or `meta.llama-3.3-70b-instruct`. Set
-`LOCUS_MODEL_PROVIDER=mock` for offline runs.
-
-You'll see five prompts dispatched through both routers side by side.
-Rows marked `≠` are where the two modes disagreed — the picker's
-rationale (on the SSE event) explains why.
-
-## See also
-
-- [Notebook 53 — cognitive router (default rule-based path)](notebook_58_cognitive_router.md)
-- [Concepts: cognitive router](../concepts/router.md) — the
-  filter-then-pick invariant plus observability schema.
-- [Notebook 27 — orchestrator pattern](notebook_26_orchestrator_pattern.md)
-  — for emergent coordination *inside* a protocol.
+- Notebook 35 (structured output).
+- Notebook 58 (cognitive router — the default rule-based path).
 
 ## Source
 
-```python
+````python
 --8<-- "examples/notebook_34_emergent_routing.py"
-```
+````

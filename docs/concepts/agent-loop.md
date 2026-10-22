@@ -1,22 +1,20 @@
 # The agent loop
 
-Every Oracle Generative AI – Multi-Agent Locus SDK agent runs the same
+Every Locus agent runs the same
 loop. Four named nodes (`Think → Execute → Reflect → Terminate`), one
 router that decides what runs next, one typed event stream, one piece of
 immutable state that flows through. This page is the architectural
 reference — what each node does, why it exists, what it emits, and how
 to extend it.
 
-![Agent loop — Think → Execute → Reflect → Terminate, with idempotent dedupe at Execute, Reflexion and Causal at Reflect, and composable termination algebra at Terminate](../img/agent-loop.svg)
+{{ locus_diagram agent-loop }}
 
 The loop is implemented in
-[`src/locus/loop/`](https://github.com/oracle-samples/locus/tree/main/src/locus/loop)
-and is composed of four files:
-[`react.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/loop/react.py) (the runner),
-[`nodes.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/loop/nodes.py) (Think / Execute / Reflect / Terminate),
-[`router.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/loop/router.py) (transitions),
-and [`runner.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/loop/runner.py)
-(the loop driver that wires the nodes together).
+[`src/locus/agent/runtime_loop.py`](https://github.com/oracle/locus/blob/main/src/locus/agent/runtime_loop.py):
+`AgentRuntimeMixin.run`, which `Agent` mixes in. The separate
+[`src/locus/loop/`](https://github.com/oracle/locus/tree/main/src/locus/loop)
+package is a deprecated second ReAct implementation that `Agent` has
+never used.
 
 ## Origin: ReAct, then refinement
 
@@ -29,19 +27,11 @@ The SDK keeps the spirit and adds three things:
 - **Action becomes Execute** — a real node in the graph that owns
   tool dispatch *and* idempotency dedup, not a callback.
 - **Reflect becomes its own node** — a structured self-evaluation step
-  that runs *between* Execute and the next Think. The router can route
-  to Reflect on a fixed cadence, on tool errors, or when loop-detection
-  trips.
+  that runs *between* Execute and the next Think, when Reflexion is
+  configured and its interval is due.
 - **Terminate becomes algebra** — stopping is a tree of typed conditions
-  composed with `&` and `|`, evaluated after every iteration.
-
-```text
-                ┌──── another iteration ─────┐
-                │                            ▼
-   ┌────────┐    ┌────────┐    ┌─────────┐    ┌────────────┐
-   │  Think │───▶│ Execute│───▶│ Reflect │───▶│ Terminate? │──── done
-   └────────┘    └────────┘    └─────────┘    └────────────┘
-```
+  composed with `&` and `|`, evaluated at the start of every iteration,
+  before Think.
 
 ## State
 
@@ -57,9 +47,9 @@ The state value object carries:
   system prompt, the user's prompt, every model message, and every
   tool result.
 - **`tool_executions`** — a chronological list of every tool call,
-  its arguments, its result, and a hash of `(name, kwargs)` used by
-  Execute for idempotent dedup.
-- **`iterations`** — the running iteration counter, consumed by
+  its arguments and its result (or error), which Execute searches for
+  idempotent dedup.
+- **`iteration`** — the running iteration counter, consumed by
   termination conditions.
 - **`metadata`** — a free-form dict for hooks and applications to
   thread their own data.
@@ -72,9 +62,11 @@ fire. It emits a `ThinkEvent` with the model's reasoning content (when
 the provider exposes it — extended-thinking models do; older models
 don't) and a `ModelChunkEvent` per streamed token.
 
-If the model returned text and no tool calls, the router transitions
-straight to Terminate. If it returned tool calls, the router goes
-to Execute.
+If the model made no tool calls, the run ends, after the grounding
+pass when grounding is on (an answer that fails it can send the loop
+round again). That is the default `completion_mode="auto"`;
+`"explicit"` keeps looping instead. If the model made tool calls, the
+loop goes to Execute.
 
 ## Execute
 
@@ -87,55 +79,71 @@ behaviours make it different from a "just run the function" callback:
    cached result is returned; the body never runs. The model can
    retry, loop, or panic without firing the tool a second time.
    Implementation:
-   [`_find_matching_execution()` `loop/nodes.py:114`](https://github.com/oracle-samples/locus/blob/main/src/locus/loop/nodes.py#L114-L144) — called from `ExecuteNode.execute` at [`loop/nodes.py:195`](https://github.com/oracle-samples/locus/blob/main/src/locus/loop/nodes.py#L195).
+   [`find_matching_execution()` `tools/executor.py:21`](https://github.com/oracle/locus/blob/main/src/locus/tools/executor.py#L21) — called from `_maybe_cached_idempotent_result` in [`agent/runtime_loop.py`](https://github.com/oracle/locus/blob/main/src/locus/agent/runtime_loop.py).
 
 2. **Parallel dispatch.** Tool calls returned in the same model
-   response fire concurrently. Execute awaits them all before
-   returning to the router. Errors in one tool don't cancel the
+   response fire concurrently. Execute awaits them all before the
+   loop moves on. Errors in one tool don't cancel the
    others; each tool's error becomes a tool-error message in the
    state.
 
-Execute emits `ToolStartEvent` and `ToolCompleteEvent` per call.
-Cached short-circuits emit a `ToolCacheHitEvent` so the run-trace
-shows them distinctly.
+Execute emits `ToolStartEvent` and `ToolCompleteEvent` per call. A
+cached short-circuit still emits a plain `ToolCompleteEvent` (there is
+no separate cache-hit event type) — the dedup is recorded on state
+instead: the `ToolExecution` is flagged `idempotent_cache_hit=True`, so
+the run-trace can still tell a re-fired call from a fresh one.
 
 ## Reflect
 
 The Reflect node runs a structured self-evaluation between Execute
-and the next Think. It's gated — the router decides when to Reflect
-rather than going straight back to Think:
+and the next Think. It's gated on a fixed cadence, and otherwise
+control goes straight back to Think:
 
-- **Fixed cadence.** `reflexion_interval=N` reflects every N
-  iterations (default disabled).
-- **On tool error.** Reflect always runs after a tool that raised.
-- **On loop detection.** The Reflector tracks the recent
-  tool-execution sequence and triggers Reflect when it spots a
-  repeating pattern.
+- **Fixed cadence.** `reflexion=ReflexionConfig(evaluate_every_n_iterations=N)`
+  reflects on every iteration whose number is a multiple of N;
+  `reflexion=True` uses N=1, every iteration. Reflexion is off by
+  default.
+
+That interval is the only trigger. Tool errors and repeating tool
+patterns are what the Reflector looks at once it runs, not reasons to
+run it. Separately, in the default `completion_mode="auto"`, the loop
+ends the run with `tool_loop` when the same tool calls with the same
+arguments repeat across `tool_loop_threshold` (default 3) consecutive
+iterations, whether or not Reflexion is on.
 
 The Reflector itself
-([`Reflector` class — `reasoning/reflexion.py:70`](https://github.com/oracle-samples/locus/blob/main/src/locus/reasoning/reflexion.py#L70))
-asks the model to evaluate its last step, adjusts a confidence
-score, and emits a `ReflectEvent` carrying the judgment text and
-new confidence. The next Think sees the reflection in its message
-stream.
+([`Reflector` class — `reasoning/reflexion.py:69`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/reflexion.py#L69))
+scores the iteration without calling a model: it checks recent
+iterations for a repeating tool pattern, counts the iteration's
+successful and failed tool calls, and adjusts a confidence score. The
+loop then emits a `ReflectEvent` carrying the `assessment`,
+`guidance`, and `new_confidence`. When the reflection carries
+guidance, the loop adds it to the messages as a system message
+(unless `include_guidance=False`), so the next Think sees it.
 
-Two complementary reasoning add-ons share the Reflect node:
+Two complementary reasoning add-ons:
 
-- **Grounding** — scores the agent's recent claims against tool
-  results (rule-based by default; LLM-as-judge when configured).
-- **Causal** — builds a graph of cause-effect relations from the
-  tool-execution trace and surfaces cycles or contradictions.
+- **Grounding** — runs on the final answer, before it is returned
+  (default `completion_mode="auto"` only, only when the run actually
+  called tools, and not on the part of a run continued with
+  `agent.resume()` after an interrupt or hold): a judge model scores
+  each claim extracted from the answer against the tool results, and a
+  failing score injects replan guidance and re-enters the loop, up to
+  `max_replans` times (default 2). Off by default; switch on via `Agent(grounding=True)`.
+- **Causal** — a standalone `build_causal_chain()` builder that turns
+  the events your agent surfaced into a cause-effect graph and flags
+  cycles or contradictions. Run it over a finished trace; it isn't an
+  `Agent(...)` flag.
 
-Both are off by default and switch on via `Agent(grounding=True)` /
-`Agent(causal=True)`. Source:
-[`GroundingEvaluator` `reasoning/grounding.py:106`](https://github.com/oracle-samples/locus/blob/main/src/locus/reasoning/grounding.py#L106) ·
-[`CausalChain` `reasoning/causal.py:160`](https://github.com/oracle-samples/locus/blob/main/src/locus/reasoning/causal.py#L160).
+Source:
+[`GroundingEvaluator.evaluate_with_llm` `reasoning/grounding.py:420`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/grounding.py#L420) ·
+[`build_causal_chain` `reasoning/causal.py`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/causal.py).
 
 ## Terminate
 
-After every iteration the router checks the agent's `terminate`
-condition. The condition is a typed object — `MaxIterations`,
-`TokenLimit`, `TimeLimit`, `NoToolCalls`, `ToolCalled`,
+At the start of every iteration, before Think, the loop checks the
+agent's `termination` condition. The condition is a typed object —
+`MaxIterations`, `TokenLimit`, `TimeLimit`, `NoToolCalls`, `ToolCalled`,
 `ConfidenceMet`, `TextMention`, or `CustomCondition` — composable
 with `&` (And) and `|` (Or):
 
@@ -145,36 +153,41 @@ from locus.core.termination import (
 )
 
 terminate = (
-    ToolCalled("submit_po") & ConfidenceMet(0.9)
+    ToolCalled("issue_refund") & ConfidenceMet(0.9)
 ) | MaxIterations(10) | TokenLimit(15_000)
 ```
 
 The composite itself is a `TerminationCondition` whose `check()`
 walks the tree and short-circuits on the first satisfied branch. The
-router emits a `TerminateEvent` carrying the satisfied condition's
-name + reason, then exits the loop.
+loop emits a `TerminateEvent` carrying the satisfied condition's
+reason, then exits.
 
 Source:
-[`src/locus/core/termination.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/core/termination.py).
+[`src/locus/core/termination.py`](https://github.com/oracle/locus/blob/main/src/locus/core/termination.py).
 
 ## The router
 
-Transitions between nodes are decided by
-[`Router` class — `loop/router.py:36`](https://github.com/oracle-samples/locus/blob/main/src/locus/loop/router.py#L36) (the `route_from_reflect` rule lives at [line 126](https://github.com/oracle-samples/locus/blob/main/src/locus/loop/router.py#L126)).
-It is a pure function of `(current_node, state)` returning the next
-node — no hidden state, no side effects, no surprises. Three rules:
+There is no separate router object: transitions between nodes are
+the control flow of `AgentRuntimeMixin.run` in
+[`agent/runtime_loop.py`](https://github.com/oracle/locus/blob/main/src/locus/agent/runtime_loop.py).
+(The `Router` class in the deprecated `locus/loop/` package is not on
+this path.) The rules:
 
 | From | To | When |
 |---|---|---|
-| Think | Execute | the model returned tool calls |
-| Think | Terminate | the model returned text only |
-| Execute | Reflect | the cadence / error / loop-detection rule fires |
-| Execute | Think | otherwise |
-| Reflect | Think | always (Reflect feeds back into the next Think) |
-| any | Terminate | `terminate.check(state)` returns true |
+| iteration start | Terminate | a termination check fires (see [Terminate](#terminate)) |
+| iteration start | Think | otherwise |
+| Think | Execute | the model made tool calls |
+| Think | Terminate | no tool calls, in `completion_mode="auto"` — through the grounding pass first when grounding is on and the run has called tools |
+| grounding pass | next iteration | the answer fails grounding and replans remain |
+| Execute | Reflect | Reflexion is configured and the iteration number is a multiple of `evaluate_every_n_iterations` |
+| Execute | next iteration | otherwise |
+| Reflect | next iteration | always (Reflect feeds back into the next Think) |
 
-Termination is checked after every node, not just at the top of the
-loop, so an agent can stop mid-cycle if a condition fires.
+Termination is checked once per iteration, at the top of the loop
+before Think, not after every node. A condition that becomes true
+during Execute or Reflect ends the run at the next iteration boundary,
+before the next model call.
 
 ## Events
 
@@ -183,12 +196,12 @@ observe but never mutate:
 
 | Event | Emitted by |
 |---|---|
-| `ThinkEvent` | Think, when the model returns reasoning |
+| `ThinkEvent` | Think, once per iteration |
 | `ModelChunkEvent` | Think, per streamed chunk |
 | `ToolStartEvent` | Execute, before each tool fires |
 | `ToolCompleteEvent` | Execute, after each tool returns (sets `error` on failure) |
 | `ReflectEvent` | Reflect, after each self-evaluation |
-| `GroundingEvent` | Reflect, after each grounding pass |
+| `GroundingEvent` | the final-answer grounding pass |
 | `InterruptEvent` | Execute, when a tool requests human input |
 | `TerminateEvent` | Terminate, when the loop exits |
 
@@ -198,51 +211,62 @@ logging.
 
 ## Hooks
 
-Hooks are how you observe and *steer* the loop without forking it.
-Each hook receives every event and can return one of three control
-directives:
+Hooks are how you observe and *steer* the loop without forking it. A
+hook subclasses `HookProvider` (`locus.hooks.provider.HookProvider`)
+and implements the lifecycle callbacks it cares about —
+`on_before_invocation` / `on_after_invocation`,
+`on_iteration_start` / `on_iteration_end`,
+`on_before_tool_call` / `on_after_tool_call`,
+`on_before_model_call` / `on_after_model_call`. There is no
+`Continue`/`Cancel`/`Retry` directive return type. Instead a hook
+steers the loop two ways:
 
-- `Continue()` — default, do nothing (most hooks).
-- `Cancel(reason)` — abort the run cleanly with a `TerminateEvent`
-  whose reason is your string.
-- `Retry()` — re-run the last node (useful in `ModelRetryHook` for
-  transient model errors).
+- **Mutate the event in place.** The after-model-call and
+  after-tool-call events carry a `retry` flag — set `event.retry = True`
+  and the runtime re-runs that call (this is exactly how
+  `ModelRetryHook` works).
+- **Raise to abort.** Raising from any callback short-circuits the run
+  (useful for budget guards).
 
 Built-in hooks:
 [`LoggingHook`](hooks.md), `StructuredLoggingHook`,
 `TelemetryHook` (OpenTelemetry-compatible),
 `ModelRetryHook`, `GuardrailsHook` (topic policy + PII redaction),
 and `SteeringHook` (LLM-as-judge tool approval). Source:
-[`hooks/builtin/__init__.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/hooks/builtin/__init__.py) (re-exports the four most-used hooks) ·
-[`hooks/builtin/steering.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/hooks/builtin/steering.py) ·
-[`hooks/builtin/retry.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/hooks/builtin/retry.py).
+[`hooks/builtin/__init__.py`](https://github.com/oracle/locus/blob/main/src/locus/hooks/builtin/__init__.py) (re-exports the four most-used hooks) ·
+[`hooks/builtin/steering.py`](https://github.com/oracle/locus/blob/main/src/locus/hooks/builtin/steering.py) ·
+[`hooks/builtin/retry.py`](https://github.com/oracle/locus/blob/main/src/locus/hooks/builtin/retry.py).
 
 ## A concrete example
 
-Consider this prompt against the agent on the homepage:
+Consider this prompt against a support agent with `lookup_order` +
+`issue_refund`:
 
-> *"Book a flight from JFK to NRT on 2026-05-04 for customer C-42."*
+> *"Process refund request R-42: verify order ord-4821, refund if eligible."*
 
 Iteration by iteration:
 
 | # | Node | What happens |
 |---|---|---|
-| 1 | Think | Model emits a tool call: `search_flights(origin="JFK", destination="NRT", date="2026-05-04")`. Streams `ThinkEvent` + `ModelChunkEvent`s. |
-| 1 | Execute | Runs `search_flights`. Tool is **not** marked idempotent (read-only) so no dedup. Result added to `state.tool_executions`. Emits `ToolStartEvent`, `ToolCompleteEvent`. |
-| 1 | Reflect | Skipped — first iteration, no error, no loop. Router goes back to Think. |
-| 1 | Terminate? | `MaxIterations(8)` not yet hit. `ToolCalled("book_flight")` not satisfied. Continue. |
-| 2 | Think | Model picks `AA-181` from the search results and emits `book_flight(flight_id="AA-181", customer_id="C-42")`. |
-| 2 | Execute | Tool is `idempotent=True`. Execute hashes `("book_flight", {flight_id: "AA-181", customer_id: "C-42"})` and walks `state.tool_executions` for matches. None — so the body fires. Confirmation `BK-58291` returned. |
-| 2 | Reflect | Reflexion runs (the cadence trigger fires). Confidence assessed at 0.93. `ReflectEvent` emitted. |
-| 2 | Terminate? | `ToolCalled("book_flight")` ✓ AND `ConfidenceMet(0.9)` ✓. The AND branch fires; the OR short-circuits true. Loop exits with `TerminateEvent(reason="ToolCalled AND ConfidenceMet")`. |
+| 1 | Think | Model emits a tool call: `lookup_order(order_id="ord-4821")`. Streams `ThinkEvent` + `ModelChunkEvent`s. |
+| 1 | Execute | Runs `lookup_order`. Tool is **not** marked idempotent (read-only) so no dedup. Result added to `state.tool_executions`. Emits `ToolStartEvent`, `ToolCompleteEvent`. |
+| 1 | Reflect | Skipped — this agent reflects every second iteration (`evaluate_every_n_iterations=2`), so reflection is not due. Control goes back to Think. |
+| 1 | Terminate? | Checked at the start of the next iteration: `MaxIterations(8)` not yet hit. `ToolCalled("issue_refund")` not satisfied. Continue. |
+| 2 | Think | The order record confirms an eligible return, so the model emits `issue_refund(order_id="ord-4821", request_id="R-42")`. |
+| 2 | Execute | Tool is `idempotent=True`. Execute walks `state.tool_executions` for an earlier `issue_refund` call with equal arguments (`{order_id: "ord-4821", request_id: "R-42"}`). None — so the body fires. Refund receipt `RF-58291` returned. |
+| 2 | Reflect | Reflexion runs (iteration 2 is due). The iteration's one successful call raises confidence from 0.0 to 0.15. `ReflectEvent` emitted. |
+| 2 | Terminate? | Checked at the start of iteration 3: `ToolCalled("issue_refund")` ✓ but `ConfidenceMet(0.9)` ✗ (0.15), so the AND branch is false, and `MaxIterations(8)` is not hit. Continue. |
+| 3 | Think | The refund is done, so the model answers in text with no tool calls. In the default `completion_mode="auto"` the run ends with `TerminateEvent(reason="complete")`; `result.stop_reason == "complete"`. |
 
-Total: **two iterations, two tool calls, one Reflect, one Terminate**.
+Total: **three iterations, two tool calls, one Reflect, one Terminate**.
 
-If the model had hallucinated and re-emitted `book_flight` with the
+If the model had hallucinated and re-emitted `issue_refund` with the
 same args on iteration 3 (it didn't, but it could), Execute would
-have caught the duplicate `(name, kwargs)` hash, returned the cached
-`BK-58291`, and emitted a `ToolCacheHitEvent` so the trace shows the
-short-circuit clearly.
+have caught the duplicate `(name, arguments)` match, returned the cached
+`RF-58291`, and flagged that `ToolExecution` with
+`idempotent_cache_hit=True` so the trace shows the short-circuit
+clearly. Refunding an already-refunded order is a no-op — exactly
+what idempotency guarantees.
 
 ## Stop reasons
 
@@ -255,16 +279,21 @@ satisfied condition. The named reasons you'll see:
 | **`TokenLimit`** | cumulative model tokens exceeded the budget |
 | **`TimeLimit`** | wall-clock budget exceeded |
 | **`NoToolCalls`** | the model emitted text and no tool calls (the natural "I'm done" signal) |
-| **`ToolCalled`** | a specific tool fired (with optional args predicate) |
+| **`ToolCalled`** | a specific tool fired (with `require_success=True`, only a call that did not error counts) |
 | **`ConfidenceMet`** | the Reflexion confidence score cleared the threshold |
-| **`TextMention`** | the final message matched a regex |
-| **`CustomCondition`** | a user-supplied `(state) -> bool` returned true |
-| **`Cancelled`** | a hook returned `Cancel(reason="…")` or the caller called `agent.cancel()` |
-| **`ModelError`** | the model raised after retries exhausted |
+| **`TextMention`** | the final message contained the configured text (case-insensitive substring by default) |
+| **`CustomCondition`** | a user-supplied `fn(state, **ctx)` returned `(True, reason)` |
+| **`cancelled`** | the caller called `agent.cancel()` |
+| **`error`** | the model (or a node, or a hook inside the loop) raised; the loop emits `TerminateEvent(reason="error")` and re-raises the exception, so `arun()` / `run_sync()` raise it instead of returning a result |
 
+Note that `result.stop_reason` is **normalized** to a fixed set of
+literals (`complete`, `terminal_tool`, `confidence_met`,
+`max_iterations`, `tool_loop`, `no_tools`, `grounding_failed`,
+`token_budget`, `time_budget`, `interrupted`, `error`, `cancelled`),
+while `TerminateEvent.reason` carries the finer branch-level string.
 Composite conditions (`OrCondition`, `AndCondition`) report the
-underlying satisfied leaf, so you always get a leaf-condition name in
-the reason.
+underlying satisfied leaf token(s), so the event reason always points
+at the branch that fired.
 
 ## Cancellation
 
@@ -273,19 +302,18 @@ terminate condition:
 
 ### From a hook
 
-Any hook can return `Cancel(reason="…")` from any event. The current
+Any hook can **raise** from a callback to abort the run. The current
 node finishes (so a tool call is not torn out mid-flight), then the
-loop exits with `TerminateEvent(reason="Cancelled: …")`. Useful for
-the `SteeringHook`, which votes on each tool call before it fires
-and can cancel the whole run if the model proposes something out of
-policy.
+loop unwinds. Useful for budget guards; the `SteeringHook` uses the
+same family of callbacks to vote on each tool call before it fires.
 
 ```python
-class CostGuardHook(Hook):
-    async def on_iteration(self, ev: IterationEvent) -> Directive:
-        if ev.token_total > 100_000:
-            return Cancel(reason=f"token budget exhausted at {ev.token_total}")
-        return Continue()
+from locus.hooks.provider import HookProvider
+
+class CostGuardHook(HookProvider):
+    async def on_iteration_start(self, iteration: int, state) -> None:
+        if state.total_tokens_used > 100_000:
+            raise RuntimeError(f"token budget exhausted at {state.total_tokens_used}")
 ```
 
 ### From the caller
@@ -293,21 +321,23 @@ class CostGuardHook(Hook):
 ```python
 import asyncio
 
-run = asyncio.create_task(agent.run(prompt))
+run = asyncio.create_task(agent.arun(prompt))
 # … later, on a timeout, on a user click, on whatever:
 run.cancel()
 ```
 
-The runner observes the cancellation between nodes and exits cleanly.
-In-flight tool calls running on asyncio see the standard
-`CancelledError` propagate through their await points; cooperative
-tools can catch it to release resources before re-raising.
+The cancellation lands at whatever the run is awaiting — typically a
+model call or a tool call — rather than between nodes. In-flight tool
+calls running on asyncio see the standard `CancelledError` propagate
+through their await points; cooperative tools can catch it to release
+resources before re-raising.
 
 ### Via `agent.cancel()`
 
-`agent.cancel()` sets a flag the runner polls between nodes. The
-loop exits at the next safe point with a
-`TerminateEvent(reason="Cancelled")`. For thread-bound runs, the
+`agent.cancel()` sets a flag the loop checks at the start of each
+iteration. The loop exits at the next iteration boundary with a
+`TerminateEvent(reason="cancelled")` (`result.stop_reason ==
+"cancelled"`). For thread-bound runs, the
 state still flushes to the checkpointer before exit, so the
 conversation can resume cleanly later.
 
@@ -319,11 +349,17 @@ Long-running agents accumulate every model message and every tool
 result in `state.messages`. Eventually the next Think exceeds the
 provider's context window and fails. Three remedies:
 
-1. **Wire a conversation manager** —
-   `Agent(conversation_manager=LLMCompactor(...))` protects the
-   system prompt and the most recent turns, then summarises the
-   middle on demand. Source:
-   [`src/locus/memory/compactor.py`](https://github.com/oracle-samples/locus/blob/main/src/locus/memory/compactor.py).
+1. **Tune the conversation manager** — an agent with no
+   `conversation_manager=` already gets one: `LLMCompactor(context_length=...)`
+   when the model has registered metadata (it prunes stale tool output
+   and keeps a token-budgeted tail, with no extra model calls), and a
+   `SlidingWindowManager` otherwise. Override that default with
+   `Agent(conversation_manager=LLMCompactor(summarize_fn=..., context_length=...))`
+   to protect the system prompt and the most recent turns, then summarise
+   the middle on demand. Pass the model's window as `context_length=`:
+   a compactor you construct assumes 128,000 tokens and does not inherit
+   the window the default looked up. Source:
+   [`src/locus/memory/compactor.py`](https://github.com/oracle/locus/blob/main/src/locus/memory/compactor.py).
 2. **Tighten tool result size** — return concise structured data,
    not blobs of HTML. The model rarely needs the full source.
 3. **Decompose with multi-agent** — let an orchestrator delegate
@@ -348,46 +384,46 @@ five times, then hits `MaxIterations` and gives up. Two fixes:
 
 ### Idempotency key collisions
 
-If two semantically-different calls happen to produce the same
-`(name, kwargs)` hash, Execute will dedup the second one and the
+If two semantically-different calls happen to carry the same tool
+name and equal arguments, Execute will dedup the second one and the
 agent will get a stale receipt. Fix by including a per-request
-identifier in the args (e.g., `request_id`) so the hash discriminates
-distinct calls.
+identifier in the args (e.g., `request_id`) so distinct calls have
+distinct arguments.
 
 ## Putting it together
 
 ```python
 from locus.agent import Agent
 from locus.tools.decorator import tool
-from locus.memory.backends import OCIBucketBackend
+from locus.memory.backends import S3Backend
 from locus.core.termination import (
     MaxIterations, ToolCalled, ConfidenceMet,
 )
 from locus.hooks.builtin import StructuredLoggingHook
 
 @tool(idempotent=True)
-def submit_po(vendor_id: str, amount_usd: float) -> dict:
-    return finance.submit(vendor_id, amount_usd)
+def issue_refund(order_id: str, request_id: str) -> dict:
+    return billing.refund(order_id, request_id)
 
 agent = Agent(
-    model="oci:openai.gpt-5.5",
-    tools=[search_vendors, submit_po],
-    system_prompt="You are a procurement officer.",
+    model="{{ locus_example_model }}",
+    tools=[lookup_order, issue_refund],
+    system_prompt="You are a customer-support agent.",
     reflexion=True,                    # turn Reflect on
     grounding=True,                    # claim verification
-    checkpointer=OCIBucketBackend(...),
-    hooks=[StructuredLoggingHook(level="INFO")],
+    checkpointer=S3Backend(...),
+    hooks=[StructuredLoggingHook()],     # logs at INFO by default
     termination=(
-        ToolCalled("submit_po") & ConfidenceMet(0.9)
+        ToolCalled("issue_refund") & ConfidenceMet(0.9)
     ) | MaxIterations(10),
 )
 
-async for event in agent.run("Find a vendor for $2M cloud spend.",
+async for event in agent.run("Process refund request R-42: verify the order, refund if eligible.",
                              thread_id="th-q3-2026"):
     match event:
         case ThinkEvent(reasoning=r) if r:    print(f"💭 {r}")
         case ToolStartEvent(tool_name=n):     print(f"🔧 {n}")
-        case ReflectEvent(judgment=j):        print(f"🪞 {j}")
+        case ReflectEvent(guidance=g) if g:   print(f"🪞 {g}")
         case TerminateEvent(reason=why):      print(f"✅ {why}")
 ```
 
@@ -398,13 +434,13 @@ async for event in agent.run("Find a vendor for $2M cloud spend.",
 | `model=` | which provider Think calls |
 | `tools=` | what Execute can dispatch |
 | `system_prompt=` | prepended to the message list before the first Think |
-| `reflexion=True` | enables Reflect on the configured cadence / triggers |
-| `grounding=True` | adds claim verification inside Reflect |
-| `checkpointer=` | persists state at every node so the run can resume after restart |
+| `reflexion=True` | enables Reflect on every iteration; `ReflexionConfig(evaluate_every_n_iterations=N)` for every Nth |
+| `grounding=True` | checks the final answer's claims against tool results before it returns |
+| `checkpointer=` | persists state at the end of a run and before an interrupt (for a run with a `thread_id`), so the run can resume after restart; pair with `checkpoint_every_n_iterations=` to also save inside the loop |
 | `conversation_manager=` | summarises / prunes long histories before they exceed the context window |
 | `hooks=` | observe and steer every event |
-| `termination=` | the algebra the router checks after each node |
-| `max_iterations=` | shorthand cap; equivalent to `termination=MaxIterations(N)` |
+| `termination=` | the algebra the loop checks at the start of each iteration |
+| `max_iterations=` | the built-in iteration cap (default 20); reaching it triggers one last model call, without tools, for a final summary |
 | `tool_execution=` | `"concurrent"` (default) or `"sequential"` |
 
 ## Where to next

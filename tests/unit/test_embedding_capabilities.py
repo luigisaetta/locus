@@ -63,29 +63,3 @@ class TestEmbeddingCapabilities:
         assert caps.supports_multimodal is False
         assert caps.supports_batching is True
         assert caps.max_batch_size == 2048
-
-    def test_oci_capabilities_are_declared(self) -> None:
-        """OCI Cohere embeddings advertise query-vs-doc and batching."""
-        pytest.importorskip("oci")
-        from locus.rag.embeddings.oci import OCIEmbeddings
-
-        embedder = OCIEmbeddings(
-            model_id="cohere.embed-english-v3.0",
-            compartment_id="ocid1.compartment.oc1..xxx",
-            service_endpoint="https://example.oraclecloud.com",
-        )
-        caps = embedder.capabilities
-        assert caps.supports_query_vs_doc is True
-        assert caps.supports_batching is True
-        assert caps.max_batch_size == 96
-
-    def test_oci_image_model_reports_multimodal(self) -> None:
-        pytest.importorskip("oci")
-        from locus.rag.embeddings.oci import OCIEmbeddings
-
-        embedder = OCIEmbeddings(
-            model_id="cohere.embed-english-image-v3.0",
-            compartment_id="ocid1.compartment.oc1..xxx",
-            service_endpoint="https://example.oraclecloud.com",
-        )
-        assert embedder.capabilities.supports_multimodal is True
