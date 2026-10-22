@@ -20,7 +20,7 @@ Postgres (a laptop, a container, a managed cluster); the generic
 
 ```python
 from datetime import timedelta
-from tulip.memory.backends import PgCheckpointer
+from locus.memory.backends import PgCheckpointer
 
 checkpointer = PgCheckpointer(
     dsn,
@@ -36,7 +36,7 @@ with checkpointer.tenant_scope("acme"):
 
 - **One tenant never sees another's threads.** Every row carries its tenant.
   Row-Level Security admits only the tenant pinned for the transaction
-  (`tulip.tenant`, the setting `PgMemory` uses), on read and on write, for the
+  (`locus.tenant`, the setting `PgMemory` uses), on read and on write, for the
   table owner too (`FORCE`). Every query also filters on the tenant. Connect as
   an application role that is not a superuser and has no `BYPASSRLS`: those
   skip Row-Level Security.
@@ -59,12 +59,12 @@ with checkpointer.tenant_scope("acme"):
 ## Message retention
 
 When a message is first checkpointed it is stamped with the time, in
-`Message.metadata["tulip_at"]`, which no provider is sent. Trimming drops whole
+`Message.metadata["locus_at"]`, which no provider is sent. Trimming drops whole
 exchanges (a user message and everything up to the next one) that began before
 the cut-off, so a tool result never outlives its call. System messages (the
 prompt, a compaction summary) stay. A message without a stamp is kept: its age
 is unknown, and retention never guesses.
 
-`tulip.memory.retention` has the pieces for any other backend:
+`locus.memory.retention` has the pieces for any other backend:
 `stamp_messages`, `trim_messages`, `oldest_message_time`, and
 `RetainedCheckpointer`, which wraps any checkpointer.

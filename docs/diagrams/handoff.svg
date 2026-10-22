@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A handoff, as run by locus.multiagent.handoff.Handoff.execute_handoff (v2.16.0):
+    caller  -> manager   execute_handoff(source_agent, target_agent_id, task, reason, state?, findings?, instructions?)
+    manager -> refused   target id not registered, or len(history) >= max_handoff_chain
+                         (HandoffResult success=False; no context is built and the target never runs)
+    manager -> context   create_handoff builds a HandoffContext and appends it to history:
+                         original_task, findings, confidence, instructions, handoff_chain;
+                         conversation_summary only when state is passed; key_messages only when
+                         state is passed and preserve_full_history=True
+    context -> target    receive_handoff turns the context into its opening prompt and calls the model
+    target  -> result    HandoffResult with success, output, final_confidence (returned_context set by the manager)
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 332" role="img" aria-labelledby="title desc">
+  <title id="title">A handoff between two agents</title>
+  <desc id="desc">Your code calls execute_handoff on the Handoff manager, naming L1 Support as the source agent and L2 Billing as the target. If the target agent is not registered or the handoff limit is reached, the manager refuses and returns a failed result with success=False. Otherwise it builds a HandoffContext holding the original task, findings, instructions and the handoff chain, plus the source's confidence and a conversation summary when the caller passes the source's state; key messages from the transcript are attached only when state is passed and preserve_full_history is on. L2 Billing, the target agent, reads that context as its prompt and answers with a HandoffResult carrying a success flag, its output and a final confidence.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the context the manager builds -->
+  <g class="lane">
+    <rect x="440" y="24" width="286" height="192" rx="12"/>
+    <text class="lane-title" x="460" y="48">Handoff context</text>
+  </g>
+  <g class="node"><rect x="460" y="62" width="118" height="28" rx="8"/><text class="sub" x="519" y="76">original_task</text></g>
+  <g class="node"><rect x="588" y="62" width="118" height="28" rx="8"/><text class="sub" x="647" y="76">findings</text></g>
+  <g class="node optional"><rect x="460" y="98" width="246" height="28" rx="8"/><text class="sub" x="583" y="112">conversation_summary</text></g>
+  <g class="node optional"><rect x="460" y="134" width="118" height="28" rx="8"/><text class="sub" x="519" y="148">confidence</text></g>
+  <g class="node"><rect x="588" y="134" width="118" height="28" rx="8"/><text class="sub" x="647" y="148">instructions</text></g>
+  <g class="node"><rect x="460" y="170" width="118" height="28" rx="8"/><text class="sub" x="519" y="184">handoff_chain</text></g>
+  <g class="node optional"><rect x="588" y="170" width="118" height="28" rx="8"/><text class="sub" x="647" y="184">key_messages</text></g>
+
+  <!-- source -> manager -->
+  <path class="edge" marker-end="url(#ah)" d="M154,130 L238,130"/>
+  <rect class="label-bg" x="161" y="141" width="72" height="20" rx="4"/>
+  <text class="label" x="197" y="151">passed in</text>
+
+  <!-- manager -> context -->
+  <path class="edge" marker-end="url(#ah)" d="M400,130 L438,130"/>
+
+  <!-- context -> target -->
+  <path class="edge" marker-end="url(#ah)" d="M726,130 L764,130"/>
+
+  <!-- manager -> refused -->
+  <path class="edge dashed deny" marker-end="url(#ah)" d="M320,159 L320,221"/>
+  <rect class="label-bg" x="220" y="181" width="200" height="20" rx="4"/>
+  <text class="label" x="320" y="191">unknown target or limit reached</text>
+
+  <!-- target -> result -->
+  <path class="edge" marker-end="url(#ah)" d="M841,159 L841,221"/>
+  <rect class="label-bg" x="811" y="181" width="60" height="20" rx="4"/>
+  <text class="label" x="841" y="191">answers</text>
+
+  <g class="node">
+    <rect x="24" y="101" width="130" height="58" rx="12"/>
+    <text x="89" y="120">L1 Support</text>
+    <text class="sub" x="89" y="141">source agent</text>
+  </g>
+  <g class="node primary">
+    <rect x="240" y="101" width="160" height="58" rx="12"/>
+    <text x="320" y="120">Handoff manager</text>
+    <text class="sub" x="320" y="141">execute_handoff()</text>
+  </g>
+  <g class="node">
+    <rect x="766" y="101" width="150" height="58" rx="12"/>
+    <text x="841" y="120">L2 Billing</text>
+    <text class="sub" x="841" y="141">target agent</text>
+  </g>
+  <g class="node deny">
+    <rect x="240" y="223" width="160" height="58" rx="12"/>
+    <text x="320" y="242">Refused</text>
+    <text class="sub" x="320" y="263">success=False</text>
+  </g>
+  <g class="node end">
+    <rect x="766" y="223" width="150" height="58" rx="29"/>
+    <text x="841" y="242">HandoffResult</text>
+    <text class="sub" x="841" y="263">success, output</text>
+  </g>
+
+  <text class="note" x="470" y="313">Dashed fields are filled only when state= is passed; key_messages also need preserve_full_history=True.</text>
+</svg>

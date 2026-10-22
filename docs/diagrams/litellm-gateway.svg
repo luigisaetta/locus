@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Locus behind the LiteLLM gateway, as the SDK wires it (v2.16.0):
+    Locus agent -> gateway    OpenAIModel(model=<alias>, api_key=<virtual key>, base_url=<gateway>)
+                              builds openai.AsyncOpenAI(api_key, base_url)   (locus/models/native/openai.py)
+                              "litellm:<alias>" resolves to the same OpenAIModel (locus/models/providers)
+                              with api="auto" (the default) a custom base_url never selects /v1/responses,
+                              so gateway traffic is chat completions unless api="responses" is set explicitly
+    other services -> gateway any OpenAI client, each with its own virtual key (optional)
+    gateway -> Postgres       virtual keys, budgets and spend logs (examples/litellm-gateway/docker-compose.yml)
+    gateway -> providers      config.yaml model_list maps each alias to openai/..., anthropic/...;
+                              router_settings.fallbacks chains aliases when a provider fails;
+                              the provider keys live only in the gateway's environment
+  Locus has no litellm dependency and never holds a provider key.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 370" role="img" aria-labelledby="title desc">
+  <title id="title">Locus behind the LiteLLM gateway</title>
+  <desc id="desc">A Locus agent's OpenAIModel, and optionally any other service with an OpenAI client, sends requests to the LiteLLM gateway's OpenAI-shaped API carrying only a virtual key. The gateway keeps virtual keys and spend logs in Postgres, and calls the model providers, OpenAI, Anthropic and any more you add to model_list, with provider keys that only it holds. Budgets and fallback chains live in the gateway too, and Locus never holds a provider key.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <g class="lane">
+    <rect x="16" y="16" width="196" height="310" rx="14"/>
+    <text class="lane-title" x="32" y="40">Your services</text>
+  </g>
+  <g class="lane">
+    <rect x="332" y="16" width="212" height="310" rx="14"/>
+    <text class="lane-title" x="348" y="40">Gateway</text>
+  </g>
+  <g class="lane">
+    <rect x="724" y="16" width="180" height="310" rx="14"/>
+    <text class="lane-title" x="740" y="40">Model providers</text>
+  </g>
+
+  <!-- other services -> gateway (enters the top) -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M196,96 H416 Q438,96 438,118 V145"/>
+  <rect class="label-bg" x="227" y="107" width="90" height="20" rx="4"/>
+  <text class="label" x="272" y="117">virtual key</text>
+
+  <!-- locus agent -> gateway -->
+  <path class="edge" marker-end="url(#ah)" d="M196,176 H348"/>
+  <rect class="label-bg" x="227" y="187" width="90" height="20" rx="4"/>
+  <text class="label" x="272" y="197">virtual key</text>
+
+  <!-- gateway -> postgres -->
+  <path class="edge" marker-end="url(#ah)" d="M438,205 V233"/>
+
+  <!-- gateway -> providers: trunk and middle branch, then the two outer branches -->
+  <path class="edge" marker-end="url(#ah)" d="M526,176 H738"/>
+  <rect class="label-bg" x="549" y="187" width="100" height="20" rx="4"/>
+  <text class="label" x="599" y="197">provider keys</text>
+  <path class="edge" marker-end="url(#ah)" d="M656,176 C698,176 698,96 738,96"/>
+  <path class="edge dashed" marker-end="url(#ah)" d="M656,176 C698,176 698,256 738,256"/>
+
+  <g class="node optional">
+    <rect x="32" y="67" width="164" height="58" rx="12"/>
+    <text x="114" y="86">Other services</text>
+    <text class="sub" x="114" y="107">any OpenAI client</text>
+  </g>
+  <g class="node primary">
+    <rect x="32" y="147" width="164" height="58" rx="12"/>
+    <text x="114" y="166">Locus agent</text>
+    <text class="sub" x="114" y="187">OpenAIModel</text>
+  </g>
+
+  <g class="node">
+    <rect x="350" y="147" width="176" height="58" rx="12"/>
+    <text x="438" y="166">LiteLLM gateway</text>
+    <text class="sub" x="438" y="187">OpenAI-shaped API</text>
+  </g>
+  <g class="store">
+    <path d="M350,244 A88,9 0 0 1 526,244 V300 A88,9 0 0 1 350,300 Z M350,244 A88,9 0 0 0 526,244"/>
+    <g class="node">
+      <text x="438" y="267">Postgres</text>
+      <text class="sub" x="438" y="288">virtual keys · spend</text>
+    </g>
+  </g>
+
+  <g class="node">
+    <rect x="740" y="67" width="148" height="58" rx="12"/>
+    <text x="814" y="86">OpenAI</text>
+    <text class="sub" x="814" y="107">openai/&lt;model&gt;</text>
+  </g>
+  <g class="node">
+    <rect x="740" y="147" width="148" height="58" rx="12"/>
+    <text x="814" y="166">Anthropic</text>
+    <text class="sub" x="814" y="187">anthropic/&lt;model&gt;</text>
+  </g>
+  <g class="node optional">
+    <rect x="740" y="227" width="148" height="58" rx="12"/>
+    <text x="814" y="246">More providers</text>
+    <text class="sub" x="814" y="267">add to model_list</text>
+  </g>
+
+  <text class="note" x="460" y="354">Locus holds only a virtual key. Provider keys, budgets and fallbacks live in the gateway.</text>
+</svg>

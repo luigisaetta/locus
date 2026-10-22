@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  One A2A exchange, as locus.a2a.protocol implements it (v2.16.0):
+    A2AClient.get_agent_card  -> GET /.well-known/agent-card.json  (falls back to GET /agent-card)
+    A2AServer                 -> the Agent Card: name, skills, capabilities, url
+    A2AClient.send_message    -> POST /, JSON-RPC SendMessage
+    A2AServer._drive_agent    -> agent.run(prompt), prompt = the message's text parts
+    agent                     -> TerminateEvent.final_message
+    A2AServer                 -> the Task, state completed, final answer appended as an artifact
+  SendStreamingMessage drives the same run and streams it back as SSE:
+  the task, then status updates, the artifact update and the final status.
+  With api_key / LOCUS_A2A_API_KEY set, every route (the card included) requires a bearer token.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 506" role="img" aria-labelledby="title desc">
+  <title id="title">An A2A call between two processes</title>
+  <desc id="desc">Two processes talk over HTTP. In the caller process, A2AClient first fetches the Agent Card from GET /.well-known/agent-card.json on the host and gets back the card, listing the agent's skills, capabilities and URL. It then sends a JSON-RPC SendMessage request to POST /. In the host process, A2AServer runs the wrapped agent on the message text; the agent works with its own loop and tools and returns a final answer, which the server sends back as a completed Task carrying the answer as an artifact. SendStreamingMessage returns the same run as a stream of server-sent events: the task, then its status and artifact updates. When the server has an api_key, every route, the card included, requires a bearer token.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the two processes -->
+  <g class="lane">
+    <rect x="20" y="20" width="220" height="420" rx="12"/>
+    <text class="lane-title" x="36" y="44">Caller process</text>
+  </g>
+  <g class="lane">
+    <rect x="510" y="20" width="390" height="420" rx="12"/>
+    <text class="lane-title" x="526" y="44">Host process</text>
+  </g>
+  <text class="lane-title" x="361" y="44">HTTP</text>
+
+  <!-- lifelines -->
+  <path class="edge dashed" d="M130,118 L130,424"/>
+  <path class="edge dashed" d="M610,118 L610,424"/>
+  <path class="edge dashed" d="M805,118 L805,424"/>
+
+  <!-- discover: fetch the Agent Card -->
+  <path class="edge" marker-end="url(#ah)" d="M130,160 L610,160"/>
+  <rect class="label-bg" x="265" y="150" width="221" height="20" rx="4"/>
+  <text class="label" x="375" y="160">GET /.well-known/agent-card.json</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M610,204 L130,204"/>
+  <rect class="label-bg" x="265" y="194" width="221" height="20" rx="4"/>
+  <text class="label" x="375" y="204">Agent Card · skills, capabilities, url</text>
+
+  <!-- call: send a message, the agent runs, a Task comes back -->
+  <path class="edge" marker-end="url(#ah)" d="M130,262 L610,262"/>
+  <rect class="label-bg" x="264" y="252" width="222" height="20" rx="4"/>
+  <text class="label" x="375" y="262">POST / · JSON-RPC SendMessage</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M610,306 L805,306"/>
+  <rect class="label-bg" x="667" y="296" width="88" height="20" rx="4"/>
+  <text class="label" x="711" y="306">run(prompt)</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M805,350 L610,350"/>
+  <rect class="label-bg" x="667" y="340" width="88" height="20" rx="4"/>
+  <text class="label" x="711" y="350">final answer</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M610,394 L130,394"/>
+  <rect class="label-bg" x="250" y="384" width="250" height="20" rx="4"/>
+  <text class="label" x="375" y="394">Task · completed, answer as an artifact</text>
+
+  <g class="node">
+    <rect x="40" y="60" width="180" height="58" rx="12"/>
+    <text x="130" y="79">A2AClient</text>
+    <text class="sub" x="130" y="100">from your code</text>
+  </g>
+  <g class="node primary">
+    <rect x="530" y="60" width="160" height="58" rx="12"/>
+    <text x="610" y="79">A2AServer</text>
+    <text class="sub" x="610" y="100">wraps the agent</text>
+  </g>
+  <g class="node">
+    <rect x="730" y="60" width="150" height="58" rx="12"/>
+    <text x="805" y="79">Agent</text>
+    <text class="sub" x="805" y="100">own loop and tools</text>
+  </g>
+
+  <text class="note" x="460" y="470">SendStreamingMessage returns the same run as server-sent events: the task, then status and artifact updates.</text>
+  <text class="note" x="460" y="490">With an api_key set, every route, the Agent Card included, requires a bearer token.</text>
+</svg>

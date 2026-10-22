@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The GSAR loop, as routed by locus.reasoning.gsar_evaluator.GSAREvaluator.evaluate (v2.16.0):
+    synthesis + evidence -> judge            the LLM judge partitions claims into G, U, X, K
+    judge  -> score                          gsar_score: type-weighted, rho on X
+    score  -> decide                         abstain if the judge abstained, else decide(S, tau)
+    decide -> done       on proceed          (S >= tau_proceed) loop exits, degraded = False
+    decide -> regenerate on regenerate       (tau_regenerate <= S < tau_proceed)
+    regenerate -> judge                      regenerate_fn rewrites the synthesis, evidence unchanged
+    decide -> budget     on replan or abstain (S < tau_regenerate, or judge abstained)
+    budget -> replan     while replans < K_max
+    replan -> judge                          replan_fn returns a new synthesis and a new evidence corpus
+    budget -> degraded   once K_max replans are spent: loop exits, degraded = True
+  A cap on total judge rounds also ends a regenerate loop that never settles, as degraded.
+  Agent(gsar=GSARConfig(...)) runs the judge once over the final answer and reports the decision;
+  this loop is GSAREvaluator.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 452" role="img" aria-labelledby="title desc">
+  <title id="title">The GSAR decision loop</title>
+  <desc id="desc">A synthesis and its evidence go to the judge, which partitions the claims into grounded, ungrounded, contradicted and complementary. The partition is scored, and the score S is compared with two thresholds to decide. Proceed, at S at or above tau proceed, ends the loop with the final report. Regenerate, in the band from tau regenerate up to tau proceed, rewrites the synthesis from the same evidence and sends it back to the judge. Replan, below tau regenerate, and abstain, when the judge itself abstains, go to a budget check: while fewer than K max replans are spent, the plan is revised, fresh evidence is gathered and the new synthesis goes back to the judge; once the budget is spent the loop ends with the report flagged degraded. A cap on the total number of judge rounds also ends the loop as degraded. GSAREvaluator runs this loop; Agent with a GSAR config judges once and reports the decision.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- pipeline: synthesis -> judge -> score -> decide -->
+  <path class="edge" marker-end="url(#ah)" d="M168,205 L212,205"/>
+  <path class="edge" marker-end="url(#ah)" d="M358,205 L402,205"/>
+  <path class="edge" marker-end="url(#ah)" d="M548,205 L592,205"/>
+
+  <!-- decide -> done (proceed) -->
+  <path class="edge allow" marker-end="url(#ah)" d="M754,205 L846,205 Q870,205 870,181 L870,96"/>
+  <rect class="label-bg" x="841" y="126" width="58" height="20" rx="4"/>
+  <text class="label" x="870" y="136">proceed</text>
+
+  <!-- decide -> regenerate -> judge -->
+  <path class="edge hold" marker-end="url(#ah)" d="M674,176 L674,89 Q674,65 650,65 L550,65"/>
+  <rect class="label-bg" x="635" y="126" width="78" height="20" rx="4"/>
+  <text class="label" x="674" y="136">regenerate</text>
+  <path class="edge" marker-end="url(#ah)" d="M404,65 L310,65 Q286,65 286,89 L286,174"/>
+
+  <!-- decide -> budget (replan or abstain) -->
+  <path class="edge deny" marker-end="url(#ah)" d="M674,234 L674,314"/>
+  <rect class="label-bg" x="618" y="264" width="112" height="20" rx="4"/>
+  <text class="label" x="674" y="274">replan · abstain</text>
+
+  <!-- budget -> replan -> judge; budget -> degraded -->
+  <path class="edge" marker-end="url(#ah)" d="M609,345 L550,345"/>
+  <rect class="label-bg" x="566" y="335" width="32" height="20" rx="4"/>
+  <text class="label" x="582" y="345">yes</text>
+  <path class="edge" marker-end="url(#ah)" d="M404,345 L310,345 Q286,345 286,321 L286,236"/>
+  <path class="edge" marker-end="url(#ah)" d="M739,345 L802,345"/>
+  <rect class="label-bg" x="752" y="335" width="28" height="20" rx="4"/>
+  <text class="label" x="766" y="345">no</text>
+
+  <g class="node">
+    <rect x="24" y="176" width="144" height="58" rx="12"/>
+    <text x="96" y="195">Synthesis</text>
+    <text class="sub" x="96" y="216">draft + evidence</text>
+  </g>
+  <g class="node">
+    <rect x="214" y="176" width="144" height="58" rx="12"/>
+    <text x="286" y="195">Judge</text>
+    <text class="sub" x="286" y="216">partitions claims</text>
+  </g>
+  <g class="node">
+    <rect x="404" y="176" width="144" height="58" rx="12"/>
+    <text x="476" y="195">Score S</text>
+    <text class="sub" x="476" y="216">weighted by type</text>
+  </g>
+  <g class="node primary">
+    <rect x="594" y="176" width="160" height="58" rx="12"/>
+    <text x="674" y="195">Decide δ</text>
+    <text class="sub" x="674" y="216">S against τ</text>
+  </g>
+
+  <g class="node">
+    <rect x="404" y="36" width="144" height="58" rx="12"/>
+    <text x="476" y="55">Regenerate</text>
+    <text class="sub" x="476" y="76">same evidence</text>
+  </g>
+  <g class="node end">
+    <rect x="804" y="36" width="132" height="58" rx="29"/>
+    <text x="870" y="55">Done</text>
+    <text class="sub" x="870" y="76">final report</text>
+  </g>
+
+  <g class="node">
+    <rect x="404" y="316" width="144" height="58" rx="12"/>
+    <text x="476" y="335">Replan</text>
+    <text class="sub" x="476" y="356">new evidence</text>
+  </g>
+  <g class="node">
+    <rect x="609" y="316" width="130" height="58" rx="12"/>
+    <text x="674" y="335">Budget left?</text>
+    <text class="sub" x="674" y="356">replans &lt; K_max</text>
+  </g>
+  <g class="node end">
+    <rect x="804" y="316" width="132" height="58" rx="29"/>
+    <text x="870" y="335">Degraded</text>
+    <text class="sub" x="870" y="356">degraded = True</text>
+  </g>
+
+  <text class="note" x="480" y="414">Proceed at S ≥ τ_proceed, regenerate from τ_regenerate up to it, replan below. A judge that abstains replans whatever S is.</text>
+  <text class="note" x="480" y="436">GSAREvaluator runs this loop, and a cap on total rounds also ends it as degraded. Agent(gsar=…) judges once and reports δ.</text>
+</svg>

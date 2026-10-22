@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The functional API, as implemented in locus.multiagent.functional (src/locus/multiagent/functional.py):
+    @entrypoint wrapper   resets the module-global task list (L69, L192-193), awaits the body, and
+                          returns the body's value unchanged (L209); it keeps an EntrypointResult with value,
+                          tasks, duration and error for the last run (L204-218), read via get_result() (L225-228)
+    @task wrapper         is a plain async function: awaiting it runs the body (with optional cache and
+                          retry_attempts, L109-134) and appends one TaskResult per call (L123, L142),
+                          except that a cache hit returns at L111-112 without one
+    asyncio.gather        is the caller's own asyncio, not Locus: one @task call per doc, results as a
+                          list in input order (the TaskResult list is in completion order)
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 472" role="img" aria-labelledby="title desc">
+  <title id="title">Functional fan-out</title>
+  <desc id="desc">Awaiting the @entrypoint summarize_all(docs) runs its body, which uses asyncio.gather, the caller's own asyncio code rather than Locus, to call the @task summarize_doc once per document: doc 1, doc 2, through doc N. gather collects the task results into a list in input order, and the entrypoint returns that list to the caller unchanged. Every task call also adds a TaskResult to a run record, and the entrypoint adds the return value, the duration and any error; get_result() returns the record of the last run.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- asyncio.gather: the tasks it starts, one per doc -->
+  <g class="lane">
+    <rect x="344" y="24" width="232" height="285" rx="14"/>
+    <text class="lane-title" x="368" y="48">Your asyncio code</text>
+  </g>
+
+  <!-- fan-out: entrypoint -> one task per doc -->
+  <path class="edge" marker-end="url(#ah)" d="M204,176 C286,176 286,96 366,96"/>
+  <path class="edge" marker-end="url(#ah)" d="M204,176 L366,176"/>
+  <path class="edge" marker-end="url(#ah)" d="M204,176 C286,176 286,256 366,256"/>
+
+  <!-- fan-in: results -> one list, in input order -->
+  <path class="edge" marker-end="url(#ah)" d="M552,96 C634,96 634,176 714,176"/>
+  <path class="edge" marker-end="url(#ah)" d="M552,176 L714,176"/>
+  <path class="edge" marker-end="url(#ah)" d="M552,256 C634,256 634,176 714,176"/>
+
+  <!-- tasks -> run record -->
+  <path class="edge" marker-end="url(#ah)" d="M460,309 L460,345"/>
+  <rect class="label-bg" x="472" y="317" width="128" height="20" rx="4"/>
+  <text class="label" x="536" y="327">TaskResult per call</text>
+
+  <!-- entrypoint -> run record -->
+  <path class="edge" marker-end="url(#ah)" d="M114,205 L114,374 Q114,390 130,390 L368,390"/>
+  <rect class="label-bg" x="176" y="380" width="146" height="20" rx="4"/>
+  <text class="label" x="249" y="390">value, duration, error</text>
+
+  <g class="node primary">
+    <rect x="24" y="147" width="180" height="58" rx="12"/>
+    <text x="114" y="166">@entrypoint</text>
+    <text class="sub" x="114" y="187">summarize_all(docs)</text>
+  </g>
+
+  <g class="node">
+    <rect x="368" y="67" width="184" height="58" rx="12"/>
+    <text x="460" y="86">@task</text>
+    <text class="sub" x="460" y="107">summarize_doc(doc 1)</text>
+  </g>
+  <g class="node">
+    <rect x="368" y="147" width="184" height="58" rx="12"/>
+    <text x="460" y="166">@task</text>
+    <text class="sub" x="460" y="187">summarize_doc(doc 2)</text>
+  </g>
+  <g class="node">
+    <rect x="368" y="227" width="184" height="58" rx="12"/>
+    <text x="460" y="246">@task</text>
+    <text class="sub" x="460" y="267">summarize_doc(doc N)</text>
+  </g>
+
+  <g class="node end">
+    <rect x="716" y="147" width="180" height="58" rx="29"/>
+    <text x="806" y="166">Return value</text>
+    <text class="sub" x="806" y="187">list, in input order</text>
+  </g>
+
+  <g class="node store">
+    <path d="M370,356 A90,9 0 0,0 550,356 A90,9 0 0,0 370,356 V416 A90,9 0 0,0 550,416 V356"/>
+    <text x="460" y="378">Run record</text>
+    <text class="sub" x="460" y="399">get_result()</text>
+  </g>
+
+  <text class="note" x="460" y="456">Your code calls asyncio.gather. The caller gets the list itself; get_result() returns the record of the last run.</text>
+</svg>

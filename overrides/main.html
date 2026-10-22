@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{#
+  Decouples the browser tab / HTML <title> from `site_name`. `site_name`
+  drives the header wordmark; the homepage (and 404) tab carries the
+  product line. Every other page prefers its front-matter `title:`
+  (page.meta.title survives when a nav label overrides page.title) and adds
+  a qualifier from its top-level docs folder (skipped on the folder's own
+  landing page, e.g. /notebooks/), so /api/rag/ and /concepts/rag/ no
+  longer ship the same title. The same expression feeds
+  og:title / twitter:title in extrahead below; on the homepage both
+  use tab_title, so the tab and the unfurl carry one spelling.
+#}
+{% set tab_title = "locus — a policy gate, approvals and audit for Python agents" %}
+{% block htmltitle %}
+  {% set seo_title = page.meta.title if page and page.meta and page.meta.title else (page.title | striptags if page and page.title else none) %}
+  {% set section = page.url.split('/')[0] if page and page.url and '/' in page.url.rstrip('/') else '' %}
+  {% set qualifier = {'api': 'API reference', 'notebooks': 'example', 'concepts': 'guide', 'how-to': 'how-to', 'research': 'research'}.get(section) %}
+  {% if seo_title and not page.is_homepage %}
+    <title>{{ seo_title }}{% if qualifier %} — {{ qualifier }}{% endif %} · {{ config.site_name }}</title>
+  {% else %}
+    <title>{{ tab_title }}</title>
+  {% endif %}
+{% endblock %}
+
+{#
+  Inject Open Graph + Twitter Card meta tags so link unfurls
+  (Slack, Twitter / X, LinkedIn, Discord, Teams) render the
+  branded 1280x640 social card at docs/img/og-card.png (rendered
+  from og-card.svg — re-render the PNG whenever the SVG changes).
+
+  config.site_url + config.theme.logo would also work for a
+  text-only fallback, but the explicit card is what
+  matches the brand assets the team designed.
+#}
+{% block extrahead %}
+  {% set seo_title = page.meta.title if page and page.meta and page.meta.title else (page.title | striptags if page and page.title else none) %}
+  {% set section = page.url.split('/')[0] if page and page.url and '/' in page.url.rstrip('/') else '' %}
+  {% set qualifier = {'api': 'API reference', 'notebooks': 'example', 'concepts': 'guide', 'how-to': 'how-to', 'research': 'research'}.get(section) %}
+  {% set page_title = tab_title if page and page.is_homepage else ((seo_title ~ (' — ' ~ qualifier if qualifier and not page.is_homepage else '')) if seo_title else config.site_name) %}
+  {% set page_desc = page.meta.description if page and page.meta and page.meta.description else config.site_description %}
+  {% set page_url = page.canonical_url if page and page.canonical_url else config.site_url %}
+  {% set og_image = (config.site_url ~ "/img/og-card.png") | replace("//img/", "/img/") %}
+  {% set og_alt = (page_title if page and page.is_homepage else "locus social card — " ~ page_title) ~ " · pip install locus-sdk · locusagents.oracle.com" %}
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ page_title }}">
+  <meta property="og:description" content="{{ page_desc }}">
+  <meta property="og:url" content="{{ page_url }}">
+  <meta property="og:image" content="{{ og_image }}">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="{{ og_alt }}">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ page_title }}">
+  <meta name="twitter:description" content="{{ page_desc }}">
+  <meta name="twitter:image" content="{{ og_image }}">
+  <meta name="twitter:image:alt" content="{{ og_alt }}">
+{% endblock %}

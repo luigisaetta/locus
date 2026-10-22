@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The trust chain, as wired in locus.control:
+    Target         -> red_team / assure  each probe runs against the target (jobs.py; assure calls
+                                         guardrail_coverage, assess.py)
+    job            -> ground_finding     grounding happens in the runner, for every result of every job
+    ground_finding -> Evidence           decide(gsar_score) is PROCEED (grounded.py)
+    ground_finding -> Abstention         any other decision (regenerate / replan): withheld, with the reason
+    Evidence       -> verify             a skeptic panel challenges the finding (verify.py)
+    verify         -> admit              admit(action, perform, finding=, verdict=, policy=) (admit.py)
+    admit: approve() returns the strongest triggered outcome, deny > require_human > allow (policy.py)
+      allow -> perform() is awaited
+      hold  -> AdmissionError, unless admit() is called with approved_by; then perform() runs
+      deny  -> AdmissionError; approved_by does not override a deny
+    admit          -> AuditTrail         every decision, admitted or not, when trail= is passed
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 482" role="img" aria-labelledby="title desc">
+  <title id="title">The trust chain</title>
+  <desc id="desc">A Target, the AI under test, is attacked by red_team or assessed by assure, and each result goes through GSAR grounding in ground_finding. Below the grounding threshold the result becomes an Abstention: the finding is withheld and no claim is made. When it proceeds it becomes an Evidence finding. Verification challenges the finding, and the admission gate, admit, weighs the proposed action against the finding, the verdict and the policy. On allow the action runs. On hold it runs only when admit is given approved_by, naming the person who approved it. On deny it never runs, and no approval overrides a deny. When an AuditTrail is passed to admit, it records every decision, allowed or not.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- row 1: target -> job -> grounding -> abstention -->
+  <path class="edge" marker-end="url(#ah)" d="M162,59 L230,59"/>
+  <path class="edge" marker-end="url(#ah)" d="M386,59 L508,59"/>
+  <rect class="label-bg" x="407" y="70" width="80" height="20" rx="4"/>
+  <text class="label" x="447" y="80">each result</text>
+  <path class="edge" marker-end="url(#ah)" d="M660,59 L782,59"/>
+  <rect class="label-bg" x="668" y="70" width="108" height="20" rx="4"/>
+  <text class="label" x="722" y="80">below threshold</text>
+
+  <!-- grounding -> evidence: the chain continues on the second row -->
+  <path class="edge" marker-end="url(#ah)" d="M585,88 L585,132 Q585,150 567,150 L109,150 Q91,150 91,168 L91,219"/>
+  <rect class="label-bg" x="304" y="140" width="68" height="20" rx="4"/>
+  <text class="label" x="338" y="150">proceed</text>
+
+  <!-- row 2: evidence -> verification -> admission gate -->
+  <path class="edge" marker-end="url(#ah)" d="M162,250 L230,250"/>
+  <path class="edge" marker-end="url(#ah)" d="M386,250 L508,250"/>
+  <rect class="label-bg" x="392" y="261" width="110" height="20" rx="4"/>
+  <text class="label" x="447" y="271">finding + verdict</text>
+
+  <!-- admission gate -> the three outcomes -->
+  <path class="edge allow" marker-end="url(#ah)" d="M660,235 C722,235 722,162 782,162"/>
+  <path class="edge hold" marker-end="url(#ah)" d="M660,250 L782,250"/>
+  <path class="edge deny" marker-end="url(#ah)" d="M660,265 C722,265 722,338 782,338"/>
+
+  <!-- admission gate -> audit trail, when one is passed -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M585,279 L585,340"/>
+  <rect class="label-bg" x="535" y="300" width="100" height="20" rx="4"/>
+  <text class="label" x="585" y="310">every decision</text>
+
+  <g class="node">
+    <rect x="20" y="30" width="142" height="58" rx="12"/>
+    <text x="91" y="49">Target</text>
+    <text class="sub" x="91" y="70">the AI under test</text>
+  </g>
+  <g class="node">
+    <rect x="232" y="30" width="154" height="58" rx="12"/>
+    <text x="309" y="49">red_team · assure</text>
+    <text class="sub" x="309" y="70">attack · assess</text>
+  </g>
+  <g class="node">
+    <rect x="510" y="30" width="150" height="58" rx="12"/>
+    <text x="585" y="49">GSAR grounding</text>
+    <text class="sub" x="585" y="70">ground_finding()</text>
+  </g>
+  <g class="node abstain">
+    <rect x="784" y="30" width="156" height="58" rx="12"/>
+    <text x="862" y="49">Abstention</text>
+    <text class="sub" x="862" y="70">withheld · no claim</text>
+  </g>
+
+  <g class="node">
+    <rect x="20" y="221" width="142" height="58" rx="12"/>
+    <text x="91" y="240">Evidence</text>
+    <text class="sub" x="91" y="261">grounded finding</text>
+  </g>
+  <g class="node">
+    <rect x="232" y="221" width="154" height="58" rx="12"/>
+    <text x="309" y="240">Verification</text>
+    <text class="sub" x="309" y="261">verify()</text>
+  </g>
+  <g class="node primary">
+    <rect x="510" y="221" width="150" height="58" rx="12"/>
+    <text x="585" y="240">Admission gate</text>
+    <text class="sub" x="585" y="261">admit() · policy</text>
+  </g>
+
+  <g class="node allow">
+    <rect x="784" y="133" width="156" height="58" rx="12"/>
+    <text x="862" y="152">Allow</text>
+    <text class="sub" x="862" y="173">action runs</text>
+  </g>
+  <g class="node hold">
+    <rect x="784" y="221" width="156" height="58" rx="12"/>
+    <text x="862" y="240">Hold</text>
+    <text class="sub" x="862" y="261">runs if approved_by</text>
+  </g>
+  <g class="node deny">
+    <rect x="784" y="309" width="156" height="58" rx="12"/>
+    <text x="862" y="328">Deny</text>
+    <text class="sub" x="862" y="349">never runs</text>
+  </g>
+
+  <g class="store node">
+    <path d="M660,350 L660,404 A75,8 0 0 1 510,404 L510,350 M510,350 A75,8 0 0 1 660,350 A75,8 0 0 1 510,350 Z"/>
+    <text x="585" y="376">AuditTrail</text>
+    <text class="sub" x="585" y="397">hash-chained</text>
+  </g>
+
+  <text class="note" x="480" y="446">A held action runs only when admit() is given approved_by; no approval overrides a deny.</text>
+  <text class="note" x="480" y="468">Decisions are recorded when an AuditTrail is passed to admit().</text>
+</svg>

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A swarm run, as executed by locus.multiagent.swarm.Swarm.execute (v2.16.0):
+    you          -> queue     add_task(description, priority): queue kept sorted, higher priority first
+    initial task -> queue     execute(initial_task) queues the task itself
+    initial task -> decompose when decompose_tasks (the default) and the swarm has a model:
+                              _generate_subtasks asks it for a JSON list of sub-tasks
+    decompose    -> queue     each sub-task queued one priority lower, with parent_task_id set
+    queue        -> agent     _claim_task: the first PENDING task, in priority order, the agent can_handle
+                              (required_tags all in capabilities; else a capability keyword in the
+                              description; an agent with no capabilities takes any untagged task)
+    agent <-> context         work_on_task: the prompt carries context.get_summary(); the reply's
+                              Findings and Blackboard sections are written back, and the result is
+                              recorded in task_results. An error or task_timeout_ms marks it FAILED.
+                              Each agent keeps claiming until nothing it can handle is pending.
+    queue        -> result    once no task is PENDING, or after max_iterations rounds
+    context      -> result    the swarm model summarizes the context (falls back to get_summary())
+  Agents never enqueue tasks: only add_task and decomposition do.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 540" role="img" aria-labelledby="title desc">
+  <title id="title">A swarm run</title>
+  <desc id="desc">Tasks enter one shared task queue, kept in priority order: tasks you seed with add_task, and the initial task passed to execute, which the swarm's model can also split into sub-tasks that are queued too. Three peer agents, Scout, Analyst and Writer, each claim the first pending task their capabilities match, work it, and claim again. Every agent reads a summary of the SharedContext in its prompt and writes its findings, blackboard notes and task results back to it. When no task is pending the run returns a SwarmResult with the completed and failed tasks and a summary written from the shared context. Agents add findings, never tasks, and the run also stops after max_iterations rounds.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- initial task -> decompose (optional) -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M460,53 H532"/>
+
+  <!-- inputs -> queue -->
+  <path class="edge" marker-end="url(#ah)" d="M122,82 C122,118 322,110 322,144"/>
+  <path class="edge" marker-end="url(#ah)" d="M372,82 V144"/>
+  <path class="edge dashed" marker-end="url(#ah)" d="M622,82 C622,118 422,110 422,144"/>
+  <rect class="label-bg" x="487" y="104" width="70" height="20" rx="4"/>
+  <text class="label" x="522" y="114">sub-tasks</text>
+
+  <!-- queue -> result -->
+  <path class="edge" marker-end="url(#ah)" d="M467,175 H680"/>
+  <rect class="label-bg" x="518" y="165" width="112" height="20" rx="4"/>
+  <text class="label" x="574" y="175">no task pending</text>
+
+  <!-- queue -> agents: each claims the next task it can handle -->
+  <path class="edge" marker-end="url(#ah)" d="M322,204 C322,250 122,244 122,288"/>
+  <path class="edge" marker-end="url(#ah)" d="M372,204 V288"/>
+  <path class="edge" marker-end="url(#ah)" d="M422,204 C422,250 622,244 622,288"/>
+  <rect class="label-bg" x="302" y="236" width="140" height="20" rx="4"/>
+  <text class="label" x="372" y="246">claims by capability</text>
+
+  <!-- agents <-> shared context -->
+  <path class="edge" marker-start="url(#ah)" marker-end="url(#ah)" d="M122,350 V417"/>
+  <path class="edge" marker-start="url(#ah)" marker-end="url(#ah)" d="M372,350 V413"/>
+  <path class="edge" marker-start="url(#ah)" marker-end="url(#ah)" d="M622,350 V417"/>
+  <rect class="label-bg" x="266" y="372" width="212" height="20" rx="4"/>
+  <text class="label" x="372" y="382">reads summary · writes findings</text>
+
+  <!-- shared context -> result -->
+  <path class="edge" marker-end="url(#ah)" d="M710,456 H752 Q784,456 784,424 V206"/>
+  <rect class="label-bg" x="743" y="309" width="82" height="20" rx="4"/>
+  <text class="label" x="784" y="319">summarized</text>
+
+  <g class="node">
+    <rect x="34" y="24" width="176" height="58" rx="12"/>
+    <text x="122" y="43">Seeded tasks</text>
+    <text class="sub" x="122" y="64">add_task()</text>
+  </g>
+  <g class="node">
+    <rect x="284" y="24" width="176" height="58" rx="12"/>
+    <text x="372" y="43">Initial task</text>
+    <text class="sub" x="372" y="64">execute(initial_task)</text>
+  </g>
+  <g class="node optional">
+    <rect x="534" y="24" width="176" height="58" rx="12"/>
+    <text x="622" y="43">Decompose</text>
+    <text class="sub" x="622" y="64">swarm model splits it</text>
+  </g>
+
+  <g class="node primary">
+    <rect x="277" y="146" width="190" height="58" rx="12"/>
+    <text x="372" y="165">Task queue</text>
+    <text class="sub" x="372" y="186">pending, by priority</text>
+  </g>
+  <g class="node end">
+    <rect x="682" y="146" width="204" height="58" rx="29"/>
+    <text x="784" y="165">SwarmResult</text>
+    <text class="sub" x="784" y="186">completed, failed, summary</text>
+  </g>
+
+  <g class="node">
+    <rect x="34" y="290" width="176" height="58" rx="12"/>
+    <text x="122" y="309">Scout</text>
+    <text class="sub" x="122" y="330">search · collect</text>
+  </g>
+  <g class="node">
+    <rect x="284" y="290" width="176" height="58" rx="12"/>
+    <text x="372" y="309">Analyst</text>
+    <text class="sub" x="372" y="330">analyze · verify</text>
+  </g>
+  <g class="node">
+    <rect x="534" y="290" width="176" height="58" rx="12"/>
+    <text x="622" y="309">Writer</text>
+    <text class="sub" x="622" y="330">write · summarize</text>
+  </g>
+
+  <g class="store">
+    <path d="M34,426 A338,12 0 0 1 710,426 V486 A338,12 0 0 1 34,486 Z M34,426 A338,12 0 0 0 710,426"/>
+    <g class="node">
+      <text x="372" y="458">SharedContext</text>
+      <text class="sub" x="372" y="479">findings · blackboard · task results</text>
+    </g>
+  </g>
+
+  <text class="note" x="460" y="526">Agents add findings, never tasks. The run also stops after max_iterations rounds.</text>
+</svg>

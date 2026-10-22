@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The supervisor + critic loop, as wired by build_supervisor_graph in
+  examples/notebook_31_supervisor_critic_loop.py on locus.multiagent.graph.StateGraph:
+    START  -> gather
+    gather -> draft                (the analyst agent writes state["notes"])
+    draft  -> review               (the author agent writes state["draft"])
+    review -> draft   when the verdict is REVISE and fewer than 2 revisions are done
+    review -> END     when the verdict is APPROVE, or once 2 revisions are done
+  (route_after_review; the conditional edge maps "revise" -> draft, "done" -> END.)
+  review_node runs the reviewer agent's verdict and then ground_finding on every
+  pass, whatever the verdict. ground_finding (locus.control.grounded) returns an
+  Evidence only when decide(gsar_score) is PROCEED, otherwise an Abstention.
+  After END the caller reads final_state["grounded_result"] from the last pass:
+  is_finding() -> it ships; an Abstention ships nothing.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 366" role="img" aria-labelledby="title desc">
+  <title id="title">The supervisor and critic loop</title>
+  <desc id="desc">Gather runs the analyst agent and passes its notes to Draft, where the author agent writes the draft. The review node then runs two steps on every pass: the reviewer agent's verdict, then the grounding gate, ground_finding. On REVISE, while fewer than two revisions are done, control returns to Draft. On APPROVE, or once two revisions are done, the graph ends. What ships depends only on the grounding gate's result from the last pass, not on the verdict: an Evidence ships to the privacy queue, and an Abstention means nothing ships.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the review node: both steps run on every pass -->
+  <g class="lane">
+    <rect x="478" y="62" width="412" height="123" rx="14"/>
+    <text class="lane-title" x="496" y="83">REVIEW NODE · EVERY PASS</text>
+  </g>
+
+  <!-- review -> draft: revise loop -->
+  <path class="edge" marker-end="url(#ah)" d="M575,62 C575,12 324,12 324,103"/>
+  <rect class="label-bg" x="352" y="20" width="195" height="20" rx="4"/>
+  <text class="label" x="449.5" y="30">REVISE, fewer than 2 revisions</text>
+
+  <!-- gather -> draft -->
+  <path class="edge" marker-end="url(#ah)" d="M170,134 L252,134"/>
+  <rect class="label-bg" x="189" y="145" width="46" height="20" rx="4"/>
+  <text class="label" x="212" y="155">notes</text>
+
+  <!-- draft -> verdict -->
+  <path class="edge" marker-end="url(#ah)" d="M394,134 L498,134"/>
+  <rect class="label-bg" x="415" y="145" width="42" height="20" rx="4"/>
+  <text class="label" x="436" y="155">draft</text>
+
+  <!-- verdict -> gate -->
+  <path class="edge" marker-end="url(#ah)" d="M650,134 L710,134"/>
+
+  <!-- review -> END -->
+  <path class="edge" marker-end="url(#ah)" d="M575,185 L575,247"/>
+  <rect class="label-bg" x="588" y="206" width="192" height="20" rx="4"/>
+  <text class="label" x="684" y="216">APPROVE, or 2 revisions done</text>
+
+  <!-- END -> what ships -->
+  <path class="edge" marker-end="url(#ah)" d="M513,278 L396,278"/>
+  <rect class="label-bg" x="420" y="289" width="67" height="20" rx="4"/>
+  <text class="label" x="453.5" y="299">Evidence</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M637,278 L754,278"/>
+  <rect class="label-bg" x="658" y="289" width="77" height="20" rx="4"/>
+  <text class="label" x="696.5" y="299">Abstention</text>
+
+  <g class="node">
+    <rect x="30" y="105" width="140" height="58" rx="12"/>
+    <text x="100" y="124">Gather</text>
+    <text class="sub" x="100" y="145">analyst agent</text>
+  </g>
+  <g class="node">
+    <rect x="254" y="105" width="140" height="58" rx="12"/>
+    <text x="324" y="124">Draft</text>
+    <text class="sub" x="324" y="145">author agent</text>
+  </g>
+  <g class="node">
+    <rect x="500" y="105" width="150" height="58" rx="12"/>
+    <text x="575" y="124">Verdict</text>
+    <text class="sub" x="575" y="145">reviewer agent</text>
+  </g>
+  <g class="node primary">
+    <rect x="712" y="105" width="156" height="58" rx="12"/>
+    <text x="790" y="124">Grounding gate</text>
+    <text class="sub" x="790" y="145">ground_finding</text>
+  </g>
+
+  <g class="node end">
+    <rect x="513" y="249" width="124" height="58" rx="29"/>
+    <text x="575" y="268">End</text>
+    <text class="sub" x="575" y="289">final state</text>
+  </g>
+  <g class="node allow">
+    <rect x="254" y="249" width="140" height="58" rx="12"/>
+    <text x="324" y="268">Ships</text>
+    <text class="sub" x="324" y="289">privacy queue</text>
+  </g>
+  <g class="node abstain">
+    <rect x="756" y="249" width="134" height="58" rx="12"/>
+    <text x="823" y="268">Abstains</text>
+    <text class="sub" x="823" y="289">nothing ships</text>
+  </g>
+
+  <text class="note" x="460" y="346">The gate runs on every pass, whatever the verdict. The verdict routes the loop; only the gate decides what ships.</text>
+</svg>

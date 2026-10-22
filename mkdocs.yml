@@ -1,0 +1,377 @@
+site_name: locus
+site_description: "A policy gate, approvals and an audit trail for the actions Python agents take: every consequential action clears a policy you write before the side effect. Build on the full runtime, or put the gate around the agent you already have."
+site_url: https://locusagents.oracle.com/
+repo_url: https://github.com/oracle/locus
+repo_name: oracle/locus
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+strict: true
+
+exclude_docs: |
+  internal/
+  doc-gen/
+  diagrams/README.md
+  # Engineering notes that live next to the code they describe (linked from
+  # the README and CHANGELOG on GitHub), not pages of the site.
+  decision.md
+  harness.md
+  observation-pack.md
+  pg-checkpointer.md
+  runner.md
+
+theme:
+  name: material
+  custom_dir: overrides
+  logo: img/mark.svg
+  favicon: img/mark.svg
+  font:
+    text: Inter
+    code: JetBrains Mono
+  palette:
+  # Dark (slate) is the default (listed first). Each scheme shows the icon
+  # for the OTHER mode — dark shows a sun (go light), light shows a moon.
+  - scheme: slate
+    primary: custom
+    accent: custom
+    toggle:
+      icon: material/brightness-7
+      name: Switch to light mode
+  - scheme: default
+    primary: custom
+    accent: custom
+    toggle:
+      icon: material/brightness-4
+      name: Switch to dark mode
+  features:
+  - navigation.instant
+  - navigation.tabs
+  - navigation.tabs.sticky
+  - navigation.indexes
+  - navigation.prune
+  - navigation.top
+  - content.code.copy
+  - content.code.annotate
+  - content.tabs.link
+  - search.highlight
+  - search.share
+  - search.suggest
+
+# Append a content hash to local CSS/JS URLs so browsers fetch fresh assets
+# the moment a file changes (no more stale-cache surprises). See hooks/.
+hooks:
+- hooks/cache_bust.py
+- hooks/build_metadata.py
+
+extra_css:
+- https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600..700&display=swap
+- stylesheets/locus.css
+
+extra_javascript:
+- javascripts/header-home.js
+- javascripts/action-demo.js
+- javascripts/notebook-filter.js
+- javascripts/sidebar-filter.js
+
+copyright: <span class="footer-brand"><span class="footer-brand__text">Oracle Generative AI</span></span><br><span class="footer-copy">Copyright &copy; 2025&ndash;2026 Oracle and/or its affiliates &middot; <a href="/legal/">Legal &amp; disclaimer</a></span>
+
+extra:
+  homepage: https://locusagents.oracle.com/
+  # The model every generic example uses. It matches the quickstart, which
+  # installs only the openai extra. Change it here, not on the pages: the
+  # build hook expands {{ locus_example_model }} everywhere.
+  example_model: openai:gpt-4o-mini
+  social:
+  - icon: fontawesome/brands/github
+    link: https://github.com/oracle/locus
+    name: locus on GitHub
+  - icon: fontawesome/brands/python
+    link: https://pypi.org/project/locus-sdk/
+    name: locus-sdk on PyPI
+  generator: false
+
+markdown_extensions:
+- admonition
+- attr_list
+- md_in_html
+- def_list
+- footnotes
+- pymdownx.details
+- pymdownx.highlight:
+    anchor_linenums: true
+    line_spans: __span
+    pygments_lang_class: true
+- pymdownx.inlinehilite
+# Notebook pages embed the notebooks source from the SDK repo: `.sdk` is
+# where the deploy workflow checks it out, `../locus-sdk` the local
+# convention (see README). check_paths makes a missing include fail the
+# build instead of rendering an empty section.
+- pymdownx.snippets:
+    base_path: [., packages/locus-sdk-security]
+    check_paths: true
+# Mermaid diagrams render client-side via Material's built-in integration;
+# the custom_fence is what routes ```mermaid to it instead of highlighting
+# it as source. Required by docs/research/ and the concept diagrams.
+- pymdownx.superfences:
+    custom_fences:
+    - name: mermaid
+      class: mermaid
+      format: !!python/name:pymdownx.superfences.fence_code_format
+- pymdownx.tabbed:
+    alternate_style: true
+- pymdownx.emoji:
+    emoji_index: !!python/name:material.extensions.emoji.twemoji
+    emoji_generator: !!python/name:material.extensions.emoji.to_svg
+- tables
+- toc:
+    permalink: true
+
+plugins:
+- search
+- mkdocstrings:
+    default_handler: python
+    handlers:
+      python:
+        options:
+          docstring_style: google
+          show_source: true
+          show_root_heading: true
+          show_root_full_path: false
+          separate_signature: true
+          show_signature_annotations: true
+          merge_init_into_class: true
+          show_if_no_docstring: false
+          inherited_members: true
+          members_order: source
+
+nav:
+# Home (index.md) is reached via the header wordmark + logo (both link to "/"),
+# so we don't repeat it as a tab here.
+- Get started:
+  - Create an agent: how-to/quickstart.md
+  - Add tools: concepts/tools.md
+  - Control an action: how-to/first-controlled-action.md
+  - Request approval: concepts/interrupts.md
+  - Check evidence (GSAR): concepts/gsar.md
+  - Inspect a run: concepts/observability.md
+  - Persist and resume: how-to/persist-conversations.md
+  - Compose multiple agents: concepts/multi-agent.md
+- Guides:
+  - Agents:
+    - Agent: concepts/agent.md
+    - Agent loop: concepts/agent-loop.md
+    - State: concepts/state.md
+    - Prompts: concepts/prompts.md
+    - Conversation management: concepts/conversation-management.md
+    - Retry strategies: concepts/retry.md
+    - Hooks: concepts/hooks.md
+    - Termination: concepts/termination.md
+    - Structured output: concepts/structured-output.md
+    - Interrupts: concepts/interrupts.md
+    - Errors: concepts/errors.md
+  - Tools:
+    - Tools: concepts/tools.md
+    - Idempotency: concepts/idempotency.md
+    - Executors: concepts/executors.md
+    - MCP: concepts/mcp.md
+    - Multi-modal providers: concepts/multi-modal-providers.md
+  - Model providers:
+    - Model providers: concepts/models.md
+    - OCI Generative AI: concepts/providers/oci.md
+    - OCI Responses API: concepts/oci-responses.md
+    - OpenAI: concepts/providers/openai.md
+    - Anthropic: concepts/providers/anthropic.md
+    - OpenAI-compatible: concepts/providers/openai-compatible.md
+    - Azure OpenAI: concepts/providers/azure.md
+    - Amazon Bedrock: concepts/providers/bedrock.md
+    - Resilience: concepts/providers/resilience.md
+  - Reasoning: concepts/reasoning.md
+  - Memory:
+    - Checkpointers & Store: concepts/checkpointers.md
+    - Long-term Memory Manager: concepts/memory-manager.md
+  - RAG: concepts/rag.md
+  - Multi-agent:
+    - Multi-agent: concepts/multi-agent.md
+    - Composition: concepts/multi-agent/composition.md
+    - Orchestrator: concepts/multi-agent/orchestrator.md
+    - Swarm: concepts/multi-agent/swarm.md
+    - Handoff: concepts/multi-agent/handoff.md
+    - StateGraph: concepts/multi-agent/graph.md
+    - Functional API: concepts/multi-agent/functional.md
+    - A2A protocol: concepts/multi-agent/a2a.md
+    - DeepAgent: concepts/deepagent.md
+    - Production-readiness: concepts/multi-agent/production.md
+  - GSAR typed grounding: concepts/gsar.md
+  - Control layer:
+    - Control-layer architecture: concepts/control-layer.md
+    - Writing a policy that holds: concepts/policy-authoring.md
+    - SecurityContext application: concepts/security-context.md
+  - Skills & Playbooks:
+    - Skills: concepts/skills.md
+    - Playbooks: concepts/playbooks.md
+  - Streaming & Server:
+    - Streaming: concepts/streaming.md
+    - Events: concepts/events.md
+    - Graph streaming: concepts/graph-streaming.md
+    - Agent server: concepts/server.md
+  - Observability:
+    - Observability: concepts/observability.md
+    - SSE event catalogue: concepts/sse-events.md
+    - Testing: concepts/testing.md
+    - Evaluation: concepts/evaluation.md
+  - Security use cases:
+    - Agentic AI-security: concepts/agentic-ai-security.md
+    - Grounded findings: concepts/security.md
+    - Guardrails: concepts/safety.md
+    - Threat scenarios: concepts/threat-scenarios.md
+    - Cloud-posture agent: concepts/cloud-posture.md
+  - How-to:
+    - Deploy: how-to/deploy.md
+    - OCI GenAI models: how-to/oci-models.md
+    - OCI Dedicated AI Cluster (DAC): how-to/oci-dac.md
+    - Persist conversations: how-to/persist-conversations.md
+    - Build a custom tool: how-to/custom-tools.md
+    - Add a checkpointer backend: how-to/custom-checkpointer.md
+    - LiteLLM AI Gateway: how-to/litellm-gateway.md
+    - Environment variables: how-to/environment-variables.md
+    - Build an integration: how-to/build-an-integration.md
+  - Project:
+    - Guarantees & boundaries: why-locus.md
+    - Capabilities: capabilities.md
+    - About & maintainers: about.md
+    - Compatibility & releases: compatibility.md
+    - Legal notices: legal.md
+- Examples:
+  - Catalog: notebooks/index.md
+  - Oracle Cloud & Database 26ai:
+    - OCI transports — start here: notebooks/notebook_01_oci_transports.md
+    - OCI v1 chat: notebooks/notebook_02_oci_openai_chat.md
+    - OCI Responses: notebooks/notebook_03_oci_responses.md
+    - OCI Dedicated AI Cluster: notebooks/notebook_04_oci_dac.md
+    - Cohere reranker on OCI: notebooks/notebook_05_cohere_reranker.md
+    - Oracle 26ai RAG: notebooks/notebook_41_oracle_26ai_rag.md
+    - Oracle ADB document loader: notebooks/notebook_42_oracle_adb_loader.md
+    - Oracle in-DB chunker: notebooks/notebook_43_oracle_indb_chunker.md
+    - Oracle in-DB embeddings: notebooks/notebook_44_oracle_indb_embeddings.md
+    - Oracle 26ai checkpointer: notebooks/notebook_53_oracle_26ai_checkpointer.md
+    - Oracle versioned checkpoint saver: notebooks/notebook_54_oracle_versioned_saver.md
+    - Oracle store (BaseStore): notebooks/notebook_10_oracle_store.md
+    - Oracle agent memory: notebooks/notebook_88_oracle_agent_memory.md
+    - OCI tools — agents that drive OCI: notebooks/notebook_89_oci_tools.md
+  - Foundations:
+    - Basic agent: notebooks/notebook_06_basic_agent.md
+    - Agent with tools: notebooks/notebook_07_agent_with_tools.md
+    - Conversation memory: notebooks/notebook_08_agent_memory.md
+    - A chat loop: notebooks/notebook_09_chat_loop.md
+    - Streaming events: notebooks/notebook_11_agent_streaming.md
+    - Lifecycle hooks: notebooks/notebook_12_agent_hooks.md
+    - SSE streaming: notebooks/notebook_13_sse_streaming.md
+    - Advanced hooks: notebooks/notebook_14_hooks_advanced.md
+    - Termination conditions: notebooks/notebook_15_termination.md
+  - Graphs & composition:
+    - Basic graph: notebooks/notebook_16_basic_graph.md
+    - Conditional routing: notebooks/notebook_17_conditional_routing.md
+    - State reducers: notebooks/notebook_18_state_reducers.md
+    - Human-in-the-loop: notebooks/notebook_19_human_in_the_loop.md
+    - Command + advanced patterns: notebooks/notebook_20_advanced_patterns.md
+    - Composition: notebooks/notebook_21_composition.md
+    - Advanced graphs: notebooks/notebook_22_graph_advanced.md
+    - Functional API: notebooks/notebook_23_functional_api.md
+  - Agent teams:
+    - Swarm: notebooks/notebook_24_swarm_multiagent.md
+    - Agent handoff: notebooks/notebook_25_agent_handoff.md
+    - Orchestrator pattern: notebooks/notebook_26_orchestrator_pattern.md
+    - Specialist agents: notebooks/notebook_27_specialist_agents.md
+    - A2A protocol: notebooks/notebook_28_a2a_protocol.md
+    - DeepAgent: notebooks/notebook_29_deepagent.md
+    - Map-reduce support triage: notebooks/notebook_30_map_reduce_code_review.md
+    - Supervisor + critic loop: notebooks/notebook_31_supervisor_critic_loop.md
+    - Adversarial debate + judge: notebooks/notebook_32_debate_with_judge.md
+    - Multi-agent + human-in-the-loop: notebooks/notebook_33_multiagent_human_in_loop.md
+    - Emergent incident routing: notebooks/notebook_34_emergent_routing.md
+  - Reasoning & grounding:
+    - Structured output: notebooks/notebook_35_structured_output.md
+    - Reasoning patterns: notebooks/notebook_36_reasoning_patterns.md
+    - GSAR typed grounding: notebooks/notebook_37_gsar_typed_grounding.md
+  - RAG:
+    - RAG basics: notebooks/notebook_38_rag_basics.md
+    - RAG providers: notebooks/notebook_39_rag_providers.md
+    - RAG agents: notebooks/notebook_40_rag_agents.md
+  - Skills, playbooks & policy:
+    - MCP integration: notebooks/notebook_45_mcp_integration.md
+    - Playbooks: notebooks/notebook_46_playbooks.md
+    - Plugins: notebooks/notebook_47_plugins.md
+    - Skills: notebooks/notebook_48_skills.md
+    - Steering: notebooks/notebook_49_steering.md
+  - Hardening for production:
+    - Guardrails & security: notebooks/notebook_50_guardrails_security.md
+    - Advanced guardrails: notebooks/notebook_51_guardrails_advanced.md
+    - Checkpoint backends: notebooks/notebook_52_checkpoint_backends.md
+    - Evaluation: notebooks/notebook_55_evaluation.md
+    - Model providers: notebooks/notebook_56_model_providers.md
+    - Multi-modal providers: notebooks/notebook_57_multimodal_providers.md
+  - Routing & observability:
+    - Cognitive router (PRISM): notebooks/notebook_58_cognitive_router.md
+    - Observability basics: notebooks/notebook_59_observability_basics.md
+    - Agent yield bridge + token usage: notebooks/notebook_60_agent_yield_bridge.md
+    - EventBus subscriber patterns: notebooks/notebook_61_eventbus_subscribers.md
+    - Full event catalogue tour: notebooks/notebook_62_event_catalogue.md
+  - Real-world workflows:
+    - On-call incident response: notebooks/notebook_63_incident_response.md
+    - Support concession approval: notebooks/notebook_64_procurement_approval.md
+    - Vendor DPA & data-privacy review: notebooks/notebook_65_contract_review.md
+    - Voice output: notebooks/notebook_66_audio_response.md
+    - Voice in → voice out: notebooks/notebook_67_audio_chat.md
+  - Serving & gateways:
+    - Agent server: notebooks/notebook_68_agent_server.md
+    - Research workflow: notebooks/notebook_69_research_workflow.md
+    - Live vendor integrations: notebooks/notebook_70_vendor_integrations.md
+    - LiteLLM AI Gateway: notebooks/notebook_71_litellm_gateway.md
+    - LiteLLM AI Gateway — cost tracking: notebooks/notebook_72_litellm_gateway_cost.md
+  - Real-world gates:
+    - Payment refund gate: notebooks/notebook_83_payment_refund_gate.md
+    - Infra deploy gate: notebooks/notebook_84_infra_deploy_gate.md
+    - Support account gate: notebooks/notebook_85_support_account_gate.md
+    - Data deletion (GDPR) gate: notebooks/notebook_86_data_deletion_gate.md
+    - Cloud resource gate: notebooks/notebook_87_cloud_resource_gate.md
+  - Security operations:
+    - Red-team an AI agent: notebooks/notebook_75_agent_red_team.md
+    - Red-team a support bot: notebooks/notebook_76_redteam_support_bot.md
+    - Verify findings: notebooks/notebook_78_verify_findings.md
+    - CI security gate: notebooks/notebook_77_ci_security_gate.md
+    - SOC alert triage: notebooks/notebook_79_soc_alert_triage.md
+    - Investigate with SecurityContext: notebooks/notebook_82_investigate_with_ctx.md
+    - IR with a tamper-evident audit trail: notebooks/notebook_81_ir_audit_trail.md
+    - SOC playbooks: notebooks/notebook_74_security_playbooks.md
+    - Grounded cloud-posture agent: notebooks/notebook_73_cloud_posture_agent.md
+    - Model & hardware fingerprinting: notebooks/notebook_80_model_fingerprint.md
+- Research:
+  - Research: research/index.md
+  - Policy blindness: research/policy-blindness.md
+- API:
+  - API reference: api/index.md
+  - Agent: api/agent.md
+  - Multi-agent: api/multiagent.md
+  - DeepAgent: api/deepagent.md
+  - Tools: api/tools.md
+  - Control: api/control.md
+  - Security: api/security.md
+  - A2A: api/a2a.md
+  - Hooks: api/hooks.md
+  - Termination: api/termination.md
+  - Reasoning: api/reasoning.md
+  - RAG: api/rag.md
+  - Memory: api/memory.md
+  - Checkpointers: api/checkpointers.md
+  - Models: api/models.md
+  - Capability providers: api/providers.md
+  - Streaming: api/streaming.md
+  - Events: api/events.md
+  - Observability: api/observability.md
+  - Agent server: api/server.md
+  - Evaluation: api/evaluation.md
+  - Playbooks: api/playbooks.md
+  - Skills: api/skills.md
+  - Integrations: api/integrations.md
+  - Core primitives: api/core.md
+  - ReAct loop (deprecated): api/loop.md

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The admission path, as locus.control.gate_tool runs a gated tool call:
+    tool call  -> Classify   resolve_action() builds the Action: environment, kind, tags,
+                             blast radius, cost (locus/control/action.py)
+    Classify   -> admit()    approve() matches the ControlPolicy against Action.labels(),
+                             blast radius and cost; it never sees the call's arguments
+                             (locus/security/policy.py)
+    admit()    -> trail      the decision is recorded before any branch, admitted or not
+                             (locus/security/admit.py)
+    allow      -> the call runs
+    hold       -> (require_human) a named person decides on the ApprovalStore:
+                  approved -> the call runs once, re-weighed with the approver recorded
+                  denied   -> refused                        (locus/control/gate.py)
+    deny       -> refused; no approval overrides a deny
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 890 388" role="img" aria-labelledby="title desc">
+  <title id="title">Classifier and enforcement point</title>
+  <desc id="desc">The model proposes a tool call. Classify turns the call into an Action (its labels, blast radius and cost), and that Action is all of the call the policy ever sees. admit() weighs that Action against the policy and records every decision on the audit trail. Allow runs the action. Hold waits for a person: approved, the action runs; denied, it is refused. Deny refuses it outright. admit() never sees the raw call, only the Action that Classify built from it.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- model -> classify -> admit() -->
+  <path class="edge" marker-end="url(#ah)" d="M188,173 L246,173"/>
+  <path class="edge" marker-end="url(#ah)" d="M414,173 L472,173"/>
+
+  <!-- admit() -> the three outcomes -->
+  <path class="edge allow" marker-end="url(#ah)" d="M624,173 C670,173 666,49 712,49"/>
+  <path class="edge hold" marker-end="url(#ah)" d="M624,173 L712,173"/>
+  <path class="edge deny" marker-end="url(#ah)" d="M624,173 C670,173 666,297 712,297"/>
+
+  <!-- a person decides a hold -->
+  <path class="edge dashed allow" marker-end="url(#ah)" d="M792,144 L792,80"/>
+  <rect class="label-bg" x="758" y="102" width="68" height="20" rx="4"/>
+  <text class="label" x="792" y="112">approved</text>
+  <path class="edge dashed deny" marker-end="url(#ah)" d="M792,202 L792,266"/>
+  <rect class="label-bg" x="764" y="224" width="56" height="20" rx="4"/>
+  <text class="label" x="792" y="234">denied</text>
+
+  <!-- admit() -> audit trail -->
+  <path class="edge" marker-end="url(#ah)" d="M549,202 L549,262"/>
+  <rect class="label-bg" x="496" y="222" width="106" height="20" rx="4"/>
+  <text class="label" x="549" y="232">every decision</text>
+
+  <g class="node">
+    <rect x="20" y="144" width="168" height="58" rx="12"/>
+    <text x="104" y="163">Model</text>
+    <text class="sub" x="104" y="184">proposes a tool call</text>
+  </g>
+  <g class="node primary">
+    <rect x="248" y="144" width="166" height="58" rx="12"/>
+    <text x="331" y="163">Classify</text>
+    <text class="sub" x="331" y="184">call → Action labels</text>
+  </g>
+  <g class="node">
+    <rect x="474" y="144" width="150" height="58" rx="12"/>
+    <text x="549" y="163">admit()</text>
+    <text class="sub" x="549" y="184">policy decides</text>
+  </g>
+
+  <g class="node allow">
+    <rect x="714" y="20" width="156" height="58" rx="12"/>
+    <text x="792" y="39">Allow</text>
+    <text class="sub" x="792" y="60">the action runs</text>
+  </g>
+  <g class="node hold">
+    <rect x="714" y="144" width="156" height="58" rx="12"/>
+    <text x="792" y="163">Hold</text>
+    <text class="sub" x="792" y="184">a person decides</text>
+  </g>
+  <g class="node deny">
+    <rect x="714" y="268" width="156" height="58" rx="12"/>
+    <text x="792" y="287">Deny</text>
+    <text class="sub" x="792" y="308">refused</text>
+  </g>
+
+  <g class="store node">
+    <path d="M474,272 A75,8 0 0 1 624,272 L624,324 A75,8 0 0 1 474,324 Z M474,272 A75,8 0 0 0 624,272"/>
+    <text x="549" y="296">Audit trail</text>
+    <text class="sub" x="549" y="317">allowed or not</text>
+  </g>
+
+  <text class="note" x="445" y="374">admit() never sees the raw call, only the Action that Classify built from it.</text>
+</svg>

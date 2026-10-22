@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The example graph on docs/concepts/multi-agent/graph.md, as locus.multiagent.graph.StateGraph
+  routes it (v2.16.0):
+    START -> plan -> investigate -> report -> review    add_edge: fixed, always followed
+    review -> END           when the router returns END (confidence >= 0.85)
+    review -> investigate   otherwise                    add_conditional_edges
+  After a node runs, its output merges into state through the schema's reducers
+  (_apply_state_update) before _get_next_nodes asks where to go, so the router sees what
+  review just wrote. A node's conditional edge wins over its fixed edges; Command(goto=)
+  wins over both. Conditional edges are not cycle-checked, so this loop needs no
+  allow_cycles. It is bounded by GraphConfig.max_iterations: at the limit the run stops
+  and returns the state it has.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 948 320" role="img" aria-labelledby="title desc">
+  <title id="title">A StateGraph with a review loop</title>
+  <desc id="desc">The example graph on this page. START passes the input state to plan, then investigate, report and review, each joined by a fixed edge. After review, a conditional edge reads the merged state: if confidence is below 0.85, control loops back to investigate; if it is 0.85 or higher, the run reaches END and returns the final state. The loop repeats until the router returns END or the graph reaches its max_iterations limit.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- fixed edges (add_edge) -->
+  <path class="edge" marker-end="url(#ah)" d="M124,129 L182,129"/>
+  <path class="edge" marker-end="url(#ah)" d="M316,129 L374,129"/>
+  <path class="edge" marker-end="url(#ah)" d="M526,129 L584,129"/>
+  <path class="edge" marker-end="url(#ah)" d="M718,129 L776,129"/>
+
+  <!-- conditional: review -> investigate -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M853,100 C853,16 451,16 451,98"/>
+  <rect class="label-bg" x="588" y="27" width="128" height="20" rx="4"/>
+  <text class="label" x="652" y="37">confidence &lt; 0.85</text>
+
+  <!-- conditional: review -> END -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M853,158 L853,238"/>
+  <rect class="label-bg" x="713" y="188" width="128" height="20" rx="4"/>
+  <text class="label" x="777" y="198">confidence ≥ 0.85</text>
+
+  <g class="node">
+    <rect x="20" y="100" width="104" height="58" rx="29"/>
+    <text x="72" y="119">START</text>
+    <text class="sub" x="72" y="140">input state</text>
+  </g>
+  <g class="node">
+    <rect x="184" y="100" width="132" height="58" rx="12"/>
+    <text x="250" y="119">plan</text>
+    <text class="sub" x="250" y="140">makes a plan</text>
+  </g>
+  <g class="node">
+    <rect x="376" y="100" width="150" height="58" rx="12"/>
+    <text x="451" y="119">investigate</text>
+    <text class="sub" x="451" y="140">writes findings</text>
+  </g>
+  <g class="node">
+    <rect x="586" y="100" width="132" height="58" rx="12"/>
+    <text x="652" y="119">report</text>
+    <text class="sub" x="652" y="140">writes report</text>
+  </g>
+  <g class="node primary">
+    <rect x="778" y="100" width="150" height="58" rx="12"/>
+    <text x="853" y="119">review</text>
+    <text class="sub" x="853" y="140">sets confidence</text>
+  </g>
+  <g class="node end">
+    <rect x="801" y="240" width="104" height="58" rx="29"/>
+    <text x="853" y="259">END</text>
+    <text class="sub" x="853" y="280">final state</text>
+  </g>
+
+  <text class="note" x="410" y="258">Solid edges are fixed (add_edge); dashed edges are picked by the router (add_conditional_edges).</text>
+  <text class="note" x="410" y="280">The router reads the state review just wrote. The run ends at END, or when it reaches max_iterations.</text>
+</svg>

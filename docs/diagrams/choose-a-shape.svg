@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pick a multi-agent shape: the three questions from docs/concepts/multi-agent.md, checked against
+  locus.multiagent / locus.agent.composition / locus.a2a (v2.16.0):
+    across processes or runtimes? yes -> A2A          A2AServer serves an agent over HTTP JSON-RPC; A2AClient calls it
+    no -> everything runs in one process; what shape is the flow?
+      straight chain or fan-out   -> Composition      SequentialPipeline chains agents; ParallelPipeline fans out and merges
+      cycles or branches          -> StateGraph       add_conditional_edges routes; GraphConfig(allow_cycles=True) permits cycles
+      the agents decide           -> who picks the next agent?
+        one coordinator           -> Orchestrator     a model routing decision picks specialists, then it correlates and summarizes
+        peers claim tasks         -> Swarm            SwarmAgents claim tasks from a shared queue and share a SharedContext
+        the current agent         -> Handoff          execute_handoff carries a HandoffContext (findings, progress summary) to the target
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 544" role="img" aria-labelledby="title desc">
+  <title id="title">Pick a multi-agent shape</title>
+  <desc id="desc">Three questions pick the shape. First, do agents need to talk across processes or runtimes? If yes, use A2A. If no, everything runs in one process, and the second question is the shape of the flow: a straight chain or fan-out is Composition, cycles or branches are StateGraph, and if the agents decide as they go, the third question is who picks the next agent. One coordinator is Orchestrator plus Specialists, peers claiming tasks is Swarm, and the current agent passing its findings on is Handoff.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- question 1 -->
+  <path class="edge" marker-end="url(#ah)" d="M290,59 L638,59"/>
+  <rect class="label-bg" x="493" y="49" width="42" height="20" rx="4"/>
+  <text class="label" x="514" y="59">yes</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M160,88 L160,167"/>
+  <rect class="label-bg" x="142" y="118" width="36" height="20" rx="4"/>
+  <text class="label" x="160" y="128">no</text>
+
+  <!-- question 2 -->
+  <path class="edge" marker-end="url(#ah)" d="M290,198 C340,198 340,161 390,161 L638,161"/>
+  <rect class="label-bg" x="456" y="151" width="116" height="20" rx="4"/>
+  <text class="label" x="514" y="161">chain or fan-out</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M290,198 C340,198 340,235 390,235 L638,235"/>
+  <rect class="label-bg" x="447" y="225" width="134" height="20" rx="4"/>
+  <text class="label" x="514" y="235">cycles or branches</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M160,227 L160,380"/>
+  <rect class="label-bg" x="108" y="294" width="104" height="20" rx="4"/>
+  <text class="label" x="160" y="304">agents decide</text>
+
+  <!-- question 3 -->
+  <path class="edge" marker-end="url(#ah)" d="M290,411 C340,411 340,337 390,337 L638,337"/>
+  <rect class="label-bg" x="457" y="327" width="114" height="20" rx="4"/>
+  <text class="label" x="514" y="337">one coordinator</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M290,411 L638,411"/>
+  <rect class="label-bg" x="452" y="401" width="124" height="20" rx="4"/>
+  <text class="label" x="514" y="411">peers claim tasks</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M290,411 C340,411 340,485 390,485 L638,485"/>
+  <rect class="label-bg" x="452" y="475" width="124" height="20" rx="4"/>
+  <text class="label" x="514" y="485">the current agent</text>
+
+  <!-- questions -->
+  <g class="node">
+    <rect x="30" y="30" width="260" height="58" rx="12"/>
+    <text x="160" y="49">Talk across processes?</text>
+    <text class="sub" x="160" y="70">or across runtimes</text>
+  </g>
+  <g class="node">
+    <rect x="30" y="169" width="260" height="58" rx="12"/>
+    <text x="160" y="188">What shape is the flow?</text>
+    <text class="sub" x="160" y="209">all in one process</text>
+  </g>
+  <g class="node">
+    <rect x="30" y="382" width="260" height="58" rx="12"/>
+    <text x="160" y="401">Who picks the next agent?</text>
+    <text class="sub" x="160" y="422">no fixed flow</text>
+  </g>
+
+  <!-- shapes -->
+  <g class="node end">
+    <rect x="640" y="30" width="250" height="58" rx="29"/>
+    <text x="765" y="49">A2A</text>
+    <text class="sub" x="765" y="70">remote agents over HTTP</text>
+  </g>
+  <g class="node end">
+    <rect x="640" y="132" width="250" height="58" rx="29"/>
+    <text x="765" y="151">Composition</text>
+    <text class="sub" x="765" y="172">pipelines of agents</text>
+  </g>
+  <g class="node end">
+    <rect x="640" y="206" width="250" height="58" rx="29"/>
+    <text x="765" y="225">StateGraph</text>
+    <text class="sub" x="765" y="246">nodes, edges, state</text>
+  </g>
+  <g class="node end">
+    <rect x="640" y="308" width="250" height="58" rx="29"/>
+    <text x="765" y="327">Orchestrator + Specialists</text>
+    <text class="sub" x="765" y="348">routes and summarizes</text>
+  </g>
+  <g class="node end">
+    <rect x="640" y="382" width="250" height="58" rx="29"/>
+    <text x="765" y="401">Swarm</text>
+    <text class="sub" x="765" y="422">shared context</text>
+  </g>
+  <g class="node end">
+    <rect x="640" y="456" width="250" height="58" rx="29"/>
+    <text x="765" y="475">Handoff</text>
+    <text class="sub" x="765" y="496">passes its findings on</text>
+  </g>
+</svg>

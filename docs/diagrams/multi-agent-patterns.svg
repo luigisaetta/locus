@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The multi-agent shapes, one panel each, as the code routes them (src/locus):
+    Sequential    agent/composition.py:88   agents run in order; each later prompt is
+                                            prompt_template(previous output, task); the last output is the result
+    Parallel      agent/composition.py:191  every agent gets the same task (task_map can override),
+                                            run with asyncio.gather; outputs concatenated (or "last")
+    Loop          agent/composition.py:268  one agent re-run with loop_prompt(previous output) until
+                                            condition(output) is true or max_loops is reached
+    Orchestrator  multiagent/orchestrator.py:350  its model picks any subset of specialists + subtasks
+                                            (:167; all of them only when there is no model, :169), they run in
+                                            parallel (semaphore-capped), then it correlates and summarizes
+    Swarm         multiagent/swarm.py:399   no router: agents claim pending tasks from a priority queue
+                                            when their capability tags match, read SharedContext and write
+                                            findings / blackboard back to it (swarm.py:232, :270)
+    Handoff       multiagent/handoff.py:366 the target receives a HandoffContext: task, conversation
+                                            summary (each message cut to 200 chars, :353), findings; never the
+                                            full transcript: preserve_full_history adds only the system message
+                                            + last 5 (:328, :420); handoffs capped by max_handoff_chain (:470)
+    StateGraph    multiagent/graph.py:928   next node = Command(goto) if returned, else the conditional
+                                            router, else plain edges; runs until END or max_iterations (:1049)
+    Functional    multiagent/functional.py  an @entrypoint function awaits @task functions (retries, cache)
+    A2A           a2a/protocol.py:1039      A2AClient reads /.well-known/agent-card.json, then sends
+                                            JSON-RPC: message/send returns a Task (:1117, server :830);
+                                            message/stream answers as SSE (:1135, server :846)
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 1070" role="img" aria-labelledby="title desc">
+  <title id="title">Multi-agent shapes</title>
+  <desc id="desc">Nine panels, one per shape. Sequential: Research, Write and Edit run in order, each output prompting the next, and the last output is the result. Parallel: one task goes to three agents at once and their outputs are joined into one result. Loop: an Editor runs a pass and, while its condition is not met, is re-prompted with its own output; once it is met, or at max_loops, that output is the result. Orchestrator and Specialists: the orchestrator routes subtasks to the specialists it picks (it can leave any of them out, as the dashed one shows), then correlates their findings into a summary. Swarm: with no router, agents claim tasks from a priority task queue when their tags match, and read and write a SharedContext of findings and a blackboard. Handoff: a Triage agent passes a HandoffContext holding the task, a conversation summary and findings, not the full transcript, to a Billing agent, and the number of hand-offs is capped. StateGraph: Draft updates shared state, then Review's router sends the work back to Draft to revise or on to END once approved; loops stop at max_iterations. Functional API: an @entrypoint function awaits @task functions, which can add retries and caching. A2A: an A2AClient in one process sends JSON-RPC to an A2AServer in another and gets a result back, or an SSE stream when it asks for a streamed reply; the server publishes an AgentCard and runs the Agent.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+<g class="lane"><rect x="0.5" y="0.5" width="295" height="345" rx="12"/><text class="lane-title" x="18" y="27">COMPOSITION · SEQUENTIAL</text></g>
+<g class="lane"><rect x="312.5" y="0.5" width="295" height="345" rx="12"/><text class="lane-title" x="330" y="27">COMPOSITION · PARALLEL</text></g>
+<g class="lane"><rect x="624.5" y="0.5" width="295" height="345" rx="12"/><text class="lane-title" x="642" y="27">COMPOSITION · LOOP</text></g>
+<g class="lane"><rect x="0.5" y="362.5" width="295" height="345" rx="12"/><text class="lane-title" x="18" y="389">ORCHESTRATOR + SPECIALISTS</text></g>
+<g class="lane"><rect x="312.5" y="362.5" width="295" height="345" rx="12"/><text class="lane-title" x="330" y="389">SWARM</text></g>
+<g class="lane"><rect x="624.5" y="362.5" width="295" height="345" rx="12"/><text class="lane-title" x="642" y="389">HANDOFF</text></g>
+<g class="lane"><rect x="0.5" y="724.5" width="295" height="345" rx="12"/><text class="lane-title" x="18" y="751">STATEGRAPH</text></g>
+<g class="lane"><rect x="312.5" y="724.5" width="295" height="345" rx="12"/><text class="lane-title" x="330" y="751">FUNCTIONAL API</text></g>
+<g class="lane"><rect x="624.5" y="724.5" width="295" height="345" rx="12"/><text class="lane-title" x="642" y="751">A2A</text></g>
+<path class="edge" marker-end="url(#ah)" d="M148,86 L148,112"/>
+<path class="edge" marker-end="url(#ah)" d="M148,152 L148,178"/>
+<path class="edge" marker-end="url(#ah)" d="M148,218 L148,244"/>
+<path class="edge" marker-end="url(#ah)" d="M410,120 C410,141 368,141 368,162"/>
+<path class="edge" marker-end="url(#ah)" d="M460,120 C460,141 460,141 460,162"/>
+<path class="edge" marker-end="url(#ah)" d="M510,120 C510,141 552,141 552,162"/>
+<path class="edge" marker-end="url(#ah)" d="M368,202 C368,223 410,223 410,244"/>
+<path class="edge" marker-end="url(#ah)" d="M460,202 C460,223 460,223 460,244"/>
+<path class="edge" marker-end="url(#ah)" d="M552,202 C552,223 510,223 510,244"/>
+<path class="edge" marker-end="url(#ah)" d="M830,144 C830,82 714,82 714,142"/>
+<path class="edge" marker-end="url(#ah)" d="M772,202 L772,244"/>
+<path class="edge" marker-end="url(#ah)" d="M94,464 C94,485 56,485 56,506"/>
+<path class="edge" marker-end="url(#ah)" d="M148,464 C148,485 148,485 148,506"/>
+<path class="edge dashed" marker-end="url(#ah)" d="M202,464 C202,485 240,485 240,506"/>
+<path class="edge" marker-end="url(#ah)" d="M56,546 C56,567 94,567 94,588"/>
+<path class="edge" marker-end="url(#ah)" d="M148,546 C148,567 148,567 148,588"/>
+<path class="edge dashed" marker-end="url(#ah)" d="M240,546 C240,567 202,567 202,588"/>
+<path class="edge" marker-end="url(#ah)" d="M406,464 C406,485 368,485 368,506"/>
+<path class="edge" marker-end="url(#ah)" d="M460,464 C460,485 460,485 460,506"/>
+<path class="edge" marker-end="url(#ah)" d="M514,464 C514,485 552,485 552,506"/>
+<path class="edge" marker-start="url(#ah)" marker-end="url(#ah)" d="M368,546 C368,567 406,567 406,588"/>
+<path class="edge" marker-start="url(#ah)" marker-end="url(#ah)" d="M460,546 C460,567 460,567 460,588"/>
+<path class="edge" marker-start="url(#ah)" marker-end="url(#ah)" d="M552,546 C552,567 514,567 514,588"/>
+<path class="edge" marker-end="url(#ah)" d="M772,470 L772,500"/>
+<path class="edge" marker-end="url(#ah)" d="M772,558 L772,588"/>
+<path class="edge" marker-end="url(#ah)" d="M126,838 L126,868"/>
+<path class="edge" marker-end="url(#ah)" d="M126,926 L126,968"/>
+<path class="edge" marker-end="url(#ah)" d="M201,897 C265,897 265,809 203,809"/>
+<path class="edge" marker-end="url(#ah)" d="M406,858 C406,904 368,904 368,950"/>
+<path class="edge" marker-end="url(#ah)" d="M460,858 C460,904 460,904 460,950"/>
+<path class="edge" marker-end="url(#ah)" d="M514,858 C514,904 552,904 552,950"/>
+<path class="edge" marker-end="url(#ah)" d="M720,826 L720,880"/>
+<path class="edge" marker-end="url(#ah)" d="M824,880 L824,826"/>
+<path class="edge" marker-end="url(#ah)" d="M772,938 L772,968"/>
+<rect class="label-bg" x="158" y="89" width="53.5" height="20" rx="4"/><text class="label" x="185" y="99">output</text>
+<rect class="label-bg" x="158" y="155" width="53.5" height="20" rx="4"/><text class="label" x="185" y="165">output</text>
+<rect class="label-bg" x="422.5" y="125" width="75" height="20" rx="4"/><text class="label" x="460" y="135">same task</text>
+<rect class="label-bg" x="742" y="87.5" width="60" height="20" rx="4"/><text class="label" x="772" y="97.5">not met</text>
+<rect class="label-bg" x="710" y="211" width="124" height="20" rx="4"/><text class="label" x="772" y="221">met, or max_loops</text>
+<rect class="label-bg" x="117.5" y="469" width="61" height="20" rx="4"/><text class="label" x="148" y="479">subtask</text>
+<rect class="label-bg" x="437" y="469" width="45.5" height="20" rx="4"/><text class="label" x="460" y="479">claim</text>
+<rect class="label-bg" x="91" y="935" width="70.5" height="20" rx="4"/><text class="label" x="126" y="945">approved</text>
+<rect class="label-bg" x="224" y="843" width="50" height="20" rx="4"/><text class="label" x="249" y="853">revise</text>
+<rect class="label-bg" x="436.5" y="894" width="46.5" height="20" rx="4"/><text class="label" x="460" y="904">await</text>
+<rect class="label-bg" x="680.5" y="842" width="79.5" height="20" rx="4"/><text class="label" x="720" y="852">JSON-RPC</text>
+<rect class="label-bg" x="778" y="842" width="92" height="20" rx="4"/><text class="label" x="824" y="852">result or SSE</text>
+<g class="node"><rect x="73" y="46" width="150" height="40" rx="12"/><text x="148" y="66">Research</text></g>
+<g class="node"><rect x="73" y="112" width="150" height="40" rx="12"/><text x="148" y="132">Write</text></g>
+<g class="node"><rect x="73" y="178" width="150" height="40" rx="12"/><text x="148" y="198">Edit</text></g>
+<g class="node end"><rect x="73" y="244" width="150" height="40" rx="20"/><text x="148" y="264">Result</text></g>
+<g class="node"><rect x="385" y="80" width="150" height="40" rx="12"/><text x="460" y="100">Task</text></g>
+<g class="node"><rect x="330" y="162" width="76" height="40" rx="12"/><text x="368" y="182">Web</text></g>
+<g class="node"><rect x="422" y="162" width="76" height="40" rx="12"/><text x="460" y="182">Data</text></g>
+<g class="node"><rect x="514" y="162" width="76" height="40" rx="12"/><text x="552" y="182">Docs</text></g>
+<g class="node end"><rect x="385" y="244" width="150" height="40" rx="20"/><text x="460" y="264">Result</text></g>
+<g class="node"><rect x="682" y="144" width="180" height="58" rx="12"/><text x="772" y="163">Editor</text><text class="sub" x="772" y="184">one pass</text></g>
+<g class="node end"><rect x="697" y="244" width="150" height="40" rx="20"/><text x="772" y="264">Result</text></g>
+<g class="node"><rect x="58" y="406" width="180" height="58" rx="12"/><text x="148" y="425">Orchestrator</text><text class="sub" x="148" y="446">routes subtasks</text></g>
+<g class="node"><rect x="16" y="506" width="80" height="40" rx="12"/><text x="56" y="526">Logs</text></g>
+<g class="node"><rect x="108" y="506" width="80" height="40" rx="12"/><text x="148" y="526">Metrics</text></g>
+<g class="node optional"><rect x="200" y="506" width="80" height="40" rx="12"/><text x="240" y="526">Traces</text></g>
+<g class="node end"><rect x="58" y="588" width="180" height="58" rx="29"/><text x="148" y="607">Summary</text><text class="sub" x="148" y="628">correlated findings</text></g>
+<g class="node store"><path d="M370,413 L370,457 A90,7 0 0 0 550,457 L550,413 A90,7 0 0 0 370,413 Z M370,413 A90,7 0 0 0 550,413"/><text x="460" y="428.5">Task queue</text><text class="sub" x="460" y="449.5">by priority</text></g>
+<g class="node"><rect x="328" y="506" width="80" height="40" rx="12"/><text x="368" y="526">Scout</text></g>
+<g class="node"><rect x="420" y="506" width="80" height="40" rx="12"/><text x="460" y="526">Verify</text></g>
+<g class="node"><rect x="512" y="506" width="80" height="40" rx="12"/><text x="552" y="526">Write</text></g>
+<g class="node store"><path d="M360,595 L360,639 A100,7 0 0 0 560,639 L560,595 A100,7 0 0 0 360,595 Z M360,595 A100,7 0 0 0 560,595"/><text x="460" y="610.5">SharedContext</text><text class="sub" x="460" y="631.5">findings · blackboard</text></g>
+<g class="node"><rect x="672" y="412" width="200" height="58" rx="12"/><text x="772" y="431">Triage</text><text class="sub" x="772" y="452">L1 support</text></g>
+<g class="node"><rect x="672" y="500" width="200" height="58" rx="12"/><text x="772" y="519">HandoffContext</text><text class="sub" x="772" y="540">task · summary · findings</text></g>
+<g class="node"><rect x="672" y="588" width="200" height="58" rx="12"/><text x="772" y="607">Billing</text><text class="sub" x="772" y="628">L2 specialist</text></g>
+<g class="node"><rect x="51" y="780" width="150" height="58" rx="12"/><text x="126" y="799">Draft</text><text class="sub" x="126" y="820">updates state</text></g>
+<g class="node"><rect x="51" y="868" width="150" height="58" rx="12"/><text x="126" y="887">Review</text><text class="sub" x="126" y="908">router</text></g>
+<g class="node end"><rect x="66" y="968" width="120" height="40" rx="20"/><text x="126" y="988">END</text></g>
+<g class="node"><rect x="370" y="800" width="180" height="58" rx="12"/><text x="460" y="819">workflow</text><text class="sub" x="460" y="840">@entrypoint</text></g>
+<g class="node"><rect x="328" y="950" width="80" height="58" rx="12"/><text x="368" y="969">fetch</text><text class="sub" x="368" y="990">@task</text></g>
+<g class="node"><rect x="420" y="950" width="80" height="58" rx="12"/><text x="460" y="969">draft</text><text class="sub" x="460" y="990">@task</text></g>
+<g class="node"><rect x="512" y="950" width="80" height="58" rx="12"/><text x="552" y="969">check</text><text class="sub" x="552" y="990">@task</text></g>
+<g class="node"><rect x="672" y="768" width="200" height="58" rx="12"/><text x="772" y="787">A2AClient</text><text class="sub" x="772" y="808">process A</text></g>
+<g class="node"><rect x="672" y="880" width="200" height="58" rx="12"/><text x="772" y="899">A2AServer</text><text class="sub" x="772" y="920">process B</text></g>
+<g class="node"><rect x="697" y="968" width="150" height="40" rx="12"/><text x="772" y="988">Agent</text></g>
+<text class="note" x="148" y="312">Each output, plus the task, prompts the next</text>
+<text class="note" x="148" y="331">agent. The last output is the result.</text>
+<text class="note" x="460" y="312">Every agent gets the same task at once;</text>
+<text class="note" x="460" y="331">the outputs are joined into one result.</text>
+<text class="note" x="772" y="312">Re-prompts the agent with its own output</text>
+<text class="note" x="772" y="331">until the condition holds, or max_loops.</text>
+<text class="note" x="148" y="674">Its model routes subtasks to the specialists</text>
+<text class="note" x="148" y="693">it picks, then correlates and summarizes.</text>
+<text class="note" x="460" y="674">No router: each agent claims queued tasks</text>
+<text class="note" x="460" y="693">its tags match, and shares what it finds.</text>
+<text class="note" x="772" y="674">Carries a summary, not the full transcript;</text>
+<text class="note" x="772" y="693">the number of hand-offs is capped.</text>
+<text class="note" x="148" y="1036">Nodes update shared state; a router picks</text>
+<text class="note" x="148" y="1055">the next node. Loops stop at max_iterations.</text>
+<text class="note" x="460" y="1036">Plain async functions: @task can add retries</text>
+<text class="note" x="460" y="1055">and caching; fan out with asyncio.gather.</text>
+<text class="note" x="772" y="1036">A2AServer serves an AgentCard; clients in</text>
+<text class="note" x="772" y="1055">any process or runtime call it over HTTP.</text>
+</svg>

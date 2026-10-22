@@ -1,17 +1,17 @@
-# The coding harness (`tulip.harness`)
+# The coding harness (`locus.harness`)
 
-`tulip.harness` is the toolset a coding agent works with — read, write,
+`locus.harness` is the toolset a coding agent works with — read, write,
 edit, search, a shell — written once against a workspace protocol and run
-unchanged on the host, in memory, or inside a sandbox. tulip-code is a UI
-over it; the Tulip gateway runs the same tools inside NVIDIA OpenShell
+unchanged on the host, in memory, or inside a sandbox. locus-code is a UI
+over it; the Locus gateway runs the same tools inside NVIDIA OpenShell
 sandboxes.
 
 ## Build a harness
 
 ```python
-from tulip import Agent
-from tulip.control import ControlPolicy, gate_tool
-from tulip.harness import LocalBackend, build_harness
+from locus import Agent
+from locus.control import ControlPolicy, gate_tool
+from locus.harness import LocalBackend, build_harness
 
 policy = ControlPolicy(require_human_for=frozenset({"workspace.exec"}))
 harness = build_harness(
@@ -39,7 +39,7 @@ agent = Agent(model=model, tools=harness.tools, system_prompt=harness.prompt_fra
 `apply_patch`, and without the shell tools on a backend that has no shell.
 `PATCH_TOOLS` swaps `edit`, `multi_edit` and `write` for `apply_patch`, the
 format the GPT family is trained on;
-`tulip.models.profiles.profile_for(model).edit_format` says which a model
+`locus.models.profiles.profile_for(model).edit_format` says which a model
 wants.
 
 `HarnessConfig` holds the behaviour: whether a change needs a read first,
@@ -53,9 +53,9 @@ much output the model sees, whether the model can see images, a
 
 Tool bodies never call a gate. `wrap` is the one place governance is
 applied, and it is applied to every tool. Locally that is
-`tulip.control.gate_tool`; the gateway passes its own. Both see the same
+`locus.control.gate_tool`; the gateway passes its own. Both see the same
 `Action` for the same call, because the labels come from
-`tulip.harness.labels`:
+`locus.harness.labels`:
 
 | Kind | Tools |
 | --- | --- |
@@ -64,7 +64,7 @@ applied, and it is applied to every tool. Locally that is
 | `workspace.exec` | every other `bash` line, write_stdin, kill_shell |
 | `network` | reserved for the web tools |
 
-A `bash` line is read with `tulip.control.shell.parse_command` — the
+A `bash` line is read with `locus.control.shell.parse_command` — the
 programs it actually runs, behind `sudo`, `env`, `xargs`, `sh -c` and inside
 `$(...)` — and tagged with what it does: `exec:destructive`,
 `exec:vcs-push`, `exec:force-push`, `exec:network`, `exec:remote-code`,
@@ -118,11 +118,11 @@ coreutils or busybox, `find`, `grep` and `awk`.
 ### OpenShell
 
 ```bash
-pip install "tulip-agents[openshell]"
+pip install "locus-sdk[openshell]"
 ```
 
 ```python
-from tulip.harness import OpenShellBackend, build_harness
+from locus.harness import OpenShellBackend, build_harness
 
 backend = OpenShellBackend.connect("my-sandbox", workspace="team-a", endpoint="gateway:443")
 # or: OpenShellBackend.create(workspace="team-a") — creates one, deletes it on close()

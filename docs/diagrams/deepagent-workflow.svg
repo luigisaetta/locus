@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  create_research_workflow, as wired by locus.deepagent.workflow (v2.16.0):
+    START            -> execute
+    execute          -> causal_inference -> summarize   (causal_inference=True, the default)
+    execute          -> summarize                        (causal_inference=False)
+    summarize        -> grounding_eval
+    grounding_eval   -> route_after_grounding(threshold, max_replans, max_regenerations):
+                          score >= threshold                      -> END
+                          regenerations and replans both used up  -> END
+                          regenerations left                      -> regenerate
+                          otherwise (only replans left)           -> replan
+    regenerate       -> grounding_eval   (rewrites the summary; tools are not re-run)
+    replan           -> execute          (a prompt focused on the ungrounded claims)
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 424" role="img" aria-labelledby="title desc">
+  <title id="title">The research workflow</title>
+  <desc id="desc">Execute runs an agent tool loop that gathers evidence. Causal inference then builds a causal chain from that evidence; it is on by default, and with causal_inference set to False Execute goes straight to Summarize. Summarize distils the evidence into a summary, and Grounding eval scores the summary's claims against the evidence. If the score meets the threshold the run is done. Below the threshold, while regenerations are left, Regenerate rewrites the summary without re-running tools and sends it back to Grounding eval. Once regenerations are used up, while replans are left, Replan writes a prompt focused on the ungrounded claims and sends it back to Execute. When both are used up, the run ends.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- replan loop: grounding_eval -> replan -> execute -->
+  <path class="edge" marker-end="url(#ah)" d="M689,154 L689,83 Q689,53 659,53 L364,53"/>
+  <rect class="label-bg" x="439" y="43" width="110" height="20" rx="4"/>
+  <text class="label" x="494" y="53">only replans left</text>
+  <path class="edge" marker-end="url(#ah)" d="M226,53 L124,53 Q94,53 94,83 L94,152"/>
+
+  <!-- main row -->
+  <path class="edge" marker-end="url(#ah)" d="M164,183 L212,183"/>
+  <path class="edge" marker-end="url(#ah)" d="M374,183 L422,183"/>
+  <path class="edge" marker-end="url(#ah)" d="M564,183 L612,183"/>
+
+  <!-- causal_inference=False: execute -> summarize -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M124,212 L124,234 Q124,258 148,258 L440,258 Q464,258 464,234 L464,214"/>
+  <rect class="label-bg" x="217" y="248" width="154" height="20" rx="4"/>
+  <text class="label" x="294" y="258">causal_inference=False</text>
+
+  <!-- regenerate loop: grounding_eval -> regenerate -> grounding_eval -->
+  <path class="edge" marker-end="url(#ah)" d="M664,212 L664,302"/>
+  <rect class="label-bg" x="538" y="248" width="118" height="20" rx="4"/>
+  <text class="label" x="597" y="258">regenerations left</text>
+  <path class="edge" marker-end="url(#ah)" d="M714,304 L714,214"/>
+
+  <!-- grounding_eval -> done -->
+  <path class="edge" marker-end="url(#ah)" d="M764,183 L838,183 Q868,183 868,213 L868,302"/>
+  <rect class="label-bg" x="808" y="238" width="120" height="40" rx="4"/>
+  <text class="label" x="868" y="248">score ≥ threshold</text>
+  <text class="label" x="868" y="268">or both used up</text>
+
+  <g class="node optional">
+    <rect x="226" y="24" width="136" height="58" rx="12"/>
+    <text x="294" y="43">Replan</text>
+    <text class="sub" x="294" y="64">focused prompt</text>
+  </g>
+  <g class="node">
+    <rect x="24" y="154" width="140" height="58" rx="12"/>
+    <text x="94" y="173">Execute</text>
+    <text class="sub" x="94" y="194">agent tool loop</text>
+  </g>
+  <g class="node optional">
+    <rect x="214" y="154" width="160" height="58" rx="12"/>
+    <text x="294" y="173">Causal inference</text>
+    <text class="sub" x="294" y="194">causal chain</text>
+  </g>
+  <g class="node">
+    <rect x="424" y="154" width="140" height="58" rx="12"/>
+    <text x="494" y="173">Summarize</text>
+    <text class="sub" x="494" y="194">distils evidence</text>
+  </g>
+  <g class="node primary">
+    <rect x="614" y="154" width="150" height="58" rx="12"/>
+    <text x="689" y="173">Grounding eval</text>
+    <text class="sub" x="689" y="194">scores claims</text>
+  </g>
+  <g class="node optional">
+    <rect x="614" y="304" width="150" height="58" rx="12"/>
+    <text x="689" y="323">Regenerate</text>
+    <text class="sub" x="689" y="344">rewrites summary</text>
+  </g>
+  <g class="node end">
+    <rect x="806" y="304" width="124" height="58" rx="29"/>
+    <text x="868" y="323">Done</text>
+    <text class="sub" x="868" y="344">final_state</text>
+  </g>
+
+  <text class="note" x="480" y="406">Below the threshold the router spends regenerations first, then replans, and ends the run once both are used up.</text>
+</svg>

@@ -1,6 +1,6 @@
 # Decisions: pick from a list, with a probability
 
-`tulip.decision` asks a model questions with a fixed list of answers and gets
+`locus.decision` asks a model questions with a fixed list of answers and gets
 back a probability for every answer, from one forward pass.
 
 ## Why not just generate
@@ -20,7 +20,7 @@ threshold can be set on, and certified.
 ## Fields, answers, decisions
 
 ```python
-from tulip.decision import Choice, LogprobDecider, Score, YesNo
+from locus.decision import Choice, LogprobDecider, Score, YesNo
 
 intent = Choice("intent", "What does the speaker want the companion to do?",
                 ("come", "follow", "build", "give", "chat"))
@@ -113,8 +113,8 @@ when policy already allows, and takes `max(policy, model)` on `allow <
 require_human < deny`.
 
 ```python
-from tulip.control import approve
-from tulip.decision import DecisionAdvisor
+from locus.control import approve
+from locus.decision import DecisionAdvisor
 
 advisor = DecisionAdvisor(decider)                    # argmax of allow / require_human / deny
 advisor = DecisionAdvisor(decider, hold_at=0.12)      # or: hold when 1 - P(allow) >= 0.12
@@ -129,7 +129,7 @@ answers into the `VerificationResult` that `ControlPolicy.require_verification_s
 weighs:
 
 ```python
-from tulip.decision import verification_from_decision
+from locus.decision import verification_from_decision
 
 safety = await decider.decide(reply_text, [personal, meeting, unkind])
 verdict = verification_from_decision(safety, {"personal": 0.21, "meeting": 0.30, "unkind": 0.18})
@@ -157,7 +157,7 @@ the score. The escalate-only seams are what hold there.
 `TenantDecisionRouter` is the same protocol for many tenants:
 
 ```python
-from tulip.decision import LogprobDecider, TenantDecisionRouter, per_tenant_trails
+from locus.decision import LogprobDecider, TenantDecisionRouter, per_tenant_trails
 
 router = TenantDecisionRouter(
     lambda tenant: LogprobDecider(url, model=f"head-{tenant}") if tenant in trained else None,

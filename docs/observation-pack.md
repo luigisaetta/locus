@@ -4,7 +4,7 @@ Handover notes for whoever picks this up next. Last updated 2026-10-03, after PR
 
 ## Why we are building it
 
-A tulip-code benchmark run (14 real tasks, DeepSeek V4 Pro) passes the most
+A locus-code benchmark run (14 real tasks, DeepSeek V4 Pro) passes the most
 tasks of the harnesses we compared (60%), but sends about **5M input tokens per
 run**. A large share of that is old tool output. A coding agent reads a 20 KB
 file or a long test log once. Today that output then rides along in every
@@ -16,7 +16,7 @@ NVIDIA's SoL-Pi paper (arXiv 2609.20519, repo `NVlabs/SoL-Pi`,
 mechanisms. ObservationPack was the best single one in their ablation:
 score 44.8 → 47.2 with 6% fewer tokens. It is also **lossless**: the model can
 always get the exact bytes back. We ported the idea to Python in the SDK
-(tulip-agents) and turned it on in tulip-code, which is built entirely on the
+(locus-sdk) and turned it on in locus-code, which is built entirely on the
 SDK.
 
 ## What it does
@@ -103,20 +103,20 @@ a named agent such as a subagent. Per-session counters are also available from
 
 | Piece | Location |
 |---|---|
-| Mechanism | `src/tulip/memory/observation_pack.py` (SoL-Pi MIT notice in the header and in `THIRD_PARTY_LICENSES.txt`) |
-| Config | `ObservationPackConfig` in `src/tulip/agent/config.py`; `AgentConfig(observation_pack=True \| ObservationPackConfig(...))`, off by default in the SDK |
-| Request transform | `_get_model_response` in `src/tulip/agent/runtime_loop.py` |
-| Compaction hooks | `src/tulip/memory/compaction.py` (`archive=` on `compact`) |
+| Mechanism | `src/locus/memory/observation_pack.py` (SoL-Pi MIT notice in the header and in `THIRD_PARTY_LICENSES.txt`) |
+| Config | `ObservationPackConfig` in `src/locus/agent/config.py`; `AgentConfig(observation_pack=True \| ObservationPackConfig(...))`, off by default in the SDK |
+| Request transform | `_get_model_response` in `src/locus/agent/runtime_loop.py` |
+| Compaction hooks | `src/locus/memory/compaction.py` (`archive=` on `compact`) |
 | Tests | `tests/unit/test_observation_pack.py`; prefix-break bounds in `tests/unit/test_cache_prefix.py` |
-| tulip-code wiring | `src/tulip_code/observation.py`; on by default; off with `TULIP_CODE_OBSERVATION_PACK=0` or `"observationPack": false`; the result record has `observation_pack` and `mechanisms.observation_pack` |
+| locus-code wiring | `src/locus_code/observation.py`; on by default; off with `LOCUS_CODE_OBSERVATION_PACK=0` or `"observationPack": false`; the result record has `observation_pack` and `mechanisms.observation_pack` |
 
 ## Status
 
 ### Done and merged into `harness/integration-all`
 
-- **tulip-agents PR #99:** the mechanism, cache batching, compaction
+- **locus-sdk PR #99:** the mechanism, cache batching, compaction
   integration, and ledger rows. Merge commit `535b755`.
-- **tulip-code PR #23:** on by default, ablation switch, result record.
+- **locus-code PR #23:** on by default, ablation switch, result record.
   Merge commit `94b96b8`.
 - Both full suites passed in the VM before the merge.
 
@@ -150,16 +150,16 @@ a named agent such as a subagent. Per-session counters are also available from
 - A caller that passes `observation_pack=` explicitly keeps its own choice.
 - How it reaches the subagent: the parent's settings ride on the
   parent-run context (`enter_parent_run(observation_pack=...)`), and
-  `_build_child` in `src/tulip/agent/subagent.py` picks them up.
+  `_build_child` in `src/locus/agent/subagent.py` picks them up.
 
-Both full suites passed in the VM before the merge. tulip-code needed no
+Both full suites passed in the VM before the merge. locus-code needed no
 change: its `task` tool builds subagents through the SDK, and the inline
 limit comes from the SDK config.
 
 ### Not started (deliberately)
 
 - **A real benchmark ablation.** Run the 14 tasks with
-  `TULIP_CODE_OBSERVATION_PACK=1` and with `=0`, then compare input tokens,
+  `LOCUS_CODE_OBSERVATION_PACK=1` and with `=0`, then compare input tokens,
   cache hits, cost and pass rate. This needs paid model calls, so it waits for
   a go-ahead.
 - **Tuning.** Adjust `min_batch_bytes`, `cache_read_cost` /
@@ -169,12 +169,12 @@ limit comes from the SDK config.
 ## Working rules for these repos
 
 - Base branches on `origin/harness/integration-all`. Never edit, commit or
-  switch branches in the shared checkouts under `/home/fede/Projects/tuliplabs/<repo>`.
-  Create worktrees under `/home/fede/Projects/tuliplabs/.worktrees/` with
+  switch branches in the shared checkouts under `/home/fede/Projects/oracle/<repo>`.
+  Create worktrees under `/home/fede/Projects/oracle/.worktrees/` with
   **absolute** paths.
-- Commit as `tuliplabs <328004975+tuliplabs@users.noreply.github.com>` with
+- Commit as `oracle <328004975+oracle@users.noreply.github.com>` with
   `-s` (DCO). No AI attribution anywhere.
-- Run `gh` as `GH_TOKEN=$(gh auth token -u tuliplabs) gh ...`. No paid model
+- Run `gh` as `GH_TOKEN=$(gh auth token -u oracle) gh ...`. No paid model
   calls.
 - Locally, run only the touched tests, with at most 2 workers. Full suites run
   in the VM.
