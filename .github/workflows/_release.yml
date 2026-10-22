@@ -141,7 +141,7 @@ jobs:
           # alone first (it must not need the security package), then both.
           pip install "dist/${PKG_NAME//-/_}-${VERSION}-py3-none-any.whl"
           python -c "import locus, locus.control; print(dir(locus))"
-          pip install "dist-security/locus_agents_security-${VERSION}-py3-none-any.whl"
+          pip install "dist-security/locus_sdk_security-${VERSION}-py3-none-any.whl"
           python -c "import locus_security; from locus.security import red_team; print(locus_security.__name__)"
 
   publish:
