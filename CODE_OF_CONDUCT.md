@@ -57,7 +57,7 @@ an individual is officially representing the community in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the maintainers privately through GitHub, by opening a
-[security advisory](https://github.com/tuliplabs-ai/tulip-agents/security/advisories/new).
+[security advisory](https://github.com/oracle/locus/security/advisories/new).
 All complaints will be
 reviewed and investigated promptly and fairly.
 

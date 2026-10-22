@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``resume`` is keyed strictly by thread, and refuses to fold a pending hold.
 
@@ -21,13 +22,13 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
-from tulip.core import errors
-from tulip.core.events import InterruptEvent, TerminateEvent, ToolCompleteEvent, TulipEvent
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
+from locus.core import errors
+from locus.core.events import InterruptEvent, LocusEvent, TerminateEvent, ToolCompleteEvent
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 calls: list[dict[str, Any]] = []
@@ -53,7 +54,7 @@ def _gated(store: InMemoryApprovals) -> Any:
     )
 
 
-async def _collect(stream: Any) -> list[TulipEvent]:
+async def _collect(stream: Any) -> list[LocusEvent]:
     return [e async for e in stream]
 
 

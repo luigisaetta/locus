@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 27: RIGHTSIZER — the cloud-rightsizing specialist.
 
@@ -18,14 +19,14 @@ cutting waste on over-provisioned instances and catching capacity risk
 on hot ones before it pages someone.
 
 The capability is demonstrated with the domain-neutral GSAR grounding
-core (``tulip.reasoning.gsar``): a deterministic classifier maps a
+core (``locus.reasoning.gsar``): a deterministic classifier maps a
 utilization feature vector to a ``WorkloadVerdict``, and the verdict
 becomes a recommendation **only** when the evidence partition clears the
 grounding threshold. Low feature coverage yields a weak evidence
 partition, so an under-observed instance abstains rather than asserting a
 rightsizing — a wrong instance-type call is worse than none.
 
-- A ``Specialist`` is a Tulip ``Agent`` with role metadata
+- A ``Specialist`` is a Locus ``Agent`` with role metadata
   (``specialist_type``, ``description``), a tool list, and a
   ``confidence_threshold`` that gates "good enough" answers.
 - ``Playbook`` and ``PlaybookStep`` encode standard procedures —
@@ -40,9 +41,9 @@ rightsizing — a wrong instance-type call is worse than none.
 Run it:
     .venv/bin/python examples/notebook_27_specialist_agents.py
 
-The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
 (or anthropic) and the matching credentials to use a live model. Set
-``TULIP_MODEL_PROVIDER=mock`` for offline runs.
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
 - Notebook 06 (Agent basics).
@@ -56,8 +57,8 @@ from dataclasses import dataclass
 
 from config import get_model, print_config
 
-from tulip.agent import Agent
-from tulip.multiagent.specialist import (
+from locus.agent import Agent
+from locus.multiagent.specialist import (
     Playbook,
     PlaybookStep,
     Specialist,
@@ -66,7 +67,7 @@ from tulip.multiagent.specialist import (
     create_metrics_analyst,
     create_trace_analyst,
 )
-from tulip.reasoning.gsar import (
+from locus.reasoning.gsar import (
     Claim,
     Decision,
     EvidenceType,
@@ -74,7 +75,7 @@ from tulip.reasoning.gsar import (
     decide,
     gsar_score,
 )
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
 
 
 async def _llm_call(

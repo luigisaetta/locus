@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 15: bounded resolution — deciding when the support loop stops.
 
@@ -7,7 +8,7 @@ A customer-support agent that never stops is a liability: a ticket
 triage loop must end after a fixed budget, a time limit, or as soon as
 the agent declares the issue resolved — both to bound cost and to keep
 the customer from waiting on an agent that keeps talking to itself.
-Tulip ships a handful of small predicates that you compose with ``|``
+Locus ships a handful of small predicates that you compose with ``|``
 (OR) and ``&`` (AND) to describe exactly when the loop should end. This
 notebook also covers two related features: ``output_key`` (auto-save the
 final verdict into the agent's state metadata) and a callable
@@ -23,15 +24,15 @@ Key ideas:
 - ``output_key="resolution"`` tells the agent to write ``result.message``
   into ``result.state.metadata["resolution"]`` — handy for handing data
   between agents without parsing prose.
-- ``system_prompt`` can be a callable ``ctx -> str``; Tulip calls it
+- ``system_prompt`` can be a callable ``ctx -> str``; Locus calls it
   with the runtime context (including ``metadata``) on every turn.
 
 Run it:
     .venv/bin/python examples/notebook_15_termination.py
 
-The default provider is the mock model; set TULIP_MODEL_PROVIDER for a live one (e.g.
+The default provider is the mock model; set LOCUS_MODEL_PROVIDER for a live one (e.g.
 ``openai`` or ``anthropic``). Set
-``TULIP_MODEL_PROVIDER=mock`` for offline runs; OpenAI and Anthropic
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs; OpenAI and Anthropic
 also work.
 """
 
@@ -39,8 +40,8 @@ import asyncio
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
-from tulip.core.termination import (
+from locus.agent import Agent, AgentConfig
+from locus.core.termination import (
     ConfidenceMet,
     CustomCondition,
     MaxIterations,
@@ -59,8 +60,8 @@ async def example_termination():
     """Build OR / AND combinations of stop predicates and probe them by hand."""
     print("=== Part 1: Composable Termination ===\n")
 
-    from tulip.core.messages import Message
-    from tulip.core.state import AgentState
+    from locus.core.messages import Message
+    from locus.core.state import AgentState
 
     # OR — stop the resolution loop when either predicate fires.
     condition = MaxIterations(5) | TextMention("TICKET_RESOLVED")

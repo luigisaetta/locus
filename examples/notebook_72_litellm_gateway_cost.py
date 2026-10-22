@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 72: Cost guardrails for always-on payments automation.
 
 Follows notebook 71 (the gateway happy path) with the part payments
@@ -256,7 +257,7 @@ def main() -> None:
     print("   · 'What did fraud-ops spend last month?'  → /spend/logs + metadata.team")
     print("   · 'What does the claude alias cost across teams?' → /global/spend/models")
     print("   · 'Which automation key is over budget right now?' → /global/spend/keys")
-    print(" — all from one SQL-backed surface. No Tulip integration glue.")
+    print(" — all from one SQL-backed surface. No Locus integration glue.")
     print("=" * 72)
 
 

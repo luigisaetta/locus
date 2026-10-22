@@ -1,7 +1,7 @@
 # Research evals
 
 The scripts behind
-[tulipagents.ai/research/policy-blindness](https://tulipagents.ai/research/policy-blindness/).
+[locusagents.oracle.com/research/policy-blindness](https://locusagents.oracle.com/research/policy-blindness/).
 Published so the numbers on that page can be checked rather than believed.
 
 | script | what it measures |

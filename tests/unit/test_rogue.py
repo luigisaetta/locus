@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The rogue challenge is a load-bearing claim, so it gets tests.
 
-``python -m tulip.rogue`` is the first thing most readers will run, and its
+``python -m locus.rogue`` is the first thing most readers will run, and its
 whole assertion is that a *fully compromised* model still cannot fire a
 dangerous action. If that ever quietly stopped being true — a policy default
 loosened, a tool wired around the gate — the demo would keep printing its
@@ -16,9 +17,9 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.control import approve
-from tulip.rogue import challenge
-from tulip.rogue.challenge import (
+from locus.control import approve
+from locus.rogue import challenge
+from locus.rogue.challenge import (
     MODE_COMPROMISED,
     MODE_FRONTIER,
     MODE_LOCAL,
@@ -39,7 +40,7 @@ def _reset_demo_globals() -> None:
 def test_no_credentials_selects_the_compromised_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    for var in ("TULIP_MODEL_URL", "TULIP_ADVISORY_URL", "ANTHROPIC_API_KEY"):
+    for var in ("LOCUS_MODEL_URL", "LOCUS_ADVISORY_URL", "ANTHROPIC_API_KEY"):
         monkeypatch.delenv(var, raising=False)
 
     mode, described = pick_mode()
@@ -52,8 +53,8 @@ def test_a_self_hosted_endpoint_outranks_a_frontier_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Setting an endpoint is deliberate, and it is the mode that exercises the gate."""
-    monkeypatch.setenv("TULIP_MODEL_URL", "http://127.0.0.1:8010")
-    monkeypatch.setenv("TULIP_MODEL_NAME", "some-small-model")
+    monkeypatch.setenv("LOCUS_MODEL_URL", "http://127.0.0.1:8010")
+    monkeypatch.setenv("LOCUS_MODEL_NAME", "some-small-model")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-not-used")
 
     mode, described = pick_mode()
@@ -65,7 +66,7 @@ def test_a_self_hosted_endpoint_outranks_a_frontier_key(
 def test_a_key_alone_selects_the_frontier_challenge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    for var in ("TULIP_MODEL_URL", "TULIP_ADVISORY_URL"):
+    for var in ("LOCUS_MODEL_URL", "LOCUS_ADVISORY_URL"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-not-used")
 

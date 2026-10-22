@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for RAG loaders and the recursive chunker.
 
@@ -17,8 +18,8 @@ import string
 
 import pytest
 
-from tulip.rag.chunkers import DEFAULT_SEPARATORS, MARKDOWN_SEPARATORS, recursive_chunks
-from tulip.rag.loaders import (
+from locus.rag.chunkers import DEFAULT_SEPARATORS, MARKDOWN_SEPARATORS, recursive_chunks
+from locus.rag.loaders import (
     load_directory,
     load_html,
     load_markdown,

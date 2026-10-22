@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Recall in fewer round trips, across several namespaces, without crossing tenants.
 
@@ -28,13 +29,13 @@ from typing import Any
 
 import pytest
 
-from tulip.core.messages import Message
-from tulip.core.state import AgentState
-from tulip.memory import MemoryScope
-from tulip.memory.manager import LLMMemoryManager, Memory, MemoryType
-from tulip.memory.store import BaseStore, InMemoryStore, StoreItem
-from tulip.memory.store_backends import postgresql as pgmod
-from tulip.memory.store_backends.postgresql import PgMemory
+from locus.core.messages import Message
+from locus.core.state import AgentState
+from locus.memory import MemoryScope
+from locus.memory.manager import LLMMemoryManager, Memory, MemoryType
+from locus.memory.store import BaseStore, InMemoryStore, StoreItem
+from locus.memory.store_backends import postgresql as pgmod
+from locus.memory.store_backends.postgresql import PgMemory
 
 
 _DSN = "postgresql://u:p@127.0.0.1:5432/db"  # never connected to
@@ -416,7 +417,7 @@ async def test_a_bare_prefix_from_the_resolver_still_works() -> None:
     with manager.scoped(("acme", "kid")):
         await manager.save([_mem("mine", "likes castles")])
     assert "likes castles" in _block(await manager.on_session_start(_state("castles")))
-    assert manager.active_recall == (("tulip_memory",),)  # outside a scope
+    assert manager.active_recall == (("locus_memory",),)  # outside a scope
 
 
 # ---------------------------------------------------------------------------

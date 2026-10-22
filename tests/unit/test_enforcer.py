@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for playbook enforcer."""
 
@@ -7,12 +8,12 @@ from datetime import datetime
 
 import pytest
 
-from tulip.playbooks.enforcer import (
+from locus.playbooks.enforcer import (
     EnforcementResult,
     EnforcementViolation,
     PlaybookEnforcer,
 )
-from tulip.playbooks.models import (
+from locus.playbooks.models import (
     Playbook,
     PlaybookStep,
     StepStatus,

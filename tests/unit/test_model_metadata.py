@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Tests for ``tulip.models.metadata``."""
+"""Tests for ``locus.models.metadata``."""
 
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from tulip.models.metadata import (
+from locus.models.metadata import (
     ModelMetadata,
     known_models,
     metadata_for,
@@ -206,8 +207,8 @@ class TestDeepSeekV4:
         assert routed.model_id != direct.model_id
 
     def test_every_compatible_provider_prefix_is_stripped(self) -> None:
-        from tulip.models.metadata import _PROVIDER_PREFIXES
-        from tulip.models.providers import COMPATIBLE_PROVIDERS
+        from locus.models.metadata import _PROVIDER_PREFIXES
+        from locus.models.providers import COMPATIBLE_PROVIDERS
 
         missing = {p.prefix for p in COMPATIBLE_PROVIDERS} - _PROVIDER_PREFIXES
         assert not missing, f"add {sorted(missing)} to _PROVIDER_PREFIXES"
@@ -245,27 +246,27 @@ class _ProxyView:
 
 class TestModelIdOf:
     def test_string_passes_through(self) -> None:
-        from tulip.models.metadata import model_id_of
+        from locus.models.metadata import model_id_of
 
         assert model_id_of("openrouter:deepseek/deepseek-v4-flash") == (
             "openrouter:deepseek/deepseek-v4-flash"
         )
 
     def test_config_model(self) -> None:
-        from tulip.models.metadata import model_id_of
+        from locus.models.metadata import model_id_of
 
         assert model_id_of(_Model("gpt-4o")) == "gpt-4o"
 
     def test_bare_model_attribute(self) -> None:
         from types import SimpleNamespace
 
-        from tulip.models.metadata import model_id_of
+        from locus.models.metadata import model_id_of
 
         assert model_id_of(SimpleNamespace(model="gpt-4o")) == "gpt-4o"
 
     def test_proxy_over_fallback_chain_resolves_the_primary(self) -> None:
-        from tulip.models.fallback import FallbackChain
-        from tulip.models.metadata import model_id_of
+        from locus.models.fallback import FallbackChain
+        from locus.models.metadata import model_id_of
 
         chain = FallbackChain(
             [_Model("deepseek/deepseek-v4-flash"), _Model("gpt-4o-mini")], names=["t1", "t2"]
@@ -277,7 +278,7 @@ class TestModelIdOf:
         assert md.input_price_per_mtok == Decimal("0.05152")
 
     def test_nothing_names_it(self) -> None:
-        from tulip.models.metadata import model_id_of
+        from locus.models.metadata import model_id_of
 
         assert model_id_of(object()) is None
 
@@ -292,7 +293,7 @@ class TestDiscoverContextLength:
         import httpx
         import respx
 
-        from tulip.models.metadata import discover_context_length
+        from locus.models.metadata import discover_context_length
 
         with respx.mock:
             route = respx.get(f"{self._BASE}/models").mock(
@@ -321,7 +322,7 @@ class TestDiscoverContextLength:
         import httpx
         import respx
 
-        from tulip.models.metadata import discover_context_length
+        from locus.models.metadata import discover_context_length
 
         register_metadata(
             ModelMetadata(
@@ -352,7 +353,7 @@ class TestDiscoverContextLength:
         import httpx
         import respx
 
-        from tulip.models.metadata import discover_context_length
+        from locus.models.metadata import discover_context_length
 
         with respx.mock:
             respx.get(f"{self._BASE}/models").mock(
@@ -384,7 +385,7 @@ class TestDiscoverContextLength:
         import httpx
         import respx
 
-        from tulip.models.metadata import discover_context_length
+        from locus.models.metadata import discover_context_length
 
         with respx.mock:
             respx.get(f"{self._BASE}/models").mock(return_value=httpx.Response(**response))  # type: ignore[arg-type]
@@ -396,7 +397,7 @@ class TestDiscoverContextLength:
         import httpx
         import respx
 
-        from tulip.models.metadata import discover_context_length
+        from locus.models.metadata import discover_context_length
 
         with respx.mock:
             respx.get(f"{self._BASE}/models").mock(side_effect=httpx.ConnectError("refused"))

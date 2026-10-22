@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for hooks/builtin module."""
 
@@ -8,8 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tulip.hooks.builtin.logging import LoggingHook
-from tulip.hooks.provider import (
+from locus.hooks.builtin.logging import LoggingHook
+from locus.hooks.provider import (
     AfterToolCallEvent,
     BeforeToolCallEvent,
     HookPriority,
@@ -177,7 +178,7 @@ class TestBuiltinHooksThroughRegistry:
     @pytest.mark.asyncio
     async def test_logging_hook_dispatches_through_registry(self):
         """LoggingHook registered via HookRegistry routes correctly."""
-        from tulip.hooks.registry import HookRegistry
+        from locus.hooks.registry import HookRegistry
 
         registry = HookRegistry()
         hook = LoggingHook()

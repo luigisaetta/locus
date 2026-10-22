@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 66: Spoken cloud status advisory — voice output.
 
@@ -35,14 +36,14 @@ Prerequisites for live speech: an OpenAI API key with access to a TTS
 model. The notebook uses gpt-4o-mini-tts for synthesis.
 
 Run it
-    TULIP_MODEL_PROVIDER=openai \\
+    LOCUS_MODEL_PROVIDER=openai \\
     OPENAI_API_KEY=sk-... \\
     python examples/notebook_66_audio_response.py
 
     afplay notebook_66_response.mp3   # macOS
     # or open it in any media player
 
-Offline: under TULIP_MODEL_PROVIDER=mock (or with no OPENAI_API_KEY) the
+Offline: under LOCUS_MODEL_PROVIDER=mock (or with no OPENAI_API_KEY) the
 agent still drafts the advisory text against the mock model, and the
 notebook prints the synthesis step it *would* run instead of calling the
 real TTS endpoint — so it runs end-to-end with zero credentials.
@@ -56,7 +57,7 @@ from pathlib import Path
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
+from locus.agent import Agent, AgentConfig
 
 
 PROMPT = (
@@ -74,7 +75,7 @@ OUT_PATH = Path(__file__).resolve().parent / "notebook_66_response.mp3"
 def _audio_client():
     """An OpenAI async client for /v1/audio/speech, or None if offline.
 
-    Tulip's chat model wraps chat completions; for audio.speech.create
+    Locus's chat model wraps chat completions; for audio.speech.create
     we use a plain ``openai.AsyncOpenAI`` against the same key. When no
     ``OPENAI_API_KEY`` is set (e.g. the mock-model walkthrough) we return
     None so the caller can describe the synthesis step without a network
@@ -93,7 +94,7 @@ async def main() -> None:
     print("Notebook 66: Spoken cloud status advisory via OpenAI text-to-speech")
     print("=" * 60)
 
-    # Step 1: a regular Tulip Agent drafts the advisory as text.
+    # Step 1: a regular Locus Agent drafts the advisory as text.
     agent = Agent(
         config=AgentConfig(
             agent_id="cloud-status-advisory",

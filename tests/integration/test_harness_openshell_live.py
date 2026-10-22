@@ -1,11 +1,12 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The coding harness against a real OpenShell gateway.
 
-Skipped unless ``TULIP_OPENSHELL_ENDPOINT`` names a gateway (``host:port``)
-and the ``openshell`` package is installed. ``TULIP_OPENSHELL_WORKSPACE``
-picks the workspace (default ``default``); ``TULIP_OPENSHELL_TOKEN`` is sent
+Skipped unless ``LOCUS_OPENSHELL_ENDPOINT`` names a gateway (``host:port``)
+and the ``openshell`` package is installed. ``LOCUS_OPENSHELL_WORKSPACE``
+picks the workspace (default ``default``); ``LOCUS_OPENSHELL_TOKEN`` is sent
 as the bearer token when set. A sandbox is created for the module and
 deleted after it.
 """
@@ -20,27 +21,27 @@ from collections.abc import Iterator
 import pytest
 
 
-ENDPOINT = os.environ.get("TULIP_OPENSHELL_ENDPOINT", "")
+ENDPOINT = os.environ.get("LOCUS_OPENSHELL_ENDPOINT", "")
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.skipif(not ENDPOINT, reason="TULIP_OPENSHELL_ENDPOINT is not set"),
+    pytest.mark.skipif(not ENDPOINT, reason="LOCUS_OPENSHELL_ENDPOINT is not set"),
 ]
 
 pytest.importorskip("openshell")
 
-from tulip.harness import OpenShellBackend, build_harness  # noqa: E402
+from locus.harness import OpenShellBackend, build_harness  # noqa: E402
 
 
 @pytest.fixture(scope="module")
 def sandbox() -> Iterator[OpenShellBackend]:
     options: dict[str, object] = {}
-    token = os.environ.get("TULIP_OPENSHELL_TOKEN")
+    token = os.environ.get("LOCUS_OPENSHELL_TOKEN")
     if token:
         options["bearer_token"] = token
     backend = OpenShellBackend.create(
-        workspace=os.environ.get("TULIP_OPENSHELL_WORKSPACE", "default"),
-        name=f"tulip-harness-{uuid.uuid4().hex[:8]}",
+        workspace=os.environ.get("LOCUS_OPENSHELL_WORKSPACE", "default"),
+        name=f"locus-harness-{uuid.uuid4().hex[:8]}",
         endpoint=ENDPOINT,
         **options,
     )

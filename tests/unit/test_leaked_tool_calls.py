@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Leaked tool-call markup: a model's own call format, arriving as text.
 
@@ -20,19 +21,19 @@ from typing import Any
 
 import pytest
 
-from tulip import Agent
-from tulip.agent.leaked_tool_calls import (
+from locus import Agent
+from locus.agent.leaked_tool_calls import (
     LEAKED_TOOL_CALL_FORMATS,
     match_leaked_tool_calls,
     parse_leaked_tool_calls,
     unfinished_leaked_tool_call,
 )
-from tulip.core.messages import Message
-from tulip.models.base import ModelResponse
-from tulip.models.profiles import PROFILES_ENV, profile_for
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools import tool
-from tulip.tools.registry import ToolRegistry
+from locus.core.messages import Message
+from locus.models.base import ModelResponse
+from locus.models.profiles import PROFILES_ENV, profile_for
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools import tool
+from locus.tools.registry import ToolRegistry
 
 
 ran: list[tuple[str, dict[str, Any]]] = []
@@ -423,7 +424,7 @@ class TestLoop:
 
     @pytest.mark.asyncio
     async def test_a_recovery_is_recorded_in_the_mechanism_ledger(self) -> None:
-        from tulip.observability.mechanisms import (
+        from locus.observability.mechanisms import (
             LEAKED_TOOL_CALLS,
             MechanismLedger,
             bind_ledger,
@@ -500,8 +501,8 @@ class TestLoop:
 
     @pytest.mark.asyncio
     async def test_a_resumed_turn_recovers_too(self) -> None:
-        from tulip.core.messages import Message
-        from tulip.core.state import AgentState
+        from locus.core.messages import Message
+        from locus.core.state import AgentState
 
         model = _deepseek_model(text(DSML_EDIT), text("Done."))
         agent = Agent(model=model, tools=[edit])
@@ -761,7 +762,7 @@ class TestLoopAroundCutOffCalls:
 
     @pytest.mark.asyncio
     async def test_a_resumed_turn_sends_it_back_too(self) -> None:
-        from tulip.core.state import AgentState
+        from locus.core.state import AgentState
 
         model = _deepseek_model(text(DSML_CUT), text(DSML_EDIT), text("Done."))
         agent = Agent(model=model, tools=[edit])

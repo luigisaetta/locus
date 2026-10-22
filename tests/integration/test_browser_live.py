@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The browser tools against real Chromium and a local site.
 
@@ -16,7 +17,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from tulip.tools.browser import BrowserError, BrowserSession, browser_toolset
+from locus.tools.browser import BrowserError, BrowserSession, browser_toolset
 
 
 if TYPE_CHECKING:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 61: Shipping agent events to a cloud telemetry platform.
 
@@ -22,11 +23,11 @@ in a cloud-ops pipeline:
   retained-run count: the health metrics of your event pipeline.
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_61_eventbus_subscribers.py
 
     # Offline / no credentials:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_61_eventbus_subscribers.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_61_eventbus_subscribers.py
 """
 
 from __future__ import annotations
@@ -35,8 +36,8 @@ import asyncio
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.observability import get_event_bus, run_context
+from locus.agent import Agent
+from locus.observability import get_event_bus, run_context
 
 
 # Part 1: the telemetry forwarder (global subscriber) sees both

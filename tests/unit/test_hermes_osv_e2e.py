@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration test for the OSV malware pre-check (A.3).
 
@@ -14,7 +15,7 @@ import socket
 
 import pytest
 
-from tulip.integrations.osv import check_package_for_malware
+from locus.integrations.osv import check_package_for_malware
 
 
 def _api_reachable() -> bool:
@@ -50,7 +51,7 @@ class TestOsvLiveQuery:
         # A name that almost certainly has never been published. OSV
         # responds with empty vulns — should pass.
         assert (
-            check_package_for_malware("npx", ["this-package-name-should-not-exist-tulip-test-xyz"])
+            check_package_for_malware("npx", ["this-package-name-should-not-exist-locus-test-xyz"])
             is None
         )
 
@@ -62,7 +63,7 @@ class TestOsvLiveQuery:
 
 class TestOptOut:
     def test_env_skip_short_circuits_before_network(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("TULIP_MCP_SKIP_OSV", "1")
+        monkeypatch.setenv("LOCUS_MCP_SKIP_OSV", "1")
         # Pass an obviously-suspicious string. With the skip flag set
         # the check must return None without making any network call,
         # so even an invalid hostname couldn't impact correctness.

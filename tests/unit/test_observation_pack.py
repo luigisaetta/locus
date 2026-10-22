@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """ObservationPack: large old tool outputs go as placeholders, and come back exactly.
 
@@ -22,19 +23,19 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent, AgentConfig, ObservationPackConfig
-from tulip.core.events import CustomEvent, TerminateEvent
-from tulip.core.media import encode_image
-from tulip.core.messages import Message, Role, ToolCall
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.memory.compaction import (
+from locus.agent import Agent, AgentConfig, ObservationPackConfig
+from locus.core.events import CustomEvent, TerminateEvent
+from locus.core.media import encode_image
+from locus.core.messages import Message, Role, ToolCall
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.memory.compaction import (
     CLEARED_OUTPUT_KEY,
     RECALLABLE_OUTPUTS_KEY,
     CompactionTracker,
     ContextCompactor,
     is_summary_message,
 )
-from tulip.memory.observation_pack import (
+from locus.memory.observation_pack import (
     OBSERVATION_ID_KEY,
     Observation,
     ObservationArchive,
@@ -44,9 +45,9 @@ from tulip.memory.observation_pack import (
     placeholder_for,
     session_directory_name,
 )
-from tulip.models.base import ModelResponse
-from tulip.testing import FunctionModel
-from tulip.tools.decorator import tool
+from locus.models.base import ModelResponse
+from locus.testing import FunctionModel
+from locus.tools.decorator import tool
 
 
 #: Swaps as soon as an output is due: no batching, no pricing.
@@ -572,7 +573,7 @@ def _scripted_recall(
         return ModelResponse(message=Message.assistant("Done."), usage=usage)
 
     model = FunctionModel(handler)
-    model.config = SimpleNamespace(model="tulip-test-observation-pack")  # type: ignore[attr-defined]
+    model.config = SimpleNamespace(model="locus-test-observation-pack")  # type: ignore[attr-defined]
     return model
 
 
@@ -690,7 +691,7 @@ def test_an_archived_object_that_is_not_a_file_is_refused(tmp_path: Path) -> Non
 
 
 def test_the_caches_are_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import tulip.memory.observation_pack as module
+    import locus.memory.observation_pack as module
 
     monkeypatch.setattr(module, "_OBSERVED_CACHE_LIMIT", 1)
     monkeypatch.setattr(module, "_PLACEHOLDER_CACHE_LIMIT", 1)
@@ -727,7 +728,7 @@ def test_a_session_is_its_thread_or_its_run() -> None:
 def test_the_default_directory_is_under_tmp() -> None:
     import tempfile
 
-    assert ObservationPack().directory == Path(tempfile.gettempdir()) / "tulip-observation-pack"
+    assert ObservationPack().directory == Path(tempfile.gettempdir()) / "locus-observation-pack"
 
 
 async def test_a_summary_without_a_working_archive_lists_nothing(tmp_path: Path) -> None:
@@ -757,7 +758,7 @@ def test_the_mechanism_ledger_records_swaps_placeholders_recalls_and_clears(
 ) -> None:
     import contextvars
 
-    from tulip.observability.mechanisms import (
+    from locus.observability.mechanisms import (
         OBSERVATION_PACK,
         MechanismLedger,
         bind_ledger,
@@ -818,7 +819,7 @@ def _one_call_agent(tmp_path: Path, size: str, **pack: Any) -> tuple[Agent, list
         return ModelResponse(message=Message.assistant("Done."))
 
     model = FunctionModel(handler)
-    model.config = SimpleNamespace(model="tulip-test-observation-pack")  # type: ignore[attr-defined]
+    model.config = SimpleNamespace(model="locus-test-observation-pack")  # type: ignore[attr-defined]
     window = pack.pop("context_window", 1_000_000)
     enabled = pack.pop("enabled", True)
     agent = Agent(
@@ -929,8 +930,8 @@ def _child_model(requests: list[list[Message]]) -> FunctionModel:
 async def test_a_subagent_gets_its_own_pack_under_the_parent_session(tmp_path: Path) -> None:
     import contextvars
 
-    from tulip.agent.subagent import run_subagent
-    from tulip.observability.mechanisms import OBSERVATION_PACK, MechanismLedger, bind_ledger
+    from locus.agent.subagent import run_subagent
+    from locus.observability.mechanisms import OBSERVATION_PACK, MechanismLedger, bind_ledger
 
     child_requests: list[list[Message]] = []
     results: list[Any] = []
@@ -951,7 +952,7 @@ async def test_a_subagent_gets_its_own_pack_under_the_parent_session(tmp_path: P
         return ModelResponse(message=Message.assistant("All done."))
 
     parent_model = FunctionModel(parent)
-    parent_model.config = SimpleNamespace(model="tulip-test-parent")  # type: ignore[attr-defined]
+    parent_model.config = SimpleNamespace(model="locus-test-parent")  # type: ignore[attr-defined]
     agent = Agent(
         model=parent_model,
         tools=[delegate],
@@ -994,7 +995,7 @@ async def test_a_subagent_gets_its_own_pack_under_the_parent_session(tmp_path: P
 
 
 async def test_a_subagent_keeps_the_callers_choice(tmp_path: Path) -> None:
-    from tulip.agent.subagent import _build_child, enter_parent_run, exit_parent_run
+    from locus.agent.subagent import _build_child, enter_parent_run, exit_parent_run
 
     token = enter_parent_run(
         threading.Event(), observation_pack=ObservationPackConfig(enabled=True, directory=tmp_path)
@@ -1027,7 +1028,7 @@ def test_a_cut_output_whose_archive_went_missing_stays_whole(tmp_path: Path) -> 
 
 
 async def test_an_explicit_result_store_still_wins(tmp_path: Path) -> None:
-    from tulip.tools.result_storage import ToolResultStore
+    from locus.tools.result_storage import ToolResultStore
 
     stored: dict[str, str] = {}
     agent, requests = _one_call_agent(tmp_path, "huge")

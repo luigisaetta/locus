@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The workspaces every harness test runs against.
 
@@ -34,7 +35,7 @@ from typing import Any
 
 import pytest
 
-from tulip.harness import (
+from locus.harness import (
     LocalBackend,
     MemoryBackend,
     OpenShellBackend,

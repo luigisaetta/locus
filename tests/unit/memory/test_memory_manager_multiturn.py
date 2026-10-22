@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Long-term memory on long, checkpointed, multi-user chat threads.
 
@@ -16,19 +17,19 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.messages import Message, Role
-from tulip.core.state import AgentState
-from tulip.memory.backends import MemoryCheckpointer
-from tulip.memory.manager import (
+from locus.agent import Agent
+from locus.core.messages import Message, Role
+from locus.core.state import AgentState
+from locus.memory.backends import MemoryCheckpointer
+from locus.memory.manager import (
     MEMORY_BLOCK_METADATA_KEY,
     LLMMemoryManager,
     Memory,
     MemoryType,
     _format_memory_block,
 )
-from tulip.memory.store import InMemoryStore, StoreItem
-from tulip.models.base import ModelResponse
+from locus.memory.store import InMemoryStore, StoreItem
+from locus.models.base import ModelResponse
 
 
 class _RecordingModel:
@@ -259,7 +260,7 @@ async def test_retrieve_with_zero_limit_returns_nothing() -> None:
 
 async def test_base_retrieve_relevant_delegates_to_legacy_retrieve() -> None:
     """Subclasses that only implement ``retrieve(limit)`` keep working."""
-    from tulip.memory.manager import BaseMemoryManager
+    from locus.memory.manager import BaseMemoryManager
 
     class _Legacy(BaseMemoryManager):
         def __init__(self) -> None:
@@ -300,7 +301,7 @@ async def test_heuristic_extraction_does_not_duplicate_across_turns() -> None:
     for i in range(3):
         await _turn(agent, f"follow-up {i}")
 
-    assert len(await store.list_keys(("tulip_memory", "user"))) == 1
+    assert len(await store.list_keys(("locus_memory", "user"))) == 1
 
 
 async def test_extractor_does_not_see_injected_memory_block() -> None:
@@ -348,8 +349,8 @@ async def test_max_memories_prunes_oldest_per_type() -> None:
         await manager.save([Memory(type=MemoryType.USER, key=f"k{i}", content=f"fact {i}")])
     await manager.save([Memory(type=MemoryType.FEEDBACK, key="f", content="rule")])
 
-    assert sorted(await store.list_keys(("tulip_memory", "user"))) == ["k2", "k3"]
-    assert await store.list_keys(("tulip_memory", "feedback")) == ["f"]
+    assert sorted(await store.list_keys(("locus_memory", "user"))) == ["k2", "k3"]
+    assert await store.list_keys(("locus_memory", "feedback")) == ["f"]
 
 
 async def test_max_memories_zero_disables_pruning() -> None:
@@ -358,16 +359,16 @@ async def test_max_memories_zero_disables_pruning() -> None:
     await manager.save(
         [Memory(type=MemoryType.USER, key=f"k{i}", content=f"fact {i}") for i in range(3)]
     )
-    assert len(await store.list_keys(("tulip_memory", "user"))) == 3
+    assert len(await store.list_keys(("locus_memory", "user"))) == 3
 
 
 async def test_prune_tolerates_values_without_metadata() -> None:
     store = InMemoryStore()
     manager = LLMMemoryManager(store=store, max_memories=1)
-    await store.put(("tulip_memory", "user"), "raw", "not-a-dict")
+    await store.put(("locus_memory", "user"), "raw", "not-a-dict")
     await manager.save([Memory(type=MemoryType.USER, key="new", content="fresh")])
 
-    assert await store.list_keys(("tulip_memory", "user")) == ["new"]
+    assert await store.list_keys(("locus_memory", "user")) == ["new"]
 
 
 async def test_save_does_not_mutate_caller_memory_metadata() -> None:
@@ -382,6 +383,6 @@ async def test_save_does_not_mutate_caller_memory_metadata() -> None:
 @pytest.mark.parametrize("bad_value", [{"no": "fields"}, {"type": "bogus", "key": "k"}])
 async def test_malformed_store_values_are_skipped(bad_value: dict[str, Any]) -> None:
     store = InMemoryStore()
-    await store.put(("tulip_memory", "user"), "bad", bad_value)
+    await store.put(("locus_memory", "user"), "bad", bad_value)
     manager = LLMMemoryManager(store=store)
     assert await manager.retrieve(query="x") == []

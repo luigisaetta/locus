@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """End-to-end: AgentServer's ``/threads/{id}`` round-trips real agent state.
 
@@ -34,19 +35,19 @@ def _build_openai_native():
     if not _OPENAI:
         return None
     pytest.importorskip("openai")
-    from tulip.models.native.openai import OpenAIModel
+    from locus.models.native.openai import OpenAIModel
 
-    return OpenAIModel(model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"))
+    return OpenAIModel(model=os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini"))
 
 
 def _build_anthropic_native():
     if not _ANTHROPIC:
         return None
     pytest.importorskip("anthropic")
-    from tulip.models.native.anthropic import AnthropicModel
+    from locus.models.native.anthropic import AnthropicModel
 
     return AnthropicModel(
-        model=os.environ.get("TULIP_ANTHROPIC_TEST_MODEL", "claude-haiku-4-5-20251001")
+        model=os.environ.get("LOCUS_ANTHROPIC_TEST_MODEL", "claude-haiku-4-5-20251001")
     )
 
 
@@ -57,9 +58,9 @@ _PROVIDER_FACTORIES = [
 
 
 def _build_server(model):
-    from tulip.agent import Agent
-    from tulip.memory.backends.memory import MemoryCheckpointer
-    from tulip.server import AgentServer
+    from locus.agent import Agent
+    from locus.memory.backends.memory import MemoryCheckpointer
+    from locus.server import AgentServer
 
     agent = Agent(
         model=model,

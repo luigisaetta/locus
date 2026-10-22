@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests: drive a live LiteLLM AI Gateway end-to-end.
 
@@ -54,7 +55,7 @@ pytestmark = [
 
 
 # ---------------------------------------------------------------------------
-# Gateway health (no Tulip involvement — just HTTP)
+# Gateway health (no Locus involvement — just HTTP)
 # ---------------------------------------------------------------------------
 
 
@@ -93,7 +94,7 @@ def test_gateway_rejects_unauthenticated_call():
 
 
 # ---------------------------------------------------------------------------
-# End-to-end through Tulip's existing OpenAIModel
+# End-to-end through Locus's existing OpenAIModel
 # ---------------------------------------------------------------------------
 
 
@@ -101,7 +102,7 @@ def test_gateway_rejects_unauthenticated_call():
 def model():
     """Build the exact OpenAIModel the docs / notebook 71 instruct users
     to build. If this fixture stops working, the docs are wrong."""
-    from tulip.models.native.openai import OpenAIModel
+    from locus.models.native.openai import OpenAIModel
 
     return OpenAIModel(
         model=_GATEWAY_MODEL,
@@ -114,8 +115,8 @@ def model():
 
 @pytest.mark.asyncio
 async def test_basic_completion_via_gateway(model):
-    """Tulip → gateway → upstream → response. The minimal happy path."""
-    from tulip.core.messages import Message
+    """Locus → gateway → upstream → response. The minimal happy path."""
+    from locus.core.messages import Message
 
     resp = await model.complete(
         messages=[Message.user("What is the capital of Japan? Reply with one word only.")],
@@ -123,7 +124,7 @@ async def test_basic_completion_via_gateway(model):
     assert resp.message.content
     assert "Tokyo" in resp.message.content
     # Usage must arrive populated — the gateway propagates upstream usage
-    # back through to Tulip.
+    # back through to Locus.
     assert resp.usage.get("prompt_tokens", 0) > 0
     assert resp.usage.get("completion_tokens", 0) > 0
 
@@ -132,7 +133,7 @@ async def test_basic_completion_via_gateway(model):
 async def test_multi_turn_with_system_message(model):
     """System + user multi-turn must round-trip through the gateway
     unchanged."""
-    from tulip.core.messages import Message
+    from locus.core.messages import Message
 
     resp = await model.complete(
         messages=[
@@ -148,8 +149,8 @@ async def test_multi_turn_with_system_message(model):
 async def test_streaming_via_gateway(model):
     """SSE end-to-end. The gateway re-serialises upstream events, so
     this is the regression test that catches a broken passthrough."""
-    from tulip.core.events import ModelChunkEvent
-    from tulip.core.messages import Message
+    from locus.core.events import ModelChunkEvent
+    from locus.core.messages import Message
 
     chunks: list[str] = []
     terminal = 0
@@ -163,7 +164,7 @@ async def test_streaming_via_gateway(model):
                 terminal += 1
 
     assert chunks, "gateway returned no streamed content chunks"
-    # Tulip's OpenAIModel may emit more than one ``done=True`` event on a
+    # Locus's OpenAIModel may emit more than one ``done=True`` event on a
     # successful stream (final content delta + a trailing finish-reason
     # event); the contract is that at least one done event fires before
     # iteration ends.
@@ -174,7 +175,7 @@ async def test_streaming_via_gateway(model):
 async def test_tool_call_via_gateway(model):
     """Tool calling must work through the gateway. OpenAI-shape tool
     schema in, OpenAI-shape tool call out."""
-    from tulip.core.messages import Message
+    from locus.core.messages import Message
 
     tools = [
         {
@@ -218,7 +219,7 @@ async def test_agent_loop_via_gateway(model):
     """Build an Agent, run a prompt, assert the result — this is what
     notebook_71 does in production form. Confirms the entire wiring
     (Agent + OpenAIModel + gateway + upstream) holds together."""
-    from tulip.agent import Agent
+    from locus.agent import Agent
 
     agent = Agent(model=model, system_prompt="Reply with a single sentence.")
     result = agent.run_sync("Name one programming language.")

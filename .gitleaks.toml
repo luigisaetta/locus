@@ -1,4 +1,4 @@
-# gitleaks configuration for tulip-agents.
+# gitleaks configuration for locus-sdk.
 #
 # Extends the default ruleset and allowlists the *illustrative* fake secrets
 # that necessarily live in a control runtime with a security domain: a scenario that demonstrates
@@ -6,7 +6,7 @@
 # surgical — the leak-demo file by path, the test fixture by exact value — so a
 # real credential committed anywhere else is still caught.
 
-title = "tulip-agents gitleaks config"
+title = "locus-sdk gitleaks config"
 
 [extend]
 useDefault = true

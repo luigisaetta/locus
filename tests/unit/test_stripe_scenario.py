@@ -24,10 +24,10 @@ from pathlib import Path
 
 import pytest
 
-from tulip.playbooks.enforcer import PlaybookEnforcer
-from tulip.playbooks.loader import load_playbook
-from tulip.playbooks.models import Playbook
-from tulip.skills.models import Skill
+from locus.playbooks.enforcer import PlaybookEnforcer
+from locus.playbooks.loader import load_playbook
+from locus.playbooks.models import Playbook
+from locus.skills.models import Skill
 
 
 PACK = Path(__file__).resolve().parents[2] / "examples" / "stripe"

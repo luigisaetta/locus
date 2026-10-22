@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.models.native.anthropic``.
+"""Coverage tests for ``locus.models.native.anthropic``.
 
 The existing ``test_anthropic_prompt_caching.py`` covers the cache-control
 wiring. This file targets the rest:
@@ -30,8 +31,8 @@ import pytest
 
 pytest.importorskip("anthropic")
 
-from tulip.core.messages import Message, Role, ToolCall  # noqa: E402
-from tulip.models.native.anthropic import AnthropicModel, _rejects_temperature  # noqa: E402
+from locus.core.messages import Message, Role, ToolCall  # noqa: E402
+from locus.models.native.anthropic import AnthropicModel, _rejects_temperature  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -506,7 +507,7 @@ class TestStream:
 
 def test_default_headers_passthrough_for_browser() -> None:
     """default_headers reach the config + client (browser/Pyodide CORS use)."""
-    from tulip.models.native.anthropic import AnthropicModel
+    from locus.models.native.anthropic import AnthropicModel
 
     hdr = {"anthropic-dangerous-direct-browser-access": "true"}
     m = AnthropicModel(model="claude-haiku-4-5", api_key="x", default_headers=hdr)

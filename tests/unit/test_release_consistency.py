@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for the release-metadata consistency check.
 
@@ -48,11 +49,11 @@ def _repo(
     security_floor: str = "2.11.0",
 ) -> Path:
     """A complete repo, consistent unless a caller asks for drift."""
-    (tmp_path / "src" / "tulip").mkdir(parents=True)
+    (tmp_path / "src" / "locus").mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text(
-        f'[project]\nname = "tulip-agents"\nversion = "{pyproject}"\n'
+        f'[project]\nname = "locus-sdk"\nversion = "{pyproject}"\n'
     )
-    (tmp_path / "src" / "tulip" / "__init__.py").write_text(f'__version__ = "{dunder}"\n')
+    (tmp_path / "src" / "locus" / "__init__.py").write_text(f'__version__ = "{dunder}"\n')
     (tmp_path / "CHANGELOG.md").write_text(
         f"# Changelog\n\n## [Unreleased]\n\n## [{changelog}] - 2026-08-16\n\n- a change\n"
     )
@@ -60,11 +61,11 @@ def _repo(
         f"# Security Policy\n\n## Supported Versions\n\n"
         f"| Latest `{security_major}.x` minor | yes |\n"
     )
-    pkg = tmp_path / "packages" / "tulip-agents-security"
+    pkg = tmp_path / "packages" / "locus-sdk-security"
     pkg.mkdir(parents=True)
     (pkg / "pyproject.toml").write_text(
-        f'[project]\nname = "tulip-agents-security"\nversion = "{security_pkg}"\n'
-        f'dependencies = ["tulip-agents>={security_floor}"]\n'
+        f'[project]\nname = "locus-sdk-security"\nversion = "{security_pkg}"\n'
+        f'dependencies = ["locus-sdk>={security_floor}"]\n'
     )
     return tmp_path
 
@@ -133,7 +134,7 @@ def test_security_package_left_behind_is_caught(tmp_path: Path) -> None:
 
 def test_security_floor_left_behind_is_caught(tmp_path: Path) -> None:
     module = _load(_repo(tmp_path, security_floor="2.10.0"))
-    with pytest.raises(module.ConsistencyError, match=re.escape("tulip-agents>=2.11.0")):
+    with pytest.raises(module.ConsistencyError, match=re.escape("locus-sdk>=2.11.0")):
         module.check_security_lockstep("2.11.0", verbose=False)
 
 
@@ -147,7 +148,7 @@ def test_a_missing_document_is_a_failure_not_a_crash(tmp_path: Path) -> None:
 
 def test_missing_dunder_version_is_reported(tmp_path: Path) -> None:
     root = _repo(tmp_path)
-    (root / "src" / "tulip" / "__init__.py").write_text("# no version here\n")
+    (root / "src" / "locus" / "__init__.py").write_text("# no version here\n")
     module = _load(root)
     with pytest.raises(module.ConsistencyError, match=r"declares no __version__"):
         module.dunder_version()

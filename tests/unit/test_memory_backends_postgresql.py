@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for ``tulip.memory.backends.postgresql`` (PostgreSQLBackend).
+"""Unit tests for ``locus.memory.backends.postgresql`` (PostgreSQLBackend).
 
 Stubs ``asyncpg`` so we never need a real Postgres. The backend's
 ``async with pool.acquire() as conn`` pattern means the stub conn
@@ -27,7 +28,7 @@ from typing import Any
 
 import pytest
 
-from tulip.memory.backends.postgresql import PostgreSQLBackend, PostgreSQLConfig
+from locus.memory.backends.postgresql import PostgreSQLBackend, PostgreSQLConfig
 
 
 # ---------------------------------------------------------------------------

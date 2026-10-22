@@ -38,7 +38,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-tulip_test}
+      POSTGRES_DB: ${POSTGRES_DB:-locus_test}
     healthcheck:
       test: [CMD-SHELL, 'pg_isready -U ${POSTGRES_USER:-postgres}']
       interval: 5s

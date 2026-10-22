@@ -2,7 +2,7 @@
 
 Working sample for deploying the [LiteLLM AI Gateway](https://litellm.ai)
 in front of your upstream providers (OpenAI, Anthropic, and any other
-LiteLLM-supported backend), with Tulip pointed at it via its existing
+LiteLLM-supported backend), with Locus pointed at it via its existing
 `OpenAIModel(base_url=...)`.
 
 | File | What it is |
@@ -23,9 +23,9 @@ export LITELLM_DB_PASSWORD="$(openssl rand -hex 16)"  # postgres pw — change f
 # 2. Start the gateway.
 docker compose up
 
-# 3. From your Tulip app — no Tulip-side code change needed:
+# 3. From your Locus app — no Locus-side code change needed:
 #
-#   from tulip.models.native.openai import OpenAIModel
+#   from locus.models.native.openai import OpenAIModel
 #   model = OpenAIModel(
 #       model="gpt-4o",                      # alias from config.yaml
 #       api_key="<gateway-virtual-key>",     # issued via /key/generate
@@ -74,6 +74,6 @@ helm -n litellm upgrade --install gateway litellm/litellm \
 
 ## Full documentation
 
-See the [LiteLLM gateway guide](https://tulipagents.ai/how-to/litellm-gateway/)
+See the [LiteLLM gateway guide](https://locusagents.oracle.com/how-to/litellm-gateway/)
 for when to choose this path over direct providers, the auth boundary
 diagram, and the notebook-run-via-gateway recipe.

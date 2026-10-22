@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 49: steering — a policy LLM gates a live production incident.
 
 ``SteeringHook`` runs a second LLM ("the steering model") in front of
@@ -29,14 +30,14 @@ approved.
 The configured provider drives both the agent and the steering model.
 
 Run it:
-    # The bundled mock model is the default; set TULIP_MODEL_PROVIDER for a live provider.
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_49_steering.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_49_steering.py
 
     # Offline:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_49_steering.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_49_steering.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``TULIP_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 """
 
@@ -44,9 +45,9 @@ import asyncio
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
-from tulip.hooks.builtin.steering import SteeringHook
-from tulip.tools.decorator import tool
+from locus.agent import Agent, AgentConfig
+from locus.hooks.builtin.steering import SteeringHook
+from locus.tools.decorator import tool
 
 
 # =============================================================================

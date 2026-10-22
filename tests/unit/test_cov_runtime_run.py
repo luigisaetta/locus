@@ -1,8 +1,9 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Coverage tests for the main ``Agent.run`` ReAct loop in
-``tulip.agent.runtime_loop``.
+``locus.agent.runtime_loop``.
 
 Drives the error / interrupt / budget / replan / checkpoint branches that
 the happy-path end-to-end tests don't reach. All tests use scripted stub
@@ -16,20 +17,20 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tulip.agent import Agent, GroundingConfig
-from tulip.agent.runtime_loop import AgentRuntimeMixin
-from tulip.core.events import (
+from locus.agent import Agent, GroundingConfig
+from locus.agent.runtime_loop import AgentRuntimeMixin
+from locus.core.events import (
     GroundingEvent,
     InterruptEvent,
     TerminateEvent,
     ToolCompleteEvent,
 )
-from tulip.core.messages import Message, ToolCall
-from tulip.core.state import AgentState
-from tulip.hooks.provider import AfterToolCallEvent, HookPriority, HookProvider
-from tulip.models.base import ModelResponse
-from tulip.tools.decorator import tool
-from tulip.tools.executor import SequentialExecutor
+from locus.core.messages import Message, ToolCall
+from locus.core.state import AgentState
+from locus.hooks.provider import AfterToolCallEvent, HookPriority, HookProvider
+from locus.models.base import ModelResponse
+from locus.tools.decorator import tool
+from locus.tools.executor import SequentialExecutor
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +167,7 @@ async def test_external_cancellation_terminates() -> None:
 
 async def test_max_iterations_summary_with_async_conversation_manager() -> None:
     """The summary call applies an async conversation manager (284-285)."""
-    from tulip.memory.conversation import SlidingWindowManager
+    from locus.memory.conversation import SlidingWindowManager
 
     agent = Agent(
         model=_ScriptedModel([_tc("trivial", {})], loop_last=True),
@@ -257,7 +258,7 @@ async def test_grounding_failure_triggers_replan(monkeypatch: pytest.MonkeyPatch
 
 
 async def test_empty_content_safety_net_async_conversation_manager() -> None:
-    from tulip.memory.conversation import SlidingWindowManager
+    from locus.memory.conversation import SlidingWindowManager
 
     agent = Agent(
         model=_ScriptedModel([_empty(), _text("recovered answer")]),
@@ -463,8 +464,8 @@ async def test_output_key_persisted_to_state_metadata() -> None:
 
 # ── usage on the terminal event (A4 metering) ────────────────────────────────
 def test_usage_of_reads_the_state_counters() -> None:
-    from tulip.agent.runtime_loop import _usage_of
-    from tulip.core.state import AgentState
+    from locus.agent.runtime_loop import _usage_of
+    from locus.core.state import AgentState
 
     state = AgentState(agent_name="a", goal="g").with_token_usage(100, 20)
     assert _usage_of(state) == {
@@ -475,8 +476,8 @@ def test_usage_of_reads_the_state_counters() -> None:
 
 
 def test_usage_of_is_none_when_nothing_was_metered() -> None:
-    from tulip.agent.runtime_loop import _usage_of
-    from tulip.core.state import AgentState
+    from locus.agent.runtime_loop import _usage_of
+    from locus.core.state import AgentState
 
     # absence means "unmetered", never zero cost
     assert _usage_of(AgentState(agent_name="a", goal="g")) is None

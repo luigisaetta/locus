@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 46: playbooks — a GDPR data-subject-access runbook the agent must follow.
 
 A playbook is a typed, ordered sequence of steps with declared
@@ -25,14 +26,14 @@ to the structured execution mechanics — every section prints
 ``[model call: X.XXs · prompt→completion tokens]``.
 
 Run it:
-    # The bundled mock model is the default; set TULIP_MODEL_PROVIDER for a live provider.
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_46_playbooks.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_46_playbooks.py
 
     # Offline:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_46_playbooks.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_46_playbooks.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``TULIP_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 """
 
@@ -42,15 +43,15 @@ from datetime import UTC, datetime
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.playbooks import (
+from locus.agent import Agent
+from locus.playbooks import (
     Playbook,
     PlaybookPlan,
     PlaybookStep,
     StepExecution,
     StepStatus,
 )
-from tulip.tools import tool
+from locus.tools import tool
 
 
 async def _llm_call(
@@ -293,7 +294,7 @@ async def main():
     # =========================================================================
     print("\n=== Part 9: Best Practices ===\n")
     practices = await _llm_call(
-        "Write five terse best-practice bullets for designing reliable Tulip "
+        "Write five terse best-practice bullets for designing reliable Locus "
         "data-privacy request playbooks. Five bullets only.",
         max_tokens=240,
     )

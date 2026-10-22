@@ -12,7 +12,7 @@ fixtures:
 ```bash
 export POSTGRES_HOST=localhost
 export POSTGRES_PORT=5432
-export POSTGRES_DB=tulip_test
+export POSTGRES_DB=locus_test
 export POSTGRES_USER=postgres
 export POSTGRES_PASSWORD=postgres
 ```
@@ -31,12 +31,12 @@ opt-in flag so local or CI runs do not connect to an arbitrary MySQL server.
 The Hatch `test` environment includes the `mysql` extra.
 
 ```bash
-export TULIP_MYSQL_INTEGRATION=1
+export LOCUS_MYSQL_INTEGRATION=1
 export MYSQL_HOST=localhost
 export MYSQL_PORT=3306
-export MYSQL_DB=tulip_test
-export MYSQL_USER=tulip
-export MYSQL_PASSWORD=tulip
+export MYSQL_DB=locus_test
+export MYSQL_USER=locus
+export MYSQL_PASSWORD=locus
 ```
 
 Start the local MySQL service with the dedicated compose file:
@@ -51,7 +51,7 @@ value to the tests:
 ```bash
 MYSQL_PORT=13306 docker compose -f tests/integration/docker-compose.mysql.yml up -d
 
-TULIP_MYSQL_INTEGRATION=1 MYSQL_PORT=13306 \
+LOCUS_MYSQL_INTEGRATION=1 MYSQL_PORT=13306 \
 uv run hatch run test:test \
   tests/integration/test_checkpoint_backends.py::TestMySQLBackend \
   tests/integration/test_checkpointer_adapters.py::TestMySQLAdapter

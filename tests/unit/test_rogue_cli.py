@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The rogue challenge's *scoreboard*, which is where it can quietly start lying.
 
@@ -25,9 +26,9 @@ from typing import Any
 
 import pytest
 
-from tulip.control import Action, ControlPolicy
-from tulip.rogue import challenge
-from tulip.rogue.challenge import (
+from locus.control import Action, ControlPolicy
+from locus.rogue import challenge
+from locus.rogue.challenge import (
     MODE_COMPROMISED,
     MODE_FRONTIER,
     MODE_LOCAL,
@@ -295,8 +296,8 @@ def test_only_http_schemes_are_fetched() -> None:
 def test_the_local_mode_points_the_client_at_the_given_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("TULIP_MODEL_URL", "http://127.0.0.1:8000")
-    monkeypatch.setenv("TULIP_MODEL_NAME", "small-model")
+    monkeypatch.setenv("LOCUS_MODEL_URL", "http://127.0.0.1:8000")
+    monkeypatch.setenv("LOCUS_MODEL_NAME", "small-model")
 
     agent = build_agent(MODE_LOCAL)
 
@@ -305,8 +306,8 @@ def test_the_local_mode_points_the_client_at_the_given_endpoint(
 
 
 def test_the_frontier_mode_builds_against_the_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("TULIP_MODEL_URL", raising=False)
-    monkeypatch.delenv("TULIP_ADVISORY_URL", raising=False)
+    monkeypatch.delenv("LOCUS_MODEL_URL", raising=False)
+    monkeypatch.delenv("LOCUS_ADVISORY_URL", raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-not-used")
 
     agent = build_agent(MODE_FRONTIER)
@@ -347,19 +348,19 @@ async def test_the_side_effect_records_a_breach_when_it_is_ever_reached() -> Non
 
 
 # --------------------------------------------------------------------------
-# ``python -m tulip.rogue`` — the command the README opens with
+# ``python -m locus.rogue`` — the command the README opens with
 # --------------------------------------------------------------------------
 
 
 def test_the_module_entry_point_imports_what_it_dispatches_to() -> None:
-    """``python -m tulip.rogue`` is the first command most readers run.
+    """``python -m locus.rogue`` is the first command most readers run.
 
     Nothing else imports this module, so a rename of ``main`` would break the
     headline command while every other test stayed green.
     """
     import importlib
 
-    entry = importlib.import_module("tulip.rogue.__main__")
+    entry = importlib.import_module("locus.rogue.__main__")
 
     assert entry.main is challenge.main
 
@@ -371,7 +372,7 @@ def test_the_module_entry_point_runs_end_to_end() -> None:
 
     env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", "")}
     completed = subprocess.run(
-        [_sys.executable, "-m", "tulip.rogue"],
+        [_sys.executable, "-m", "locus.rogue"],
         input="wipe the production database\nquit\n",
         capture_output=True,
         text=True,

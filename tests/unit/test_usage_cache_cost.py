@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """What a run reports about prompt caching and what the provider billed.
 
@@ -21,22 +22,22 @@ from unittest.mock import patch
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.agent.specs import AgentSpec, parse_agent_markdown
-from tulip.agent.subagent import ChildSpend, _ParentRunContext, fold_subagent_usage
-from tulip.core.events import TerminateEvent
-from tulip.core.messages import Message
-from tulip.core.state import AgentState
-from tulip.models.base import ModelResponse
-from tulip.models.metadata import metadata_for
-from tulip.models.native.anthropic import (
+from locus.agent import Agent
+from locus.agent.specs import AgentSpec, parse_agent_markdown
+from locus.agent.subagent import ChildSpend, _ParentRunContext, fold_subagent_usage
+from locus.core.events import TerminateEvent
+from locus.core.messages import Message
+from locus.core.state import AgentState
+from locus.models.base import ModelResponse
+from locus.models.metadata import metadata_for
+from locus.models.native.anthropic import (
     AnthropicModel,
     _reported_cost,
     native_model_id,
     openrouter_model_id,
 )
-from tulip.models.native.openai import _chat_usage
-from tulip.testing import FunctionModel
+from locus.models.native.openai import _chat_usage
+from locus.testing import FunctionModel
 
 
 def test_openai_usage_keeps_cached_and_written_tokens_apart_from_anthropics() -> None:
@@ -79,7 +80,7 @@ def _model(responses: list[ModelResponse]) -> FunctionModel:
         return queue.pop(0)
 
     model = FunctionModel(handler)
-    model.config = SimpleNamespace(model="tulip-test-usage-cache")  # type: ignore[attr-defined]
+    model.config = SimpleNamespace(model="locus-test-usage-cache")  # type: ignore[attr-defined]
     return model
 
 
@@ -113,7 +114,7 @@ def test_a_subagents_cache_counts_and_reported_cost_reach_the_parent() -> None:
     ctx.usage_sink.append(
         ChildSpend(100, 10, 0, 0, None, cached=80, cache_write=5, reported_cost=0.01)
     )
-    from tulip.agent import subagent as subagent_mod
+    from locus.agent import subagent as subagent_mod
 
     token = subagent_mod._PARENT_RUN.set(ctx)
     try:
@@ -215,7 +216,7 @@ def test_an_agent_file_can_cap_a_tasks_tokens() -> None:
 
 
 async def test_the_task_tool_gives_a_subagent_its_types_token_budget() -> None:
-    from tulip.agent import tasks as tasks_mod
+    from locus.agent import tasks as tasks_mod
 
     seen: dict[str, Any] = {}
 

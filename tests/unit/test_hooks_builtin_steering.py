@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for ``tulip.hooks.builtin.steering`` (LLM-powered steering).
+"""Unit tests for ``locus.hooks.builtin.steering`` (LLM-powered steering).
 
 The steering hook delegates decisions to a separate LLM. Tests use a
 stub model that returns canned responses to exercise each branch:
@@ -16,14 +17,14 @@ from typing import Any
 
 import pytest
 
-from tulip.core.messages import Message
-from tulip.hooks.builtin.steering import (
+from locus.core.messages import Message
+from locus.hooks.builtin.steering import (
     SteeringAction,
     SteeringContext,
     SteeringDecision,
     SteeringHook,
 )
-from tulip.models.base import ModelResponse
+from locus.models.base import ModelResponse
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +107,7 @@ class TestSteeringContext:
 
 class TestConstruction:
     def test_default_priority_in_security_band(self) -> None:
-        from tulip.hooks.provider import HookPriority
+        from locus.hooks.provider import HookPriority
 
         hook = SteeringHook(model=_StubModel())
         assert hook.priority == HookPriority.SECURITY_DEFAULT

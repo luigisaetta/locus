@@ -1,10 +1,11 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit: a restored run never mistakes a digest for data; declared questions must be answered.
 
 Under the gateway's ``metadata_only`` custody a mirrored ``playbook_step`` record carries a
-digest where a step's ``outputs`` were (``tulip_gateway.persist._digest``, copied below).
+digest where a step's ``outputs`` were (``locus_gateway.persist._digest``, copied below).
 A runtime restored from such a trace must not route on the digest: the output is
 UNAVAILABLE, a branch that reads it is ``unknown``, and ``complete_step`` refuses to route
 -- unless the caller supplies the real values, checked against the digest. A step that
@@ -24,7 +25,7 @@ from typing import Any
 import pytest
 import yaml
 
-from tulip.playbooks.v2 import (
+from locus.playbooks.v2 import (
     ROUTING_UNKNOWN,
     UNAVAILABLE,
     UNKNOWN,
@@ -34,7 +35,7 @@ from tulip.playbooks.v2 import (
     is_withheld,
     when_verdict,
 )
-from tulip.playbooks.v2.engine import (
+from locus.playbooks.v2.engine import (
     ACTIVE,
     DONE,
     NOT_EXECUTED,
@@ -44,18 +45,18 @@ from tulip.playbooks.v2.engine import (
     PlaybookV2,
     parse_playbook_v2,
 )
-from tulip.playbooks.v2.results import not_executed_result
-from tulip.playbooks.v2.when import Unavailable
+from locus.playbooks.v2.results import not_executed_result
+from locus.playbooks.v2.when import Unavailable
 
 
 EXAMPLE = Path(__file__).parent / "fixtures" / "refund-dispute.v2.yaml"
 
 
-# ── the gateway's metadata_only mirror, as tulip_gateway.persist writes it ───
+# ── the gateway's metadata_only mirror, as locus_gateway.persist writes it ───
 
 
 def _digest(value: Any) -> dict[str, Any]:
-    """``tulip_gateway.persist._digest``, byte for byte."""
+    """``locus_gateway.persist._digest``, byte for byte."""
     encoded = json.dumps(value, sort_keys=True, default=str).encode("utf-8")
     return {"redacted": True, "sha256": hashlib.sha256(encoded).hexdigest(), "bytes": len(encoded)}
 

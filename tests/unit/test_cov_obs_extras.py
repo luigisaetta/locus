@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Extra coverage for qdrant.py and rag/__init__.py lazy imports."""
 
@@ -10,8 +11,8 @@ import pytest
 
 pytest.importorskip("qdrant_client")
 
-from tulip.rag.stores.base import Document  # noqa: E402
-from tulip.rag.stores.qdrant import QdrantVectorStore  # noqa: E402
+from locus.rag.stores.base import Document  # noqa: E402
+from locus.rag.stores.qdrant import QdrantVectorStore  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -31,7 +32,7 @@ def _doc(doc_id: str, vec, **meta) -> Document:
 class TestQdrantConfig:
     def test_config_property_returns_vector_store_config(self):
         """config property (line 94) returns the right VectorStoreConfig."""
-        from tulip.rag.stores.base import VectorStoreConfig  # noqa: PLC0415
+        from locus.rag.stores.base import VectorStoreConfig  # noqa: PLC0415
 
         store = _store(dimension=128, distance_metric="cosine")
         cfg = store.config  # line 94
@@ -120,104 +121,104 @@ class TestQdrantClose:
 
 class TestRagLazyImports:
     def test_in_memory_vector_store_lazy(self):
-        """Accessing tulip.rag.InMemoryVectorStore triggers the lazy import
+        """Accessing locus.rag.InMemoryVectorStore triggers the lazy import
         (lines 149-152)."""
-        from tulip import rag  # noqa: PLC0415
+        from locus import rag  # noqa: PLC0415
 
         cls = rag.InMemoryVectorStore  # lines 149-152
-        from tulip.rag.stores.memory import InMemoryVectorStore  # noqa: PLC0415
+        from locus.rag.stores.memory import InMemoryVectorStore  # noqa: PLC0415
 
         assert cls is InMemoryVectorStore
 
     def test_opensearch_vector_store_lazy(self):
-        """Accessing tulip.rag.OpenSearchVectorStore triggers the lazy import
+        """Accessing locus.rag.OpenSearchVectorStore triggers the lazy import
         (lines 159-162). The opensearch module is omitted from coverage, but the
         __getattr__ branch itself (lines 159-162 in __init__.py) IS measured."""
-        from tulip import rag  # noqa: PLC0415
+        from locus import rag  # noqa: PLC0415
 
         cls = rag.OpenSearchVectorStore  # lines 159-162
-        from tulip.rag.stores.opensearch import OpenSearchVectorStore  # noqa: PLC0415
+        from locus.rag.stores.opensearch import OpenSearchVectorStore  # noqa: PLC0415
 
         assert cls is OpenSearchVectorStore
 
     def test_openai_embeddings_lazy(self):
-        """Accessing tulip.rag.OpenAIEmbeddings triggers the lazy import
+        """Accessing locus.rag.OpenAIEmbeddings triggers the lazy import
         (lines 139, 141)."""
-        from tulip import rag  # noqa: PLC0415
+        from locus import rag  # noqa: PLC0415
 
         cls = rag.OpenAIEmbeddings  # lines 139, 141
-        from tulip.rag.embeddings.openai import OpenAIEmbeddings  # noqa: PLC0415
+        from locus.rag.embeddings.openai import OpenAIEmbeddings  # noqa: PLC0415
 
         assert cls is OpenAIEmbeddings
 
     def test_cohere_embeddings_lazy(self):
-        """Accessing tulip.rag.CohereEmbeddings triggers the lazy import
+        """Accessing locus.rag.CohereEmbeddings triggers the lazy import
         (lines 144, 146)."""
-        from tulip import rag  # noqa: PLC0415
+        from locus import rag  # noqa: PLC0415
 
         cls = rag.CohereEmbeddings  # lines 144, 146
-        from tulip.rag.embeddings.cohere import CohereEmbeddings  # noqa: PLC0415
+        from locus.rag.embeddings.cohere import CohereEmbeddings  # noqa: PLC0415
 
         assert cls is CohereEmbeddings
 
     def test_pgvector_store_lazy(self):
-        """Accessing tulip.rag.PgVectorStore triggers the lazy import
+        """Accessing locus.rag.PgVectorStore triggers the lazy import
         (lines 155, 157)."""
-        from tulip import rag  # noqa: PLC0415
+        from locus import rag  # noqa: PLC0415
 
         cls = rag.PgVectorStore  # lines 155, 157
-        from tulip.rag.stores.pgvector import PgVectorStore  # noqa: PLC0415
+        from locus.rag.stores.pgvector import PgVectorStore  # noqa: PLC0415
 
         assert cls is PgVectorStore
 
     def test_qdrant_store_lazy(self):
-        """Accessing tulip.rag.QdrantVectorStore triggers the lazy import
+        """Accessing locus.rag.QdrantVectorStore triggers the lazy import
         (lines 165, 167)."""
-        from tulip import rag  # noqa: PLC0415
+        from locus import rag  # noqa: PLC0415
 
         cls = rag.QdrantVectorStore  # lines 165, 167
-        from tulip.rag.stores.qdrant import QdrantVectorStore as QdrantStore  # noqa: PLC0415
+        from locus.rag.stores.qdrant import QdrantVectorStore as QdrantStore  # noqa: PLC0415
 
         assert cls is QdrantStore
 
     def test_chroma_store_lazy(self):
-        """Accessing tulip.rag.ChromaVectorStore triggers the lazy import
+        """Accessing locus.rag.ChromaVectorStore triggers the lazy import
         (lines 170, 172).  chromadb installs fine; only direct 'import chromadb'
-        fails in this env due to a protobuf conflict — the tulip module wraps it."""
-        from tulip import rag  # noqa: PLC0415
+        fails in this env due to a protobuf conflict — the locus module wraps it."""
+        from locus import rag  # noqa: PLC0415
 
         try:
             cls = rag.ChromaVectorStore  # lines 170, 172
         except (ImportError, TypeError):
             pytest.skip("ChromaVectorStore not importable in this environment")
 
-        from tulip.rag.stores.chroma import ChromaVectorStore  # noqa: PLC0415
+        from locus.rag.stores.chroma import ChromaVectorStore  # noqa: PLC0415
 
         assert cls is ChromaVectorStore
 
     def test_cross_encoder_reranker_lazy(self):
-        """Accessing tulip.rag.CrossEncoderReranker triggers the lazy import
+        """Accessing locus.rag.CrossEncoderReranker triggers the lazy import
         (lines 176, 178)."""
-        from tulip import rag  # noqa: PLC0415
+        from locus import rag  # noqa: PLC0415
 
         cls = rag.CrossEncoderReranker  # lines 176, 178
-        from tulip.rag.reranker.cross_encoder import CrossEncoderReranker  # noqa: PLC0415
+        from locus.rag.reranker.cross_encoder import CrossEncoderReranker  # noqa: PLC0415
 
         assert cls is CrossEncoderReranker
 
     def test_cohere_reranker_lazy(self):
-        """Accessing tulip.rag.CohereReranker triggers the lazy import
+        """Accessing locus.rag.CohereReranker triggers the lazy import
         (lines 181, 183)."""
-        from tulip import rag  # noqa: PLC0415
+        from locus import rag  # noqa: PLC0415
 
         cls = rag.CohereReranker  # lines 181, 183
-        from tulip.rag.reranker.cohere import CohereReranker  # noqa: PLC0415
+        from locus.rag.reranker.cohere import CohereReranker  # noqa: PLC0415
 
         assert cls is CohereReranker
 
     def test_unknown_attribute_raises(self):
         """Accessing an unknown attribute raises AttributeError (line 186)."""
-        from tulip import rag  # noqa: PLC0415
+        from locus import rag  # noqa: PLC0415
 
         with pytest.raises(AttributeError, match="has no attribute"):
             _ = rag.NonExistentAttribute  # line 186

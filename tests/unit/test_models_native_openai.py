@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for ``tulip.models.native.openai`` (OpenAIModel).
+"""Unit tests for ``locus.models.native.openai`` (OpenAIModel).
 
 The ``openai`` SDK already supplies test-friendly response objects;
 we still need to stub them to control finish_reason, usage, content,
@@ -28,8 +29,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tulip.core.messages import Message, ToolCall, ToolResult
-from tulip.models.native.openai import (
+from locus.core.messages import Message, ToolCall, ToolResult
+from locus.models.native.openai import (
     OpenAIModel,
     _decode_tool_arguments,
     _malformed_tool_arguments,
@@ -978,7 +979,7 @@ class TestParameterPassthrough:
 
     def test_param_set_is_read_from_the_openai_package(self) -> None:
         """Hand-maintained lists go stale; this one must track the dependency."""
-        from tulip.models.native.openai import _OPENAI_PARAMS
+        from locus.models.native.openai import _OPENAI_PARAMS
 
         for expected in ("tool_choice", "parallel_tool_calls", "logprobs", "n", "seed"):
             assert expected in _OPENAI_PARAMS
@@ -1312,7 +1313,7 @@ class TestResponseExtrasEdgeCases:
         keeps the long-stable parameters reachable."""
         import typing as _typing
 
-        import tulip.models.native.openai as mod
+        import locus.models.native.openai as mod
 
         def boom(*_a, **_k):
             raise AttributeError("openai moved its request types")

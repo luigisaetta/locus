@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Per-message retention: whole exchanges older than the cut-off go, nothing else does."""
 
@@ -9,11 +10,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.messages import Message, ToolCall, ToolResult
-from tulip.core.state import AgentState
-from tulip.memory.backends import MemoryCheckpointer
-from tulip.memory.retention import (
+from locus.agent import Agent
+from locus.core.messages import Message, ToolCall, ToolResult
+from locus.core.state import AgentState
+from locus.memory.backends import MemoryCheckpointer
+from locus.memory.retention import (
     MESSAGE_TIME_KEY,
     RetainedCheckpointer,
     message_time,
@@ -21,7 +22,7 @@ from tulip.memory.retention import (
     stamp_messages,
     trim_messages,
 )
-from tulip.testing import ScriptedModel, text
+from locus.testing import ScriptedModel, text
 
 
 NOW = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)

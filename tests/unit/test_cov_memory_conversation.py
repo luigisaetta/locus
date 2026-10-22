@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.memory.conversation.SummarizingManager``.
+"""Coverage tests for ``locus.memory.conversation.SummarizingManager``.
 
 Covers the system-message and summary-cache arms of both the sync
 ``apply`` and async ``async_apply`` paths.
@@ -11,8 +12,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from tulip.core.messages import Message, Role
-from tulip.memory.conversation import SummarizingManager
+from locus.core.messages import Message, Role
+from locus.memory.conversation import SummarizingManager
 
 
 def _user(content: str) -> Message:

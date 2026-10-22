@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
-"""Probe the public claims on tulipagents.ai against the code.
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
+"""Probe the public claims on locusagents.oracle.com against the code.
 
 Every check maps to a concrete, verbatim claim made on the marketing or docs
 pages. Offline-only: uses the bundled MockModel, no credentials, no cost. Run:
@@ -43,9 +44,9 @@ def main() -> None:
     try:
         from config import get_model
 
-        from tulip.agent.agent import Agent
-        from tulip.agent.result import AgentResult
-        from tulip_security import create_soc_analyst, ground_report, is_finding  # noqa: F401
+        from locus.agent.agent import Agent
+        from locus.agent.result import AgentResult
+        from locus_security import create_soc_analyst, ground_report, is_finding  # noqa: F401
 
         analyst = create_soc_analyst(model=get_model())
         result = analyst.run_sync("Audit this account's IAM posture.")
@@ -67,8 +68,8 @@ def main() -> None:
     # Abstention, never a Finding. (open-source.html: "an ungrounded finding is
     # a false positive by construction. There's no public path that builds one.")
     try:
-        from tulip.control import Abstention, Severity, ground_finding
-        from tulip.reasoning.gsar import Claim, EvidenceType, Partition
+        from locus.control import Abstention, Severity, ground_finding
+        from locus.reasoning.gsar import Claim, EvidenceType, Partition
 
         out = ground_finding(
             title="suspicious IAM role",
@@ -103,14 +104,14 @@ def main() -> None:
         import re
 
         vals: set[str] = set()
-        for p in pathlib.Path("src/tulip").rglob("*.py"):
+        for p in pathlib.Path("src/locus").rglob("*.py"):
             for m in re.finditer(r'EV_[A-Z0-9_]+\s*=\s*"([^"]+)"', p.read_text()):
                 vals.add(m.group(1))
         n = len(vals)
         record(
             '"40+ canonical events"',
             PASS if n >= 40 else FAIL,
-            f"{n} unique EV_* canonical event-type strings across tulip.*",
+            f"{n} unique EV_* canonical event-type strings across locus.*",
         )
     except Exception as exc:  # noqa: BLE001
         record('"40+ canonical events"', FAIL, f"{type(exc).__name__}: {exc}")
@@ -118,10 +119,10 @@ def main() -> None:
     # ── CLAIM 4 — "Eight shapes, one class" coordination ─────────────────────
     try:
         shapes = []
-        from tulip.agent import Agent  # 1 single
+        from locus.agent import Agent  # 1 single
 
         shapes.append("single")
-        from tulip.agent.composition import (  # 2,3 pipeline/loop
+        from locus.agent.composition import (  # 2,3 pipeline/loop
             LoopAgent,
             SequentialPipeline,
         )
@@ -130,11 +131,11 @@ def main() -> None:
         import importlib
 
         for name, target in [
-            ("parallel", "tulip.agent.composition:ParallelPipeline"),  # 4 parallel
-            ("orchestrator", "tulip.multiagent.orchestrator:Orchestrator"),  # 5 orchestrator
-            ("swarm", "tulip.multiagent.swarm:Swarm"),  # 6 swarm
-            ("handoff", "tulip.multiagent.handoff:Handoff"),  # 7 hand-off
-            ("a2a", "tulip.a2a:"),  # 8 cross-process A2A
+            ("parallel", "locus.agent.composition:ParallelPipeline"),  # 4 parallel
+            ("orchestrator", "locus.multiagent.orchestrator:Orchestrator"),  # 5 orchestrator
+            ("swarm", "locus.multiagent.swarm:Swarm"),  # 6 swarm
+            ("handoff", "locus.multiagent.handoff:Handoff"),  # 7 hand-off
+            ("a2a", "locus.a2a:"),  # 8 cross-process A2A
         ]:
             mod, _, attr = target.partition(":")
             obj = importlib.import_module(mod)
@@ -153,7 +154,7 @@ def main() -> None:
     # ── CLAIM 5 — read-only cloud-posture auditor ("its tools admit only ─────
     # describe/list/get calls")
     try:
-        from tulip_security import cloud_posture_audit
+        from locus_security import cloud_posture_audit
 
         tools = cloud_posture_audit()
         names = [getattr(t, "name", str(t)) for t in tools]
@@ -178,7 +179,7 @@ def main() -> None:
     # the OpenAI provider + base_url (not a dedicated prefix), so verify both
     # native providers are registered AND the OpenAI provider accepts base_url.
     try:
-        from tulip.models.registry import get_model, list_providers
+        from locus.models.registry import get_model, list_providers
 
         provs = set(list_providers())
         natives = {"openai", "anthropic"} <= provs
@@ -194,7 +195,7 @@ def main() -> None:
 
     # ── CLAIM 7 — "fingerprint AI infrastructure": timing measurement ────────
     try:
-        from tulip_security.fingerprint import FEATURE_KEYS, measure_endpoint_timing
+        from locus_security.fingerprint import FEATURE_KEYS, measure_endpoint_timing
 
         feats = measure_endpoint_timing()  # offline sample without OPENAI_API_KEY
         have = set(feats) >= set(FEATURE_KEYS)
@@ -232,7 +233,7 @@ def main() -> None:
 
     # ── report ───────────────────────────────────────────────────────────────
     print("\n" + "=" * 80)
-    print("PUBLIC-CLAIM PROBE  —  tulipagents.ai  vs  the code")
+    print("PUBLIC-CLAIM PROBE  —  locusagents.oracle.com  vs  the code")
     print("=" * 80)
     width = max(len(c) for c, _, _ in results)
     for claim, status, detail in results:

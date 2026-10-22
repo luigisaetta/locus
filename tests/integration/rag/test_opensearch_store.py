@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for OpenSearch Vector Store.
 
@@ -20,13 +21,13 @@ class TestOpenSearchVectorStoreIntegration:
     @pytest.fixture
     async def store(self, opensearch_config):
         """Create OpenSearch store for testing."""
-        from tulip.rag.stores.opensearch import OpenSearchVectorStore
+        from locus.rag.stores.opensearch import OpenSearchVectorStore
 
         store = OpenSearchVectorStore(
             hosts=opensearch_config["hosts"],
             http_auth=opensearch_config["http_auth"],
             use_ssl=opensearch_config["use_ssl"],
-            index_name="tulip_test_vectors",
+            index_name="locus_test_vectors",
             dimension=128,  # Small dimension for testing
         )
 
@@ -54,7 +55,7 @@ class TestOpenSearchVectorStoreIntegration:
     @pytest.mark.asyncio
     async def test_add_document(self, store, sample_embedding):
         """Test adding a document."""
-        from tulip.rag.stores.base import Document
+        from locus.rag.stores.base import Document
 
         doc = Document(
             id="test_doc_1",
@@ -70,7 +71,7 @@ class TestOpenSearchVectorStoreIntegration:
     @pytest.mark.asyncio
     async def test_get_document(self, store, sample_embedding):
         """Test retrieving a document."""
-        from tulip.rag.stores.base import Document
+        from locus.rag.stores.base import Document
 
         doc = Document(
             id="test_doc_2",
@@ -90,7 +91,7 @@ class TestOpenSearchVectorStoreIntegration:
     @pytest.mark.asyncio
     async def test_delete_document(self, store, sample_embedding):
         """Test deleting a document."""
-        from tulip.rag.stores.base import Document
+        from locus.rag.stores.base import Document
 
         doc = Document(
             id="test_doc_3",
@@ -107,7 +108,7 @@ class TestOpenSearchVectorStoreIntegration:
     @pytest.mark.asyncio
     async def test_search(self, store):
         """Test similarity search."""
-        from tulip.rag.stores.base import Document
+        from locus.rag.stores.base import Document
 
         # Add documents with different embeddings
         docs = [
@@ -144,7 +145,7 @@ class TestOpenSearchVectorStoreIntegration:
     @pytest.mark.asyncio
     async def test_search_with_threshold(self, store, sample_embedding):
         """Test search with similarity threshold."""
-        from tulip.rag.stores.base import Document
+        from locus.rag.stores.base import Document
 
         await store.add(
             Document(
@@ -164,7 +165,7 @@ class TestOpenSearchVectorStoreIntegration:
     @pytest.mark.asyncio
     async def test_batch_add(self, store, sample_embedding):
         """Test adding multiple documents."""
-        from tulip.rag.stores.base import Document
+        from locus.rag.stores.base import Document
 
         docs = [
             Document(
@@ -183,7 +184,7 @@ class TestOpenSearchVectorStoreIntegration:
     @pytest.mark.asyncio
     async def test_count(self, store, sample_embedding):
         """Test document count."""
-        from tulip.rag.stores.base import Document
+        from locus.rag.stores.base import Document
 
         initial_count = await store.count()
 
@@ -202,7 +203,7 @@ class TestOpenSearchVectorStoreIntegration:
     @pytest.mark.asyncio
     async def test_clear(self, store, sample_embedding):
         """Test clearing all documents."""
-        from tulip.rag.stores.base import Document
+        from locus.rag.stores.base import Document
 
         for i in range(3):
             await store.add(

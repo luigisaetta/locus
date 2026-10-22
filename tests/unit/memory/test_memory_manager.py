@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """End-to-end tests for the long-term memory manager."""
 
@@ -7,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.core.messages import Message, Role
-from tulip.core.state import AgentState
-from tulip.memory.manager import (
+from locus.core.messages import Message, Role
+from locus.core.state import AgentState
+from locus.memory.manager import (
     LLMMemoryManager,
     Memory,
     MemoryType,
@@ -18,7 +19,7 @@ from tulip.memory.manager import (
     _heuristic_extract,
     _inject_memories_into_state,
 )
-from tulip.memory.store import InMemoryStore
+from locus.memory.store import InMemoryStore
 
 
 # ---------------------------------------------------------------------------
@@ -434,20 +435,20 @@ class TestLLMMemoryManagerSessionLifecycle:
 
 class TestAgentConfigIntegration:
     def test_memory_manager_accepted_in_config(self, store):
-        from tulip.agent.config import AgentConfig
+        from locus.agent.config import AgentConfig
 
         mgr = LLMMemoryManager(store=store)
         config = AgentConfig(model="openai:gpt-4o", memory_manager=mgr)
         assert config.memory_manager is mgr
 
     def test_memory_manager_defaults_to_none(self):
-        from tulip.agent.config import AgentConfig
+        from locus.agent.config import AgentConfig
 
         config = AgentConfig(model="openai:gpt-4o")
         assert config.memory_manager is None
 
     def test_noop_manager_accepted(self):
-        from tulip.agent.config import AgentConfig
+        from locus.agent.config import AgentConfig
 
         config = AgentConfig(model="openai:gpt-4o", memory_manager=NoopMemoryManager())
         assert isinstance(config.memory_manager, NoopMemoryManager)

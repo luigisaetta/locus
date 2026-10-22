@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for the Holographic (HRR) long-term memory store + scrubber."""
 
@@ -7,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.memory.scrubber import build_memory_context_block, sanitize_context
-from tulip.memory.store import StoreItem
-from tulip.memory.store_backends.holographic import (
+from locus.memory.scrubber import build_memory_context_block, sanitize_context
+from locus.memory.store import StoreItem
+from locus.memory.store_backends.holographic import (
     HolographicStore,
     bind,
     bytes_to_phases,
@@ -125,7 +126,7 @@ def test_capabilities_report_lexical_not_semantic(store: HolographicStore) -> No
 async def test_lexical_fallback_when_numpy_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import tulip.memory.store_backends.holographic as h
+    import locus.memory.store_backends.holographic as h
 
     s = HolographicStore(":memory:", dim=256)
     await s.put(("t",), "k", {"content": "restart the production server"})
@@ -139,7 +140,7 @@ async def test_lexical_fallback_when_numpy_absent(
 
 
 def test_content_of_handles_str_dict_and_other() -> None:
-    from tulip.memory.store_backends.holographic import _content_of
+    from locus.memory.store_backends.holographic import _content_of
 
     assert _content_of("plain") == "plain"
     assert "April" in _content_of({"content": "starts April", "n": 4})

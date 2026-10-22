@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 69: Customer-support research workflow — recon, hypothesize, validate, report.
 
@@ -28,11 +29,11 @@ investigation end-to-end the same way you would stream an Agent run.
 - Read the final state: summary, structured output, grounding score.
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_69_research_workflow.py
 
     # Offline / no credentials:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_69_research_workflow.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_69_research_workflow.py
 """
 
 from __future__ import annotations
@@ -42,7 +43,7 @@ import asyncio
 from config import get_model
 from pydantic import BaseModel, Field
 
-from tulip.deepagent.workflow import (
+from locus.deepagent.workflow import (
     KEY_CAUSAL_CONFIDENCE,
     KEY_CAUSAL_HYPOTHESIS,
     KEY_GROUNDING_SCORE,
@@ -53,8 +54,8 @@ from tulip.deepagent.workflow import (
     KEY_SUMMARY,
     create_research_workflow,
 )
-from tulip.observability import get_event_bus, run_context
-from tulip.tools import tool
+from locus.observability import get_event_bus, run_context
+from locus.tools import tool
 
 
 # Tiny knowledge base the agent can investigate via its three tools.
@@ -188,14 +189,14 @@ async def part1_factory_with_sse() -> None:
 async def part2_custom_graph() -> None:
     print("\n--- Part 2: custom graph (no causal inference) ---")
 
-    from tulip.deepagent.workflow import (  # noqa: PLC0415
+    from locus.deepagent.workflow import (  # noqa: PLC0415
         KEY_EVIDENCE,
         make_execute_node,
         make_grounding_eval_node,
         make_summarize_node,
         route_after_grounding,
     )
-    from tulip.multiagent.graph import END, START, StateGraph  # noqa: PLC0415
+    from locus.multiagent.graph import END, START, StateGraph  # noqa: PLC0415
 
     graph = StateGraph()
     graph.add_node("execute", make_execute_node(get_model(), [list_articles, describe_article]))

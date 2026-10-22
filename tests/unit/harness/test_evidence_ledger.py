@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Exec evidence and the read ledger."""
 
@@ -10,11 +11,11 @@ from typing import Any
 
 import pytest
 
-from tulip.harness import ExecRecord, MemoryBackend, ReadLedger
-from tulip.harness.backend import ExecResult, FileStat
-from tulip.harness.evidence import exec_record, publish
-from tulip.harness.ledger import _same
-from tulip.observability.emit import EV_HARNESS_EXEC
+from locus.harness import ExecRecord, MemoryBackend, ReadLedger
+from locus.harness.backend import ExecResult, FileStat
+from locus.harness.evidence import exec_record, publish
+from locus.harness.ledger import _same
+from locus.observability.emit import EV_HARNESS_EXEC
 
 
 def test_a_record_carries_digests_not_text() -> None:
@@ -34,7 +35,7 @@ def test_a_record_carries_digests_not_text() -> None:
 def test_publish_emits_on_the_bus_and_to_the_sink(monkeypatch: pytest.MonkeyPatch) -> None:
     emitted: list[tuple[str, dict[str, Any]]] = []
     monkeypatch.setattr(
-        "tulip.harness.evidence.emit_sync", lambda kind, **data: emitted.append((kind, data))
+        "locus.harness.evidence.emit_sync", lambda kind, **data: emitted.append((kind, data))
     )
     sunk: list[ExecRecord] = []
     record = exec_record("ls", ExecResult(exit_code=0, output=b""), backend_label="x")
@@ -63,7 +64,7 @@ def test_the_ledger_can_forget_and_ignores_what_is_not_there() -> None:
 
 
 def test_a_path_that_is_not_text_is_invalid() -> None:
-    from tulip.harness import BackendError
+    from locus.harness import BackendError
 
     with pytest.raises(BackendError):
         MemoryBackend().resolve(42)  # type: ignore[arg-type]

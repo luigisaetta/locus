@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Comprehensive integration tests for the agentic loop.
 
@@ -15,16 +16,16 @@ import time
 
 import pytest
 
-from tests._safe_math import safe_math_eval
-from tulip.agent import Agent, GroundingConfig, ReflexionConfig
-from tulip.core.events import (
+from locus.agent import Agent, GroundingConfig, ReflexionConfig
+from locus.core.events import (
     ReflectEvent,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
     ToolStartEvent,
 )
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
+from tests._safe_math import safe_math_eval
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_model]

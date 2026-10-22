@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 30: customer-support triage at scale — scatter-gather with Send.
 
@@ -23,9 +24,9 @@ or routing pipeline already speaks.
 Run it:
     .venv/bin/python examples/notebook_30_map_reduce_code_review.py
 
-The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
 (or anthropic) and the matching credentials to use a live model. Set
-``TULIP_MODEL_PROVIDER=mock`` for offline runs.
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
 - Notebook 16 (basic graph).
@@ -39,9 +40,9 @@ from typing import Any
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
-from tulip.core.send import Send
-from tulip.multiagent.graph import END, START, StateGraph
+from locus.agent import Agent, AgentConfig
+from locus.core.send import Send
+from locus.multiagent.graph import END, START, StateGraph
 
 
 # ----------------------------------------------------------------------------
@@ -140,7 +141,7 @@ async def analyze_one(state: dict[str, Any]) -> dict[str, Any]:
     ``asyncio.gather`` — a blocking sync call would serialise them on a
     shared thread-pool worker.
     """
-    from tulip.core.events import TerminateEvent
+    from locus.core.events import TerminateEvent
 
     role: str = state["role"]
     ticket_id: str = state["ticket_id"]

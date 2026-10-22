@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 22: Resilient cloud-provisioning workflows.
 
@@ -19,12 +20,12 @@ check).
 - graph.stream(...) + emit_custom — push provisioning progress from inside a node.
 
 Run it:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_22_graph_advanced.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_22_graph_advanced.py
 
-The default provider is the bundled mock model; set TULIP_MODEL_PROVIDER for a live provider.
-Set TULIP_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
-TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o
-(or TULIP_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER for a live provider.
+Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
 provider: ollama, vllm, groq, together, openrouter, ...).
 """
 
@@ -33,8 +34,8 @@ import time
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.multiagent.graph import (
+from locus.agent import Agent
+from locus.multiagent.graph import (
     END,
     START,
     CachePolicy,
@@ -42,7 +43,7 @@ from tulip.multiagent.graph import (
     RetryPolicy,
     StateGraph,
 )
-from tulip.multiagent.visualize import draw_ascii, draw_mermaid
+from locus.multiagent.visualize import draw_ascii, draw_mermaid
 
 
 async def _llm_call(
@@ -142,7 +143,7 @@ async def example_visualization():
     """draw_mermaid and draw_ascii print the provisioning workflow as a diagram."""
     print("\n=== Part 3: Diagrams ===\n")
     _ai_note = await _llm_call(
-        "In one sentence, why are Mermaid diagrams useful when reviewing a Tulip StateGraph?"
+        "In one sentence, why are Mermaid diagrams useful when reviewing a Locus StateGraph?"
     )
     print(f"AI rationale: {_ai_note}")
 
@@ -185,7 +186,7 @@ async def example_realtime_streaming():
         "In one sentence, why is streaming progress events better than polling for provisioning status?"
     )
     print(f"AI rationale: {_ai_note}")
-    from tulip.multiagent import StreamMode, emit_custom
+    from locus.multiagent import StreamMode, emit_custom
 
     graph = StateGraph(config=GraphConfig(parallel=False))
 

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The box runner's protocol with the gateway, against a fake gateway."""
 
@@ -13,12 +14,11 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from tests.unit.runner.conftest import RUN_ID, TOKEN, FakeGateway
-from tulip import Agent, tool
-from tulip.core.events import TerminateEvent
-from tulip.core.state import AgentState
-from tulip.hooks.provider import BeforeToolCallEvent, HookPriority
-from tulip.runner import (
+from locus import Agent, tool
+from locus.core.events import TerminateEvent
+from locus.core.state import AgentState
+from locus.hooks.provider import BeforeToolCallEvent, HookPriority
+from locus.runner import (
     ALLOWED_TYPES,
     AdmitResult,
     GatewayCheckpointer,
@@ -36,7 +36,8 @@ from tulip.runner import (
     fetch_manifest,
     next_op,
 )
-from tulip.testing import ScriptedModel, text, tool_call
+from locus.testing import ScriptedModel, text, tool_call
+from tests.unit.runner.conftest import RUN_ID, TOKEN, FakeGateway
 
 
 def _manifest(**over: Any) -> dict[str, Any]:
@@ -62,7 +63,7 @@ def _manifest(**over: Any) -> dict[str, Any]:
 
 def test_config_reads_the_box_environment_and_hides_the_token() -> None:
     config = RunnerConfig.from_env(
-        {"TULIP_ADMIT_URL": "http://gw:8421/", "TULIP_ADMIT_TOKEN": TOKEN, "TULIP_RUN_ID": "r"}
+        {"LOCUS_ADMIT_URL": "http://gw:8421/", "LOCUS_ADMIT_TOKEN": TOKEN, "LOCUS_RUN_ID": "r"}
     )
     assert config.url == "http://gw:8421"
     assert config.run_id == "r"
@@ -70,9 +71,9 @@ def test_config_reads_the_box_environment_and_hides_the_token() -> None:
     assert TOKEN not in repr(GatewayClient(config))
 
 
-@pytest.mark.parametrize("missing", ["TULIP_ADMIT_URL", "TULIP_ADMIT_TOKEN", "TULIP_RUN_ID"])
+@pytest.mark.parametrize("missing", ["LOCUS_ADMIT_URL", "LOCUS_ADMIT_TOKEN", "LOCUS_RUN_ID"])
 def test_config_names_a_missing_variable(missing: str) -> None:
-    env = {"TULIP_ADMIT_URL": "http://gw", "TULIP_ADMIT_TOKEN": TOKEN, "TULIP_RUN_ID": "r"}
+    env = {"LOCUS_ADMIT_URL": "http://gw", "LOCUS_ADMIT_TOKEN": TOKEN, "LOCUS_RUN_ID": "r"}
     env[missing] = " "
     with pytest.raises(ValueError, match=missing) as raised:
         RunnerConfig.from_env(env)
@@ -80,9 +81,9 @@ def test_config_names_a_missing_variable(missing: str) -> None:
 
 
 def test_config_reads_os_environ(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TULIP_ADMIT_URL", "http://gw")
-    monkeypatch.setenv("TULIP_ADMIT_TOKEN", TOKEN)
-    monkeypatch.setenv("TULIP_RUN_ID", "r9")
+    monkeypatch.setenv("LOCUS_ADMIT_URL", "http://gw")
+    monkeypatch.setenv("LOCUS_ADMIT_TOKEN", TOKEN)
+    monkeypatch.setenv("LOCUS_RUN_ID", "r9")
     assert RunnerConfig.from_env().run_id == "r9"
 
 
@@ -429,7 +430,7 @@ async def test_events_spool_through_an_outage_and_replay_in_order(
 ) -> None:
     path = f"/internal/v1/runs/{RUN_ID}/events"
     gateway.on("POST", path, {})
-    spool = tmp_path / "tulip" / "events.jsonl"
+    spool = tmp_path / "locus" / "events.jsonl"
     events = GatewayEvents(client, spool=spool, batch_size=10)
     gateway.down = True
     await events.emit({"type": "think", "text": "a"})

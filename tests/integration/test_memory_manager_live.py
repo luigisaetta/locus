@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """End-to-end integration tests for MemoryManager with a real model.
 
@@ -18,10 +19,10 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.agent import Agent, AgentConfig
-from tulip.core.messages import Message, Role
-from tulip.memory.manager import LLMMemoryManager, Memory, MemoryType
-from tulip.memory.store import InMemoryStore
+from locus.agent import Agent, AgentConfig
+from locus.core.messages import Message, Role
+from locus.memory.manager import LLMMemoryManager, Memory, MemoryType
+from locus.memory.store import InMemoryStore
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_model]
@@ -124,7 +125,7 @@ async def test_session_end_persists_memories(model):
     agent.run_sync("How should I approach database testing?")
 
     # After the run, the extracted memory should be in the store.
-    retrieved = await store.get(("tulip_memory", "feedback"), "no_mocks")
+    retrieved = await store.get(("locus_memory", "feedback"), "no_mocks")
     assert retrieved is not None, "Memory was not persisted after session end"
     assert "Never mock the database" in retrieved.get("content", "")
 
@@ -212,7 +213,7 @@ async def test_full_cross_session_memory_cycle(model):
 @pytest.mark.asyncio
 async def test_noop_manager_with_live_agent(model):
     """NoopMemoryManager wires cleanly — agent runs normally, nothing stored."""
-    from tulip.memory.manager import NoopMemoryManager
+    from locus.memory.manager import NoopMemoryManager
 
     manager = NoopMemoryManager()
 
@@ -237,7 +238,7 @@ async def test_noop_manager_with_live_agent(model):
 @pytest.mark.asyncio
 async def test_memory_block_in_state_before_run(model):
     """Verify _inject_memories_into_state produces the expected shape."""
-    from tulip.core.state import AgentState
+    from locus.core.state import AgentState
 
     store = InMemoryStore()
     manager = LLMMemoryManager(store=store)

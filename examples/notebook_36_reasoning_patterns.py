@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 36: reasoning patterns — a missed-redaction postmortem.
 
 A privacy-team exercise seeded a synthetic PII canary (a fake SSN) into a
@@ -8,7 +9,7 @@ question is why the redaction pipeline stayed silent: a stale PII
 classifier model and a saturated scan queue amount to an unintended
 privacy gap (the kind that ships personal data in the clear — a
 data-protection-by-design failure under GDPR Art. 25 / Art. 32). Each
-part exercises one piece of the Tulip reasoning toolkit against that
+part exercises one piece of the Locus reasoning toolkit against that
 postmortem with a live model and prints a
 ``[model call: X.XXs · prompt→completion tokens]`` banner.
 
@@ -30,14 +31,14 @@ claim is scored against tool evidence before it is allowed to stand.
   cause/effect relationships from canary seed to shipped-in-the-clear PII.
 
 Run it:
-    # The bundled mock model is the default; set TULIP_MODEL_PROVIDER for a live provider.
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_36_reasoning_patterns.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_36_reasoning_patterns.py
 
     # Offline:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_36_reasoning_patterns.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_36_reasoning_patterns.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``TULIP_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 - A model that supports constrained JSON decoding for the
   ``output_schema=`` parts. The ``check_structured_output_capable()``
@@ -50,9 +51,9 @@ import time
 from config import get_model
 from pydantic import BaseModel, Field
 
-from tulip.agent import Agent
-from tulip.core.state import AgentState
-from tulip.reasoning import (
+from locus.agent import Agent
+from locus.core.state import AgentState
+from locus.reasoning import (
     CausalChain,
     GroundingEvaluator,
     Reflector,
@@ -60,7 +61,7 @@ from tulip.reasoning import (
     build_causal_chain,
     evaluate_progress,
 )
-from tulip.tools import tool
+from locus.tools import tool
 
 
 # ---------------------------------------------------------------------------

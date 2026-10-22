@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for RAG notebooks 22-24.
 
@@ -25,7 +26,7 @@ def has_embedder_available() -> bool:
 def get_embedder():
     """Get embedder based on available credentials."""
     if os.environ.get("OPENAI_API_KEY"):
-        from tulip.rag.embeddings import OpenAIEmbeddings
+        from locus.rag.embeddings import OpenAIEmbeddings
 
         return OpenAIEmbeddings(model="text-embedding-3-small")
 
@@ -38,10 +39,10 @@ def get_model():
     OpenAI when ``OPENAI_API_KEY`` is set; otherwise ``None``.
     """
     if os.environ.get("OPENAI_API_KEY"):
-        from tulip.models.native.openai import OpenAIModel
+        from locus.models.native.openai import OpenAIModel
 
         return OpenAIModel(
-            model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=256
+            model=os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=256
         )
 
     return None
@@ -114,8 +115,8 @@ class TestNotebook22RAGBasics:
     @pytest.mark.asyncio
     async def test_inmemory_vector_store(self):
         """Test InMemoryVectorStore operations."""
-        from tulip.rag.stores.base import Document
-        from tulip.rag.stores.memory import InMemoryVectorStore
+        from locus.rag.stores.base import Document
+        from locus.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -159,8 +160,8 @@ class TestNotebook22RAGBasics:
     @pytest.mark.asyncio
     async def test_rag_retriever(self):
         """Test RAGRetriever end-to-end."""
-        from tulip.rag import RAGRetriever
-        from tulip.rag.stores.memory import InMemoryVectorStore
+        from locus.rag import RAGRetriever
+        from locus.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -193,8 +194,8 @@ class TestNotebook22RAGBasics:
     @pytest.mark.asyncio
     async def test_rag_retriever_with_metadata(self):
         """Test RAGRetriever with metadata."""
-        from tulip.rag import RAGRetriever
-        from tulip.rag.stores.memory import InMemoryVectorStore
+        from locus.rag import RAGRetriever
+        from locus.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -227,7 +228,7 @@ class TestNotebook23RAGProviders:
     @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="OpenAI not configured")
     async def test_openai_embeddings(self):
         """Test OpenAI embeddings."""
-        from tulip.rag.embeddings import OpenAIEmbeddings
+        from locus.rag.embeddings import OpenAIEmbeddings
 
         embedder = OpenAIEmbeddings(model="text-embedding-3-small")
 
@@ -264,8 +265,8 @@ class TestNotebook24RAGAgents:
     @pytest.mark.asyncio
     async def test_rag_as_tool(self):
         """Test converting RAG retriever to a tool."""
-        from tulip.rag import RAGRetriever
-        from tulip.rag.stores.memory import InMemoryVectorStore
+        from locus.rag import RAGRetriever
+        from locus.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -276,8 +277,8 @@ class TestNotebook24RAGAgents:
 
         await retriever.add_documents(
             [
-                "Tulip is a Python framework for AI agents.",
-                "Tulip supports multiple LLM providers.",
+                "Locus is a Python framework for AI agents.",
+                "Locus supports multiple LLM providers.",
             ]
         )
 
@@ -291,7 +292,7 @@ class TestNotebook24RAGAgents:
         assert "Search documentation" in tool.description
 
         # Test tool execution
-        result = await tool("What is Tulip?")
+        result = await tool("What is Locus?")
 
         assert "results" in result
         assert "total" in result
@@ -300,9 +301,9 @@ class TestNotebook24RAGAgents:
     @pytest.mark.asyncio
     async def test_create_rag_tool(self):
         """Test create_rag_tool function."""
-        from tulip.rag import RAGRetriever
-        from tulip.rag.stores.memory import InMemoryVectorStore
-        from tulip.rag.tools import create_rag_tool
+        from locus.rag import RAGRetriever
+        from locus.rag.stores.memory import InMemoryVectorStore
+        from locus.rag.tools import create_rag_tool
 
         embedder = get_embedder()
         if not embedder:
@@ -324,9 +325,9 @@ class TestNotebook24RAGAgents:
     @pytest.mark.asyncio
     async def test_rag_agent_simple(self):
         """Test simple RAG agent."""
-        from tulip.agent import Agent
-        from tulip.rag import RAGRetriever
-        from tulip.rag.stores.memory import InMemoryVectorStore
+        from locus.agent import Agent
+        from locus.rag import RAGRetriever
+        from locus.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         model = get_model()
@@ -363,8 +364,8 @@ class TestNotebook24RAGAgents:
     @pytest.mark.asyncio
     async def test_retrieve_text(self):
         """Test retrieve_text convenience method."""
-        from tulip.rag import RAGRetriever
-        from tulip.rag.stores.memory import InMemoryVectorStore
+        from locus.rag import RAGRetriever
+        from locus.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -399,8 +400,8 @@ class TestRAGFullPipeline:
     @pytest.mark.asyncio
     async def test_document_chunking(self):
         """Test that long documents are chunked correctly."""
-        from tulip.rag import RAGRetriever
-        from tulip.rag.stores.memory import InMemoryVectorStore
+        from locus.rag import RAGRetriever
+        from locus.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -424,8 +425,8 @@ class TestRAGFullPipeline:
     @pytest.mark.asyncio
     async def test_similarity_ordering(self):
         """Test that results are ordered by similarity."""
-        from tulip.rag import RAGRetriever
-        from tulip.rag.stores.memory import InMemoryVectorStore
+        from locus.rag import RAGRetriever
+        from locus.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:
@@ -451,8 +452,8 @@ class TestRAGFullPipeline:
     @pytest.mark.asyncio
     async def test_empty_retrieval(self):
         """Test retrieval from empty store."""
-        from tulip.rag import RAGRetriever
-        from tulip.rag.stores.memory import InMemoryVectorStore
+        from locus.rag import RAGRetriever
+        from locus.rag.stores.memory import InMemoryVectorStore
 
         embedder = get_embedder()
         if not embedder:

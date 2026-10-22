@@ -21,11 +21,11 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent, AgentConfig
-from tulip.core.messages import Message, ToolCall
-from tulip.hooks.provider import HookProvider
-from tulip.models.base import ModelResponse
-from tulip.tools import tool
+from locus.agent import Agent, AgentConfig
+from locus.core.messages import Message, ToolCall
+from locus.hooks.provider import HookProvider
+from locus.models.base import ModelResponse
+from locus.tools import tool
 
 
 @tool
@@ -63,7 +63,7 @@ class _CallsTheTool:
         # calls have to arrive in a chunk — a stream that carries text but
         # forgets tool_calls produces a response with none, and the agent
         # simply never calls the tool. No error, no gate, nothing to hold.
-        from tulip.core.events import ModelChunkEvent
+        from locus.core.events import ModelChunkEvent
 
         self.turns += 1
         if self.turns == 1:

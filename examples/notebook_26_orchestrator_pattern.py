@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 26: STEWARD — one privacy officer, many data-privacy specialists.
 
@@ -17,7 +18,7 @@ same fleet self-organizing — exactly the accountability and
 data-minimization posture GDPR and CCPA expect you to demonstrate.
 
 - ``Specialist`` is a domain-focused agent with tools, a system prompt,
-  and a confidence threshold. Tulip ships pre-built ones for logs,
+  and a confidence threshold. Locus ships pre-built ones for logs,
   metrics, traces, and code — all useful evidence sources when tracing
   where personal data flows.
 - ``Orchestrator`` registers specialists, emits ``RoutingDecision``
@@ -32,11 +33,11 @@ data-minimization posture GDPR and CCPA expect you to demonstrate.
 Run it:
     .venv/bin/python examples/notebook_26_orchestrator_pattern.py
 
-The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
 (or anthropic) and the matching credentials to use a live model. Set
-``TULIP_MODEL_PROVIDER=mock`` for offline runs.
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
-This notebook uses Tulip's "Model B" slot (``TULIP_MODEL_ID_B``) for the
+This notebook uses Locus's "Model B" slot (``LOCUS_MODEL_ID_B``) for the
 short commentary calls — set a cheaper model there to cut runtime; falls
 back to Model A when unset.
 
@@ -50,8 +51,8 @@ import time
 
 from config import get_model, get_model_b, print_config
 
-from tulip.agent import Agent
-from tulip.multiagent import (
+from locus.agent import Agent
+from locus.multiagent import (
     Orchestrator,
     RoutingDecision,
     Specialist,
@@ -61,7 +62,7 @@ from tulip.multiagent import (
     create_orchestrator,
     create_trace_analyst,
 )
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
 
 
 async def _llm_call(
@@ -69,7 +70,7 @@ async def _llm_call(
 ) -> str:
     """One model call with a timing/token banner — used for commentary."""
     # Slot B (a cheaper/faster model) is enough for short commentary;
-    # falls back to slot A when TULIP_MODEL_ID_B is unset.
+    # falls back to slot A when LOCUS_MODEL_ID_B is unset.
     agent = Agent(model=get_model_b(max_tokens=max_tokens), system_prompt=system)
     t0 = time.perf_counter()
     res = await agent.arun(prompt)

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """An approval names one call, in one context, under one policy, and can edit it.
 
@@ -17,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from tulip.control import (
+from locus.control import (
     Action,
     ApprovalAuthority,
     ApproverRule,
@@ -27,7 +28,7 @@ from tulip.control import (
     call_digest,
     gate_tool,
 )
-from tulip.tools.decorator import Tool, tool
+from locus.tools.decorator import Tool, tool
 
 
 def _refund(calls: list[float]) -> Tool:

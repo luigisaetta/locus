@@ -1,11 +1,12 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""``tulip.security`` is a compatibility shim over two new homes.
+"""``locus.security`` is a compatibility shim over two new homes.
 
-The grounding / verification names moved to ``tulip.control`` and still import
+The grounding / verification names moved to ``locus.control`` and still import
 from the old path with a deprecation warning. The security-domain tooling moved
-to the separate ``tulip-agents-security`` distribution (``tulip_security``):
+to the separate ``locus-sdk-security`` distribution (``locus_security``):
 the old path resolves it when that package is installed and raises an
 ImportError naming the install when it is not. Submodule paths alias to the
 same module objects, so nothing is loaded twice.
@@ -19,8 +20,8 @@ import warnings
 
 import pytest
 
-import tulip.security as shim
-from tulip.core.warnings import TulipDeprecationWarning
+import locus.security as shim
+from locus.core.warnings import LocusDeprecationWarning
 
 
 _CORE = sorted(shim._CORE_NAMES)
@@ -37,11 +38,11 @@ def fresh_shim(monkeypatch: pytest.MonkeyPatch) -> object:
 
 @pytest.fixture
 def without_security_package(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make ``tulip_security`` unimportable, as on a core-only install."""
+    """Make ``locus_security`` unimportable, as on a core-only install."""
     for name in list(sys.modules):
-        if name == "tulip_security" or name.startswith(("tulip_security.", "tulip.security.")):
+        if name == "locus_security" or name.startswith(("locus_security.", "locus.security.")):
             monkeypatch.delitem(sys.modules, name)
-    monkeypatch.setitem(sys.modules, "tulip_security", None)
+    monkeypatch.setitem(sys.modules, "locus_security", None)
 
 
 def test_the_two_name_sets_are_disjoint_and_cover_the_old_surface() -> None:
@@ -52,9 +53,9 @@ def test_the_two_name_sets_are_disjoint_and_cover_the_old_surface() -> None:
 
 @pytest.mark.parametrize("name", _CORE)
 def test_core_names_resolve_from_control_with_a_warning(fresh_shim: object, name: str) -> None:
-    from tulip import control
+    from locus import control
 
-    with pytest.warns(TulipDeprecationWarning, match=rf"tulip\.control\.{name}"):
+    with pytest.warns(LocusDeprecationWarning, match=rf"locus\.control\.{name}"):
         value = getattr(fresh_shim, name)
     assert value is getattr(control, name)
 
@@ -62,18 +63,18 @@ def test_core_names_resolve_from_control_with_a_warning(fresh_shim: object, name
 def test_a_core_name_warns_once(fresh_shim: object) -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        from tulip.security import Evidence  # noqa: F401
-        from tulip.security import Evidence as Again  # noqa: F401
-    assert len([w for w in caught if issubclass(w.category, TulipDeprecationWarning)]) == 1
+        from locus.security import Evidence  # noqa: F401
+        from locus.security import Evidence as Again  # noqa: F401
+    assert len([w for w in caught if issubclass(w.category, LocusDeprecationWarning)]) == 1
 
 
 def test_core_names_resolve_without_the_security_package(
     fresh_shim: object, without_security_package: None
 ) -> None:
-    with pytest.warns(TulipDeprecationWarning):
-        from tulip.security import Severity, ground_finding
+    with pytest.warns(LocusDeprecationWarning):
+        from locus.security import Severity, ground_finding
 
-    from tulip import control
+    from locus import control
 
     assert Severity is control.Severity
     assert ground_finding is control.ground_finding
@@ -81,32 +82,32 @@ def test_core_names_resolve_without_the_security_package(
 
 @pytest.mark.parametrize("name", _DOMAIN)
 def test_domain_names_resolve_from_the_security_package(fresh_shim: object, name: str) -> None:
-    tulip_security = pytest.importorskip("tulip_security")
+    locus_security = pytest.importorskip("locus_security")
 
     with warnings.catch_warnings():
-        warnings.simplefilter("error", TulipDeprecationWarning)
-        assert getattr(fresh_shim, name) is getattr(tulip_security, name)
+        warnings.simplefilter("error", LocusDeprecationWarning)
+        assert getattr(fresh_shim, name) is getattr(locus_security, name)
 
 
 def test_domain_names_without_the_package_say_what_to_install(
     fresh_shim: object, without_security_package: None
 ) -> None:
-    with pytest.raises(ImportError, match="subdirectory=packages/tulip-agents-security") as exc:
-        from tulip.security import red_team  # noqa: F401
-    assert exc.value.name == "tulip_security"
+    with pytest.raises(ImportError, match="subdirectory=packages/locus-sdk-security") as exc:
+        from locus.security import red_team  # noqa: F401
+    assert exc.value.name == "locus_security"
 
 
 def test_unknown_names_are_attribute_errors(fresh_shim: object) -> None:
     assert not hasattr(fresh_shim, "ControlPolicy")
     with pytest.raises(ImportError):
-        from tulip.security import ControlPolicy  # noqa: F401
+        from locus.security import ControlPolicy  # noqa: F401
 
 
 @pytest.mark.parametrize(("old", "new"), sorted(shim._CORE_MODULES.items()))
 def test_core_submodules_alias_the_moved_module(old: str, new: str) -> None:
-    sys.modules.pop(f"tulip.security.{old}", None)
-    with pytest.warns(TulipDeprecationWarning, match=new.replace(".", r"\.")):
-        module = importlib.import_module(f"tulip.security.{old}")
+    sys.modules.pop(f"locus.security.{old}", None)
+    with pytest.warns(LocusDeprecationWarning, match=new.replace(".", r"\.")):
+        module = importlib.import_module(f"locus.security.{old}")
     assert module is importlib.import_module(new)
     # The alias keeps the real module's identity for reload / pickling.
     assert module.__spec__ is not None
@@ -115,36 +116,36 @@ def test_core_submodules_alias_the_moved_module(old: str, new: str) -> None:
 
 @pytest.mark.parametrize("old", sorted(shim._DOMAIN_MODULES))
 def test_domain_submodules_alias_the_security_package(old: str) -> None:
-    pytest.importorskip("tulip_security")
-    sys.modules.pop(f"tulip.security.{old}", None)
-    module = importlib.import_module(f"tulip.security.{old}")
-    assert module is importlib.import_module(f"tulip_security.{old}")
+    pytest.importorskip("locus_security")
+    sys.modules.pop(f"locus.security.{old}", None)
+    module = importlib.import_module(f"locus.security.{old}")
+    assert module is importlib.import_module(f"locus_security.{old}")
     assert module.__spec__ is not None
-    assert module.__spec__.name == f"tulip_security.{old}"
+    assert module.__spec__.name == f"locus_security.{old}"
 
 
 def test_nested_domain_submodules_alias_too() -> None:
-    pytest.importorskip("tulip_security")
-    probes = importlib.import_module("tulip.security.redteam.probes")
-    assert probes is importlib.import_module("tulip_security.redteam.probes")
+    pytest.importorskip("locus_security")
+    probes = importlib.import_module("locus.security.redteam.probes")
+    assert probes is importlib.import_module("locus_security.redteam.probes")
 
 
 def test_submodule_attribute_access_imports_it(monkeypatch: pytest.MonkeyPatch) -> None:
-    pytest.importorskip("tulip_security")
+    pytest.importorskip("locus_security")
     monkeypatch.delitem(vars(shim), "redteam", raising=False)
-    assert shim.redteam is importlib.import_module("tulip_security.redteam")
+    assert shim.redteam is importlib.import_module("locus_security.redteam")
 
 
 def test_domain_submodules_without_the_package_say_what_to_install(
     without_security_package: None,
 ) -> None:
-    with pytest.raises(ImportError, match="subdirectory=packages/tulip-agents-security"):
-        importlib.import_module("tulip.security.redteam.probes")
+    with pytest.raises(ImportError, match="subdirectory=packages/locus-sdk-security"):
+        importlib.import_module("locus.security.redteam.probes")
 
 
 def test_unknown_submodules_are_not_found() -> None:
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("tulip.security.no_such_module")
+        importlib.import_module("locus.security.no_such_module")
 
 
 def test_the_finder_is_installed_once() -> None:

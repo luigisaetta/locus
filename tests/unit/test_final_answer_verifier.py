@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``AgentConfig.final_answer_verifier``: a pluggable check on every final answer.
 
@@ -17,27 +18,27 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from tulip.agent import Agent
-from tulip.agent.verification import (
+from locus.agent import Agent
+from locus.agent.verification import (
     EPHEMERAL_MESSAGE_KEY,
     FinalAnswerContext,
     is_ephemeral_message,
     mark_ephemeral,
 )
-from tulip.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
-from tulip.core.events import (
+from locus.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
+from locus.core.events import (
     FinalAnswerVerificationEvent,
     InterruptEvent,
+    LocusEvent,
     ModelChunkEvent,
     TerminateEvent,
     ToolStartEvent,
-    TulipEvent,
 )
-from tulip.core.messages import Message
-from tulip.hooks.provider import AfterModelCallEvent, HookProvider
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.testing import FunctionModel, ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.core.messages import Message
+from locus.hooks.provider import AfterModelCallEvent, HookProvider
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.testing import FunctionModel, ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 @tool
@@ -46,7 +47,7 @@ def get_rate(hotel: str) -> str:
     return f"{hotel}: 420 EUR"
 
 
-async def _collect(stream: Any) -> list[TulipEvent]:
+async def _collect(stream: Any) -> list[LocusEvent]:
     return [e async for e in stream]
 
 
@@ -74,11 +75,11 @@ class _Verifier:
         return self.feedback if self.bad in draft else None
 
 
-def _verdicts(events: list[TulipEvent]) -> list[FinalAnswerVerificationEvent]:
+def _verdicts(events: list[LocusEvent]) -> list[FinalAnswerVerificationEvent]:
     return [e for e in events if isinstance(e, FinalAnswerVerificationEvent)]
 
 
-def _terminate(events: list[TulipEvent]) -> TerminateEvent:
+def _terminate(events: list[LocusEvent]) -> TerminateEvent:
     return next(e for e in events if isinstance(e, TerminateEvent))
 
 
@@ -230,7 +231,7 @@ def test_mark_ephemeral_keeps_existing_metadata() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _streamed_text(events: list[TulipEvent]) -> str:
+def _streamed_text(events: list[LocusEvent]) -> str:
     return "".join(e.content or "" for e in events if isinstance(e, ModelChunkEvent))
 
 

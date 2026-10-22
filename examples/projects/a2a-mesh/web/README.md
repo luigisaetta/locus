@@ -1,6 +1,6 @@
 # a2a-mesh-web — console for the A2A security mesh
 
-A React + Vite + TypeScript front-end for the tulip
+A React + Vite + TypeScript front-end for the locus
 [a2a-mesh](../README.md) backend. Discovers running A2A (Agent-to-Agent)
 peers via their `AgentCard`, routes a query by capability tag, and renders
 the typed event stream from `POST /a2a/stream` in real time.
@@ -8,7 +8,7 @@ the typed event stream from `POST /a2a/stream` in real time.
 Styled in a clean console design language — global header with a thin
 red rule, sidebar workspace nav, white surface cards on a warm
 off-white canvas, sand and sage accents. Same palette tokens used by
-the tulip docs site.
+the locus docs site.
 
 ## Run
 
@@ -49,7 +49,7 @@ talks to both peers without CORS drama.
 | `src/App.tsx` | Single-page console — discovery + form + reply panel |
 | `src/api.ts` | Wrappers around `GET /agent-card`, `POST /a2a/invoke`, SSE stream |
 | `src/types.ts` | `AgentCard`, `Peer`, `StreamedEvent` |
-| `src/styles/tulip.css` | tulip palette + console layout primitives |
+| `src/styles/locus.css` | locus palette + console layout primitives |
 | `vite.config.ts` | Dev-server proxies to the two A2A services |
 
 ## Why a separate webapp?

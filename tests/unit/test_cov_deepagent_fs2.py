@@ -1,12 +1,13 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Coverage-gap tests for filesystem/state backends and filesystem tools.
 
 Targets uncovered branches in:
-  - tulip.deepagent.backends.filesystem
-  - tulip.deepagent.backends.state
-  - tulip.deepagent.tools.filesystem
+  - locus.deepagent.backends.filesystem
+  - locus.deepagent.backends.state
+  - locus.deepagent.tools.filesystem
 """
 
 from __future__ import annotations
@@ -17,10 +18,10 @@ from unittest import mock
 
 import pytest
 
-from tulip.deepagent.backends.filesystem import FilesystemBackend
-from tulip.deepagent.backends.protocol import BackendError
-from tulip.deepagent.backends.state import StateBackend, _normalize
-from tulip.deepagent.tools.filesystem import make_filesystem_tools
+from locus.deepagent.backends.filesystem import FilesystemBackend
+from locus.deepagent.backends.protocol import BackendError
+from locus.deepagent.backends.state import StateBackend, _normalize
+from locus.deepagent.tools.filesystem import make_filesystem_tools
 
 
 # ---------------------------------------------------------------------------

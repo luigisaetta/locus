@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """A host-side skills router on one shared Agent: ``SkillsPlugin(router=...)``.
 
@@ -17,12 +18,12 @@ from typing import Any
 
 import pytest
 
-from tulip import Agent, tool
-from tulip.core.events import RunInfo
-from tulip.core.messages import Message
-from tulip.skills.models import Skill
-from tulip.skills.plugin import SkillsPlugin
-from tulip.testing import FunctionModel, text, tool_call
+from locus import Agent, tool
+from locus.core.events import RunInfo
+from locus.core.messages import Message
+from locus.skills.models import Skill
+from locus.skills.plugin import SkillsPlugin
+from locus.testing import FunctionModel, text, tool_call
 
 
 BUILD = Skill(
@@ -157,7 +158,7 @@ class TestRouter:
         model = FunctionModel(lambda _m, _t: text("ok"))
         plugin = SkillsPlugin([BUILD, GREET], router=lambda _t, _r: ["nope", "greet"])
         agent = Agent(model=model, plugins=[plugin])
-        with caplog.at_level(logging.WARNING, logger="tulip.skills.plugin"):
+        with caplog.at_level(logging.WARNING, logger="locus.skills.plugin"):
             await agent.arun("hi")
 
         assert "Greet by name, briefly." in _system_text(model.received_messages[0])
@@ -172,7 +173,7 @@ class TestRouter:
 
         model = FunctionModel(lambda _m, _t: text("ok"))
         plugin = SkillsPlugin([BUILD, GREET], active=["greet"], router=broken)
-        with caplog.at_level(logging.WARNING, logger="tulip.skills.plugin"):
+        with caplog.at_level(logging.WARNING, logger="locus.skills.plugin"):
             result = await Agent(model=model, plugins=[plugin]).arun("hi")
 
         assert result.message == "ok", "the turn is not lost"
@@ -286,7 +287,7 @@ class TestWrapperText:
 
 class TestBookkeeping:
     def test_runs_that_never_finish_are_bounded(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import tulip.skills.plugin as plugin_module
+        import locus.skills.plugin as plugin_module
 
         monkeypatch.setattr(plugin_module, "_MAX_TRACKED_RUNS", 2)
         plugin = _plugin(active=["greet"])
@@ -309,7 +310,7 @@ class TestBookkeeping:
         import importlib
 
         # The package re-exports a function named `emit`, so take the module itself.
-        emit_module = importlib.import_module("tulip.observability.emit")
+        emit_module = importlib.import_module("locus.observability.emit")
 
         def boom(*_args: Any, **_kwargs: Any) -> None:
             raise RuntimeError("telemetry down")
@@ -320,7 +321,7 @@ class TestBookkeeping:
         assert "Build only in the kid's own plot." in reply
 
     def test_the_latest_user_text_skips_other_roles_and_reads_any_content(self) -> None:
-        from tulip.skills.plugin import _latest_user_text
+        from locus.skills.plugin import _latest_user_text
 
         class _Odd:
             role = "user"

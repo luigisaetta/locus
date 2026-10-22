@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """SessionBackend: what is particular to driving a sandbox with shell scripts."""
 
@@ -9,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
+from locus.harness import BackendError, JobError, SessionBackend, SessionLike
+from locus.harness.session import _cap, _parse_status
 from tests.unit.harness.conftest import ShellSession, needs_posix
-from tulip.harness import BackendError, JobError, SessionBackend, SessionLike
-from tulip.harness.session import _cap, _parse_status
 
 
 pytestmark = needs_posix
@@ -95,7 +96,7 @@ def test_a_broken_stat_reply_is_permission_denied(root: Path) -> None:
 
 
 def test_long_output_keeps_its_head_and_tail() -> None:
-    from tulip.harness.local import HEAD_KEEP, TAIL_KEEP
+    from locus.harness.local import HEAD_KEEP, TAIL_KEEP
 
     data = b"h" * HEAD_KEEP + b"m" * 10 + b"t" * TAIL_KEEP
     capped, truncated = _cap(data)
@@ -113,7 +114,7 @@ def test_status_lines_parse() -> None:
 def test_a_huge_background_output_is_read_as_head_and_tail(
     root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from tulip.harness import session
+    from locus.harness import session
 
     monkeypatch.setattr(session, "HEAD_KEEP", 10)
     monkeypatch.setattr(session, "TAIL_KEEP", 10)

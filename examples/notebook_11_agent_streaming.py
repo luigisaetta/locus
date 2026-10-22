@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 11: streaming a data-subject-request (DSAR) analysis.
 
-Every Tulip agent run is a stream of events: thinking, tool start, tool
+Every Locus agent run is a stream of events: thinking, tool start, tool
 complete, terminate. ``agent.run(prompt)`` returns an async iterator
 that yields them in order — so a privacy analyst can watch a data-subject
 request unfold instead of waiting for an opaque verdict. This notebook
@@ -33,9 +34,9 @@ domains and 555-01xx phone numbers.
 Run it:
     .venv/bin/python examples/notebook_11_agent_streaming.py
 
-The default provider is the mock model; set TULIP_MODEL_PROVIDER for a live one (e.g.
+The default provider is the mock model; set LOCUS_MODEL_PROVIDER for a live one (e.g.
 ``openai`` or ``anthropic``). For an offline
-run set ``TULIP_MODEL_PROVIDER=mock``; OpenAI, Anthropic
+run set ``LOCUS_MODEL_PROVIDER=mock``; OpenAI, Anthropic
 work too.
 
 Prerequisite: notebook 07.
@@ -48,15 +49,15 @@ from datetime import datetime
 # Import shared config
 from config import get_model, print_config
 
-from tulip.agent import Agent
-from tulip.core.events import (
+from locus.agent import Agent
+from locus.core.events import (
     ModelChunkEvent,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
     ToolStartEvent,
 )
-from tulip.tools import tool
+from locus.tools import tool
 
 
 # =============================================================================
@@ -457,7 +458,7 @@ def main():
         "Wrap any agent stream with StructuredStream:\n"
     )
     print(
-        """    from tulip.streaming import StructuredStream
+        """    from locus.streaming import StructuredStream
 
     stream = StructuredStream(agent.run("Top 3 PII items in this record."), schema=PiiList)
     async for partial in stream:
@@ -466,7 +467,7 @@ def main():
 """
     )
     print(
-        "Tulip buffers each ModelChunkEvent, closes any unbalanced JSON\n"
+        "Locus buffers each ModelChunkEvent, closes any unbalanced JSON\n"
         "braces / brackets / strings, runs the result through\n"
         "schema.model_validate, and yields the parsed instance if it\n"
         "validates.\n"

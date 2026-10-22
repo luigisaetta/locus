@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Mid-run system notes never replace the agent's instructions, on any adapter.
 
@@ -29,7 +30,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tulip.core.messages import Message, ToolCall, ToolResult
+from locus.core.messages import Message, ToolCall, ToolResult
 
 
 INSTRUCTIONS = "You are the release agent. Never push to main."
@@ -92,7 +93,7 @@ def _anthropic(*, prompt_cache: bool = False) -> tuple[Any, AsyncMock]:
     pytest.importorskip("anthropic")
     from types import SimpleNamespace  # noqa: PLC0415
 
-    from tulip.models.native.anthropic import AnthropicModel  # noqa: PLC0415
+    from locus.models.native.anthropic import AnthropicModel  # noqa: PLC0415
 
     model = AnthropicModel(model="claude-sonnet-4-6", api_key="sk-test", prompt_cache=prompt_cache)
     client = AsyncMock()
@@ -224,7 +225,7 @@ def test_anthropic_convert_messages_still_returns_the_joined_prompt() -> None:
 
 def _bedrock_params(messages: list[Message]) -> dict[str, Any]:
     pytest.importorskip("boto3", reason="bedrock extra not installed")
-    from tulip.models.native.bedrock import BedrockModel  # noqa: PLC0415
+    from locus.models.native.bedrock import BedrockModel  # noqa: PLC0415
 
     model = BedrockModel(
         model="us.amazon.nova-micro-v1:0",
@@ -283,7 +284,7 @@ def test_bedrock_note_never_splits_a_tool_call_from_its_results() -> None:
 
 def _openai_model(model: str = "gpt-4o") -> Any:
     pytest.importorskip("openai", reason="openai extra not installed")
-    from tulip.models.native.openai import OpenAIModel  # noqa: PLC0415
+    from locus.models.native.openai import OpenAIModel  # noqa: PLC0415
 
     return OpenAIModel(model=model, api_key="sk-test")
 
@@ -317,7 +318,7 @@ def test_openai_responses_keeps_one_leading_system_item_and_notes_in_place() -> 
 
 def test_azure_inherits_the_same_mapping() -> None:
     pytest.importorskip("openai", reason="openai extra not installed")
-    from tulip.models.native.azure import AzureOpenAIModel  # noqa: PLC0415
+    from locus.models.native.azure import AzureOpenAIModel  # noqa: PLC0415
 
     model = AzureOpenAIModel(
         model="gpt-4o", endpoint="https://my-resource.openai.azure.com", api_key="k"

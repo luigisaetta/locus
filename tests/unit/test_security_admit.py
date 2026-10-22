@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Admission control — the runtime's enforcement point.
 
@@ -12,14 +13,14 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.control import (
+from locus.control import (
     Action,
     AdmissionError,
     AuditTrail,
     ControlPolicy,
     admit,
 )
-from tulip.control.verification import VerificationResult
+from locus.control.verification import VerificationResult
 
 
 # A verdict strong enough to clear the default policy bar (0.8).

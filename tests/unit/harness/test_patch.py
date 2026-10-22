@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``apply_patch``: GPT's edit format, with ``edit``'s containment.
 
-Ported from tulip-code. The format is the easy part; what these pin is the
+Ported from locus-code. The format is the easy part; what these pin is the
 contract: paths stay inside the workspace, the whole patch is worked out
 before anything is written, and a patch that does not fully apply changes
 nothing.
@@ -13,9 +14,9 @@ from __future__ import annotations
 
 import pytest
 
+from locus.harness import BackendError, FileChange, HarnessConfig, WorkspaceBackend, build_harness
+from locus.harness.tools.patch import PatchError, apply_hunks, parse
 from tests.unit.harness.conftest import get, put
-from tulip.harness import BackendError, FileChange, HarnessConfig, WorkspaceBackend, build_harness
-from tulip.harness.tools.patch import PatchError, apply_hunks, parse
 
 
 def _patch(*body: str) -> str:

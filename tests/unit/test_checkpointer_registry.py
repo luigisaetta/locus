@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for checkpointer registry."""
 
@@ -7,8 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tulip.memory.checkpointer import BaseCheckpointer
-from tulip.memory.registry import (
+from locus.memory.checkpointer import BaseCheckpointer
+from locus.memory.registry import (
     _CHECKPOINTERS,
     get_checkpointer,
     list_checkpointers,
@@ -63,7 +64,7 @@ class TestGetCheckpointer:
         """Test getting memory checkpointer."""
         cp = get_checkpointer("memory")
         assert cp is not None
-        from tulip.memory.backends.memory import MemoryCheckpointer
+        from locus.memory.backends.memory import MemoryCheckpointer
 
         assert isinstance(cp, MemoryCheckpointer)
 
@@ -74,7 +75,7 @@ class TestGetCheckpointer:
         with tempfile.TemporaryDirectory() as tmpdir:
             cp = get_checkpointer(f"file:{tmpdir}")
             assert cp is not None
-            from tulip.memory.backends.file import FileCheckpointer
+            from locus.memory.backends.file import FileCheckpointer
 
             assert isinstance(cp, FileCheckpointer)
 
@@ -152,7 +153,7 @@ class TestHTTPCheckpointerFactory:
         """Test HTTP checkpointer with config_hint URL."""
         cp = get_checkpointer("http:http://localhost:8000")
         assert cp is not None
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         assert isinstance(cp, HTTPCheckpointer)
 
@@ -280,14 +281,14 @@ class TestProviderFactoryFunctions:
         with tempfile.TemporaryDirectory() as tmpdir:
             cp = get_checkpointer(f"file:{tmpdir}")
             # Verify the checkpointer was created with the path
-            from tulip.memory.backends.file import FileCheckpointer
+            from locus.memory.backends.file import FileCheckpointer
 
             assert isinstance(cp, FileCheckpointer)
 
     def test_http_factory_config_hint_sets_base_url(self):
         """Test HTTP factory uses config_hint as base_url."""
         cp = get_checkpointer("http:http://example.com/api")
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         assert isinstance(cp, HTTPCheckpointer)
 

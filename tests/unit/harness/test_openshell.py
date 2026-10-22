@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """OpenShellBackend: what is particular to it beyond the shared contract.
 
@@ -17,8 +18,8 @@ from typing import Any
 
 import pytest
 
+from locus.harness import OpenShellBackend, OpenShellSession, build_harness
 from tests.unit.harness.conftest import FakeOpenShellClient, needs_posix
-from tulip.harness import OpenShellBackend, OpenShellSession, build_harness
 
 
 pytestmark = needs_posix
@@ -76,7 +77,7 @@ def test_an_upload_keeps_the_files_mode(root: Path) -> None:
 
 
 def test_a_large_upload_goes_in_chunks(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from tulip.harness import openshell
+    from locus.harness import openshell
 
     monkeypatch.setattr(openshell, "UPLOAD_CHUNK", 1000)
     client = FakeOpenShellClient()
@@ -226,7 +227,7 @@ def test_without_the_package_the_error_says_what_to_install(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setitem(sys.modules, "openshell", None)
-    with pytest.raises(ImportError, match=r"tulip-agents\[openshell\]"):
+    with pytest.raises(ImportError, match=r"locus-sdk\[openshell\]"):
         OpenShellBackend.connect("sbx")
 
 

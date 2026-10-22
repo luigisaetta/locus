@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """#177 — deferred tools: invisible until searched, governed the whole time."""
 
@@ -9,9 +10,9 @@ import json
 
 import pytest
 
-from tulip.tools.decorator import tool
-from tulip.tools.registry import create_registry
-from tulip.tools.tool_search import create_tool_search_tool, deferred_catalog_note
+from locus.tools.decorator import tool
+from locus.tools.registry import create_registry
+from locus.tools.tool_search import create_tool_search_tool, deferred_catalog_note
 
 
 @tool
@@ -106,7 +107,7 @@ class _StubModel:
 
 class TestAgentWiring:
     def test_tool_search_auto_registered_only_when_deferred_exist(self) -> None:
-        from tulip.agent import Agent
+        from locus.agent import Agent
 
         with_deferred = Agent(model=_StubModel(), tools=[eager_lookup, issue_refund])
         assert "tool_search" in with_deferred.tools
@@ -119,7 +120,7 @@ class TestGatingSurvivesDeferral:
     @pytest.mark.asyncio
     async def test_gated_deferred_tool_stays_gated_after_activation(self) -> None:
         """The point of the design: activation must not widen authority."""
-        from tulip.control import ControlPolicy, gate_tool
+        from locus.control import ControlPolicy, gate_tool
 
         gated = gate_tool(issue_refund, policy=ControlPolicy(deny_for={"payment"}))
         gated_deferred = gated.model_copy(update={"deferred": True})

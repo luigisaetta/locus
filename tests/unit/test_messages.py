@@ -1,12 +1,13 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for message types."""
 
 import pytest
 from pydantic import ValidationError
 
-from tulip.core.messages import Message, Role, ToolCall, ToolResult
+from locus.core.messages import Message, Role, ToolCall, ToolResult
 
 
 class TestRole:

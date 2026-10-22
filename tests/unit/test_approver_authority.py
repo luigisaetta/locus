@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Who may approve a held call, decided in the SDK at decision time.
 
@@ -19,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tulip.control import (
+from locus.control import (
     Action,
     ApprovalAuthority,
     ApprovalAuthorityError,
@@ -31,7 +32,7 @@ from tulip.control import (
     InMemoryApprovals,
     gate_tool,
 )
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
 
 
 if TYPE_CHECKING:

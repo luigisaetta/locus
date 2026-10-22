@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for ``tulip.a2a`` — the spec-compliant A2A transport.
+"""Unit tests for ``locus.a2a`` — the spec-compliant A2A transport.
 
 Covers both the public A2A protocol surface (Agent Card at the
 well-known URL, JSON-RPC 2.0 method dispatch, the eight-state task
@@ -21,7 +22,7 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
-from tulip.a2a import (
+from locus.a2a import (
     A2AClient,
     A2AMessage,
     A2ARequest,
@@ -40,8 +41,8 @@ from tulip.a2a import (
     TaskState,
     TextPart,
 )
-from tulip.a2a.protocol import _is_loopback
-from tulip.a2a.protocol_v1 import (
+from locus.a2a.protocol import _is_loopback
+from locus.a2a.protocol_v1 import (
     A2AV1ProtocolError,
     A2AV1ServerMixin,
     legacy_event_to_v1_stream_response,
@@ -54,7 +55,7 @@ from tulip.a2a.protocol_v1 import (
     v1_stream_response_to_legacy_payload,
     v1_task_to_legacy_payload,
 )
-from tulip.a2a.spec import (
+from locus.a2a.spec import (
     CONTENT_TYPE_NOT_SUPPORTED,
     INVALID_PARAMS,
     TASK_NOT_FOUND,
@@ -65,7 +66,7 @@ from tulip.a2a.spec import (
     TaskStatus,
     TaskStatusUpdateEvent,
 )
-from tulip.a2a.spec_v1 import (
+from locus.a2a.spec_v1 import (
     A2AV1Message,
     A2AV1Part,
     A2AV1Role,
@@ -73,7 +74,7 @@ from tulip.a2a.spec_v1 import (
     A2AV1TaskStatus,
     A2AV1TaskStatusUpdateEvent,
 )
-from tulip.core.events import TerminateEvent, ThinkEvent
+from locus.core.events import TerminateEvent, ThinkEvent
 
 
 # ---------------------------------------------------------------------------
@@ -411,7 +412,7 @@ class TestWellKnownAgentCard:
                 "description": (
                     "Bearer token required on every route. "
                     "Set via the ``api_key=`` constructor argument or "
-                    "the ``TULIP_A2A_API_KEY`` environment variable."
+                    "the ``LOCUS_A2A_API_KEY`` environment variable."
                 ),
             }
         }
@@ -1149,7 +1150,7 @@ class TestDocsGate:
         def boom() -> None:
             raise RuntimeError("no settings")
 
-        monkeypatch.setattr("tulip.core.config.get_settings", boom)
+        monkeypatch.setattr("locus.core.config.get_settings", boom)
         server = A2AServer(agent=_StubAgent([]), allow_unauthenticated=True)
         assert server._resolve_docs_enabled() is False
 

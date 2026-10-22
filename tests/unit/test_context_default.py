@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Context management that counts tokens, on by default.
 
@@ -18,18 +19,18 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.events import InterruptEvent, TerminateEvent
-from tulip.core.messages import Message, Role, ToolCall
-from tulip.memory.compaction import ContextCompactor
-from tulip.memory.compactor import LLMCompactor
-from tulip.memory.conversation import NullManager, SlidingWindowManager
-from tulip.models.metadata import ModelMetadata, register_metadata
-from tulip.testing import FunctionModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.core.events import InterruptEvent, TerminateEvent
+from locus.core.messages import Message, Role, ToolCall
+from locus.memory.compaction import ContextCompactor
+from locus.memory.compactor import LLMCompactor
+from locus.memory.conversation import NullManager, SlidingWindowManager
+from locus.models.metadata import ModelMetadata, register_metadata
+from locus.testing import FunctionModel, text, tool_call
+from locus.tools.decorator import tool
 
 
-_MODEL = "tulip-test-small-window"
+_MODEL = "locus-test-small-window"
 _WINDOW = 20_000  # tokens
 _OUTPUT = "x" * 30_000  # ~7,500 tokens by the char/4 estimate
 
@@ -225,7 +226,7 @@ def test_the_final_held_call_is_kept_without_a_result() -> None:
 
 def _unknown_model(**reported: Any) -> FunctionModel:
     model = FunctionModel(lambda m, t: text("ok"))
-    model.config = SimpleNamespace(model="vllm:tulip-test-unlisted", **reported)  # type: ignore[attr-defined]
+    model.config = SimpleNamespace(model="vllm:locus-test-unlisted", **reported)  # type: ignore[attr-defined]
     return model
 
 
@@ -235,7 +236,7 @@ def _agent(model: Any, **kwargs: Any) -> Agent:
 
 @pytest.fixture(autouse=True)
 def _no_window_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("TULIP_CONTEXT_WINDOW", raising=False)
+    monkeypatch.delenv("LOCUS_CONTEXT_WINDOW", raising=False)
 
 
 def test_an_explicit_window_counts_tokens_for_an_unknown_model() -> None:
@@ -255,7 +256,7 @@ def test_an_explicit_window_overrides_the_metadata_window() -> None:
 def test_the_environment_names_the_window_when_the_config_does_not(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("TULIP_CONTEXT_WINDOW", "131072")
+    monkeypatch.setenv("LOCUS_CONTEXT_WINDOW", "131072")
 
     agent = _agent(_unknown_model())
 
@@ -269,13 +270,13 @@ def test_the_environment_names_the_window_when_the_config_does_not(
 def test_an_invalid_environment_window_is_ignored_with_a_warning(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, raw: str
 ) -> None:
-    monkeypatch.setenv("TULIP_CONTEXT_WINDOW", raw)
+    monkeypatch.setenv("LOCUS_CONTEXT_WINDOW", raw)
 
-    with caplog.at_level("WARNING", logger="tulip.agent.initializer"):
+    with caplog.at_level("WARNING", logger="locus.agent.initializer"):
         agent = _agent(_unknown_model())
 
     assert isinstance(agent._conversation_manager, SlidingWindowManager)
-    assert any(r.getMessage().startswith("Ignoring TULIP_CONTEXT_WINDOW") for r in caplog.records)
+    assert any(r.getMessage().startswith("Ignoring LOCUS_CONTEXT_WINDOW") for r in caplog.records)
 
 
 def test_a_window_the_model_reports_is_used_when_nothing_else_names_one() -> None:
@@ -305,17 +306,17 @@ def test_an_explicit_manager_wins_over_every_window() -> None:
 def test_the_message_window_fallback_says_how_to_name_the_window_once(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    from tulip.agent import initializer
+    from locus.agent import initializer
 
-    initializer._warned_unknown.discard("vllm:tulip-test-unlisted")
-    with caplog.at_level("WARNING", logger="tulip.agent.initializer"):
+    initializer._warned_unknown.discard("vllm:locus-test-unlisted")
+    with caplog.at_level("WARNING", logger="locus.agent.initializer"):
         first = _agent(_unknown_model())
         _agent(_unknown_model())
 
     assert isinstance(first._conversation_manager, SlidingWindowManager)
     warnings = [r.getMessage() for r in caplog.records if "context_window" in r.getMessage()]
     assert len(warnings) == 1
-    assert "TULIP_CONTEXT_WINDOW" in warnings[0]
+    assert "LOCUS_CONTEXT_WINDOW" in warnings[0]
 
 
 def test_an_explicit_window_must_be_positive() -> None:

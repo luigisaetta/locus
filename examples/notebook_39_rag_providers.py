@@ -1,11 +1,12 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 39: RAG providers — a payments runbook KB on any vector store.
 
 A payments operations team's runbook corpus outlives any single backend
 choice. The same corpus that feeds the dispute assistant (notebook 38)
 also carries decline-code playbooks and chargeback procedures, and
-production RAG is two pluggable pieces, both behind one Tulip interface:
+production RAG is two pluggable pieces, both behind one Locus interface:
 
 - **Embeddings** — ``OpenAIEmbeddings`` (``text-embedding-3-small`` /
   ``-3-large``) or ``CohereEmbeddings`` (Cohere's direct API).
@@ -37,13 +38,13 @@ import asyncio
 import os
 import sys
 
-from tulip.rag import (
+from locus.rag import (
     InMemoryVectorStore,
     OpenAIEmbeddings,
     QdrantVectorStore,
     RAGRetriever,
 )
-from tulip.rag.stores.base import Document
+from locus.rag.stores.base import Document
 
 
 def _missing_env() -> list[str]:
@@ -146,8 +147,8 @@ async def part3_swap_backend():
         # qdrant-client isn't installed here (e.g. a browser/WASM runtime or a
         # slim install). The swap is a one-liner precisely because the API is
         # identical to the InMemoryVectorStore shown above — install the extra
-        # to run it: pip install "tulip-agents[qdrant]".
-        print("  QdrantVectorStore needs the qdrant extra (pip install 'tulip-agents[qdrant]').")
+        # to run it: pip install "locus-sdk[qdrant]".
+        print("  QdrantVectorStore needs the qdrant extra (pip install 'locus-sdk[qdrant]').")
         print("  Same RAGRetriever/store API as InMemoryVectorStore above — nothing else changes.")
         return
 

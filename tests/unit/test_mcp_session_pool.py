@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Per-identity MCP session pool, without a real server.
 
@@ -18,14 +19,14 @@ from typing import Any
 import httpx
 import pytest
 
-from tulip.integrations.fastmcp import (
+from locus.integrations.fastmcp import (
     MCPClient,
     MCPConnectionError,
     MCPRequestContext,
     _SessionHandle,
     _TypedConnectErrors,
 )
-from tulip.tools.context import ToolContext, bind_tool_context
+from locus.tools.context import ToolContext, bind_tool_context
 
 
 class _StubSession:
@@ -175,7 +176,7 @@ async def test_open_and_close_are_logged_without_headers(
 ) -> None:
     client = _pool()
     _as(client, {"Authorization": "Bearer s3cr3t-value"})
-    with caplog.at_level(logging.INFO, logger="tulip.integrations.fastmcp"):
+    with caplog.at_level(logging.INFO, logger="locus.integrations.fastmcp"):
         await client.call_tool("t", {})
         await client.close()
     assert "session opened" in caplog.text

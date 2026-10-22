@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for ``create_deepagent(datastores=...)``.
 
@@ -12,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.deepagent.factory import create_deepagent
+from locus.deepagent.factory import create_deepagent
 
 
 class _StubRetriever:
@@ -24,7 +25,7 @@ class _StubRetriever:
         self.store = None
 
     async def retrieve(self, *args, **kwargs):  # pragma: no cover - never called
-        from tulip.rag.retriever import RetrievalResult
+        from locus.rag.retriever import RetrievalResult
 
         return RetrievalResult(query="", documents=[], total_results=0)
 
@@ -35,9 +36,9 @@ def _make_stub_retriever() -> object:
     Going through the actual constructor keeps the ``isinstance`` check in
     ``create_deepagent`` honest — we shouldn't have to hack around it.
     """
-    from tulip.rag.embeddings.base import BaseEmbedding, EmbeddingConfig, EmbeddingResult
-    from tulip.rag.retriever import RAGRetriever
-    from tulip.rag.stores.memory import InMemoryVectorStore
+    from locus.rag.embeddings.base import BaseEmbedding, EmbeddingConfig, EmbeddingResult
+    from locus.rag.retriever import RAGRetriever
+    from locus.rag.stores.memory import InMemoryVectorStore
 
     class StubEmbedder(BaseEmbedding):
         @property
@@ -46,7 +47,7 @@ def _make_stub_retriever() -> object:
 
         @property
         def capabilities(self):  # type: ignore[override]
-            from tulip.rag.embeddings.base import EmbeddingCapabilities
+            from locus.rag.embeddings.base import EmbeddingCapabilities
 
             return EmbeddingCapabilities()
 

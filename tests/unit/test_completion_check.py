@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""``tulip.agent.completion``: a stop is not always the end of the work.
+"""``locus.agent.completion``: a stop is not always the end of the work.
 
 Open-weight models often end a turn on the announcement of their next step —
 "Let me first check the conftest and the specific test area:" — and the loop
@@ -18,8 +19,8 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent, CompletionCheck, Continuation, chain_verifiers
-from tulip.agent.completion import (
+from locus.agent import Agent, CompletionCheck, Continuation, chain_verifiers
+from locus.agent.completion import (
     AUTOMATED_NOTE_KEY,
     CONTINUATION_NOTE_KEY,
     announced_step,
@@ -28,20 +29,20 @@ from tulip.agent.completion import (
     max_replans_for,
     requests_changes,
 )
-from tulip.agent.verification import FinalAnswerContext, is_ephemeral_message
-from tulip.core.events import (
+from locus.agent.verification import FinalAnswerContext, is_ephemeral_message
+from locus.core.events import (
     FinalAnswerVerificationEvent,
+    LocusEvent,
     RunInfo,
     TerminateEvent,
-    TulipEvent,
 )
-from tulip.core.messages import Message, Role, ToolCall
-from tulip.core.state import ToolExecution
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.memory.compaction import CompactionTracker, ContextCompactor
-from tulip.models.base import ModelResponse
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.core.messages import Message, Role, ToolCall
+from locus.core.state import ToolExecution
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.memory.compaction import CompactionTracker, ContextCompactor
+from locus.models.base import ModelResponse
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 # --------------------------------------------------------------- the corpus --
@@ -82,11 +83,11 @@ ANNOUNCEMENTS = [
     "下面是需要修改的地方：",
 ]
 
-#: Replies that end a run properly. The first block is real tulip-code final
+#: Replies that end a run properly. The first block is real locus-code final
 #: answers from a playground session; the rest are the common shapes of a
 #: finished turn, including the ones a loose detector would trip on.
 FINAL_ANSWERS = [
-    # Real tulip-code answers.
+    # Real locus-code answers.
     "Hello! What would you like me to work on?",
     "Sure — I can help build a Go MCP server.\n\nA couple of choices before I edit files: do "
     "you want a **minimal MCP stdio server** scaffold in `src/` with one example tool, or do "
@@ -492,15 +493,15 @@ def read(path: str) -> str:
     return f"contents of {path}"
 
 
-async def _collect(stream: Any) -> list[TulipEvent]:
+async def _collect(stream: Any) -> list[LocusEvent]:
     return [e async for e in stream]
 
 
-def _verdicts(events: list[TulipEvent]) -> list[FinalAnswerVerificationEvent]:
+def _verdicts(events: list[LocusEvent]) -> list[FinalAnswerVerificationEvent]:
     return [e for e in events if isinstance(e, FinalAnswerVerificationEvent)]
 
 
-def _terminate(events: list[TulipEvent]) -> TerminateEvent:
+def _terminate(events: list[LocusEvent]) -> TerminateEvent:
     return next(e for e in events if isinstance(e, TerminateEvent))
 
 
@@ -674,7 +675,7 @@ async def test_compaction_never_takes_a_continuation_note_for_the_users_request(
 async def test_announcements_can_be_turned_off_and_old_runs_are_forgotten(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from tulip.agent import completion
+    from locus.agent import completion
 
     assert await CompletionCheck(announcements=False)("Let me look.", _ctx()) is None
     monkeypatch.setattr(completion, "_RUNS_KEPT", 2)
@@ -686,7 +687,7 @@ async def test_announcements_can_be_turned_off_and_old_runs_are_forgotten(
 
 
 async def test_a_no_tool_calls_termination_waits_for_the_reply_after_a_nudge() -> None:
-    from tulip.core.termination import NoToolCalls
+    from locus.core.termination import NoToolCalls
 
     model = ScriptedModel(
         [text("Let me look at the tests."), tool_call("read", path="t"), text("Done.")]

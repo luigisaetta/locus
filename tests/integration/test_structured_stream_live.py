@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Live: ``StructuredStream`` produces incrementally-validated partials.
 
@@ -22,9 +23,9 @@ from collections.abc import AsyncIterator
 import pytest
 from pydantic import BaseModel, Field
 
-from tulip.core.events import ModelChunkEvent, TerminateEvent, TulipEvent
-from tulip.core.messages import Message
-from tulip.streaming.structured import StructuredStream
+from locus.core.events import LocusEvent, ModelChunkEvent, TerminateEvent
+from locus.core.messages import Message
+from locus.streaming.structured import StructuredStream
 
 
 pytestmark = [pytest.mark.integration]
@@ -46,9 +47,9 @@ def _build_openai_native():
     if not _OPENAI:
         return None
     pytest.importorskip("openai")
-    from tulip.models.native.openai import OpenAIModel
+    from locus.models.native.openai import OpenAIModel
 
-    return OpenAIModel(model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"))
+    return OpenAIModel(model=os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini"))
 
 
 _FACTORIES = [
@@ -56,7 +57,7 @@ _FACTORIES = [
 ]
 
 
-async def _events_from_model_stream(model, messages, response_format) -> AsyncIterator[TulipEvent]:
+async def _events_from_model_stream(model, messages, response_format) -> AsyncIterator[LocusEvent]:
     """Drive ``model.stream(...)`` and re-yield only the events
     ``StructuredStream`` cares about (``ModelChunkEvent`` + a synthetic
     ``TerminateEvent`` at the end).
@@ -84,7 +85,7 @@ async def test_structured_stream_emits_partial_then_final(factory):
     if model is None:
         pytest.skip("provider credentials missing")
 
-    from tulip.core.structured import build_response_format
+    from locus.core.structured import build_response_format
 
     response_format = build_response_format(VendorList, strict=True)
     messages = [

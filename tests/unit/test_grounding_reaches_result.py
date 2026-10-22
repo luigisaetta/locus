@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The grounding verdict, which the agent computed and then dropped.
 
@@ -22,10 +23,10 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.messages import Message, ToolCall
-from tulip.models.base import ModelResponse
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.core.messages import Message, ToolCall
+from locus.models.base import ModelResponse
+from locus.tools.decorator import tool
 
 
 @tool

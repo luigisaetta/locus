@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 52: Durable support cases — checkpoint backends on object storage.
 
 A real customer-support case runs for days and survives restarts,
-shift handoffs, and redeploys. Tulip persists that conversation state
+shift handoffs, and redeploys. Locus persists that conversation state
 in a durable store — the team's system of record for checkpointed case
 state. The checkpointer contract is backend-agnostic; this notebook
 drives it against ``S3Backend`` — S3 / MinIO / Cloudflare R2 via boto3 —
@@ -23,7 +24,7 @@ key/value deployments can use Redis.
 Run it
     # Requires an S3-compatible endpoint (e.g. MinIO) + a bucket:
     export S3_ENDPOINT_URL=http://localhost:9000   # MinIO / R2 endpoint
-    export S3_BUCKET=tulip-checkpoints
+    export S3_BUCKET=locus-checkpoints
     export AWS_ACCESS_KEY_ID=minioadmin
     export AWS_SECRET_ACCESS_KEY=minioadmin
     python examples/notebook_52_checkpoint_backends.py
@@ -37,9 +38,9 @@ import asyncio
 import os
 import sys
 
-from tulip.core.messages import Message
-from tulip.core.state import AgentState
-from tulip.memory.backends import S3Backend
+from locus.core.messages import Message
+from locus.core.state import AgentState
+from locus.memory.backends import S3Backend
 
 
 _REQUIRED_ENV = (
@@ -57,7 +58,7 @@ def _make_backend() -> S3Backend:
     return S3Backend(
         bucket=os.environ["S3_BUCKET"],
         endpoint_url=os.environ.get("S3_ENDPOINT_URL") or None,
-        prefix="tulip_notebook_52/",
+        prefix="locus_notebook_52/",
     )
 
 

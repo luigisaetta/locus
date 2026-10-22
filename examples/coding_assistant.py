@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
-"""Interactive Secure-Coding Assistant powered by Tulip.
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
+"""Interactive Secure-Coding Assistant powered by Locus.
 
 An application-security reviewer that hunts for vulnerabilities in a
 codebase, applies fixes, and verifies them — and only reports findings
@@ -31,8 +32,8 @@ from pathlib import Path
 
 from config import get_model
 
-from tulip.agent import Agent, ReflexionConfig
-from tulip.core.events import (
+from locus.agent import Agent, ReflexionConfig
+from locus.core.events import (
     InterruptEvent,
     ReflectEvent,
     TerminateEvent,
@@ -40,7 +41,7 @@ from tulip.core.events import (
     ToolCompleteEvent,
     ToolStartEvent,
 )
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
 
 
 # =============================================================================
@@ -116,7 +117,7 @@ def _build_model():
     """Model for the review agent.
 
     Delegates to the shared ``examples/config.py`` helper so the id comes from
-    TULIP_MODEL_ID like every other example. This file used to hardcode
+    LOCUS_MODEL_ID like every other example. This file used to hardcode
     gpt-4o-mini, which meant that against any self-hosted or gateway endpoint
     the run died on a 404 and printed only "Done: error".
     """
@@ -175,7 +176,7 @@ async def main():
     )
 
     print(f"\n{'=' * 60}")
-    print(f"  TULIP SECURE-CODING ASSISTANT")
+    print(f"  LOCUS SECURE-CODING ASSISTANT")
     print(f"{'=' * 60}")
     print(f"  Task: {task}")
     print(f"  Mode: explicit (agent runs until task_complete)")
@@ -259,7 +260,7 @@ async def main():
             if event.reason == "error":
                 print(
                     "     (the event stream carries no cause; check the model "
-                    "id and endpoint — TULIP_MODEL_ID / OPENAI_BASE_URL)"
+                    "id and endpoint — LOCUS_MODEL_ID / OPENAI_BASE_URL)"
                 )
             if event.final_message:
                 print(f"\n  Final report:")

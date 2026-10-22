@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for OpenAI model provider."""
 
@@ -7,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tulip.core.messages import Message
-from tulip.models.native.openai import OpenAIConfig, OpenAIModel
+from locus.core.messages import Message
+from locus.models.native.openai import OpenAIConfig, OpenAIModel
 
 
 class TestOpenAIConfig:
@@ -454,7 +455,7 @@ class TestOpenAIModelToolMessage:
         """Test converting tool message to OpenAI format."""
         model = OpenAIModel()
 
-        from tulip.tools.executor import ToolResult
+        from locus.tools.executor import ToolResult
 
         tool_msg = Message.tool(
             ToolResult(

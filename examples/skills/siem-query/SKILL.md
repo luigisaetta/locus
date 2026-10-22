@@ -2,9 +2,9 @@
 name: siem-query
 description: Use when the user asks the agent to write, review, or explain a SIEM / log search (Splunk SPL, Elastic/KQL, or SQL over a log table) — enforces correctness, scoping, and read-only-by-default behavior.
 allowed-tools: kb_search
-license: Apache-2.0
+license: UPL-1.0
 metadata:
-  author: tulip
+  author: locus
   domain: security
 ---
 

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Comprehensive tests for the ReAct loop implementation."""
 
@@ -9,23 +10,23 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tests._safe_math import safe_math_eval
-from tulip.core.events import (
+from locus.core.events import (
     ReflectEvent,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
     ToolStartEvent,
 )
-from tulip.core.messages import Message, ToolCall
-from tulip.core.state import AgentState, ToolExecution
-from tulip.loop.nodes import ExecuteNode, ReflectNode, ThinkNode
-from tulip.loop.react import ReActLoop, ReActLoopConfig, create_react_loop
-from tulip.loop.router import ConditionalRouter, NodeType, RouteDecision, Router
-from tulip.loop.runner import BatchRunner, LoopRunner, StreamingCollector, create_runner
-from tulip.models.base import ModelResponse
-from tulip.tools.decorator import tool
-from tulip.tools.registry import ToolRegistry, create_registry
+from locus.core.messages import Message, ToolCall
+from locus.core.state import AgentState, ToolExecution
+from locus.loop.nodes import ExecuteNode, ReflectNode, ThinkNode
+from locus.loop.react import ReActLoop, ReActLoopConfig, create_react_loop
+from locus.loop.router import ConditionalRouter, NodeType, RouteDecision, Router
+from locus.loop.runner import BatchRunner, LoopRunner, StreamingCollector, create_runner
+from locus.models.base import ModelResponse
+from locus.tools.decorator import tool
+from locus.tools.registry import ToolRegistry, create_registry
+from tests._safe_math import safe_math_eval
 
 
 # =============================================================================
@@ -596,8 +597,8 @@ class TestReflectNode:
         node = ReflectNode()
 
         # Create state with tool loop across iterations
-        from tulip.core.messages import ToolCall
-        from tulip.core.state import ReasoningStep
+        from locus.core.messages import ToolCall
+        from locus.core.state import ReasoningStep
 
         state = AgentState(tool_loop_threshold=3)
         for i in range(3):

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Coverage tests for the self-contained helper methods of
 ``AgentRuntimeMixin`` plus the ``_bus_bridge`` decorator.
@@ -17,12 +18,12 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import BaseModel
 
-from tulip.agent import Agent
-from tulip.agent.config import GSARConfig
-from tulip.core.events import GroundingEvent, TerminateEvent, ThinkEvent
-from tulip.core.messages import Message
-from tulip.core.state import AgentState, ToolExecution
-from tulip.models.base import ModelResponse
+from locus.agent import Agent
+from locus.agent.config import GSARConfig
+from locus.core.events import GroundingEvent, TerminateEvent, ThinkEvent
+from locus.core.messages import Message
+from locus.core.state import AgentState, ToolExecution
+from locus.models.base import ModelResponse
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +111,7 @@ async def test_bus_bridge_swallows_telemetry_errors(monkeypatch: pytest.MonkeyPa
     async def _boom(event: Any) -> None:
         raise RuntimeError("telemetry boom")
 
-    monkeypatch.setattr("tulip.observability.agent_bridge.bridge_tulip_event", _boom)
+    monkeypatch.setattr("locus.observability.agent_bridge.bridge_locus_event", _boom)
 
     agent = _agent(_OneShotModel("hi"), max_iterations=5)
     events: list[Any] = []

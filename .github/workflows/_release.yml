@@ -40,14 +40,14 @@ jobs:
       - name: Install Hatch
         run: pip install hatch==${{ env.HATCH_VERSION }}
 
-      # Only tulip-agents (root) is published. tulip-agents-security
+      # Only locus-sdk (root) is published. locus-sdk-security
       # (packages/) is built into its own directory so pre-release-checks can
       # prove the two still install together, but it is never uploaded: it is
       # not published to PyPI.
       - name: Build project for distribution
         run: |
           hatch build
-          cd packages/tulip-agents-security && hatch build ../../dist-security
+          cd packages/locus-sdk-security && hatch build ../../dist-security
 
       # actions/upload-artifact@v7.0.1
       - name: Upload build
@@ -66,7 +66,7 @@ jobs:
       - name: Check Version
         id: check-version
         run: |
-          echo "pkg-name=tulip-agents" >> "$GITHUB_OUTPUT"
+          echo "pkg-name=locus-sdk" >> "$GITHUB_OUTPUT"
           echo "version=$(hatch version)" >> "$GITHUB_OUTPUT"
 
   test-pypi-publish:
@@ -90,8 +90,8 @@ jobs:
 
       # pypa/gh-action-pypi-publish@v1.14.2 — Trusted Publishing (OIDC).
       # Requires a trusted publisher registered on test.pypi.org for
-      # tulip-agents:
-      #   repo=tuliplabs-ai/tulip-agents, workflow=_release.yml, environment=testpypi
+      # locus-sdk:
+      #   repo=oracle/locus, workflow=_release.yml, environment=testpypi
       # continue-on-error so a TestPyPI hiccup never blocks the prod publish;
       # skip-existing tolerates re-runs over an already-uploaded version.
       - name: Publish to TestPyPI
@@ -140,9 +140,9 @@ jobs:
           # Install the wheels directly from the build artifacts: the core
           # alone first (it must not need the security package), then both.
           pip install "dist/${PKG_NAME//-/_}-${VERSION}-py3-none-any.whl"
-          python -c "import tulip, tulip.control; print(dir(tulip))"
-          pip install "dist-security/tulip_agents_security-${VERSION}-py3-none-any.whl"
-          python -c "import tulip_security; from tulip.security import red_team; print(tulip_security.__name__)"
+          python -c "import locus, locus.control; print(dir(locus))"
+          pip install "dist-security/locus_agents_security-${VERSION}-py3-none-any.whl"
+          python -c "import locus_security; from locus.security import red_team; print(locus_security.__name__)"
 
   publish:
     needs:
@@ -166,9 +166,9 @@ jobs:
           path: dist/
 
       # pypa/gh-action-pypi-publish@v1.14.2 — Trusted Publishing (OIDC).
-      # Requires a trusted publisher on pypi.org for tulip-agents:
-      #   repo=tuliplabs-ai/tulip-agents, workflow=_release.yml, environment=pypi
-      # dist/ holds tulip-agents only; tulip-agents-security is not published.
+      # Requires a trusted publisher on pypi.org for locus-sdk:
+      #   repo=oracle/locus, workflow=_release.yml, environment=pypi
+      # dist/ holds locus-sdk only; locus-sdk-security is not published.
       #
       # Moved off v1.14.0 on 2026-08-12: `requires = ["hatchling"]` is unpinned,
       # so the build machine picked up a hatchling that emits
@@ -185,22 +185,22 @@ jobs:
           packages-dir: dist/
           skip-existing: true
 
-  # The box runner (`python -m tulip.runner`), shipped two ways for a Tulip
-  # gateway to start in an OpenShell sandbox: tulip-runner.pyz, attached to the
+  # The box runner (`python -m locus.runner`), shipped two ways for a Locus
+  # gateway to start in an OpenShell sandbox: locus-runner.pyz, attached to the
   # GitHub release (runs on any CPython 3.12 linux x86_64 image), and the image
-  # ghcr.io/tuliplabs-ai/tulip-runner (python:3.12-slim + the .pyz, non-root).
+  # ghcr.io/oracle/locus-runner (python:3.12-slim + the .pyz, non-root).
   # Built from the same wheel PyPI gets; the .pyz pins what that wheel resolved
-  # to (tulip-runner.pyz.requirements.txt beside it).
+  # to (locus-runner.pyz.requirements.txt beside it).
   runner:
     needs: build
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # push ghcr.io/tuliplabs-ai/tulip-runner
+      packages: write # push ghcr.io/oracle/locus-runner
     env:
       VERSION: ${{ needs.build.outputs.version }}
-      IMAGE: ghcr.io/tuliplabs-ai/tulip-runner
+      IMAGE: ghcr.io/oracle/locus-runner
     steps:
       # actions/checkout@v6.0.2
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -219,13 +219,13 @@ jobs:
           name: dist
           path: dist/
 
-      - name: Build tulip-runner.pyz
+      - name: Build locus-runner.pyz
         run: |
           set -eu
-          scripts/build_runner_pyz.sh "dist/tulip_agents-${VERSION}-py3-none-any.whl" \
-            dist-runner/tulip-runner.pyz
+          scripts/build_runner_pyz.sh "dist/locus_agents-${VERSION}-py3-none-any.whl" \
+            dist-runner/locus-runner.pyz
           # It must start, and say it was not started by a gateway.
-          if env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" python3 dist-runner/tulip-runner.pyz; then
+          if env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" python3 dist-runner/locus-runner.pyz; then
             echo "the runner started without a gateway" >&2
             exit 1
           fi
@@ -237,8 +237,8 @@ jobs:
         run: |
           set -eu
           echo "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
-          docker build -f runner.Dockerfile --build-arg PYZ=dist-runner/tulip-runner.pyz \
-            --label org.opencontainers.image.source=https://github.com/tuliplabs-ai/tulip-agents \
+          docker build -f runner.Dockerfile --build-arg PYZ=dist-runner/locus-runner.pyz \
+            --label org.opencontainers.image.source=https://github.com/oracle/locus \
             --label org.opencontainers.image.version="$VERSION" \
             -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
           docker run --rm --entrypoint python3 "$IMAGE:$VERSION" -c "import sys; print(sys.version)"

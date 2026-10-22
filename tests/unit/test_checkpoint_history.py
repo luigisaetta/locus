@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Read, edit and fork a thread from its checkpoints.
 
@@ -15,11 +16,11 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.messages import Message, Role
-from tulip.memory.backends.file import FileCheckpointer
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.testing import FunctionModel, text
+from locus.agent import Agent
+from locus.core.messages import Message, Role
+from locus.memory.backends.file import FileCheckpointer
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.testing import FunctionModel, text
 
 
 if TYPE_CHECKING:

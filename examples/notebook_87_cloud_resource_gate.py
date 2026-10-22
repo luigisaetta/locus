@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 87: A cloud-ops agent that can only touch production with a human's say-so.
 
@@ -10,7 +11,7 @@ that the whole product runs on, or hand an outside principal admin over your
 account. The model deciding *what* to do is not the place to enforce *whether*
 it is allowed to. That belongs in code that runs before the API call.
 
-This example puts :func:`tulip.control.admit` in front of every cloud mutation.
+This example puts :func:`locus.control.admit` in front of every cloud mutation.
 The agent proposes an :class:`Action`; the gate weighs it against a
 :class:`ControlPolicy` you wrote; the actual cloud call (here a local stub —
 no network, no credentials) fires *only* if the policy admits it. Small,
@@ -52,7 +53,7 @@ from __future__ import annotations
 
 import asyncio
 
-from tulip.control import (
+from locus.control import (
     Action,
     AdmissionError,
     AuditTrail,

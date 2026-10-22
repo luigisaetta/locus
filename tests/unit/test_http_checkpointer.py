@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for HTTP checkpointer backend."""
 
@@ -22,21 +23,21 @@ class TestHTTPCheckpointerInit:
 
     def test_create_with_base_url(self):
         """Test creating checkpointer with base URL."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         cp = HTTPCheckpointer(base_url="http://localhost:8000")
         assert cp.base_url == "http://localhost:8000"
 
     def test_base_url_strips_trailing_slash(self):
         """Test base URL trailing slash is stripped."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         cp = HTTPCheckpointer(base_url="http://localhost:8000/")
         assert cp.base_url == "http://localhost:8000"
 
     def test_create_with_headers(self):
         """Test creating checkpointer with headers."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         headers = {"Authorization": "Bearer token123"}
         cp = HTTPCheckpointer(base_url="http://localhost:8000", headers=headers)
@@ -44,7 +45,7 @@ class TestHTTPCheckpointerInit:
 
     def test_create_with_auth(self):
         """Test creating checkpointer with auth."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         auth = ("user", "pass")
         cp = HTTPCheckpointer(base_url="http://localhost:8000", auth=auth)
@@ -52,14 +53,14 @@ class TestHTTPCheckpointerInit:
 
     def test_create_with_timeout(self):
         """Test creating checkpointer with timeout."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         cp = HTTPCheckpointer(base_url="http://localhost:8000", timeout=60.0)
         assert cp.timeout == 60.0
 
     def test_repr(self):
         """Test string representation."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         cp = HTTPCheckpointer(base_url="http://localhost:8000")
         assert "HTTPCheckpointer" in repr(cp)
@@ -72,7 +73,7 @@ class TestHTTPCheckpointerClient:
     @pytest.mark.asyncio
     async def test_get_client_creates_client(self):
         """Test that _get_client creates httpx client."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         cp = HTTPCheckpointer(base_url="http://localhost:8000")
         assert cp._client is None
@@ -86,7 +87,7 @@ class TestHTTPCheckpointerClient:
     @pytest.mark.asyncio
     async def test_get_client_reuses_client(self):
         """Test that _get_client reuses existing client."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         cp = HTTPCheckpointer(base_url="http://localhost:8000")
 
@@ -100,7 +101,7 @@ class TestHTTPCheckpointerClient:
     @pytest.mark.asyncio
     async def test_close_closes_client(self):
         """Test that close closes the client."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         cp = HTTPCheckpointer(base_url="http://localhost:8000")
         await cp._get_client()
@@ -112,7 +113,7 @@ class TestHTTPCheckpointerClient:
     @pytest.mark.asyncio
     async def test_close_without_client(self):
         """Test close when no client exists."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         cp = HTTPCheckpointer(base_url="http://localhost:8000")
         await cp.close()  # Should not raise
@@ -120,7 +121,7 @@ class TestHTTPCheckpointerClient:
     @pytest.mark.asyncio
     async def test_context_manager(self):
         """Test async context manager."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         async with HTTPCheckpointer(base_url="http://localhost:8000") as cp:
             assert cp._client is not None
@@ -134,7 +135,7 @@ class TestHTTPCheckpointerSave:
     @pytest.mark.asyncio
     async def test_save_returns_checkpoint_id(self, mock_respx):
         """Test save returns checkpoint ID."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.post("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json={"checkpoint_id": "cp123"})
@@ -152,7 +153,7 @@ class TestHTTPCheckpointerSave:
     @pytest.mark.asyncio
     async def test_save_with_custom_checkpoint_id(self, mock_respx):
         """Test save with provided checkpoint ID."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.post("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json={"checkpoint_id": "custom-id"})
@@ -174,7 +175,7 @@ class TestHTTPCheckpointerLoad:
     @pytest.mark.asyncio
     async def test_load_returns_state(self, mock_respx):
         """Test load returns state."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         # Mock list checkpoints
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
@@ -205,7 +206,7 @@ class TestHTTPCheckpointerLoad:
     @pytest.mark.asyncio
     async def test_load_specific_checkpoint(self, mock_respx):
         """Test load with specific checkpoint ID."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints/cp456").mock(
             return_value=httpx.Response(
@@ -227,7 +228,7 @@ class TestHTTPCheckpointerLoad:
     @pytest.mark.asyncio
     async def test_load_not_found_returns_none(self, mock_respx):
         """Test load returns None when not found."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json=[])
@@ -242,7 +243,7 @@ class TestHTTPCheckpointerLoad:
     @pytest.mark.asyncio
     async def test_load_error_returns_none(self, mock_respx):
         """Test load returns None on error."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json=["cp123"])
@@ -264,7 +265,7 @@ class TestHTTPCheckpointerListCheckpoints:
     @pytest.mark.asyncio
     async def test_list_returns_ids(self, mock_respx):
         """Test list_checkpoints returns IDs."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json=["cp1", "cp2", "cp3"])
@@ -279,7 +280,7 @@ class TestHTTPCheckpointerListCheckpoints:
     @pytest.mark.asyncio
     async def test_list_with_dict_format(self, mock_respx):
         """Test list_checkpoints with dict format response."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(
@@ -300,7 +301,7 @@ class TestHTTPCheckpointerListCheckpoints:
     @pytest.mark.asyncio
     async def test_list_with_wrapped_response(self, mock_respx):
         """Test list_checkpoints with wrapped response."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(
@@ -318,7 +319,7 @@ class TestHTTPCheckpointerListCheckpoints:
     @pytest.mark.asyncio
     async def test_list_with_wrapped_dict_format(self, mock_respx):
         """Test list_checkpoints with wrapped dict format."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(
@@ -341,7 +342,7 @@ class TestHTTPCheckpointerListCheckpoints:
     @pytest.mark.asyncio
     async def test_list_empty_on_error(self, mock_respx):
         """Test list_checkpoints returns empty on error."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(500)
@@ -356,7 +357,7 @@ class TestHTTPCheckpointerListCheckpoints:
     @pytest.mark.asyncio
     async def test_list_respects_limit(self, mock_respx):
         """Test list_checkpoints respects limit."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json=["cp1", "cp2", "cp3", "cp4", "cp5"])
@@ -375,7 +376,7 @@ class TestHTTPCheckpointerDelete:
     @pytest.mark.asyncio
     async def test_delete_specific_checkpoint(self, mock_respx):
         """Test deleting specific checkpoint."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.delete("http://localhost:8000/threads/thread1/checkpoints/cp123").mock(
             return_value=httpx.Response(204)
@@ -390,7 +391,7 @@ class TestHTTPCheckpointerDelete:
     @pytest.mark.asyncio
     async def test_delete_all_checkpoints(self, mock_respx):
         """Test deleting all checkpoints."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.delete("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(204)
@@ -405,7 +406,7 @@ class TestHTTPCheckpointerDelete:
     @pytest.mark.asyncio
     async def test_delete_returns_false_on_error(self, mock_respx):
         """Test delete returns False on error."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.delete("http://localhost:8000/threads/thread1/checkpoints/cp123").mock(
             return_value=httpx.Response(500)
@@ -424,7 +425,7 @@ class TestHTTPCheckpointerHealthCheck:
     @pytest.mark.asyncio
     async def test_health_check_success(self, mock_respx):
         """Test health check returns True on success."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/health").mock(return_value=httpx.Response(200))
 
@@ -437,7 +438,7 @@ class TestHTTPCheckpointerHealthCheck:
     @pytest.mark.asyncio
     async def test_health_check_failure(self, mock_respx):
         """Test health check returns False on failure."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/health").mock(return_value=httpx.Response(500))
 
@@ -450,7 +451,7 @@ class TestHTTPCheckpointerHealthCheck:
     @pytest.mark.asyncio
     async def test_health_check_connection_error(self, mock_respx):
         """Test health check returns False on connection error."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/health").mock(
             side_effect=Exception("Connection failed")
@@ -469,7 +470,7 @@ class TestHTTPCheckpointerImportError:
     @pytest.mark.asyncio
     async def test_get_client_import_error(self):
         """Test _get_client raises ImportError when httpx not available."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         _cp = HTTPCheckpointer(base_url="http://localhost:8000")
 
@@ -486,7 +487,7 @@ class TestHTTPCheckpointerListCheckpointsEdgeCases:
     @pytest.mark.asyncio
     async def test_list_with_empty_response(self, mock_respx):
         """Test list_checkpoints with empty response."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json=[])
@@ -501,7 +502,7 @@ class TestHTTPCheckpointerListCheckpointsEdgeCases:
     @pytest.mark.asyncio
     async def test_list_unexpected_format_returns_empty(self, mock_respx):
         """Test list_checkpoints with unexpected format returns empty."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json="not a list or dict")
@@ -516,7 +517,7 @@ class TestHTTPCheckpointerListCheckpointsEdgeCases:
     @pytest.mark.asyncio
     async def test_list_dict_without_checkpoints_key(self, mock_respx):
         """Test list with dict missing checkpoints key."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json={"other_key": "value"})
@@ -531,7 +532,7 @@ class TestHTTPCheckpointerListCheckpointsEdgeCases:
     @pytest.mark.asyncio
     async def test_list_connection_error(self, mock_respx):
         """Test list_checkpoints with connection error."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             side_effect=Exception("Connection failed")
@@ -550,7 +551,7 @@ class TestHTTPCheckpointerDeleteEdgeCases:
     @pytest.mark.asyncio
     async def test_delete_connection_error(self, mock_respx):
         """Test delete returns False on connection error."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.delete("http://localhost:8000/threads/thread1/checkpoints/cp123").mock(
             side_effect=Exception("Connection failed")
@@ -569,7 +570,7 @@ class TestHTTPCheckpointerLoadEdgeCases:
     @pytest.mark.asyncio
     async def test_load_connection_error_on_get(self, mock_respx):
         """Test load returns None on connection error."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json=["cp123"])
@@ -587,7 +588,7 @@ class TestHTTPCheckpointerLoadEdgeCases:
     @pytest.mark.asyncio
     async def test_load_unwrapped_state_format(self, mock_respx):
         """Test load with unwrapped state format."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints/cp123").mock(
             return_value=httpx.Response(
@@ -614,7 +615,7 @@ class TestHTTPCheckpointerDeleteOperations:
     @pytest.mark.asyncio
     async def test_delete_all_checkpoints(self, mock_respx):
         """Test delete all checkpoints for a thread."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.delete("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json={"deleted": True})
@@ -629,7 +630,7 @@ class TestHTTPCheckpointerDeleteOperations:
     @pytest.mark.asyncio
     async def test_delete_specific_checkpoint(self, mock_respx):
         """Test delete specific checkpoint."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.delete("http://localhost:8000/threads/thread1/checkpoints/cp123").mock(
             return_value=httpx.Response(200, json={"deleted": True})
@@ -644,7 +645,7 @@ class TestHTTPCheckpointerDeleteOperations:
     @pytest.mark.asyncio
     async def test_delete_not_found(self, mock_respx):
         """Test delete returns False on 404."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.delete("http://localhost:8000/threads/thread1/checkpoints/nonexistent").mock(
             return_value=httpx.Response(404, json={"error": "Not found"})
@@ -663,7 +664,7 @@ class TestHTTPCheckpointerListFormats:
     @pytest.mark.asyncio
     async def test_list_wrapped_string_checkpoints(self, mock_respx):
         """Test list with wrapped response containing string checkpoint IDs."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json={"checkpoints": ["cp1", "cp2", "cp3"]})
@@ -678,7 +679,7 @@ class TestHTTPCheckpointerListFormats:
     @pytest.mark.asyncio
     async def test_list_wrapped_dict_checkpoints(self, mock_respx):
         """Test list with wrapped response containing dict checkpoints."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(
@@ -701,7 +702,7 @@ class TestHTTPCheckpointerListFormats:
     @pytest.mark.asyncio
     async def test_list_data_key_format(self, mock_respx):
         """Test list with 'data' key in response."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         mock_respx.get("http://localhost:8000/threads/thread1/checkpoints").mock(
             return_value=httpx.Response(200, json={"data": ["cp1", "cp2"]})
@@ -719,7 +720,7 @@ class TestHTTPCheckpointerRepr:
 
     def test_repr(self):
         """Test string representation."""
-        from tulip.memory.backends.http import HTTPCheckpointer
+        from locus.memory.backends.http import HTTPCheckpointer
 
         cp = HTTPCheckpointer(base_url="http://localhost:8000")
         r = repr(cp)

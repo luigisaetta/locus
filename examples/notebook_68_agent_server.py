@@ -1,8 +1,9 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 68: Agent server — deploy an on-call incident triage copilot as an HTTP API.
 
-AgentServer wraps any Tulip Agent in a FastAPI app: synchronous invoke,
+AgentServer wraps any Locus Agent in a FastAPI app: synchronous invoke,
 streaming SSE, persisted incident threads scoped to the bearer principal
 so two on-call engineers' API keys sharing one server can't read each
 other's incidents. Principal-scoped threads are an identity-and-privilege
@@ -20,17 +21,17 @@ Endpoints:
 When to use AgentServer vs A2AServer:
 
 - AgentServer: first-party HTTP API. Persisted threads, principal
-  scoping, bearer auth. Use when Tulip is the system of record and
+  scoping, bearer auth. Use when Locus is the system of record and
   clients are yours (PagerDuty webhook, deploy dashboard).
 - A2AServer: cross-framework interop with the A2A message spec. Use
-  when another framework (Strands, ADK) needs to call your Tulip agent.
+  when another framework (Strands, ADK) needs to call your Locus agent.
 
 Run it
     # Smoke test against a TestClient (no live server, no live model):
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_68_agent_server.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_68_agent_server.py
 
     # Boot a real uvicorn server on http://127.0.0.1:8000:
-    TULIP_NOTEBOOK_BOOT=1 python examples/notebook_68_agent_server.py
+    LOCUS_NOTEBOOK_BOOT=1 python examples/notebook_68_agent_server.py
 
 Prerequisites:
 
@@ -44,9 +45,9 @@ import sys
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
-from tulip.memory.backends import RedisBackend, StorageBackendAdapter
-from tulip.server import AgentServer
+from locus.agent import Agent, AgentConfig
+from locus.memory.backends import RedisBackend, StorageBackendAdapter
+from locus.server import AgentServer
 
 
 _REQUIRED_ENV = ("REDIS_URL",)
@@ -61,7 +62,7 @@ def _build_checkpointer():
     # name is swallowed silently and every notebook shares one keyspace.
     backend = RedisBackend(
         url=os.environ["REDIS_URL"],
-        prefix="tulip_notebook_68:",
+        prefix="locus_notebook_68:",
     )
     # A backend is raw key/value storage; StorageBackendAdapter is what gives it
     # the Checkpointer contract the agent loop expects.
@@ -142,9 +143,9 @@ def example_server():
     r = client.delete("/threads/inc-4711")
     print(f"DELETE /threads/inc-4711: {r.json()}")
 
-    print("\nTo run as a real server, set TULIP_NOTEBOOK_BOOT=1 and run this")
+    print("\nTo run as a real server, set LOCUS_NOTEBOOK_BOOT=1 and run this")
     print("file directly. Example session:")
-    print("  TULIP_NOTEBOOK_BOOT=1 TULIP_MODEL_PROVIDER=openai \\")
+    print("  LOCUS_NOTEBOOK_BOOT=1 LOCUS_MODEL_PROVIDER=openai \\")
     print("      python examples/notebook_68_agent_server.py")
     print("  curl -s -X POST http://127.0.0.1:8000/invoke \\")
     print("       -H 'Content-Type: application/json' \\")
@@ -161,7 +162,7 @@ def example_server():
 def boot_live_server() -> None:
     """Bind a live uvicorn instance.
 
-    Gated behind TULIP_NOTEBOOK_BOOT=1 so the integration runner that
+    Gated behind LOCUS_NOTEBOOK_BOOT=1 so the integration runner that
     imports every notebook doesn't hang on a blocking server.
     """
     model = get_model()
@@ -199,7 +200,7 @@ if __name__ == "__main__":
             print(f"  - {name}")
         print("\nStart a Redis instance, set REDIS_URL, and re-run.")
         sys.exit(0)
-    if os.getenv("TULIP_NOTEBOOK_BOOT") == "1":
+    if os.getenv("LOCUS_NOTEBOOK_BOOT") == "1":
         boot_live_server()
     else:
         example_server()

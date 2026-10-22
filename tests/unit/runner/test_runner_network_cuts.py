@@ -10,8 +10,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from tulip.runner import client as client_module
-from tulip.runner.client import GatewayClient, GatewayUnavailable, RunnerConfig, _safe_to_repeat
+from locus.runner import client as client_module
+from locus.runner.client import GatewayClient, GatewayUnavailable, RunnerConfig, _safe_to_repeat
 
 
 URL = "http://gateway.test:8421"
@@ -91,6 +91,6 @@ def test_safe_to_repeat() -> None:
 
 
 def test_the_runner_model_reads_turns_whole_and_reconnects() -> None:
-    from tulip.runner import build
+    from locus.runner import build
 
     assert build.MODEL_STREAM_RECONNECTS >= 1

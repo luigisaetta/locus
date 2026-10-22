@@ -1,25 +1,26 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration test for redaction (A.1) wired through the tool executor.
 
 Verifies the secret-redaction patterns added in milestone A actually
 fire on real exception messages thrown by tool execution, end to
-end through :class:`~tulip.tools.executor.SequentialExecutor`.
+end through :class:`~locus.tools.executor.SequentialExecutor`.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from tulip.core.messages import ToolCall
-from tulip.tools.decorator import tool
-from tulip.tools.executor import (
+from locus.core.messages import ToolCall
+from locus.tools.decorator import tool
+from locus.tools.executor import (
     SequentialExecutor,
     ToolContextFactory,
     redact_sensitive_text,
 )
-from tulip.tools.registry import ToolRegistry
+from locus.tools.registry import ToolRegistry
 
 
 def _make_executor() -> tuple[SequentialExecutor, ToolRegistry, ToolContextFactory]:

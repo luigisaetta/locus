@@ -1,10 +1,11 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """A real MCP server for the MCP client tests (``unit/test_mcp_fidelity.py``).
 
 Runs on whichever ``mcp`` major is installed — ``MCPServer`` on mcp 2.x,
-``FastMCP`` on mcp 1.x — since ``tulip[mcp]`` accepts both (``mcp>=1.0``), so
+``FastMCP`` on mcp 1.x — since ``locus[mcp]`` accepts both (``mcp>=1.0``), so
 the client is exercised against the same SDK a user would get.
 
 Imported by the tests to serve on a thread, and run as a script

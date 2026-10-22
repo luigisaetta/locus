@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Tests for ``tulip.tools.path_safety.safe_resolve``."""
+"""Tests for ``locus.tools.path_safety.safe_resolve``."""
 
 from __future__ import annotations
 
@@ -10,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from tulip.core.errors import ValidationError
-from tulip.tools.path_safety import safe_resolve
+from locus.core.errors import ValidationError
+from locus.tools.path_safety import safe_resolve
 
 
 class TestHappyPath:

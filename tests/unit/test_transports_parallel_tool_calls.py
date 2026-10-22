@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Per-transport guard that N>1 wire-format tool_calls are normalized
 into ``ModelResponse.message.tool_calls`` of length N.
@@ -57,7 +58,7 @@ class _Response:
 def test_openai_parse_response_preserves_n_parallel_tool_calls() -> None:
     """OpenAI wire returns 3 ``tool_calls``; normalised list must have length 3
     with ids/names/args intact."""
-    from tulip.models.native.openai import OpenAIModel
+    from locus.models.native.openai import OpenAIModel
 
     m = OpenAIModel()
     resp = _Response(

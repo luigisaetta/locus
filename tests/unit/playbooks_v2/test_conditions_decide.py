@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit: a branch's condition decides; the model cannot choose against the data.
 
@@ -17,8 +18,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from tulip.playbooks.v2 import ROUTING_UNKNOWN
-from tulip.playbooks.v2.engine import (
+from locus.playbooks.v2 import ROUTING_UNKNOWN
+from locus.playbooks.v2.engine import (
     ACTIVE,
     DONE,
     STEP_EVENT,

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """MCP client fidelity and resilience, against a real MCP server on loopback.
 
@@ -38,21 +39,21 @@ from tests._mcp_deps import require_server_deps
 
 uvicorn = require_server_deps()
 
-from tests._mcp_loopback_server import PNG_1PX, build_server  # noqa: E402
-from tulip.agent import Agent  # noqa: E402
-from tulip.core.events import (  # noqa: E402
+from locus.agent import Agent  # noqa: E402
+from locus.core.events import (  # noqa: E402
     TerminateEvent,
     ToolCompleteEvent,
     ToolProgressEvent,
     ToolStartEvent,
 )
-from tulip.integrations.fastmcp import (  # noqa: E402
+from locus.integrations.fastmcp import (  # noqa: E402
     MCPClient,
     MCPConnectionError,
     MCPRequestContext,
     MCPToolNotAllowedError,
 )
-from tulip.testing import ScriptedModel, text, tool_call  # noqa: E402
+from locus.testing import ScriptedModel, text, tool_call  # noqa: E402
+from tests._mcp_loopback_server import PNG_1PX, build_server  # noqa: E402
 
 
 def _free_port() -> int:
@@ -199,7 +200,7 @@ async def test_is_error_becomes_a_tool_error_the_model_is_told_about(
 async def test_images_are_embedded_and_passed_through_not_dropped(
     server: _LoopbackServer,
 ) -> None:
-    from tulip.core.media import images
+    from locus.core.media import images
 
     model = ScriptedModel([tool_call("photo", call_id="c3"), text("nice")])
     events = await _events(_agent(model, _client(server.url)))
@@ -218,7 +219,7 @@ async def test_output_schema_is_listed_and_kept_on_the_tool(server: _LoopbackSer
     try:
         schemas = {t["name"]: t for t in await client.list_tools()}
         assert schemas["search_hotels"]["outputSchema"]["type"] == "object"
-        tools = {t.name: t for t in client.to_tulip_tools(list(schemas.values()))}
+        tools = {t.name: t for t in client.to_locus_tools(list(schemas.values()))}
         assert tools["search_hotels"].output_schema == schemas["search_hotels"]["outputSchema"]
         assert tools["search_hotels"].emits_progress is True
     finally:

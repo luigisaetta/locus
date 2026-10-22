@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""``tulip.testing.check_model_conformance`` — verify a model before trusting it."""
+"""``locus.testing.check_model_conformance`` — verify a model before trusting it."""
 
 from __future__ import annotations
 
@@ -10,10 +11,10 @@ from typing import Any
 
 import pytest
 
-from tulip.core.events import ModelChunkEvent
-from tulip.core.messages import Message
-from tulip.models.fallback import FallbackChain
-from tulip.testing import FunctionModel, check_model_conformance, text, tool_call
+from locus.core.events import ModelChunkEvent
+from locus.core.messages import Message
+from locus.models.fallback import FallbackChain
+from locus.testing import FunctionModel, check_model_conformance, text, tool_call
 
 
 def _well_behaved(messages: list[Message], tools: list[dict[str, Any]]) -> Any:

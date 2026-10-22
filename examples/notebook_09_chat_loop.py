@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 09: a chat loop — actually talking to your agent.
 
@@ -31,10 +32,10 @@ non-tty and replays a scripted conversation instead of prompting:
     echo "" | .venv/bin/python examples/notebook_09_chat_loop.py
 
 Live model:
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o
-    (or TULIP_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+    (or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
     provider: ollama, vllm, groq, together, openrouter, ...).
-Set TULIP_MODEL_PROVIDER=mock for an offline run.
+Set LOCUS_MODEL_PROVIDER=mock for an offline run.
 """
 
 import asyncio
@@ -43,9 +44,9 @@ import sys
 
 from config import get_model, print_config
 
-from tulip.agent import Agent
-from tulip.memory.backends import MemoryCheckpointer
-from tulip.tools import tool
+from locus.agent import Agent
+from locus.memory.backends import MemoryCheckpointer
+from locus.tools import tool
 
 
 BANNER = """
@@ -108,7 +109,7 @@ async def scripted_run(agent: Agent) -> None:
         print(f"  you  : {line}")
         await say(agent, thread_id, line)
 
-    if os.environ.get("TULIP_MODEL_PROVIDER", "mock").lower() == "mock":
+    if os.environ.get("LOCUS_MODEL_PROVIDER", "mock").lower() == "mock":
         # Be straight about it: the mock answers the same way whatever it is
         # asked, so this run shows the loop and the tool calls but proves
         # nothing about memory. Against a real model the third answer names

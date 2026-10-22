@@ -1,17 +1,17 @@
 # syntax=docker/dockerfile:1.7
 #
-# Multi-stage image for a tulip AgentServer deployment.
+# Multi-stage image for a locus AgentServer deployment.
 #
 # Base: Amazon Linux 2023 (EKS / Graviton-arm64). A venv is built in the builder
 # and copied into a minimal runtime; non-root 10001, readOnlyRootFilesystem-safe.
 #
 # Build:
-#   docker build -t tulip-agent:latest .
+#   docker build -t locus-agent:latest .
 # Run (with a model-provider key and a bearer server key):
-#   docker run -p 8080:8080 -e OPENAI_API_KEY=sk-... -e TULIP_SERVER_API_KEY=secret \
-#     tulip-agent:latest
+#   docker run -p 8080:8080 -e OPENAI_API_KEY=sk-... -e LOCUS_SERVER_API_KEY=secret \
+#     locus-agent:latest
 #
-# The image is built around `tulip.server.AgentServer`. Replace
+# The image is built around `locus.server.AgentServer`. Replace
 # `app:server.app` in the CMD with the import path of your own AgentServer.
 
 ARG AL2023=public.ecr.aws/amazonlinux/amazonlinux:2023
@@ -36,7 +36,7 @@ RUN ${PYTHON} -m venv /app/.venv
 COPY pyproject.toml README.md LICENSE.txt ./
 COPY src ./src
 
-# tulip + the OpenAI provider + AgentServer + checkpoint backends.
+# locus + the OpenAI provider + AgentServer + checkpoint backends.
 # Add [telemetry,rag,anthropic] to taste.
 RUN --mount=type=cache,target=/root/.cache/pip pip install ".[openai,server,checkpoints]"
 
@@ -50,8 +50,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # libpq for asyncpg/psycopg at runtime; ca-certificates for outbound TLS.
 RUN dnf -y install --setopt=install_weak_deps=False \
         ${PYTHON} libpq ca-certificates shadow-utils \
-    && groupadd -g 10001 tulip \
-    && useradd -u 10001 -g 10001 -M -s /sbin/nologin tulip \
+    && groupadd -g 10001 locus \
+    && useradd -u 10001 -g 10001 -M -s /sbin/nologin locus \
     && dnf -y remove shadow-utils \
     && dnf clean all && rm -rf /var/cache/dnf
 

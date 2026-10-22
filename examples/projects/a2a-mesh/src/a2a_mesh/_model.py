@@ -1,8 +1,9 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Shared model factory for the mesh services.
 
-Reads ``TULIP_MODEL_PROVIDER`` (``mock`` | ``openai`` | ``anthropic``) and
+Reads ``LOCUS_MODEL_PROVIDER`` (``mock`` | ``openai`` | ``anthropic``) and
 returns a model instance. Defaults to a small inline MockModel so the
 demo runs end-to-end without credentials or network access to a model
 provider.
@@ -16,9 +17,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from tulip.core.events import ModelChunkEvent
-from tulip.core.messages import Message
-from tulip.models.base import ModelResponse
+from locus.core.events import ModelChunkEvent
+from locus.core.messages import Message
+from locus.models.base import ModelResponse
 
 
 class MockModel(BaseModel):
@@ -61,24 +62,24 @@ class MockModel(BaseModel):
 
 
 def _openai_model() -> Any:
-    from tulip.models import OpenAIModel
+    from locus.models import OpenAIModel
 
-    return OpenAIModel(model=os.environ.get("TULIP_MODEL_ID", "gpt-4o"))
+    return OpenAIModel(model=os.environ.get("LOCUS_MODEL_ID", "gpt-4o"))
 
 
 def _anthropic_model() -> Any:
-    from tulip.models.native.anthropic import AnthropicModel
+    from locus.models.native.anthropic import AnthropicModel
 
-    return AnthropicModel(model=os.environ.get("TULIP_MODEL_ID", "claude-sonnet-4-6"))
+    return AnthropicModel(model=os.environ.get("LOCUS_MODEL_ID", "claude-sonnet-4-6"))
 
 
 def get_model() -> Any:
-    provider = os.environ.get("TULIP_MODEL_PROVIDER", "mock").lower()
+    provider = os.environ.get("LOCUS_MODEL_PROVIDER", "mock").lower()
     if provider == "mock":
         return MockModel()
     if provider == "openai":
         return _openai_model()
     if provider == "anthropic":
         return _anthropic_model()
-    msg = f"Unknown TULIP_MODEL_PROVIDER: {provider!r}"
+    msg = f"Unknown LOCUS_MODEL_PROVIDER: {provider!r}"
     raise ValueError(msg)

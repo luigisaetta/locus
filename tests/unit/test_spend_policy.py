@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Spend as a policy input, across runs.
 
@@ -16,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tulip.control import (
+from locus.control import (
     Action,
     AdmissionError,
     AuditTrail,
@@ -29,7 +30,7 @@ from tulip.control import (
     approve,
     gate_tool,
 )
-from tulip.tools.decorator import Tool, tool
+from locus.tools.decorator import Tool, tool
 
 
 if TYPE_CHECKING:

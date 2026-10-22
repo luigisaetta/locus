@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The two lifecycle hooks that were documented and never fired.
 
@@ -24,11 +25,11 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.state import AgentState
-from tulip.hooks.provider import HookProvider
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.core.state import AgentState
+from locus.hooks.provider import HookProvider
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 @tool

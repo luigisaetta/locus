@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for the documentation snippet checker.
 
@@ -27,7 +28,7 @@ from check_doc_snippets import check, check_block, iter_blocks  # noqa: E402
 
 
 def test_valid_code_passes() -> None:
-    assert check_block("from tulip.agent import Agent\nprint(Agent)\n") == []
+    assert check_block("from locus.agent import Agent\nprint(Agent)\n") == []
 
 
 def test_top_level_await_in_a_complete_snippet_is_reported() -> None:
@@ -35,7 +36,7 @@ def test_top_level_await_in_a_complete_snippet_is_reported() -> None:
 
     That gap is exactly how a quickstart shipped raising SyntaxError.
     """
-    problems = check_block("import asyncio\nfrom tulip.agent import Agent\n\nawait Agent()\n")
+    problems = check_block("import asyncio\nfrom locus.agent import Agent\n\nawait Agent()\n")
     assert [kind for kind, _ in problems] == ["syntax"]
     assert "await" in problems[0][1]
 
@@ -60,7 +61,7 @@ def test_unparseable_code_is_reported() -> None:
 def test_a_complete_async_program_passes() -> None:
     source = (
         "import asyncio\n"
-        "from tulip.agent import Agent\n\n"
+        "from locus.agent import Agent\n\n"
         "async def main():\n"
         "    await Agent().arun('hi')\n\n"
         "asyncio.run(main())\n"
@@ -74,22 +75,22 @@ def test_a_complete_async_program_passes() -> None:
 
 
 def test_a_missing_symbol_is_reported() -> None:
-    problems = check_block("from tulip.agent import NoSuchThing\n")
+    problems = check_block("from locus.agent import NoSuchThing\n")
     assert [k for k, _ in problems] == ["symbol"]
     assert "NoSuchThing" in problems[0][1]
 
 
 def test_a_missing_module_is_reported() -> None:
-    assert [k for k, _ in check_block("from tulip.nope import thing\n")] == ["import"]
+    assert [k for k, _ in check_block("from locus.nope import thing\n")] == ["import"]
 
 
-def test_non_tulip_imports_are_ignored() -> None:
+def test_non_locus_imports_are_ignored() -> None:
     """Only this SDK's surface is verifiable from here."""
     assert check_block("from os.path import nonexistent_thing\n") == []
 
 
 def test_a_real_export_resolves() -> None:
-    assert check_block("from tulip.testing import ScriptedModel\n") == []
+    assert check_block("from locus.testing import ScriptedModel\n") == []
 
 
 # --------------------------------------------------------------------------
@@ -99,14 +100,14 @@ def test_a_real_export_resolves() -> None:
 
 def test_an_unknown_keyword_is_reported() -> None:
     problems = check_block(
-        "from tulip.evaluation import EvalCase\nEvalCase(name='x', prompt='p', nope=1)\n"
+        "from locus.evaluation import EvalCase\nEvalCase(name='x', prompt='p', nope=1)\n"
     )
     assert any("nope" in message for _, message in problems)
 
 
 def test_real_keywords_pass() -> None:
     assert (
-        check_block("from tulip.evaluation import EvalCase\nEvalCase(name='x', prompt='p')\n") == []
+        check_block("from locus.evaluation import EvalCase\nEvalCase(name='x', prompt='p')\n") == []
     )
 
 
@@ -115,7 +116,7 @@ def test_a_callable_taking_var_keyword_is_not_second_guessed() -> None:
 
     Without this the checker would report every documented Agent call.
     """
-    assert check_block("from tulip.agent import Agent\nAgent(anything_at_all=1)\n") == []
+    assert check_block("from locus.agent import Agent\nAgent(anything_at_all=1)\n") == []
 
 
 # --------------------------------------------------------------------------
@@ -131,13 +132,13 @@ def test_only_python_blocks_are_checked(tmp_path: pathlib.Path) -> None:
 
 def test_an_inline_skip_marker_exempts_a_block(tmp_path: pathlib.Path) -> None:
     md = tmp_path / "d.md"
-    md.write_text("```python\n# docs: skip\nfrom tulip.agent import Nope\n```\n")
+    md.write_text("```python\n# docs: skip\nfrom locus.agent import Nope\n```\n")
     assert list(iter_blocks(md)) == []
 
 
 def test_a_comment_skip_marker_exempts_the_next_block(tmp_path: pathlib.Path) -> None:
     md = tmp_path / "d.md"
-    md.write_text("<!-- docs: skip -->\n```python\nfrom tulip.agent import Nope\n```\n")
+    md.write_text("<!-- docs: skip -->\n```python\nfrom locus.agent import Nope\n```\n")
     assert list(iter_blocks(md)) == []
 
 

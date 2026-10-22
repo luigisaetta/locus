@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """What a playbook or skill file does when it is wrong.
 
@@ -24,8 +25,8 @@ import pathlib
 
 import pytest
 
-from tulip.playbooks.loader import PlaybookLoader, PlaybookLoadError
-from tulip.skills.models import Skill
+from locus.playbooks.loader import PlaybookLoader, PlaybookLoadError
+from locus.skills.models import Skill
 
 
 VALID = {

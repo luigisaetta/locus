@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for telemetry hook."""
 
@@ -8,13 +9,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tulip.hooks.builtin.telemetry import (
+from locus.hooks.builtin.telemetry import (
     OTEL_AVAILABLE,
     NoOpTelemetryHook,
     TelemetryHook,
     create_telemetry_hook,
 )
-from tulip.hooks.provider import (
+from locus.hooks.provider import (
     AfterToolCallEvent,
     BeforeToolCallEvent,
     HookPriority,
@@ -82,7 +83,7 @@ class TestTelemetryHook:
     def test_create_hook(self):
         """Test creating telemetry hook."""
         hook = TelemetryHook()
-        assert hook._service_name == "tulip-agent"
+        assert hook._service_name == "locus-agent"
         assert hook._record_arguments is False
         assert hook._record_results is False
 
@@ -270,9 +271,9 @@ class TestCreateTelemetryHook:
 
     def test_create_otel_not_available(self):
         """Test creating hook when OpenTelemetry is not available."""
-        with patch("tulip.hooks.builtin.telemetry.OTEL_AVAILABLE", False):
+        with patch("locus.hooks.builtin.telemetry.OTEL_AVAILABLE", False):
             # Reimport to get patched behavior
-            from tulip.hooks.builtin import telemetry
+            from locus.hooks.builtin import telemetry
 
             original_otel = telemetry.OTEL_AVAILABLE
             telemetry.OTEL_AVAILABLE = False
@@ -308,8 +309,8 @@ class TestOtelNotAvailable:
 
     def test_telemetry_hook_raises_import_error(self):
         """Test TelemetryHook raises ImportError when OTEL not available."""
-        with patch("tulip.hooks.builtin.telemetry.OTEL_AVAILABLE", False):
-            from tulip.hooks.builtin import telemetry
+        with patch("locus.hooks.builtin.telemetry.OTEL_AVAILABLE", False):
+            from locus.hooks.builtin import telemetry
 
             original_otel = telemetry.OTEL_AVAILABLE
             telemetry.OTEL_AVAILABLE = False
@@ -393,7 +394,7 @@ class TestTraceContextPropagation:
     @pytest.mark.asyncio
     async def test_all_spans_share_one_trace_id(self, exporter, mock_state):
         """invocation + iteration + tool spans must share a single trace_id."""
-        hook = TelemetryHook(tracer_name="tulip.telemetry.test-244")
+        hook = TelemetryHook(tracer_name="locus.telemetry.test-244")
 
         await hook.on_before_invocation("Question?", mock_state)
         await hook.on_iteration_start(0, mock_state)
@@ -405,7 +406,7 @@ class TestTraceContextPropagation:
         spans = [
             s
             for s in exporter.get_finished_spans()
-            if s.instrumentation_scope.name == "tulip.telemetry.test-244"
+            if s.instrumentation_scope.name == "locus.telemetry.test-244"
         ]
         # We expect: 1 invocation + 1 iteration + 1 tool = 3 spans.
         assert len(spans) == 3, f"expected 3 spans, got {len(spans)}: {[s.name for s in spans]}"
@@ -419,7 +420,7 @@ class TestTraceContextPropagation:
     @pytest.mark.asyncio
     async def test_tool_span_is_child_of_iteration_span(self, exporter, mock_state):
         """Tool span's parent must be the iteration span (not the invocation)."""
-        hook = TelemetryHook(tracer_name="tulip.telemetry.test-244-parent")
+        hook = TelemetryHook(tracer_name="locus.telemetry.test-244-parent")
 
         await hook.on_before_invocation("Q", mock_state)
         await hook.on_iteration_start(0, mock_state)
@@ -431,7 +432,7 @@ class TestTraceContextPropagation:
         by_name = {
             s.name: s
             for s in exporter.get_finished_spans()
-            if s.instrumentation_scope.name == "tulip.telemetry.test-244-parent"
+            if s.instrumentation_scope.name == "locus.telemetry.test-244-parent"
         }
         assert "agent.invocation" in by_name
         assert "agent.iteration.0" in by_name
@@ -462,7 +463,7 @@ class TestTraceContextPropagation:
         """
         from opentelemetry import trace as otel_trace
 
-        hook = TelemetryHook(tracer_name="tulip.telemetry.test-244-detach")
+        hook = TelemetryHook(tracer_name="locus.telemetry.test-244-detach")
         await hook.on_before_invocation("Q", mock_state)
         await hook.on_after_invocation(mock_state, success=True)
 

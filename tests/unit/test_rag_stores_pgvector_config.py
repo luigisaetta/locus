@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """#171 — PgVectorStore must never silently discard its configuration.
 
@@ -15,7 +16,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from tulip.rag.stores.pgvector import PgVectorConfig, PgVectorStore
+from locus.rag.stores.pgvector import PgVectorConfig, PgVectorStore
 
 
 DSN = "postgresql://u:p@db:5432/x"
@@ -67,13 +68,13 @@ class TestEventTextAliases:
     """#165 — assistant text is reachable under the first-guess name."""
 
     def test_think_event_content_aliases_reasoning(self) -> None:
-        from tulip.core.events import ThinkEvent
+        from locus.core.events import ThinkEvent
 
         ev = ThinkEvent(agent_name="a", iteration=1, reasoning="hello")
         assert ev.content == "hello"
 
     def test_terminate_event_content_aliases_final_message(self) -> None:
-        from tulip.core.events import TerminateEvent
+        from locus.core.events import TerminateEvent
 
         ev = TerminateEvent(
             agent_name="a",

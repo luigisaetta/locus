@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit: the two result shapes the engine reads -- a refusal, and a call that ran nothing."""
 
@@ -10,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from tulip.playbooks.v2.results import (
+from locus.playbooks.v2.results import (
     DENIAL_PREFIX,
     not_executed_reason,
     not_executed_result,

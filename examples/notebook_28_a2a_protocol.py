@@ -1,10 +1,11 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 28: A2A — cross-org payment-intel sharing between spec-compliant peers.
 
 A2A (Agent-to-Agent) is the public cross-framework protocol at
-https://a2aproject.github.io/A2A/. Tulip implements the server and
+https://a2aproject.github.io/A2A/. Locus implements the server and
 client sides on the A2A **v1.0** wire format; this notebook publishes one
 payment network's risk agent behind ``A2AServer``, drives every v1.0
 method from a partner bank's ``A2AClient``, and inspects the typed
@@ -32,15 +33,15 @@ do not promote it to a decline or a chargeback unverified.
   unchanged; the v1.0 conversion happens at the HTTP boundary.
 - ``A2AClient.invoke`` is the backwards-compatible flat shape for peers
   that haven't picked up the spec yet.
-- ``A2AClient.as_tool(...)`` wraps a remote agent as a Tulip ``@tool``
+- ``A2AClient.as_tool(...)`` wraps a remote agent as a Locus ``@tool``
   so a local payments agent can delegate risk questions transparently.
 
 Run it:
     .venv/bin/python examples/notebook_28_a2a_protocol.py
 
-The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
 (or anthropic) and the matching credentials to use a live model. Set
-``TULIP_MODEL_PROVIDER=mock`` for offline runs.
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
 - ``pip install fastapi uvicorn`` for the server side.
@@ -56,7 +57,7 @@ import time
 
 from config import get_model
 
-from tulip.a2a import (
+from locus.a2a import (
     A2AClient,
     A2AServer,
     AgentSkill,
@@ -64,7 +65,7 @@ from tulip.a2a import (
     TaskState,
     TextPart,
 )
-from tulip.agent import Agent, AgentConfig
+from locus.agent import Agent, AgentConfig
 
 
 def _free_port() -> int:

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """One Agent, many runs: the hooks that used to be bound to the whole Agent.
 
@@ -16,15 +17,15 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.events import RunInfo
-from tulip.observability.bus_hook import EventBusHook
-from tulip.observability.context import run_context
-from tulip.observability.event_bus import StreamEvent, get_event_bus, reset_event_bus
-from tulip.playbooks.hook import PlaybookEnforcerHook
-from tulip.playbooks.models import Playbook, PlaybookStep
-from tulip.testing import FunctionModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.core.events import RunInfo
+from locus.observability.bus_hook import EventBusHook
+from locus.observability.context import run_context
+from locus.observability.event_bus import StreamEvent, get_event_bus, reset_event_bus
+from locus.playbooks.hook import PlaybookEnforcerHook
+from locus.playbooks.models import Playbook, PlaybookStep
+from locus.testing import FunctionModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 @tool

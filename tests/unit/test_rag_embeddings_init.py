@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for RAG embeddings module init (lazy imports)."""
 
@@ -11,7 +12,7 @@ class TestRAGEmbeddingsDirectImports:
 
     def test_import_base_classes(self):
         """Test importing base classes."""
-        from tulip.rag.embeddings import (
+        from locus.rag.embeddings import (
             BaseEmbedding,
             EmbeddingConfig,
             EmbeddingProvider,
@@ -30,7 +31,7 @@ class TestRAGEmbeddingsLazyImports:
     def test_lazy_import_openai_embeddings(self):
         """Test lazy importing OpenAIEmbeddings."""
         try:
-            from tulip.rag.embeddings import OpenAIEmbeddings
+            from locus.rag.embeddings import OpenAIEmbeddings
 
             assert OpenAIEmbeddings is not None
         except ImportError:
@@ -38,7 +39,7 @@ class TestRAGEmbeddingsLazyImports:
 
     def test_lazy_import_unknown_raises(self):
         """Test that unknown attribute raises AttributeError."""
-        from tulip.rag import embeddings
+        from locus.rag import embeddings
 
         with pytest.raises(AttributeError, match="has no attribute"):
             _ = embeddings.NonExistentProvider

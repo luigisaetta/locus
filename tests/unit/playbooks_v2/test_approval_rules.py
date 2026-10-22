@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit: a step's approval rules, and which one applies to a held call.
 
@@ -17,22 +18,22 @@ from typing import Any
 
 import pytest
 
-from tulip.playbooks.v2 import (
+from locus.playbooks.v2 import (
     ApprovalRule,
     ResolvedApproval,
     StepApproval,
     parse_duration,
     pick_rule,
 )
-from tulip.playbooks.v2.approvals import (
+from locus.playbooks.v2.approvals import (
     call_context,
     group_name,
     parse_rule,
     parse_step_approval,
     who_must_approve,
 )
-from tulip.playbooks.v2.engine import PlaybookRuntime, parse_playbook_v2
-from tulip.playbooks.v2.when import Money
+from locus.playbooks.v2.engine import PlaybookRuntime, parse_playbook_v2
+from locus.playbooks.v2.when import Money
 
 
 VECTORS = json.loads(

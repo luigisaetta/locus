@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Per-model capability profiles: what a harness adapts its tools and prompt to.
 
@@ -14,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from tulip.models.metadata import ModelMetadata, register_metadata
-from tulip.models.profiles import (
+from locus.models.metadata import ModelMetadata, register_metadata
+from locus.models.profiles import (
     FAMILIES,
     PROFILES_ENV,
     family_of,

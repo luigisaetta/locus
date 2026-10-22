@@ -1,10 +1,11 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for MCP wiring on the agent.
 
 MCP support was ~90% built and stranded: ``MCPClient`` was not exported,
-there was no way to hand an agent an MCP server, and ``to_tulip_tools()``
+there was no way to hand an agent an MCP server, and ``to_locus_tools()``
 called ``asyncio.get_event_loop().run_until_complete(...)`` from a sync
 method — which raises inside any running loop, and a running loop is the
 only way to reach it, since ``await client.connect()`` comes first.
@@ -17,9 +18,9 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.integrations import MCPClient
-from tulip.testing import ScriptedModel, text, tool_call
+from locus.agent import Agent
+from locus.integrations import MCPClient
+from locus.testing import ScriptedModel, text, tool_call
 
 
 SCHEMAS: list[dict[str, Any]] = [
@@ -71,28 +72,28 @@ def _server(cls: type[_FakeServer] = _FakeServer) -> _FakeServer:
 
 
 # --------------------------------------------------------------------------
-# to_tulip_tools — the sync/async bug
+# to_locus_tools — the sync/async bug
 # --------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_to_tulip_tools_works_inside_a_running_loop() -> None:
+async def test_to_locus_tools_works_inside_a_running_loop() -> None:
     """The old implementation raised RuntimeError here."""
-    tools = _server().to_tulip_tools(SCHEMAS)
+    tools = _server().to_locus_tools(SCHEMAS)
     assert [t.name for t in tools] == ["search_docs", "get_page"]
 
 
 @pytest.mark.asyncio
 async def test_each_tool_calls_its_own_name() -> None:
     """Late binding: a bare closure would give every tool the last name."""
-    search, page = _server().to_tulip_tools(SCHEMAS)
+    search, page = _server().to_locus_tools(SCHEMAS)
     assert await search.fn(q="hi") == "search_docs:[('q', 'hi')]"
     assert await page.fn(page_id="42") == "get_page:[('page_id', '42')]"
 
 
 @pytest.mark.asyncio
 async def test_tool_schema_survives_the_conversion() -> None:
-    search = _server().to_tulip_tools(SCHEMAS)[0]
+    search = _server().to_locus_tools(SCHEMAS)[0]
     schema = search.to_openai_schema()["function"]
     assert schema["description"] == "Search the documentation."
     assert schema["parameters"]["required"] == ["q"]
@@ -180,7 +181,7 @@ async def test_no_mcp_servers_is_a_no_op() -> None:
 
 @pytest.mark.asyncio
 async def test_mcp_tools_coexist_with_local_tools() -> None:
-    from tulip.tools.decorator import tool
+    from locus.tools.decorator import tool
 
     @tool
     def local_lookup(order_id: str) -> str:

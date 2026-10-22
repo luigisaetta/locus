@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.a2a.protocol_v1`` — v1.0 handler error paths.
+"""Coverage tests for ``locus.a2a.protocol_v1`` — v1.0 handler error paths.
 
 These exercise the validation-failure and lifecycle-guard branches in the
 ``A2AV1ServerMixin`` handlers plus the ISO timestamp parser, all of which
@@ -15,9 +16,9 @@ from typing import Any
 
 import pytest
 
-from tulip.a2a.protocol import A2AServer
-from tulip.a2a.protocol_v1 import A2AV1ProtocolError, _parse_iso_timestamp
-from tulip.a2a.spec import (
+from locus.a2a.protocol import A2AServer
+from locus.a2a.protocol_v1 import A2AV1ProtocolError, _parse_iso_timestamp
+from locus.a2a.spec import (
     INVALID_PARAMS,
     TASK_NOT_FOUND,
     UNSUPPORTED_OPERATION,

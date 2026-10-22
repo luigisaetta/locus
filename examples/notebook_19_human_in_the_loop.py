@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 19: Human approval gates for production changes.
 
@@ -20,16 +21,16 @@ response.
 - `graph.config.interrupt_before = [...]` — pause before specific nodes.
 
 Run it:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_19_human_in_the_loop.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_19_human_in_the_loop.py
 
 This notebook doesn't call any LLM, so the model provider doesn't
-matter. The default is the bundled mock model unless TULIP_MODEL_PROVIDER is set.
+matter. The default is the bundled mock model unless LOCUS_MODEL_PROVIDER is set.
 """
 
 import asyncio
 
-from tulip.core import Command, interrupt
-from tulip.multiagent import END, START, StateGraph
+from locus.core import Command, interrupt
+from locus.multiagent import END, START, StateGraph
 
 
 # =============================================================================

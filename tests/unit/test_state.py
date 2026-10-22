@@ -1,13 +1,14 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for agent state."""
 
 import pytest
 from pydantic import ValidationError
 
-from tulip.core.messages import Message, ToolCall
-from tulip.core.state import AgentState, ReasoningStep, ToolExecution
+from locus.core.messages import Message, ToolCall
+from locus.core.state import AgentState, ReasoningStep, ToolExecution
 
 
 class TestAgentState:
@@ -440,7 +441,7 @@ class TestConfigBudgets:
 
     def test_max_iterations_raised_to_500(self):
         """max_iterations cap is now 500."""
-        from tulip.agent.config import AgentConfig
+        from locus.agent.config import AgentConfig
 
         config = AgentConfig(model="openai:gpt-4o", max_iterations=200)
         assert config.max_iterations == 200
@@ -453,7 +454,7 @@ class TestConfigBudgets:
 
     def test_token_budget(self):
         """token_budget accepts positive int or None."""
-        from tulip.agent.config import AgentConfig
+        from locus.agent.config import AgentConfig
 
         config = AgentConfig(model="openai:gpt-4o", token_budget=50000)
         assert config.token_budget == 50000
@@ -463,7 +464,7 @@ class TestConfigBudgets:
 
     def test_time_budget(self):
         """time_budget_seconds accepts positive float or None."""
-        from tulip.agent.config import AgentConfig
+        from locus.agent.config import AgentConfig
 
         config = AgentConfig(model="openai:gpt-4o", time_budget_seconds=30.0)
         assert config.time_budget_seconds == 30.0
@@ -473,7 +474,7 @@ class TestConfigBudgets:
 
     def test_stop_reason_includes_budgets(self):
         """StopReason literal includes budget reasons."""
-        from tulip.agent.result import StopReason
+        from locus.agent.result import StopReason
 
         # These should be valid StopReason values
         reasons: list[StopReason] = ["token_budget", "time_budget"]

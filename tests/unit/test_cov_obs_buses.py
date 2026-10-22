@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Extra coverage for tulip.observability.event_bus — missing branches."""
+"""Extra coverage for locus.observability.event_bus — missing branches."""
 
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ import asyncio
 
 import pytest
 
-from tulip.observability.event_bus import EventBus, StreamEvent, reset_event_bus
+from locus.observability.event_bus import EventBus, StreamEvent, reset_event_bus
 
 
 pytestmark = pytest.mark.asyncio

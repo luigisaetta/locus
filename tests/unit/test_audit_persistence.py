@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """A trail on disk: durable as it is written, continued when reopened, and
 checkable from the file alone — with the break located, not just detected."""
@@ -12,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from tulip.control import AuditTrail, check_jsonl, verify_jsonl
-from tulip.control.audit import _GENESIS
+from locus.control import AuditTrail, check_jsonl, verify_jsonl
+from locus.control.audit import _GENESIS
 
 
 def _lines(path: Path) -> list[dict[str, object]]:
@@ -153,7 +154,7 @@ def test_concurrent_records_never_share_a_parent(tmp_path: Path) -> None:
 
 def test_signed_records_are_checked_per_record() -> None:
     pytest.importorskip("cryptography")
-    from tulip.control import Ed25519Signer
+    from locus.control import Ed25519Signer
 
     signer = Ed25519Signer.generate(key_id="k1")
     trail = AuditTrail(signer=signer)

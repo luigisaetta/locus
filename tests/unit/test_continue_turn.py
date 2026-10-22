@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Per-iteration checkpoints and ``Agent.continue_turn``.
 
@@ -15,16 +16,16 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.agent.agent import _UNFINISHED_CALL_ERROR
-from tulip.agent.runtime_loop import ITERATION_CHECKPOINTS_KEY
-from tulip.core.events import TerminateEvent, ToolStartEvent
-from tulip.core.messages import Message, Role, ToolCall, ToolResult
-from tulip.core.state import AgentState
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.memory.checkpointer import BaseCheckpointer
-from tulip.models.base import ModelResponse
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.agent.agent import _UNFINISHED_CALL_ERROR
+from locus.agent.runtime_loop import ITERATION_CHECKPOINTS_KEY
+from locus.core.events import TerminateEvent, ToolStartEvent
+from locus.core.messages import Message, Role, ToolCall, ToolResult
+from locus.core.state import AgentState
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.memory.checkpointer import BaseCheckpointer
+from locus.models.base import ModelResponse
+from locus.tools.decorator import tool
 
 
 class _KilledError(Exception):

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit: task steps a person completes, and the playbook's ``notify`` rules.
 
@@ -19,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from tulip.playbooks.v2 import (
+from locus.playbooks.v2 import (
     NOTIFY_EVENTS,
     ROUTING_UNKNOWN,
     NotifyRule,
@@ -29,7 +30,7 @@ from tulip.playbooks.v2 import (
     form_problems,
     parse_notify_rules,
 )
-from tulip.playbooks.v2.engine import (
+from locus.playbooks.v2.engine import (
     ACTIVE,
     BLOCKED,
     DONE,
@@ -42,8 +43,8 @@ from tulip.playbooks.v2.engine import (
     playbook_prose,
     step_brief,
 )
-from tulip.playbooks.v2.fields import Field
-from tulip.playbooks.v2.tasks import field_schema, is_task, parse_task
+from locus.playbooks.v2.fields import Field
+from locus.playbooks.v2.tasks import field_schema, is_task, parse_task
 
 
 REF = {"ref": "file_01H", "name": "call.m4a", "size": 2048, "media_type": "audio/mp4"}
@@ -591,7 +592,7 @@ def test_a_branch_that_reads_what_the_run_cannot_see_is_not_routed() -> None:
 
 
 def _digest(value: Any) -> dict[str, Any]:
-    """``tulip_gateway.persist._digest``, byte for byte."""
+    """``locus_gateway.persist._digest``, byte for byte."""
     encoded = json.dumps(value, sort_keys=True, default=str).encode("utf-8")
     return {"redacted": True, "sha256": hashlib.sha256(encoded).hexdigest(), "bytes": len(encoded)}
 

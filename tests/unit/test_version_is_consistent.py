@@ -1,11 +1,12 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""`tulip.__version__` must match the version the package ships as.
+"""`locus.__version__` must match the version the package ships as.
 
-Not hypothetical: `tulip_agents-2.5.0-py3-none-any.whl` went to PyPI with
-`METADATA Version: 2.5.0` and `tulip.__version__ == "2.4.0"` inside it,
-because the literal in `src/tulip/__init__.py` and the one in
+Not hypothetical: `locus_agents-2.5.0-py3-none-any.whl` went to PyPI with
+`METADATA Version: 2.5.0` and `locus.__version__ == "2.4.0"` inside it,
+because the literal in `src/locus/__init__.py` and the one in
 `pyproject.toml` are maintained by hand and drifted. Anything reading
 `__version__` -- telemetry, a bug report, a compatibility check in the
 gateway -- was told the wrong release for the whole of 2.5.0.
@@ -19,7 +20,7 @@ from __future__ import annotations
 import pathlib
 import re
 
-import tulip
+import locus
 
 
 def _pyproject_version() -> str | None:
@@ -37,9 +38,9 @@ def test_dunder_version_matches_pyproject() -> None:
     declared = _pyproject_version()
     if declared is None:
         return  # installed-wheel run; the metadata test below still applies
-    assert tulip.__version__ == declared, (
-        f"tulip.__version__ is {tulip.__version__!r} but pyproject.toml declares "
-        f"{declared!r}. Both are hand-maintained -- update src/tulip/__init__.py."
+    assert locus.__version__ == declared, (
+        f"locus.__version__ is {locus.__version__!r} but pyproject.toml declares "
+        f"{declared!r}. Both are hand-maintained -- update src/locus/__init__.py."
     )
 
 
@@ -48,16 +49,16 @@ def test_dunder_version_matches_installed_metadata() -> None:
     from importlib.metadata import PackageNotFoundError, version
 
     try:
-        installed = version("tulip-agents")
+        installed = version("locus-sdk")
     except PackageNotFoundError:
         return  # not installed in this env (source-only run)
-    assert tulip.__version__ == installed, (
-        f"tulip.__version__ is {tulip.__version__!r} but the installed "
+    assert locus.__version__ == installed, (
+        f"locus.__version__ is {locus.__version__!r} but the installed "
         f"distribution is {installed!r}."
     )
 
 
 def test_dunder_version_is_a_release_number() -> None:
-    assert re.fullmatch(r"\d+\.\d+\.\d+([abrc.\-+].*)?", tulip.__version__), (
-        f"{tulip.__version__!r} is not a recognisable version"
+    assert re.fullmatch(r"\d+\.\d+\.\d+([abrc.\-+].*)?", locus.__version__), (
+        f"{locus.__version__!r} is not a recognisable version"
     )

@@ -1,15 +1,16 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for verify() — independent challenge of a finding.
 
 A well-grounded finding survives; an unsupported or over-claimed one is refuted.
-Works on Tulip Findings and on finding-shaped mappings from any other framework.
+Works on Locus Findings and on finding-shaped mappings from any other framework.
 """
 
 from __future__ import annotations
 
-from tulip.control import (
+from locus.control import (
     Evidence,
     EvidenceQualitySkeptic,
     Refutation,
@@ -18,7 +19,7 @@ from tulip.control import (
     VerificationResult,
     verify,
 )
-from tulip.control.verification import FindingLike
+from locus.control.verification import FindingLike
 
 
 def _strong_finding() -> Evidence:
@@ -121,8 +122,8 @@ class _ScriptedModel:
         self._content = content
 
     async def complete(self, messages, tools=None, **kwargs):  # noqa: ANN001, ANN003
-        from tulip.core.messages import Message
-        from tulip.models.base import ModelResponse
+        from locus.core.messages import Message
+        from locus.models.base import ModelResponse
 
         return ModelResponse(message=Message.assistant(content=self._content), usage={})
 
@@ -130,7 +131,7 @@ class _ScriptedModel:
 async def test_adversarial_skeptic_refutes_overreach() -> None:
     import json
 
-    from tulip.control import AdversarialSkeptic
+    from locus.control import AdversarialSkeptic
 
     review = json.dumps(
         {
@@ -156,7 +157,7 @@ async def test_adversarial_skeptic_refutes_overreach() -> None:
 async def test_adversarial_skeptic_can_clear_a_finding() -> None:
     import json
 
-    from tulip.control import AdversarialSkeptic
+    from locus.control import AdversarialSkeptic
 
     review = json.dumps({"supported": True, "objections": [], "alternatives": []})
     verdict = await verify(
@@ -167,7 +168,7 @@ async def test_adversarial_skeptic_can_clear_a_finding() -> None:
 
 
 async def test_adversarial_skeptic_fails_safe_on_model_error() -> None:
-    from tulip.control import AdversarialSkeptic
+    from locus.control import AdversarialSkeptic
 
     class _Boom:
         async def complete(self, *args, **kwargs):  # noqa: ANN002, ANN003, ANN201

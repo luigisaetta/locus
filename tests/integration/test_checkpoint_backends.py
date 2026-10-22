@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for checkpoint backends."""
 
@@ -10,8 +11,8 @@ import os
 
 import pytest
 
-from tulip.core.messages import Message, Role
-from tulip.core.state import AgentState
+from locus.core.messages import Message, Role
+from locus.core.state import AgentState
 
 
 pytestmark = pytest.mark.integration
@@ -52,7 +53,7 @@ class TestMemoryCheckpointer:
 
     @pytest.fixture
     def backend(self):
-        from tulip.memory.backends import MemoryCheckpointer
+        from locus.memory.backends import MemoryCheckpointer
 
         return MemoryCheckpointer()
 
@@ -113,11 +114,11 @@ class TestRedisBackend:
 
     @pytest.fixture
     async def backend(self):
-        from tulip.memory.backends import RedisBackend
+        from locus.memory.backends import RedisBackend
 
         backend = RedisBackend(
             url=os.getenv("REDIS_URL", "redis://localhost:6379"),
-            prefix="tulip:test:",
+            prefix="locus:test:",
         )
         yield backend
         # Cleanup
@@ -176,12 +177,12 @@ class TestPostgreSQLBackend:
 
     @pytest.fixture
     async def backend(self):
-        from tulip.memory.backends import PostgreSQLBackend
+        from locus.memory.backends import PostgreSQLBackend
 
         backend = PostgreSQLBackend(
             host=os.getenv("POSTGRES_HOST", "localhost"),
             port=int(os.getenv("POSTGRES_PORT", "5432")),
-            database=os.getenv("POSTGRES_DB", "tulip_test"),
+            database=os.getenv("POSTGRES_DB", "locus_test"),
             user=os.getenv("POSTGRES_USER", "postgres"),
             password=os.getenv("POSTGRES_PASSWORD", ""),
             table_name="test_checkpoints",
@@ -258,14 +259,14 @@ class TestMySQLBackend:
 
     @pytest.fixture
     async def backend(self):
-        from tulip.memory.backends import MySQLBackend
+        from locus.memory.backends import MySQLBackend
 
         backend = MySQLBackend(
             host=os.getenv("MYSQL_HOST", "localhost"),
             port=int(os.getenv("MYSQL_PORT", "3306")),
-            database=os.getenv("MYSQL_DB", "tulip_test"),
-            user=os.getenv("MYSQL_USER", "tulip"),
-            password=os.getenv("MYSQL_PASSWORD", "tulip"),
+            database=os.getenv("MYSQL_DB", "locus_test"),
+            user=os.getenv("MYSQL_USER", "locus"),
+            password=os.getenv("MYSQL_PASSWORD", "locus"),
             table_name="test_checkpoints",
             min_pool_size=0,
             max_pool_size=5,
@@ -388,14 +389,14 @@ class TestMySQLBackend:
         """
         import uuid
 
-        from tulip.memory.backends import mysql_checkpointer
+        from locus.memory.backends import mysql_checkpointer
 
         ck = mysql_checkpointer(
             host=os.getenv("MYSQL_HOST", "localhost"),
             port=int(os.getenv("MYSQL_PORT", "3306")),
-            database=os.getenv("MYSQL_DB", "tulip_test"),
-            user=os.getenv("MYSQL_USER", "tulip"),
-            password=os.getenv("MYSQL_PASSWORD", "tulip"),
+            database=os.getenv("MYSQL_DB", "locus_test"),
+            user=os.getenv("MYSQL_USER", "locus"),
+            password=os.getenv("MYSQL_PASSWORD", "locus"),
             table_name="test_cold_" + uuid.uuid4().hex[:8],
         )
         state = AgentState(agent_id="x", max_iterations=1).with_message(
@@ -423,13 +424,13 @@ class TestOpenSearchBackend:
 
     @pytest.fixture
     async def backend(self):
-        from tulip.memory.backends import OpenSearchBackend
+        from locus.memory.backends import OpenSearchBackend
 
         hosts_env = os.getenv("OPENSEARCH_HOSTS") or os.getenv("OPENSEARCH_HOST", "localhost:9200")
         hosts = [h.strip() for h in hosts_env.split(",")]
         backend = OpenSearchBackend(
             hosts=hosts,
-            index_name="tulip-test-checkpoints",
+            index_name="locus-test-checkpoints",
             username=os.getenv("OPENSEARCH_USER"),
             password=os.getenv("OPENSEARCH_PASSWORD"),
             use_ssl=os.getenv("OPENSEARCH_USE_SSL", "false").lower() == "true",
@@ -493,7 +494,7 @@ class TestBackendCompatibility:
     @pytest.mark.asyncio
     async def test_state_roundtrip_memory(self, sample_state):
         """State survives memory backend roundtrip."""
-        from tulip.memory.backends import MemoryCheckpointer
+        from locus.memory.backends import MemoryCheckpointer
 
         backend = MemoryCheckpointer()
         await backend.save(sample_state, "thread-1")

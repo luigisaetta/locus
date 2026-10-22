@@ -1,5 +1,5 @@
 {
-  "about": "Which approval rule of a step applies to one held call. Written in the SDK while the registry's StepApprovalRule / pick_rule (tuliplabs-ai/registry, branch step-approval-rules) is not yet open; replace with the registry's tests/unit/fixtures/approval_rules.json once it lands, and keep both copies agreeing. Money is {amount, currency}; a withheld value is a trace digest {redacted, sha256, bytes}.",
+  "about": "Which approval rule of a step applies to one held call. Written in the SDK while the registry's StepApprovalRule / pick_rule (oracle/registry, branch step-approval-rules) is not yet open; replace with the registry's tests/unit/fixtures/approval_rules.json once it lands, and keep both copies agreeing. Money is {amount, currency}; a withheld value is a trace digest {redacted, sha256, bytes}.",
   "approvals": {
     "vendor_change": {
       "ask": "Confirm the new account was verified with the vendor.",

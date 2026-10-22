@@ -1,16 +1,17 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 57: Multi-modal dispute triage — order pages, ledger, image, speech.
 
 A chargeback case is rarely just text. The payments analyst has a merchant
 order URL to fetch, an internal transactions ledger to query, a receipt
 image to regenerate for the dispute packet, and a customer voicemail to
 transcribe. Set a provider on the Agent kwargs (web_search, web_fetch,
-image_generator, speech_provider) and Tulip auto-registers a matching
+image_generator, speech_provider) and Locus auto-registers a matching
 @tool. The model calls it the same way it calls a hand-written tool —
 you don't write the wrapper.
 
-- Four Protocols under tulip.providers: search, fetch, image, speech.
+- Four Protocols under locus.providers: search, fetch, image, speech.
 - Live demo with HTTPXWebFetcher (no API key needed) — example.com
   stands in for a merchant's order-confirmation URL.
 - Bring-your-own: any duck-typed object that implements the protocol
@@ -18,11 +19,11 @@ you don't write the wrapper.
 - Optional OpenAI-backed providers (image, speech, search-preview).
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_57_multimodal_providers.py
 
     # Offline / no credentials:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_57_multimodal_providers.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_57_multimodal_providers.py
 
 Optional: set OPENAI_API_KEY to exercise the OpenAI-backed providers.
 """
@@ -34,18 +35,18 @@ import os
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
-from tulip.providers.web_fetch import HTTPXWebFetcher
+from locus.agent import Agent, AgentConfig
+from locus.providers.web_fetch import HTTPXWebFetcher
 
 
-# Part 1: the four provider Protocols. Implement one and Tulip accepts it.
+# Part 1: the four provider Protocols. Implement one and Locus accepts it.
 
 
 def example_protocols():
     """Print the four Protocols you can implement to plug a backend."""
     print("=== Part 1: The four provider Protocols ===\n")
 
-    print("tulip.providers exposes four runtime_checkable Protocols:")
+    print("locus.providers exposes four runtime_checkable Protocols:")
     print()
     print("  BaseWebSearchProvider:    async search(query, max_results)")
     print("                            -> list[SearchResult]")
@@ -65,7 +66,7 @@ def example_protocols():
 
 
 def example_auto_register():
-    """Configure providers; tulip registers the tools."""
+    """Configure providers; locus registers the tools."""
     print("\n=== Part 2: Auto-registered tools ===\n")
 
     # HTTPXWebFetcher is the only built-in that needs no API key.
@@ -83,7 +84,7 @@ def example_auto_register():
     print(f"Registered tools: {sorted(agent._tool_registry.tools.keys())}")
     print()
     print("Notice `web_fetch` appears even though we didn't pass it via `tools=`.")
-    print("Setting `web_fetch=` is enough — tulip auto-registered the wrapper.")
+    print("Setting `web_fetch=` is enough — locus auto-registered the wrapper.")
     print()
     print("The same kwargs work for the other modalities:")
     print("  Agent(web_search=..., web_fetch=..., image_generator=..., speech_provider=...)")
@@ -129,7 +130,7 @@ def example_byo_backend():
     """A toy transaction-ledger search provider — any duck-typed class works."""
     print("\n=== Part 4: Bring your own ledger backend ===\n")
 
-    from tulip.providers.types import SearchResult
+    from locus.providers.types import SearchResult
 
     class StaticLedgerSearch:
         """Hard-coded ledger hits — swap for your real payments-ledger client."""
@@ -170,10 +171,10 @@ def example_openai_providers():
         print()
         print("Snippet you'd use with a key:")
         print("""
-  from tulip.providers.image import OpenAIImageProvider
-  from tulip.providers.speech import OpenAISpeechProvider
-  from tulip.providers.web_search import OpenAISearchPreviewProvider
-  from tulip.models.native.openai import OpenAIModel
+  from locus.providers.image import OpenAIImageProvider
+  from locus.providers.speech import OpenAISpeechProvider
+  from locus.providers.web_search import OpenAISearchPreviewProvider
+  from locus.models.native.openai import OpenAIModel
 
   agent = Agent(config=AgentConfig(
       model=get_model(),
@@ -186,8 +187,8 @@ def example_openai_providers():
 """)
         return
 
-    from tulip.providers.image import OpenAIImageProvider
-    from tulip.providers.speech import OpenAISpeechProvider
+    from locus.providers.image import OpenAIImageProvider
+    from locus.providers.speech import OpenAISpeechProvider
 
     image = OpenAIImageProvider(model="dall-e-3")
     speech = OpenAISpeechProvider()

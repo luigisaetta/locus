@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit: a runtime restored from its own ``playbook_step`` records is where the run left it.
 
@@ -19,8 +20,8 @@ from typing import Any
 import pytest
 import yaml
 
-from tulip.playbooks.v2 import RestoreError, RestoreResult
-from tulip.playbooks.v2.engine import (
+from locus.playbooks.v2 import RestoreError, RestoreResult
+from locus.playbooks.v2.engine import (
     ACTIVE,
     BLOCKED,
     DONE,

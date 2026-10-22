@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for the Hermes-port external tool-result storage (D.1).
 
-Wires :class:`~tulip.tools.result_storage.ToolResultStore` to a shared
+Wires :class:`~locus.tools.result_storage.ToolResultStore` to a shared
 in-process dict to verify that:
 
 * Oversized tool outputs are persisted to disk without hitting the
@@ -17,8 +18,8 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.core.messages import ToolResult
-from tulip.tools.result_storage import ToolResultStore, extract_reference_key
+from locus.core.messages import ToolResult
+from locus.tools.result_storage import ToolResultStore, extract_reference_key
 
 
 def _make_store(backend: dict[str, str]) -> ToolResultStore:
@@ -96,7 +97,7 @@ class TestToolResultStorageRoundTrip:
 
         # No write should have happened — load on the constructed key
         # should return None.
-        speculative_key = "tulip:result:r:0:t"
+        speculative_key = "locus:result:r:0:t"
         assert store.load(speculative_key) is None
 
     def test_concurrent_offloads_distinct_keys(self, backend: dict[str, str]) -> None:

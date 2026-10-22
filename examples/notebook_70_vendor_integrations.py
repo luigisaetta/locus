@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 70: Live vendor integrations — PII discovery, data map, scan dispatch.
 
@@ -42,8 +43,8 @@ import os
 
 from config import get_model, print_config
 
-from tulip.multiagent.specialist import Specialist
-from tulip.tools import tool
+from locus.multiagent.specialist import Specialist
+from locus.tools import tool
 
 
 # The PII categories a discovery scan reports on — a fixed, well-known set
@@ -174,9 +175,9 @@ async def main() -> None:
     # =========================================================================
     # Part 2: hand the tools to a DSAR triage agent
     # =========================================================================
-    # The same integrations, this time as Tulip @tools the agent can call.
+    # The same integrations, this time as Locus @tools the agent can call.
     # Under the mock model the agent narrates rather than truly tool-calls;
-    # point TULIP_MODEL_PROVIDER at a live model to see it drive the tools.
+    # point LOCUS_MODEL_PROVIDER at a live model to see it drive the tools.
     print("\n=== Part 2: A DSAR triage agent with vendor tools ===\n")
 
     steward = Specialist(

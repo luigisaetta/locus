@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for ``create_research_workflow(datastores=...)``.
 
@@ -14,8 +15,8 @@ from typing import Any
 
 import pytest
 
-from tulip.deepagent.factory import wire_datastores
-from tulip.deepagent.workflow import create_research_workflow
+from locus.deepagent.factory import wire_datastores
+from locus.deepagent.workflow import create_research_workflow
 
 
 class _StubRetriever:
@@ -29,7 +30,7 @@ class _StubRetriever:
 
     async def retrieve(self, *args: Any, **kwargs: Any) -> Any:  # pragma: no cover
         self.calls.append({"args": args, "kwargs": kwargs})
-        from tulip.rag.retriever import RetrievalResult
+        from locus.rag.retriever import RetrievalResult
 
         return RetrievalResult(query="", documents=[], scores=[])
 
@@ -39,14 +40,14 @@ def _make_retriever() -> Any:
     `wire_datastores`'s isinstance check passes and `create_rag_tool` can
     bind it. The store is irrelevant — we only exercise the wiring path.
     """
-    from tulip.rag import RAGRetriever
-    from tulip.rag.embeddings.base import (
+    from locus.rag import RAGRetriever
+    from locus.rag.embeddings.base import (
         BaseEmbedding,
         EmbeddingCapabilities,
         EmbeddingConfig,
         EmbeddingResult,
     )
-    from tulip.rag.stores.memory import InMemoryVectorStore
+    from locus.rag.stores.memory import InMemoryVectorStore
 
     class StubEmbedder(BaseEmbedding):
         @property

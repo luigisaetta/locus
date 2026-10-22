@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.multiagent.graph``.
+"""Coverage tests for ``locus.multiagent.graph``.
 
 The existing ``test_graph.py`` covers the happy paths.  This file
 targets the remaining gaps:
@@ -28,8 +29,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pydantic import BaseModel
 
-from tulip.core import Command, Send
-from tulip.multiagent.graph import (
+from locus.core import Command, Send
+from locus.multiagent.graph import (
     END,
     START,
     CachePolicy,

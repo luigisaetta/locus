@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Threat-intel agent — exposed over A2A on :8001 by default.
 
 Skills: ``threat_intel``, ``ioc_enrichment``.
@@ -10,9 +11,9 @@ from __future__ import annotations
 import argparse
 
 from a2a_mesh._model import get_model
-from tulip.a2a import A2AServer
-from tulip.agent import Agent, AgentConfig
-from tulip.tools import tool
+from locus.a2a import A2AServer
+from locus.agent import Agent, AgentConfig
+from locus.tools import tool
 
 
 @tool

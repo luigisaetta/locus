@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
-from tulip.core.messages import Message
+from locus.core.messages import Message
 
 
 pytest.importorskip("openai")
@@ -40,7 +40,7 @@ class _StubModel:
 
     async def complete(self, **kwargs: Any) -> Any:  # type: ignore[override,no-redef]
         self._captured_kwargs = kwargs
-        from tulip.models.base import ModelResponse
+        from locus.models.base import ModelResponse
 
         return ModelResponse(
             message=Message.assistant('{"name": "ok", "score": 0.9}'),
@@ -50,7 +50,7 @@ class _StubModel:
 
 def test_supports_structured_output_capability_on_openai_model():
     """OpenAIModel reports True; structured output passes through natively."""
-    from tulip.models.native.openai import OpenAIModel
+    from locus.models.native.openai import OpenAIModel
 
     model = OpenAIModel(model="gpt-4o", api_key="sk-test")
     assert model.supports_structured_output is True
@@ -58,7 +58,7 @@ def test_supports_structured_output_capability_on_openai_model():
 
 def test_supports_structured_output_capability_on_anthropic_model():
     """AnthropicModel reports False; falls back to prompted JSON."""
-    from tulip.models.native.anthropic import AnthropicModel
+    from locus.models.native.anthropic import AnthropicModel
 
     model = AnthropicModel(model="claude-sonnet-4-6", api_key="sk-test")
     assert model.supports_structured_output is False
@@ -66,7 +66,7 @@ def test_supports_structured_output_capability_on_anthropic_model():
 
 def test_build_response_format_returns_openai_shape():
     """``build_response_format`` already returns the right shape — sanity check."""
-    from tulip.core.structured import build_response_format
+    from locus.core.structured import build_response_format
 
     rf = build_response_format(SamplePayload, strict=True)
     assert rf["type"] == "json_schema"
@@ -86,7 +86,7 @@ def test_build_response_format_returns_openai_shape():
 
 def test_inline_schema_refs_no_defs():
     """Schema without $defs passes through unchanged."""
-    from tulip.core.structured import inline_schema_refs
+    from locus.core.structured import inline_schema_refs
 
     schema = {"type": "object", "properties": {"x": {"type": "string"}}}
     result = inline_schema_refs(schema)
@@ -95,7 +95,7 @@ def test_inline_schema_refs_no_defs():
 
 def test_inline_schema_refs_inlines_single_ref():
     """$ref inside a property is replaced with the definition inline."""
-    from tulip.core.structured import inline_schema_refs
+    from locus.core.structured import inline_schema_refs
 
     schema = {
         "type": "object",
@@ -111,7 +111,7 @@ def test_inline_schema_refs_inlines_single_ref():
 
 def test_inline_schema_refs_inlines_nested():
     """Nested $ref (list items) are also inlined."""
-    from tulip.core.structured import inline_schema_refs
+    from locus.core.structured import inline_schema_refs
 
     schema = {
         "type": "object",
@@ -127,7 +127,7 @@ def test_inline_schema_refs_nested_pydantic_integration():
     """Nested Pydantic model produces a fully inlined schema (no $defs/$ref)."""
     from pydantic import BaseModel, Field
 
-    from tulip.core.structured import inline_schema_refs
+    from locus.core.structured import inline_schema_refs
 
     class Inner(BaseModel):
         score: float = Field(ge=0.0, le=1.0)

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Checkpoint history against a real Postgres checkpointer.
 
@@ -18,11 +19,11 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.messages import Message, Role
-from tulip.memory.backends.adapters import StorageBackendAdapter
-from tulip.multiagent.graph import END, START, StateGraph
-from tulip.testing import FunctionModel, text
+from locus.agent import Agent
+from locus.core.messages import Message, Role
+from locus.memory.backends.adapters import StorageBackendAdapter
+from locus.multiagent.graph import END, START, StateGraph
+from locus.testing import FunctionModel, text
 
 
 if TYPE_CHECKING:
@@ -31,12 +32,12 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 async def checkpointer() -> AsyncIterator[StorageBackendAdapter]:
-    from tulip.memory.backends import PostgreSQLBackend
+    from locus.memory.backends import PostgreSQLBackend
 
     backend = PostgreSQLBackend(
         host=os.getenv("POSTGRES_HOST", "localhost"),
         port=int(os.getenv("POSTGRES_PORT", "5432")),
-        database=os.getenv("POSTGRES_DB", "tulip_test"),
+        database=os.getenv("POSTGRES_DB", "locus_test"),
         user=os.getenv("POSTGRES_USER", "postgres"),
         password=os.getenv("POSTGRES_PASSWORD", ""),
         table_name="test_history_" + uuid.uuid4().hex[:8],

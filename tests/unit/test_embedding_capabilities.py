@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Contract tests for the ``EmbeddingCapabilities`` surface.
 
@@ -12,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.rag.embeddings.base import (
+from locus.rag.embeddings.base import (
     BaseEmbedding,
     EmbeddingCapabilities,
     EmbeddingConfig,
@@ -54,7 +55,7 @@ class TestEmbeddingCapabilities:
         """OpenAI embeddings advertise text-only, native batching."""
         openai_module = pytest.importorskip("openai")
         assert openai_module is not None  # sanity
-        from tulip.rag.embeddings.openai import OpenAIEmbeddings
+        from locus.rag.embeddings.openai import OpenAIEmbeddings
 
         embedder = OpenAIEmbeddings(api_key="sk-test", model="text-embedding-3-small")
         caps = embedder.capabilities

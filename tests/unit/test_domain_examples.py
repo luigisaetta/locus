@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The non-security domain examples run end-to-end.
 
@@ -12,6 +13,7 @@ instead of silently shipping.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -23,6 +25,9 @@ _REPO = Path(__file__).resolve().parents[2]
 
 
 def _run(notebook: str) -> subprocess.CompletedProcess[str]:
+    # Pin the bundled mock model: ``examples/config.py`` auto-detects OCI when a
+    # usable ``~/.oci/config`` profile exists, and these are offline tests.
+    env = {**os.environ, "LOCUS_MODEL_PROVIDER": "mock"}
     return subprocess.run(
         [sys.executable, f"examples/{notebook}"],
         cwd=_REPO,
@@ -30,6 +35,7 @@ def _run(notebook: str) -> subprocess.CompletedProcess[str]:
         text=True,
         timeout=120,
         check=False,
+        env=env,
     )
 
 

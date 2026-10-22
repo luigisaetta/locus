@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit: a step may name who approves it, and the runtime says which step owns a call.
 
@@ -16,8 +17,8 @@ from typing import Any
 import pytest
 import yaml
 
-from tulip.playbooks.v2 import StepApproval
-from tulip.playbooks.v2.engine import PlaybookRuntime, parse_playbook_v2
+from locus.playbooks.v2 import StepApproval
+from locus.playbooks.v2.engine import PlaybookRuntime, parse_playbook_v2
 
 
 EXAMPLE = Path(__file__).parent / "fixtures" / "refund-dispute.v2.yaml"

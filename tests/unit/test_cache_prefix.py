@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Each request starts with the whole of the one before it, except at a compaction.
 
@@ -9,7 +10,7 @@ start of the request to be byte-identical to an earlier request, so a harness
 that rewrites an early message between iterations pays full price for the
 whole conversation on every call of a long run. These tests drive scripted
 multi-step sessions through the real loop and check every request against the
-previous one, in Tulip's messages and in what the OpenAI and Anthropic
+previous one, in Locus's messages and in what the OpenAI and Anthropic
 adapters put on the wire.
 """
 
@@ -23,18 +24,18 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent, ObservationPackConfig
-from tulip.core.events import CompactionEvent, CustomEvent, TerminateEvent
-from tulip.core.messages import Message, Role, ToolCall
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.memory.conversation import SlidingWindowManager
-from tulip.memory.manager import BaseMemoryManager, Memory, MemoryType
-from tulip.memory.observation_pack import OBSERVATION_ID_KEY
-from tulip.models.base import ModelResponse
-from tulip.models.native.anthropic import AnthropicModel
-from tulip.models.native.openai import OpenAIModel
-from tulip.testing import FunctionModel
-from tulip.tools.decorator import tool
+from locus.agent import Agent, ObservationPackConfig
+from locus.core.events import CompactionEvent, CustomEvent, TerminateEvent
+from locus.core.messages import Message, Role, ToolCall
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.memory.conversation import SlidingWindowManager
+from locus.memory.manager import BaseMemoryManager, Memory, MemoryType
+from locus.memory.observation_pack import OBSERVATION_ID_KEY
+from locus.models.base import ModelResponse
+from locus.models.native.anthropic import AnthropicModel
+from locus.models.native.openai import OpenAIModel
+from locus.testing import FunctionModel
+from locus.tools.decorator import tool
 
 
 @tool(idempotent=False)
@@ -78,7 +79,7 @@ def _scripted(
         )
 
     model = FunctionModel(handler)
-    model.config = SimpleNamespace(model="tulip-test-cache-prefix")  # type: ignore[attr-defined]
+    model.config = SimpleNamespace(model="locus-test-cache-prefix")  # type: ignore[attr-defined]
     return model, requests
 
 

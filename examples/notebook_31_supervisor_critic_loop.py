@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 31: PII-exposure report vs skeptical reviewer — kill unproven claims.
 
@@ -12,7 +13,7 @@ The revise loop caps at two passes to bound runtime.
 The point of the notebook is the *last* step, not the loop: a report that
 reads well is not the same as a report that is grounded. Before anything
 ships, the reviewer runs the drafted finding through ``ground_finding`` —
-the GSAR grounding gate from ``tulip.control``. A finding is emitted only
+the GSAR grounding gate from ``locus.control``. A finding is emitted only
 when its evidence partition clears the proceed threshold; otherwise the
 call returns an ``Abstention`` and nothing reaches the privacy queue. An
 unproven exposure claim is a false positive *by construction* and never ships.
@@ -40,9 +41,9 @@ START → gather → draft → review → END (ship grounded Evidence | abstain)
 Run it:
     .venv/bin/python examples/notebook_31_supervisor_critic_loop.py
 
-The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
 (or anthropic) and the matching credentials to use a live model. Set
-``TULIP_MODEL_PROVIDER=mock`` for offline runs — the grounding gate is
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs — the grounding gate is
 deterministic and exercises the same admit/abstain path either way.
 
 Prerequisites:
@@ -58,8 +59,8 @@ from typing import Any
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
-from tulip.control import (
+from locus.agent import Agent, AgentConfig
+from locus.control import (
     AtlasTechnique,
     Indicator,
     IndicatorType,
@@ -68,9 +69,9 @@ from tulip.control import (
     ground_finding,
     is_finding,
 )
-from tulip.core.events import TerminateEvent
-from tulip.multiagent.graph import END, START, StateGraph
-from tulip.reasoning.gsar import Claim, EvidenceType, Partition
+from locus.core.events import TerminateEvent
+from locus.multiagent.graph import END, START, StateGraph
+from locus.reasoning.gsar import Claim, EvidenceType, Partition
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +312,7 @@ async def main() -> None:
 
     # Stream node-completion events for live UI feedback, then call
     # execute() for the authoritative final state with metrics.
-    from tulip.multiagent.graph import StreamMode
+    from locus.multiagent.graph import StreamMode
 
     async for event in graph.stream(initial, mode=StreamMode.NODES):
         if event.node_id:

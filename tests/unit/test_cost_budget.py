@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """A spend budget that stops the call that would cross it.
 
@@ -16,19 +17,19 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.agent.agent import _normalize_stop_reason
-from tulip.core.events import TerminateEvent
-from tulip.core.messages import Message, ToolCall
-from tulip.core.state import AgentState
-from tulip.models.base import ModelResponse
-from tulip.models.metadata import ModelMetadata, register_metadata
-from tulip.testing import FunctionModel
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.agent.agent import _normalize_stop_reason
+from locus.core.events import TerminateEvent
+from locus.core.messages import Message, ToolCall
+from locus.core.state import AgentState
+from locus.models.base import ModelResponse
+from locus.models.metadata import ModelMetadata, register_metadata
+from locus.testing import FunctionModel
+from locus.tools.decorator import tool
 
 
-_PRICED = "tulip-test-priced"
-_UNPRICED = "tulip-test-unpriced"
+_PRICED = "locus-test-priced"
+_UNPRICED = "locus-test-unpriced"
 
 register_metadata(
     ModelMetadata(
@@ -188,7 +189,7 @@ class _TurnView:
 
 
 def test_a_budget_prices_a_model_behind_a_proxy_view() -> None:
-    from tulip.models.fallback import FallbackChain
+    from locus.models.fallback import FallbackChain
 
     calls: list[int] = []
     chain = FallbackChain([_looping_model(_PRICED, calls)], names=["primary"])
@@ -207,7 +208,7 @@ def test_a_budget_prices_a_model_behind_a_proxy_view() -> None:
 
 
 def test_a_budget_on_an_openrouter_deepseek_id_is_accepted() -> None:
-    from tulip.models.native.openai import OpenAIModel
+    from locus.models.native.openai import OpenAIModel
 
     agent = Agent(
         model=OpenAIModel(model="deepseek/deepseek-v4-flash", api_key="sk-test"),

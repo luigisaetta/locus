@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Images a person attaches to a prompt reach a model that can see them.
 
@@ -11,11 +12,11 @@ placeholder — never a base64 blob read as text — on the one that does not.
 
 from __future__ import annotations
 
-from tulip.core.media import IMAGE_OMITTED, encode_image
-from tulip.core.messages import Message
-from tulip.models.native.anthropic import AnthropicModel
-from tulip.models.native.bedrock import BedrockModel
-from tulip.models.native.openai import OpenAIModel
+from locus.core.media import IMAGE_OMITTED, encode_image
+from locus.core.messages import Message
+from locus.models.native.anthropic import AnthropicModel
+from locus.models.native.bedrock import BedrockModel
+from locus.models.native.openai import OpenAIModel
 
 
 PNG = b"\x89PNG\r\n\x1a\nfake-diagram"
@@ -59,11 +60,11 @@ def test_bedrock_sends_a_placeholder_not_base64() -> None:
     _, converted = m._convert_messages([Message.user(PROMPT)])
     text = converted[0]["content"][0]["text"]
     assert IMAGE_OMITTED in text
-    assert "tulip-image" not in text
+    assert "locus-image" not in text
 
 
 def test_tool_images_follow_the_whole_tool_batch_on_chat_completions() -> None:
-    from tulip.core.messages import ToolCall, ToolResult
+    from locus.core.messages import ToolCall, ToolResult
 
     m = OpenAIModel(model="gpt-5.5", api_key="sk-x")  # noqa: S106
     converted = m._convert_messages(

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Current models are priced, and dated snapshots find their base record.
 
@@ -14,7 +15,7 @@ from decimal import Decimal
 
 import pytest
 
-from tulip.models.metadata import metadata_for
+from locus.models.metadata import metadata_for
 
 
 @pytest.mark.parametrize(

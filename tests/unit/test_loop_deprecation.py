@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""``tulip.loop`` on its way out, and the deprecation machinery finally used.
+"""``locus.loop`` on its way out, and the deprecation machinery finally used.
 
-``tulip.loop`` is a second ReAct implementation parallel to the one ``Agent``
+``locus.loop`` is a second ReAct implementation parallel to the one ``Agent``
 runs. ``Agent`` never used it — the single reference from the production
 runtime was one private helper, which has moved. Two implementations of the
 same idea is worse than either alone: they drift, and a bug fixed in one stays
@@ -11,9 +12,9 @@ live in the other.
 
 It is public API on a SemVer 2.x line, though, with sixteen exports and its own
 reference page, so it gets deprecated rather than deleted. That makes this the
-first exercise of ``TulipDeprecationWarning`` — the policy in `DEPRECATION.md`
+first exercise of ``LocusDeprecationWarning`` — the policy in `DEPRECATION.md`
 was documented in two files and had zero call sites, so nothing had ever proved
-a Tulip deprecation reaches a consumer at all.
+a Locus deprecation reaches a consumer at all.
 
 The tests that matter here are the ones that would catch a deprecation which
 *looks* done and is not: a warning that never fires because the name is still
@@ -29,10 +30,10 @@ import warnings
 
 import pytest
 
-from tulip.core.warnings import TulipDeprecationWarning
+from locus.core.warnings import LocusDeprecationWarning
 
 
-SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "tulip"
+SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "locus"
 
 
 # --------------------------------------------------------------------------
@@ -43,22 +44,22 @@ SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "tulip"
 @pytest.mark.parametrize(
     ("name", "instead"),
     [
-        ("ReActLoop", "tulip.agent.Agent"),
-        ("create_react_loop", "tulip.agent.Agent"),
+        ("ReActLoop", "locus.agent.Agent"),
+        ("create_react_loop", "locus.agent.Agent"),
         ("LoopRunner", "Agent.arun()"),
-        ("BatchRunner", "tulip.evaluation.EvalRunner"),
+        ("BatchRunner", "locus.evaluation.EvalRunner"),
         ("StreamingCollector", "Agent.run()"),
     ],
 )
 def test_using_a_deprecated_name_warns_and_says_what_to_use(name: str, instead: str) -> None:
-    import tulip.loop
+    import locus.loop
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        _ = getattr(tulip.loop, name)
+        _ = getattr(locus.loop, name)
 
     assert len(caught) == 1
-    assert issubclass(caught[0].category, TulipDeprecationWarning)
+    assert issubclass(caught[0].category, LocusDeprecationWarning)
     message = str(caught[0].message)
     assert "3.0.0" in message, "a deprecation without a removal version is a rumour"
     assert instead in message
@@ -71,24 +72,24 @@ def test_a_name_with_no_clean_replacement_does_not_invent_one() -> None:
     ``Agent`` — so the warning says it is going and stops there, rather than
     sending the reader to check something that was never going to fit.
     """
-    import tulip.loop
+    import locus.loop
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        _ = tulip.loop.ThinkNode
+        _ = locus.loop.ThinkNode
 
     assert "; use " not in str(caught[0].message)
 
 
 def test_every_export_warns() -> None:
     """A partial deprecation is the worst kind: some callers never hear."""
-    import tulip.loop
+    import locus.loop
 
     unwarned = []
-    for name in tulip.loop.__all__:
+    for name in locus.loop.__all__:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            _ = getattr(tulip.loop, name)
+            _ = getattr(locus.loop, name)
         if not caught:
             unwarned.append(name)
 
@@ -98,25 +99,25 @@ def test_every_export_warns() -> None:
 def test_the_names_still_work() -> None:
     """Deprecated is not removed. Breaking now would skip the whole policy."""
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", TulipDeprecationWarning)
-        from tulip.loop import BatchRunner, LoopRunner, ReActLoop
+        warnings.simplefilter("ignore", LocusDeprecationWarning)
+        from locus.loop import BatchRunner, LoopRunner, ReActLoop
 
     assert all(callable(obj) for obj in (ReActLoop, LoopRunner, BatchRunner))
 
 
 def test_an_unknown_attribute_still_raises() -> None:
     """``__getattr__`` must not turn every typo into a deprecation notice."""
-    import tulip.loop
+    import locus.loop
 
     with pytest.raises(AttributeError, match="NoSuchThing"):
-        _ = tulip.loop.NoSuchThing
+        _ = locus.loop.NoSuchThing
 
 
 def test_dir_still_lists_the_module() -> None:
     """Serving names through ``__getattr__`` otherwise breaks tab-completion."""
-    import tulip.loop
+    import locus.loop
 
-    assert set(dir(tulip.loop)) == set(tulip.loop.__all__)
+    assert set(dir(locus.loop)) == set(locus.loop.__all__)
 
 
 # --------------------------------------------------------------------------
@@ -137,23 +138,23 @@ def test_the_supported_runtime_does_not_import_the_deprecated_package() -> None:
             continue
         for node in ast.walk(ast.parse(path.read_text())):
             module = getattr(node, "module", None) if isinstance(node, ast.ImportFrom) else None
-            if module and module.split(".")[:2] == ["tulip", "loop"]:
+            if module and module.split(".")[:2] == ["locus", "loop"]:
                 offenders.append(f"{path.relative_to(SRC.parent)}:{node.lineno} imports {module}")
             if isinstance(node, ast.Import):
                 offenders.extend(
                     f"{path.relative_to(SRC.parent)}:{node.lineno} imports {alias.name}"
                     for alias in node.names
-                    if alias.name.split(".")[:2] == ["tulip", "loop"]
+                    if alias.name.split(".")[:2] == ["locus", "loop"]
                 )
 
-    assert not offenders, "\n  ".join(["tulip.loop cannot be removed while:", *offenders])
+    assert not offenders, "\n  ".join(["locus.loop cannot be removed while:", *offenders])
 
 
 def test_the_helper_that_moved_still_behaves() -> None:
     """``idempotent=True`` is a documented feature; moving its guts must not
     change what it does."""
-    from tulip.agent.result import ToolExecution
-    from tulip.tools.executor import find_matching_execution
+    from locus.agent.result import ToolExecution
+    from locus.tools.executor import find_matching_execution
 
     class _State:
         tool_executions = (
@@ -176,7 +177,7 @@ def test_arguments_that_cannot_be_compared_are_a_miss_not_a_crash() -> None:
     shown equal to anything, so the honest answer is "no match" — the tool
     runs again. Raising here would turn a cache lookup into an outage.
     """
-    from tulip.tools.executor import find_matching_execution
+    from locus.tools.executor import find_matching_execution
 
     class _Uncomparable:
         tool_name = "book"
@@ -191,9 +192,9 @@ def test_arguments_that_cannot_be_compared_are_a_miss_not_a_crash() -> None:
 def test_the_old_private_name_still_resolves() -> None:
     """Anything importing the private helper from its old home keeps working."""
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", TulipDeprecationWarning)
-        from tulip.loop.nodes import _find_matching_execution
+        warnings.simplefilter("ignore", LocusDeprecationWarning)
+        from locus.loop.nodes import _find_matching_execution
 
-    from tulip.tools.executor import find_matching_execution
+    from locus.tools.executor import find_matching_execution
 
     assert _find_matching_execution is find_matching_execution

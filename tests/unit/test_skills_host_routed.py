@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Skills a host routes in code: ``SkillsPlugin(active=..., enforce_allowed_tools=...)``.
 
@@ -19,12 +20,12 @@ from typing import Any
 
 import pytest
 
-from tulip import Agent, tool
-from tulip.core.messages import Message
-from tulip.memory.backends.file import FileCheckpointer
-from tulip.skills.models import Skill
-from tulip.skills.plugin import SkillsPlugin
-from tulip.testing import FunctionModel, text, tool_call
+from locus import Agent, tool
+from locus.core.messages import Message
+from locus.memory.backends.file import FileCheckpointer
+from locus.skills.models import Skill
+from locus.skills.plugin import SkillsPlugin
+from locus.testing import FunctionModel, text, tool_call
 
 
 PRICING = Skill(

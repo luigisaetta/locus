@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for memory/checkpointer backends."""
 
@@ -8,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import ValidationError
 
-from tulip.memory.backends import (
+from locus.memory.backends import (
     MySQLBackend,
     OpenSearchBackend,
     PostgreSQLBackend,
@@ -29,24 +30,24 @@ class TestRedisBackend:
         mock_client.delete = AsyncMock(return_value=1)
         mock_client.exists = AsyncMock(return_value=1)
         mock_client.keys = AsyncMock(
-            return_value=["tulip:checkpoint:thread1", "tulip:checkpoint:thread2"]
+            return_value=["locus:checkpoint:thread1", "locus:checkpoint:thread2"]
         )
         mock_client.close = AsyncMock()
         return mock_client
 
     def test_redis_config_defaults(self):
         """Test default Redis configuration."""
-        from tulip.memory.backends.redis import RedisConfig
+        from locus.memory.backends.redis import RedisConfig
 
         config = RedisConfig()
         assert config.url == "redis://localhost:6379"
-        assert config.prefix == "tulip:checkpoint:"
+        assert config.prefix == "locus:checkpoint:"
         assert config.ttl_seconds is None
         assert config.db == 0
 
     def test_redis_config_custom(self):
         """Test custom Redis configuration."""
-        from tulip.memory.backends.redis import RedisConfig
+        from locus.memory.backends.redis import RedisConfig
 
         config = RedisConfig(
             url="redis://custom:6380",
@@ -61,16 +62,16 @@ class TestRedisBackend:
 
     def test_key_generation(self):
         """Test key generation."""
-        from tulip.memory.backends.redis import RedisBackend
+        from locus.memory.backends.redis import RedisBackend
 
         backend = RedisBackend(url="redis://localhost")
         key = backend._key("thread123")
-        assert key == "tulip:checkpoint:thread123"
+        assert key == "locus:checkpoint:thread123"
 
     @pytest.mark.asyncio
     async def test_save_without_ttl(self, mock_redis):
         """Test saving checkpoint without TTL."""
-        from tulip.memory.backends.redis import RedisBackend
+        from locus.memory.backends.redis import RedisBackend
 
         backend = RedisBackend()
         backend._client = mock_redis
@@ -82,7 +83,7 @@ class TestRedisBackend:
     @pytest.mark.asyncio
     async def test_save_with_ttl(self, mock_redis):
         """Test saving checkpoint with TTL."""
-        from tulip.memory.backends.redis import RedisBackend
+        from locus.memory.backends.redis import RedisBackend
 
         backend = RedisBackend(ttl_seconds=3600)
         backend._client = mock_redis
@@ -94,7 +95,7 @@ class TestRedisBackend:
     @pytest.mark.asyncio
     async def test_load_existing(self, mock_redis):
         """Test loading existing checkpoint."""
-        from tulip.memory.backends.redis import RedisBackend
+        from locus.memory.backends.redis import RedisBackend
 
         backend = RedisBackend()
         backend._client = mock_redis
@@ -108,7 +109,7 @@ class TestRedisBackend:
         """Test loading nonexistent checkpoint."""
         mock_redis.get = AsyncMock(return_value=None)
 
-        from tulip.memory.backends.redis import RedisBackend
+        from locus.memory.backends.redis import RedisBackend
 
         backend = RedisBackend()
         backend._client = mock_redis
@@ -119,7 +120,7 @@ class TestRedisBackend:
     @pytest.mark.asyncio
     async def test_delete_existing(self, mock_redis):
         """Test deleting existing checkpoint."""
-        from tulip.memory.backends.redis import RedisBackend
+        from locus.memory.backends.redis import RedisBackend
 
         backend = RedisBackend()
         backend._client = mock_redis
@@ -132,7 +133,7 @@ class TestRedisBackend:
         """Test deleting nonexistent checkpoint."""
         mock_redis.delete = AsyncMock(return_value=0)
 
-        from tulip.memory.backends.redis import RedisBackend
+        from locus.memory.backends.redis import RedisBackend
 
         backend = RedisBackend()
         backend._client = mock_redis
@@ -143,7 +144,7 @@ class TestRedisBackend:
     @pytest.mark.asyncio
     async def test_exists_true(self, mock_redis):
         """Test exists returns True."""
-        from tulip.memory.backends.redis import RedisBackend
+        from locus.memory.backends.redis import RedisBackend
 
         backend = RedisBackend()
         backend._client = mock_redis
@@ -156,7 +157,7 @@ class TestRedisBackend:
         """Test exists returns False."""
         mock_redis.exists = AsyncMock(return_value=0)
 
-        from tulip.memory.backends.redis import RedisBackend
+        from locus.memory.backends.redis import RedisBackend
 
         backend = RedisBackend()
         backend._client = mock_redis
@@ -167,7 +168,7 @@ class TestRedisBackend:
     @pytest.mark.asyncio
     async def test_list_threads(self, mock_redis):
         """Test listing threads."""
-        from tulip.memory.backends.redis import RedisBackend
+        from locus.memory.backends.redis import RedisBackend
 
         backend = RedisBackend()
         backend._client = mock_redis
@@ -181,7 +182,7 @@ class TestRedisBackend:
     @pytest.mark.asyncio
     async def test_close(self, mock_redis):
         """Test closing connection."""
-        from tulip.memory.backends.redis import RedisBackend
+        from locus.memory.backends.redis import RedisBackend
 
         backend = RedisBackend()
         backend._client = mock_redis
@@ -197,18 +198,18 @@ class TestPostgreSQLBackend:
 
     def test_postgresql_config_defaults(self):
         """Test default PostgreSQL configuration."""
-        from tulip.memory.backends.postgresql import PostgreSQLConfig
+        from locus.memory.backends.postgresql import PostgreSQLConfig
 
         config = PostgreSQLConfig()
         assert config.dsn is None
         assert config.host == "localhost"
         assert config.port == 5432
-        assert config.database == "tulip"
+        assert config.database == "locus"
         assert config.table_name == "checkpoints"
 
     def test_postgresql_config_with_dsn(self):
         """Test PostgreSQL configuration with DSN."""
-        from tulip.memory.backends.postgresql import PostgreSQLConfig
+        from locus.memory.backends.postgresql import PostgreSQLConfig
 
         config = PostgreSQLConfig(dsn="postgresql://user:pass@host:5432/db")
         assert config.dsn == "postgresql://user:pass@host:5432/db"

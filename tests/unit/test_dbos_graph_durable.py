@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Durable StateGraph runs on DBOS, against a SQLite system database and a file checkpointer.
 
@@ -21,8 +22,8 @@ pytest.importorskip("dbos")
 
 from dbos import DBOS  # noqa: E402
 
-from tulip.core.interrupt import interrupt  # noqa: E402
-from tulip.durable.dbos import (  # noqa: E402
+from locus.core.interrupt import interrupt  # noqa: E402
+from locus.durable.dbos import (  # noqa: E402
     GraphSegmentOutcome,
     InterruptedSegmentError,
     pending_interrupt,
@@ -30,9 +31,9 @@ from tulip.durable.dbos import (  # noqa: E402
     resume_graph,
     start_graph_run,
 )
-from tulip.durable.segments import SegmentError, run_graph  # noqa: E402
-from tulip.memory.backends.file import FileCheckpointer  # noqa: E402
-from tulip.multiagent.graph import END, START, StateGraph  # noqa: E402
+from locus.durable.segments import SegmentError, run_graph  # noqa: E402
+from locus.memory.backends.file import FileCheckpointer  # noqa: E402
+from locus.multiagent.graph import END, START, StateGraph  # noqa: E402
 
 
 if TYPE_CHECKING:
@@ -47,7 +48,7 @@ def system_db(tmp_path: Path) -> Iterator[str]:
 
 
 def _launch(url: str) -> None:
-    DBOS(config={"name": "tulip-test", "system_database_url": url, "run_admin_server": False})
+    DBOS(config={"name": "locus-test", "system_database_url": url, "run_admin_server": False})
     DBOS.launch()
 
 
@@ -115,7 +116,7 @@ async def test_a_graph_waits_twice_and_finishes_once(system_db: str, tmp_path: P
     _launch(system_db)
 
     handle = await start_graph_run(graph=name, inputs={"request": 12}, thread_id="t1")
-    assert handle.workflow_id == "tulip-graph-t1"
+    assert handle.workflow_id == "locus-graph-t1"
     paused = await _wait_for_pause(handle.workflow_id, "job")
     assert paused.status == "paused"
     assert paused.interrupt == {"waiting": "job", "request": 12}

@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.memory.backends.s3.S3Backend``.
+"""Coverage tests for ``locus.memory.backends.s3.S3Backend``.
 
 Exercises the error / pagination / edge-case branches that the existing
 ``test_memory_backends_s3.py`` (happy path via ``moto``) does not reach.
@@ -26,13 +27,13 @@ pytest.importorskip("boto3")
 from botocore.exceptions import ClientError  # noqa: E402
 from moto import mock_aws  # noqa: E402
 
-from tulip.core.state import AgentState  # noqa: E402
-from tulip.memory.backends.s3 import S3Backend  # noqa: E402
+from locus.core.state import AgentState  # noqa: E402
+from locus.memory.backends.s3 import S3Backend  # noqa: E402
 
 
 def _backend(**kwargs: Any) -> S3Backend:
     kwargs.setdefault("region_name", "us-east-1")
-    return S3Backend(bucket="tulip-test", **kwargs)
+    return S3Backend(bucket="locus-test", **kwargs)
 
 
 # ---------------------------------------------------------------------------

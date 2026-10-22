@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit: a step's resolved approval, enforced by the open-source approval stores.
 
@@ -15,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tulip.control import (
+from locus.control import (
     ApprovalAuthority,
     ApprovalAuthorityError,
     ApproverRule,
@@ -23,14 +24,14 @@ from tulip.control import (
     FileApprovals,
     InMemoryApprovals,
 )
-from tulip.playbooks.v2 import ResolvedApproval, StepApproval, authority_from_resolved, pick_rule
-from tulip.playbooks.v2.approvals import ApprovalRule
+from locus.playbooks.v2 import ResolvedApproval, StepApproval, authority_from_resolved, pick_rule
+from locus.playbooks.v2.approvals import ApprovalRule
 
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from tulip.control.approvals import ApprovalRecord
+    from locus.control.approvals import ApprovalRecord
 
 
 ROLES: dict[str, set[str]] = {

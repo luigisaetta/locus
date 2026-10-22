@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Gemini Live against a scripted live session.
 
@@ -19,15 +20,15 @@ from typing import Any
 
 import pytest
 
-from tulip.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
-from tulip.tools.decorator import tool
-from tulip.voice.gemini import (
+from locus.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
+from locus.tools.decorator import tool
+from locus.voice.gemini import (
     INPUT_AUDIO_MIME,
     GeminiLiveConnection,
     connect_gemini_live,
     gemini_live_config,
 )
-from tulip.voice.realtime import (
+from locus.voice.realtime import (
     ActionHeld,
     AudioDelta,
     RealtimeSession,

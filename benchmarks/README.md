@@ -2,13 +2,13 @@
 
 An agent framework should be a thin runtime. That is a claim, and claims about
 performance are worth exactly as much as the numbers behind them, so this
-directory measures Tulip and publishes what it finds — including the number we
+directory measures Locus and publishes what it finds — including the number we
 would rather not have.
 
 ## Method
 
 Every measurement replaces the model with
-[`tulip.testing.ScriptedModel`](../src/tulip/testing.py), a double that returns
+[`locus.testing.ScriptedModel`](../src/locus/testing.py), a double that returns
 a canned turn immediately. Against a real provider a single call costs hundreds
 of milliseconds and a framework can hide almost any amount of overhead inside
 it. With the model pinned at roughly zero, what remains **is** the framework:
@@ -28,7 +28,7 @@ python benchmarks/framework_overhead.py --quick   # smoke run
 
 ## Results
 
-`tulip 2.10.0` · CPython 3.12.3 · Linux x86-64 · 2026-08-16
+`locus 2.10.0` · CPython 3.12.3 · Linux x86-64 · 2026-08-16
 
 | operation | median | p95 | IQR |
 | --- | ---: | ---: | ---: |
@@ -37,7 +37,7 @@ python benchmarks/framework_overhead.py --quick   # smoke run
 | `run_sync` — 1 model turn | **0.802 ms** | 1.782 ms | 0.335 ms |
 | `run_sync` — tool call + turn | **3.357 ms** | 5.535 ms | 1.323 ms |
 | `run()` — time to first event | **0.790 ms** | 1.657 ms | 0.392 ms |
-| `import tulip` — cold process | **255.9 ms** | — | — |
+| `import locus` — cold process | **255.9 ms** | — | — |
 
 Peak Python heap for one agent doing one turn: **138 KiB**, of which 128 KiB is
 still retained afterwards.
@@ -46,25 +46,25 @@ still retained afterwards.
 
 **The runtime is thin.** Sub-millisecond agent construction and a
 sub-millisecond turn mean that against any real model — where a fast provider
-answers in 300 ms and a reasoning model takes several seconds — Tulip is well
+answers in 300 ms and a reasoning model takes several seconds — Locus is well
 under 1% of wall-clock. A full tool round trip at 3.4 ms is the most expensive
 in-loop operation and is still noise beside inference.
 
 **Import is not thin, and that is the honest weak spot.** 256 ms to
-`import tulip` is slow enough to be felt in a CLI, a serverless cold start, or
+`import locus` is slow enough to be felt in a CLI, a serverless cold start, or
 a test suite that spawns processes. Profiling with `python -X importtime`
 attributes it roughly as:
 
 ```
-270 ms  tulip
-252 ms    tulip.core.config
-169 ms      tulip.core.command
+270 ms  locus
+252 ms    locus.core.config
+169 ms      locus.core.command
  63 ms        pydantic          (54 ms pydantic_core, 33 ms asyncio)
 ```
 
 About 63 ms is pydantic and effectively fixed — it is a core dependency and
 every framework built on it pays the same. The remainder sits under
-`tulip.core.command`, and that part is ours. Deferring work there behind lazy
+`locus.core.command`, and that part is ours. Deferring work there behind lazy
 imports is the obvious lever, and this table exists partly so that improvement
 is visible when it lands rather than asserted.
 
@@ -72,7 +72,7 @@ is visible when it lands rather than asserted.
 
 **Throughput and concurrency.** Both are dominated by the provider and by how
 you deploy, so a number here would say more about the harness than about
-Tulip.
+Locus.
 
 **Comparisons against other frameworks.** A fair cross-framework benchmark
 needs equivalent configurations, equivalent middleware, and an author with no

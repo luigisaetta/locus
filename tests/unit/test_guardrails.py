@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for guardrails hook."""
 
@@ -7,14 +8,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tulip.hooks.builtin.guardrails import (
+from locus.hooks.builtin.guardrails import (
     ContentFilterHook,
     GuardrailAction,
     GuardrailConfig,
     GuardrailsHook,
     GuardrailViolation,
 )
-from tulip.hooks.provider import (
+from locus.hooks.provider import (
     AfterToolCallEvent,
     BeforeToolCallEvent,
     HookPriority,
@@ -595,7 +596,7 @@ class TestTopicPolicy:
 
     def test_blocks_matching_topic(self):
         """Topic policy blocks text matching blocked topics."""
-        from tulip.hooks.builtin.guardrails import TopicPolicy
+        from locus.hooks.builtin.guardrails import TopicPolicy
 
         policy = TopicPolicy(
             blocked_topics={"weapons", "drugs"},
@@ -611,7 +612,7 @@ class TestTopicPolicy:
 
     def test_case_insensitive(self):
         """Topic matching is case-insensitive."""
-        from tulip.hooks.builtin.guardrails import TopicPolicy
+        from locus.hooks.builtin.guardrails import TopicPolicy
 
         policy = TopicPolicy(
             blocked_topics={"weapons"},
@@ -626,7 +627,7 @@ class TestContentPolicy:
 
     def test_detects_harmful_content(self):
         """Content policy detects harmful categories."""
-        from tulip.hooks.builtin.guardrails import ContentPolicy
+        from locus.hooks.builtin.guardrails import ContentPolicy
 
         policy = ContentPolicy()
 
@@ -636,7 +637,7 @@ class TestContentPolicy:
 
     def test_respects_enabled_categories(self):
         """Only enabled categories are checked."""
-        from tulip.hooks.builtin.guardrails import ContentPolicy
+        from locus.hooks.builtin.guardrails import ContentPolicy
 
         policy = ContentPolicy(enabled_categories={"violence"})
 
@@ -651,10 +652,10 @@ class TestOutputFilterHook:
     async def test_redacts_pii_in_output(self):
         """Output filter redacts PII from model responses."""
 
-        from tulip.core.messages import Message
-        from tulip.hooks.builtin.guardrails import OutputFilterHook
-        from tulip.hooks.provider import AfterModelCallEvent
-        from tulip.models.base import ModelResponse
+        from locus.core.messages import Message
+        from locus.hooks.builtin.guardrails import OutputFilterHook
+        from locus.hooks.provider import AfterModelCallEvent
+        from locus.models.base import ModelResponse
 
         hook = OutputFilterHook(redact_pii=True)
 
@@ -670,10 +671,10 @@ class TestOutputFilterHook:
     async def test_blocks_harmful_content_in_output(self):
         """Output filter blocks harmful content categories."""
 
-        from tulip.core.messages import Message
-        from tulip.hooks.builtin.guardrails import ContentPolicy, OutputFilterHook
-        from tulip.hooks.provider import AfterModelCallEvent
-        from tulip.models.base import ModelResponse
+        from locus.core.messages import Message
+        from locus.hooks.builtin.guardrails import ContentPolicy, OutputFilterHook
+        from locus.hooks.provider import AfterModelCallEvent
+        from locus.models.base import ModelResponse
 
         hook = OutputFilterHook(content_policy=ContentPolicy())
 
@@ -688,10 +689,10 @@ class TestOutputFilterHook:
     @pytest.mark.asyncio
     async def test_safe_content_passes_through(self):
         """Safe content is not modified."""
-        from tulip.core.messages import Message
-        from tulip.hooks.builtin.guardrails import OutputFilterHook
-        from tulip.hooks.provider import AfterModelCallEvent
-        from tulip.models.base import ModelResponse
+        from locus.core.messages import Message
+        from locus.hooks.builtin.guardrails import OutputFilterHook
+        from locus.hooks.provider import AfterModelCallEvent
+        from locus.models.base import ModelResponse
 
         hook = OutputFilterHook(redact_pii=True)
 

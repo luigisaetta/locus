@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Async backend handles must belong to the loop that uses them.
 
@@ -25,7 +26,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tulip.memory.backends import OpenSearchBackend, PostgreSQLBackend
+from locus.memory.backends import OpenSearchBackend, PostgreSQLBackend
 
 
 class TestOpenSearchLoopAffinity:

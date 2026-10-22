@@ -1,5 +1,6 @@
-# Copyright 2026 Tulip Labs
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The ``task`` tool and what it rests on: live child events, shared budgets,
 resumable children.
@@ -26,7 +27,7 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import (
+from locus.agent import (
     Agent,
     AgentSpec,
     Subagent,
@@ -35,31 +36,31 @@ from tulip.agent import (
     run_subagent,
     task_tool,
 )
-from tulip.agent.subagent import (
+from locus.agent.subagent import (
     _child_budgets,
     enter_parent_run,
     exit_parent_run,
     parent_hooks,
 )
-from tulip.agent.tasks import DEFAULT_SUBAGENT_PROMPT, task_depth
-from tulip.core.events import (
+from locus.agent.tasks import DEFAULT_SUBAGENT_PROMPT, task_depth
+from locus.core.events import (
+    LocusEvent,
     SubagentEvent,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
     ToolStartEvent,
-    TulipEvent,
 )
-from tulip.hooks.provider import BeforeToolCallEvent, HookProvider
-from tulip.models.metadata import ModelMetadata, register_metadata
-from tulip.testing import FunctionModel, ScriptedModel, text, tool_call
-from tulip.tools.context import (
+from locus.hooks.provider import BeforeToolCallEvent, HookProvider
+from locus.models.metadata import ModelMetadata, register_metadata
+from locus.testing import FunctionModel, ScriptedModel, text, tool_call
+from locus.tools.context import (
     ToolContext,
     bind_tool_context,
     forward_event,
     forwarding_events,
 )
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
 
 
 @tool
@@ -84,7 +85,7 @@ EXPLORE = AgentSpec(
 GENERAL = AgentSpec(name="general", description="Everything.", mode="subagent")
 
 
-async def _collect(agent: Agent, prompt: str) -> list[TulipEvent]:
+async def _collect(agent: Agent, prompt: str) -> list[LocusEvent]:
     return [event async for event in agent.run(prompt)]
 
 
@@ -543,7 +544,7 @@ async def test_the_last_level_is_not_given_the_task_tool() -> None:
 
 async def test_nesting_past_the_limit_is_refused() -> None:
     task = task_tool([GENERAL], tools=[], model=ScriptedModel([]), max_depth=1)
-    from tulip.agent.tasks import _TASK_DEPTH
+    from locus.agent.tasks import _TASK_DEPTH
 
     token = _TASK_DEPTH.set(1)
     try:

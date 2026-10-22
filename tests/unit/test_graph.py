@@ -1,19 +1,20 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for StateGraph and graph execution."""
 
 import pytest
 
-from tulip.core import (
+from locus.core import (
     Command,
     Send,
     goto,
     interrupt,
     scatter,
 )
-from tulip.core.interrupt import NodeExecutionContext
-from tulip.multiagent.graph import (
+from locus.core.interrupt import NodeExecutionContext
+from locus.multiagent.graph import (
     END,
     START,
     ConditionalEdge,
@@ -1016,7 +1017,7 @@ class TestStateGraphInterruptBefore:
         """When a checkpointer is configured, the interrupt_before pause
         boundary writes through to it — durable resume needs the paused
         state on disk, not just on the returned ``GraphResult``."""
-        from tulip.memory.backends.memory import MemoryCheckpointer
+        from locus.memory.backends.memory import MemoryCheckpointer
 
         graph = StateGraph()
 
@@ -1053,7 +1054,7 @@ class TestStateGraphInterruptBefore:
         previous behaviour re-paused on every resume, so durable
         human-in-the-loop flows needed application-side bookkeeping to
         rewrite ``__resume_node__``."""
-        from tulip.memory.backends.memory import MemoryCheckpointer
+        from locus.memory.backends.memory import MemoryCheckpointer
 
         graph = StateGraph()
 
@@ -1116,7 +1117,7 @@ class TestStateGraphInterruptBefore:
         FileCheckpointer exercises JSON serialization on disk — proves
         ``AgentState.metadata`` survives ``to_checkpoint()`` →
         ``from_checkpoint()`` for the non-memory path too."""
-        from tulip.memory.backends.file import FileCheckpointer
+        from locus.memory.backends.file import FileCheckpointer
 
         graph = StateGraph()
 
@@ -1161,7 +1162,7 @@ class TestInlineInterruptCheckpointerSave:
 
     @pytest.mark.asyncio
     async def test_inline_interrupt_persists_to_memory_checkpointer(self):
-        from tulip.memory.backends.memory import MemoryCheckpointer
+        from locus.memory.backends.memory import MemoryCheckpointer
 
         graph = StateGraph()
 
@@ -1196,7 +1197,7 @@ class TestInlineInterruptCheckpointerSave:
 
     @pytest.mark.asyncio
     async def test_inline_interrupt_persists_to_file_checkpointer(self, tmp_path):
-        from tulip.memory.backends.file import FileCheckpointer
+        from locus.memory.backends.file import FileCheckpointer
 
         graph = StateGraph()
 
@@ -1263,7 +1264,7 @@ class TestStateGraphResumeExecution:
     @pytest.mark.asyncio
     async def test_resume_with_command(self):
         """Test resuming execution with Command."""
-        from tulip.core.command import Command
+        from locus.core.command import Command
 
         graph = StateGraph()
 
@@ -1414,7 +1415,7 @@ class TestGraphResult:
 
     def test_graph_result_with_interrupt(self):
         """Test GraphResult with interrupt."""
-        from tulip.core.interrupt import InterruptValue
+        from locus.core.interrupt import InterruptValue
 
         interrupt = InterruptValue(
             payload={"question": "Continue?"},
@@ -1509,7 +1510,7 @@ class TestLangGraphParityShims:
     """
 
     def _trivial(self) -> StateGraph:
-        from tulip.multiagent.graph import END, START
+        from locus.multiagent.graph import END, START
 
         g = StateGraph()
 

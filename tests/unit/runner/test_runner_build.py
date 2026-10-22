@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The box runner end to end: build from a manifest, run, park, resume, report."""
 
@@ -18,11 +19,10 @@ from typing import Any
 import httpx
 import pytest
 
-from tests.unit.runner.conftest import RUN_ID, TOKEN
-from tulip.core.events import ModelChunkEvent, ThinkEvent, ToolCompleteEvent, ToolStartEvent
-from tulip.core.messages import ToolCall
-from tulip.harness import LocalBackend
-from tulip.runner import (
+from locus.core.events import ModelChunkEvent, ThinkEvent, ToolCompleteEvent, ToolStartEvent
+from locus.core.messages import ToolCall
+from locus.harness import LocalBackend
+from locus.runner import (
     ADMIT_TOKEN_VAR,
     ADMIT_URL_VAR,
     DECISION_HEADER,
@@ -44,8 +44,8 @@ from tulip.runner import (
     report_result,
     run_box,
 )
-from tulip.runner.build import TOKEN_ARGUMENT, system_prompt
-from tulip.runner.harden import (
+from locus.runner.build import TOKEN_ARGUMENT, system_prompt
+from locus.runner.harden import (
     HARDEN_VAR,
     command_env,
     make_non_dumpable,
@@ -55,13 +55,14 @@ from tulip.runner.harden import (
     wipe_initial_environ,
     withheld_names,
 )
-from tulip.runner.main import EXIT_DONE, EXIT_ERROR, EXIT_REFUSED, event_for, main
-from tulip.testing import ScriptedModel, text, tool_call
+from locus.runner.main import EXIT_DONE, EXIT_ERROR, EXIT_REFUSED, event_for, main
+from locus.testing import ScriptedModel, text, tool_call
+from tests.unit.runner.conftest import RUN_ID, TOKEN
 
 
-MODEL_KEY_ENV = "TULIP_MODEL_KEY"
-API_KEY_ENV = "TULIP_CRM_KEY"
-MCP_KEY_ENV = "TULIP_MCP_KEY"
+MODEL_KEY_ENV = "LOCUS_MODEL_KEY"
+API_KEY_ENV = "LOCUS_CRM_KEY"
+MCP_KEY_ENV = "LOCUS_MCP_KEY"
 
 
 def _call(name: str, call_id: str, **arguments: Any) -> Any:
@@ -312,8 +313,8 @@ async def test_call_api_refuses_without_a_decision_or_credential(
 async def test_call_api_reports_a_refusal_and_an_outage(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(API_KEY_ENV, "ph")
     op = ApiOperation(method="DELETE", path="/x")
-    refused = httpx.MockTransport(lambda r: httpx.Response(403, text="no tulip writes"))
-    with pytest.raises(ConnectorError, match="403: no tulip writes"):
+    refused = httpx.MockTransport(lambda r: httpx.Response(403, text="no locus writes"))
+    with pytest.raises(ConnectorError, match="403: no locus writes"):
         await call_api(CRM, op, {}, decision_token="dt", transport=refused)
 
     def down(request: httpx.Request) -> httpx.Response:
@@ -461,7 +462,7 @@ def test_the_runner_keeps_no_connection_alive(world: World, tmp_path: Path) -> N
 
 
 def test_an_openai_model_keeps_connections_alive_by_default() -> None:
-    from tulip.models.native.openai import OpenAIModel
+    from locus.models.native.openai import OpenAIModel
 
     model = OpenAIModel(model="m", api_key="k", base_url="http://m")
     assert model.config.keepalive is True
@@ -539,7 +540,7 @@ async def test_a_run_uses_every_kind_of_tool_then_parks_on_a_hold(
         "tool": "bash",
         "approval_id": "ap-1",
     }
-    assert json.loads((tmp_path / ".tulip" / "parked.json").read_text())["call_id"] == "c5"
+    assert json.loads((tmp_path / ".locus" / "parked.json").read_text())["call_id"] == "c5"
     assert RUN_ID in world.checkpoints
     # Only box and connector calls were asked about; the gateway tool went to its route.
     admitted = [b["tool"] for b in world.bodies("/v1/admit")]
@@ -561,7 +562,7 @@ async def test_a_run_uses_every_kind_of_tool_then_parks_on_a_hold(
     assert "tool_complete" in types
     assert "think" in types
     # The runner kept a log of its own in the workspace, for its gateway to read back.
-    assert (tmp_path / ".tulip" / "runner.log").is_file()
+    assert (tmp_path / ".locus" / "runner.log").is_file()
 
 
 async def test_a_parked_run_resumes_after_approval_and_finishes(
@@ -594,7 +595,7 @@ async def test_a_parked_run_resumes_after_approval_and_finishes(
     assert execs
     assert execs[-1]["attested_by"] == "runner"
     assert execs[-1]["exit_code"] == 0
-    assert not (tmp_path / ".tulip" / "parked.json").exists()
+    assert not (tmp_path / ".locus" / "parked.json").exists()
 
 
 async def test_a_resumed_runner_numbers_its_events_on(world: World, tmp_path: Path) -> None:
@@ -644,13 +645,13 @@ async def test_the_runner_protects_what_it_read_once_built(
 ) -> None:
     protected: list[tuple[str, ...]] = []
     monkeypatch.setattr(
-        "tulip.runner.main.protect", lambda names, environ=None: protected.append(tuple(names))
+        "locus.runner.main.protect", lambda names, environ=None: protected.append(tuple(names))
     )
     code = await run_box(
         _env(), workspace=tmp_path, transport=world.transport, model=ScriptedModel([text("done")])
     )
     assert code == EXIT_DONE
-    assert protected == [("TULIP_ADMIT_TOKEN", MODEL_KEY_ENV, MCP_KEY_ENV, API_KEY_ENV)]
+    assert protected == [("LOCUS_ADMIT_TOKEN", MODEL_KEY_ENV, MCP_KEY_ENV, API_KEY_ENV)]
 
 
 async def test_a_denied_call_is_reported_to_the_model(world: World, tmp_path: Path) -> None:
@@ -734,7 +735,7 @@ async def test_a_subagent_is_its_own_run_in_the_same_workspace(
 async def test_a_failing_subagent_is_the_parents_tool_error(
     world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import tulip.runner.build as build_module
+    import locus.runner.build as build_module
 
     world.manifest = _manifest(tools=[{"name": "task", "runs": "box"}])
 
@@ -804,7 +805,7 @@ def test_event_mapping() -> None:
     assert mapped is not None
     assert len(mapped["result"]) == 4000
     assert event_for(ToolCompleteEvent(tool_name="t", tool_call_id="c")) is not None
-    from tulip.core.events import TerminateEvent
+    from locus.core.events import TerminateEvent
 
     terminate = TerminateEvent(
         reason="complete", iterations_used=1, final_confidence=1.0, total_tool_calls=0
@@ -822,9 +823,9 @@ def test_command_env_withholds_names() -> None:
 
 
 def test_scrub_environ(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TULIP_SCRUB_ME", "x")
-    scrub_environ(["TULIP_SCRUB_ME", "TULIP_NOT_SET"])
-    assert "TULIP_SCRUB_ME" not in os.environ
+    monkeypatch.setenv("LOCUS_SCRUB_ME", "x")
+    scrub_environ(["LOCUS_SCRUB_ME", "LOCUS_NOT_SET"])
+    assert "LOCUS_SCRUB_ME" not in os.environ
 
 
 def test_non_dumpable_on_linux_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -833,7 +834,7 @@ def test_non_dumpable_on_linux_only(monkeypatch: pytest.MonkeyPatch) -> None:
         import subprocess
 
         code = (
-            "from tulip.runner.harden import make_non_dumpable;"
+            "from locus.runner.harden import make_non_dumpable;"
             "import sys; ok = make_non_dumpable();"
             "s = open('/proc/self/status').read();"
             "sys.exit(0 if ok else 1)"
@@ -855,12 +856,12 @@ def test_wipe_hides_values_from_proc_environ_and_keeps_the_process_identifiable(
 
     code = (
         "import os, sys;"
-        "from tulip.runner.harden import wipe_initial_environ;"
+        "from locus.runner.harden import wipe_initial_environ;"
         "before = open('/proc/self/environ', 'rb').read();"
-        "n = wipe_initial_environ(['TULIP_T_SECRET', 'TULIP_T_ABSENT']);"
+        "n = wipe_initial_environ(['LOCUS_T_SECRET', 'LOCUS_T_ABSENT']);"
         "after = open('/proc/self/environ', 'rb').read();"
         "ok = b'hunter2-value' in before and b'hunter2-value' not in after "
-        "and b'TULIP_T_SECRET=' in after and b'TULIP_T_KEEP=still-here' in after and n == 1;"
+        "and b'LOCUS_T_SECRET=' in after and b'LOCUS_T_KEEP=still-here' in after and n == 1;"
         "sys.exit(0 if ok else 1)"
     )
     child = subprocess.run(  # noqa: S603 — a fixed interpreter and script
@@ -869,8 +870,8 @@ def test_wipe_hides_values_from_proc_environ_and_keeps_the_process_identifiable(
         env={
             **os.environ,
             "PYTHONPATH": os.pathsep.join(sys.path),
-            "TULIP_T_SECRET": "hunter2-value",
-            "TULIP_T_KEEP": "still-here",
+            "LOCUS_T_SECRET": "hunter2-value",
+            "LOCUS_T_KEEP": "still-here",
         },
     )
     assert child.returncode == 0
@@ -883,9 +884,9 @@ def test_a_child_command_cannot_read_a_protected_value_from_its_parent() -> None
 
     code = (
         "import os, subprocess, sys;"
-        "from tulip.runner.harden import protect;"
-        "protect(['TULIP_T_SECRET']);"
-        "assert 'TULIP_T_SECRET' not in os.environ;"
+        "from locus.runner.harden import protect;"
+        "protect(['LOCUS_T_SECRET']);"
+        "assert 'LOCUS_T_SECRET' not in os.environ;"
         'peek = \'import os; print(open(f"/proc/{os.getppid()}/environ", "rb").read().count(b"hunter2-value"))\';'
         "out = subprocess.run([sys.executable, '-c', peek], capture_output=True, text=True, check=True).stdout;"
         "sys.exit(0 if out.strip() == '0' else 1)"
@@ -896,7 +897,7 @@ def test_a_child_command_cannot_read_a_protected_value_from_its_parent() -> None
         env={
             **os.environ,
             "PYTHONPATH": os.pathsep.join(sys.path),
-            "TULIP_T_SECRET": "hunter2-value",
+            "LOCUS_T_SECRET": "hunter2-value",
         },
     )
     assert child.returncode == 0
@@ -905,15 +906,15 @@ def test_a_child_command_cannot_read_a_protected_value_from_its_parent() -> None
 def test_protect_modes(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
-        "tulip.runner.harden.make_non_dumpable", lambda: calls.append("non-dumpable") or True
+        "locus.runner.harden.make_non_dumpable", lambda: calls.append("non-dumpable") or True
     )
     monkeypatch.setattr(
-        "tulip.runner.harden.wipe_initial_environ", lambda names: calls.append("wipe") or 0
+        "locus.runner.harden.wipe_initial_environ", lambda names: calls.append("wipe") or 0
     )
-    monkeypatch.setenv("TULIP_T_GONE", "x")
-    protect(["TULIP_T_GONE"], environ={})
+    monkeypatch.setenv("LOCUS_T_GONE", "x")
+    protect(["LOCUS_T_GONE"], environ={})
     assert calls == ["wipe"]
-    assert "TULIP_T_GONE" not in os.environ
+    assert "LOCUS_T_GONE" not in os.environ
     calls.clear()
     protect([], environ={HARDEN_VAR: "non-dumpable"})
     assert calls == ["wipe", "non-dumpable"]
@@ -924,8 +925,8 @@ def test_protect_modes(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptur
 
 
 def test_value_ranges_finds_only_the_named_values() -> None:
-    block = b"PATH=/bin\0TULIP_T_SECRET=abc\0TULIP_T_SECRETX=keep\0EMPTY=\0TULIP_T_SECRET2=xy"
-    ranges = value_ranges(block, [b"TULIP_T_SECRET=", b"TULIP_T_SECRET2=", b"EMPTY="])
+    block = b"PATH=/bin\0LOCUS_T_SECRET=abc\0LOCUS_T_SECRETX=keep\0EMPTY=\0LOCUS_T_SECRET2=xy"
+    ranges = value_ranges(block, [b"LOCUS_T_SECRET=", b"LOCUS_T_SECRET2=", b"EMPTY="])
     assert [block[o : o + n] for o, n in ranges] == [b"abc", b"xy"]
     assert value_ranges(b"", [b"A="]) == []
 
@@ -933,7 +934,7 @@ def test_value_ranges_finds_only_the_named_values() -> None:
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="/proc is Linux")
 def test_wipe_in_process_finds_the_block_and_skips_absent_names() -> None:
     # Names this process was not started with: the block is read, nothing is changed.
-    assert wipe_initial_environ(["TULIP_T_NEVER_SET_A", "TULIP_T_NEVER_SET_B"]) == 0
+    assert wipe_initial_environ(["LOCUS_T_NEVER_SET_A", "LOCUS_T_NEVER_SET_B"]) == 0
 
 
 def test_wipe_is_a_no_op_off_linux_or_with_no_names(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1002,10 +1003,10 @@ async def test_a_resume_while_still_pending_parks_again(world: World, tmp_path: 
 
 
 def test_parked_file_is_read_defensively(tmp_path: Path) -> None:
-    from tulip.runner import main as runner_main
+    from locus.runner import main as runner_main
 
     assert runner_main._read_parked(tmp_path) == {}
-    path = tmp_path / ".tulip" / "parked.json"
+    path = tmp_path / ".locus" / "parked.json"
     path.parent.mkdir()
     path.write_text("not json")
     assert runner_main._read_parked(tmp_path) == {}
@@ -1016,7 +1017,7 @@ def test_parked_file_is_read_defensively(tmp_path: Path) -> None:
 async def test_a_stream_that_ends_without_an_answer_is_an_error(
     world: World, tmp_path: Path
 ) -> None:
-    from tulip.runner import main as runner_main
+    from locus.runner import main as runner_main
 
     async def nothing() -> Any:
         return
@@ -1066,5 +1067,5 @@ def test_the_module_entry_point_exits_with_the_runners_code(
     for name in (ADMIT_URL_VAR, ADMIT_TOKEN_VAR, RUN_ID_VAR):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(SystemExit) as stopped:
-        runpy.run_module("tulip.runner", run_name="__main__")
+        runpy.run_module("locus.runner", run_name="__main__")
     assert stopped.value.code == EXIT_ERROR

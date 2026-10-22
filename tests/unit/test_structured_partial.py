@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for partial JSON parsing and structured streaming."""
 
@@ -10,9 +11,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from tulip.core.events import ModelChunkEvent, TerminateEvent, TulipEvent
-from tulip.core.structured import _close_partial_json, parse_partial
-from tulip.streaming.structured import StructuredStream, stream_structured
+from locus.core.events import LocusEvent, ModelChunkEvent, TerminateEvent
+from locus.core.structured import _close_partial_json, parse_partial
+from locus.streaming.structured import StructuredStream, stream_structured
 
 
 class Vendor(BaseModel):
@@ -89,7 +90,7 @@ class TestParsePartial:
 # =============================================================================
 
 
-async def _emit(events: list[TulipEvent]) -> AsyncIterator[TulipEvent]:
+async def _emit(events: list[LocusEvent]) -> AsyncIterator[LocusEvent]:
     for ev in events:
         yield ev
 
@@ -187,8 +188,8 @@ class TestStructuredStream:
 
 class TestParsedAs:
     def _result_with_parsed(self, parsed: BaseModel | None, parse_error: str | None = None) -> Any:
-        from tulip.agent.result import AgentResult
-        from tulip.core.state import AgentState
+        from locus.agent.result import AgentResult
+        from locus.core.state import AgentState
 
         state = AgentState()
         return AgentResult(

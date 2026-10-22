@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""The ``tulip`` command, end to end through ``main(argv)``.
+"""The ``locus`` command, end to end through ``main(argv)``.
 
 The flow that matters is the one a person runs by hand: an agent pauses on a
 held refund, someone approves it from the command line, the run resumes and the
@@ -16,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tulip.cli import EXIT_PAUSED, load_agent, main
+from locus.cli import EXIT_PAUSED, load_agent, main
 
 
 if TYPE_CHECKING:
@@ -24,8 +25,8 @@ if TYPE_CHECKING:
 
 
 _SIMPLE_APP = """
-from tulip.agent import Agent
-from tulip.testing import FunctionModel, text
+from locus.agent import Agent
+from locus.testing import FunctionModel, text
 
 
 def make():
@@ -45,14 +46,14 @@ _HELD_APP = '''
 import os
 from pathlib import Path
 
-from tulip.agent import Agent
-from tulip.control import Action, ApprovalAuthority, ApproverRule, ControlPolicy, FileApprovals, gate_tool
-from tulip.core.messages import Role
-from tulip.memory.backends.file import FileCheckpointer
-from tulip.testing import FunctionModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.control import Action, ApprovalAuthority, ApproverRule, ControlPolicy, FileApprovals, gate_tool
+from locus.core.messages import Role
+from locus.memory.backends.file import FileCheckpointer
+from locus.testing import FunctionModel, text, tool_call
+from locus.tools.decorator import tool
 
-ROOT = Path(os.environ["TULIP_CLI_TEST_ROOT"])
+ROOT = Path(os.environ["LOCUS_CLI_TEST_ROOT"])
 
 
 @tool
@@ -107,7 +108,7 @@ def test_run_streams_the_answer(tmp_path: Path, capsys: pytest.CaptureFixture[st
 def test_a_factory_is_called(tmp_path: Path) -> None:
     app = _write(tmp_path, "simple_app.py", _SIMPLE_APP)
 
-    from tulip.agent import Agent
+    from locus.agent import Agent
 
     assert isinstance(load_agent(f"{app}:make"), Agent)
 
@@ -134,14 +135,14 @@ def test_a_bad_agent_spec_is_a_usage_error(
 def test_hold_approve_resume_from_the_command_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("TULIP_CLI_TEST_ROOT", str(tmp_path))
+    monkeypatch.setenv("LOCUS_CLI_TEST_ROOT", str(tmp_path))
     app = _write(tmp_path, "held_app.py", _HELD_APP)
     store = str(tmp_path / "approvals.json")
 
     assert main(["run", f"{app}:make", "refund o1", "--thread", "t1"]) == EXIT_PAUSED
     paused = capsys.readouterr().out
     approval_id = next(line.split()[-1] for line in paused.splitlines() if "approval:" in line)
-    assert "tulip resume" in paused
+    assert "locus resume" in paused
     assert not (tmp_path / "refunds.log").exists()
 
     assert main(["approvals", "--store", store, "list"]) == 0
@@ -167,7 +168,7 @@ def test_hold_approve_resume_from_the_command_line(
 def test_decisions_are_checked_against_an_authority(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("TULIP_CLI_TEST_ROOT", str(tmp_path))
+    monkeypatch.setenv("LOCUS_CLI_TEST_ROOT", str(tmp_path))
     app = _write(tmp_path, "held_app.py", _HELD_APP)
     store = str(tmp_path / "approvals.json")
     main(["run", f"{app}:make", "refund o1", "--thread", "t1"])
@@ -188,7 +189,7 @@ def test_decisions_are_checked_against_an_authority(
 
 def test_audit_verify_from_public_keys(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     pytest.importorskip("cryptography")
-    from tulip.control import AuditTrail, Ed25519Signer
+    from locus.control import AuditTrail, Ed25519Signer
 
     signer = Ed25519Signer.generate(key_id="audit-1")
     trail = AuditTrail(signer=signer)
@@ -230,14 +231,14 @@ def test_serve_hands_the_agent_to_the_server(
     def fake_run(self: Any, host: str, port: int) -> None:
         calls.append({"host": host, "port": port, "api_key": self._api_key})
 
-    monkeypatch.setattr("tulip.server.app.AgentServer.run", fake_run)
+    monkeypatch.setattr("locus.server.app.AgentServer.run", fake_run)
     assert main(["serve", f"{app}:agent", "--port", "9123", "--api-key", "k"]) == 0
     assert calls == [{"host": "127.0.0.1", "port": 9123, "api_key": "k"}]
 
     def refusing_run(self: Any, host: str, port: int) -> None:
         raise RuntimeError("Refusing to bind")
 
-    monkeypatch.setattr("tulip.server.app.AgentServer.run", refusing_run)
+    monkeypatch.setattr("locus.server.app.AgentServer.run", refusing_run)
     assert main(["serve", f"{app}:agent", "--host", "0.0.0.0"]) == 1  # noqa: S104
     assert "Refusing to bind" in capsys.readouterr().err
 
@@ -246,4 +247,4 @@ def test_version_is_printed(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exit_info:
         main(["--version"])
     assert exit_info.value.code == 0
-    assert capsys.readouterr().out.startswith("tulip-agents ")
+    assert capsys.readouterr().out.startswith("locus-sdk ")

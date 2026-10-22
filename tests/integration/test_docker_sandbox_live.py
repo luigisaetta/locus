@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The Docker sandbox against a real daemon: the boundary holds.
 
@@ -14,7 +15,7 @@ import subprocess
 
 import pytest
 
-from tulip.tools.sandbox import DockerSandbox, SandboxManifest
+from locus.tools.sandbox import DockerSandbox, SandboxManifest
 
 
 _IMAGE = "python:3.12-slim"
@@ -64,7 +65,7 @@ def test_the_root_filesystem_is_read_only_and_the_workspace_is_not() -> None:
         "def write():\n"
         "    outcome = {}\n"
         "    try:\n"
-        "        open('/etc/tulip-probe', 'w').write('x')\n"
+        "        open('/etc/locus-probe', 'w').write('x')\n"
         "        outcome['root'] = 'written'\n"
         "    except OSError:\n"
         "        outcome['root'] = 'refused'\n"
@@ -95,7 +96,7 @@ def test_a_timeout_kills_the_container() -> None:
 
     assert result.timed_out
     left = subprocess.run(  # noqa: S603
-        [shutil.which("docker") or "docker", "ps", "-q", "--filter", "name=tulip-sandbox-"],
+        [shutil.which("docker") or "docker", "ps", "-q", "--filter", "name=locus-sandbox-"],
         capture_output=True,
         text=True,
         check=False,

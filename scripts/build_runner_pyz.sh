@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 #
-# Build tulip-runner.pyz: the box runner (`python -m tulip.runner`) as one file
+# Build locus-runner.pyz: the box runner (`python -m locus.runner`) as one file
 # that runs on any CPython of the same version and platform it was built with.
 #
-#   scripts/build_runner_pyz.sh <tulip_agents wheel> <output .pyz>
+#   scripts/build_runner_pyz.sh <locus_agents wheel> <output .pyz>
 #
 # The wheel is installed with the `openai` extra into a fresh virtualenv, and
 # what that resolved to is frozen: the .pyz carries exactly those versions,
@@ -25,7 +26,7 @@ trap 'rm -rf "$work"' EXIT
 
 "$python" -m venv "$work/venv"
 "$work/venv/bin/pip" install --quiet --disable-pip-version-check "${wheel}[openai]"
-"$work/venv/bin/pip" freeze --disable-pip-version-check --exclude tulip-agents \
+"$work/venv/bin/pip" freeze --disable-pip-version-check --exclude locus-sdk \
   > "$work/requirements.txt"
 
 "$python" -m venv "$work/build"
@@ -33,7 +34,7 @@ trap 'rm -rf "$work"' EXIT
 
 mkdir -p "$(dirname "$out")"
 "$work/build/bin/shiv" \
-  --console-script tulip-runner \
+  --console-script locus-runner \
   --python "/usr/bin/env python3" \
   --compressed \
   --reproducible \

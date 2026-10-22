@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """One behavioural contract, every backend.
 
@@ -17,15 +18,15 @@ from pathlib import Path
 
 import pytest
 
-from tests.unit.harness.conftest import get, put
-from tulip.harness import (
+from locus.harness import (
     BackendError,
     ExecUnsupportedError,
     JobError,
     MemoryBackend,
     WorkspaceBackend,
 )
-from tulip.harness.backend import SKIP_DIRS
+from locus.harness.backend import SKIP_DIRS
+from tests.unit.harness.conftest import get, put
 
 
 # ------------------------------------------------------------------ files --

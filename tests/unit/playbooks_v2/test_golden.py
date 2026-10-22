@@ -1,12 +1,13 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The engine moved out of the gateway without changing a byte of what it does.
 
 ``fixtures/golden.json`` is the full trace of every scripted scenario in
-``golden_scenarios.py`` as tulip-gateway's own engine produced it (``make_golden.py``):
+``golden_scenarios.py`` as locus-gateway's own engine produced it (``make_golden.py``):
 the events, the audit records, every call's answer, the final graph, the model's prose,
-the ``when`` corpus. The same scripts run here on :mod:`tulip.playbooks.v2`.
+the ``when`` corpus. The same scripts run here on :mod:`locus.playbooks.v2`.
 
 Changed since, by this engine on purpose: ``static`` and ``refund_block``, when a
 branch's condition came to decide whenever the run can tell it (the brief says the
@@ -21,8 +22,8 @@ from typing import Any
 
 import pytest
 
+from locus.playbooks.v2 import engine, results, when
 from tests.unit.playbooks_v2.golden_scenarios import FIXTURES, SCENARIOS, Engine
-from tulip.playbooks.v2 import engine, results, when
 
 
 GOLDEN: dict[str, Any] = json.loads((FIXTURES / "golden.json").read_text("utf-8"))
@@ -42,7 +43,7 @@ def sdk_engine() -> Engine:
 
 
 def test_the_golden_covers_every_scenario() -> None:
-    assert GOLDEN["source"].startswith("tulip-gateway ")
+    assert GOLDEN["source"].startswith("locus-gateway ")
     assert set(GOLDEN["scenarios"]) == set(SCENARIOS)
 
 

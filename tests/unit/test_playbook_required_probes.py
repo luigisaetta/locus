@@ -18,8 +18,8 @@ A skill declares `required_probes` and coverage is scored per step.
 
 from __future__ import annotations
 
-from tulip.playbooks.enforcer import PlaybookEnforcer
-from tulip.playbooks.models import Playbook, PlaybookStep, RequiredProbe
+from locus.playbooks.enforcer import PlaybookEnforcer
+from locus.playbooks.models import Playbook, PlaybookStep, RequiredProbe
 
 
 def _playbook(**step_kw: object) -> Playbook:

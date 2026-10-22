@@ -1,12 +1,13 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 40: RAG agents — ATLAS, an on-call SRE copilot over the Index.
 
 Once you have a vector store full of runbooks (notebook 38 / 39), the
 next step is to let an agent reach into it — so an incident answer cites
 your internal runbooks instead of model memory. ATLAS is the platform
 team's on-call copilot; it reads the Index. ``RAGRetriever.as_tool()``
-turns the retriever into an ordinary Tulip tool that ATLAS picks up
+turns the retriever into an ordinary Locus tool that ATLAS picks up
 alongside any other ``@tool`` you define.
 
 - ``retriever.as_tool(name, description)`` — convert a retriever into a
@@ -26,7 +27,7 @@ alongside any other ``@tool`` you define.
 
 Backend: the pure-Python ``InMemoryVectorStore`` keeps the demo dependency-free
 and runnable anywhere (even in a browser). Swap ``_make_store`` for any other
-Tulip vector store implementation (pgvector, OpenSearch, Qdrant, Chroma) for a
+Locus vector store implementation (pgvector, OpenSearch, Qdrant, Chroma) for a
 durable backend.
 
 Run it:
@@ -44,8 +45,8 @@ import operator as _op
 import os
 import sys
 
-from tulip.rag import InMemoryVectorStore
-from tulip.reasoning.gsar import Claim, Decision, EvidenceType, Partition, decide, gsar_score
+from locus.rag import InMemoryVectorStore
+from locus.reasoning.gsar import Claim, Decision, EvidenceType, Partition, decide, gsar_score
 
 
 def _missing_env() -> list[str]:
@@ -98,7 +99,7 @@ async def rag_as_tool():
     print("Notebook 40: RAG as a Tool")
     print("=" * 60)
 
-    from tulip.rag import RAGRetriever
+    from locus.rag import RAGRetriever
 
     embedder = get_embedder()
     if not embedder:
@@ -150,8 +151,8 @@ async def simple_rag_agent():
     print("Notebook 40: ATLAS — On-Call SRE Copilot")
     print("=" * 60)
 
-    from tulip.agent import Agent
-    from tulip.rag import RAGRetriever
+    from locus.agent import Agent
+    from locus.rag import RAGRetriever
 
     embedder = get_embedder()
     model = get_model()
@@ -234,9 +235,9 @@ async def multi_tool_rag_agent():
 
     from datetime import datetime
 
-    from tulip.agent import Agent
-    from tulip.rag import RAGRetriever
-    from tulip.tools import tool
+    from locus.agent import Agent
+    from locus.rag import RAGRetriever
+    from locus.tools import tool
 
     embedder = get_embedder()
     model = get_model()
@@ -311,9 +312,9 @@ async def rag_with_streaming():
     print("Notebook 40: ATLAS with Streaming")
     print("=" * 60)
 
-    from tulip.agent import Agent
-    from tulip.core.events import ThinkEvent, ToolCompleteEvent, ToolStartEvent
-    from tulip.rag import RAGRetriever
+    from locus.agent import Agent
+    from locus.core.events import ThinkEvent, ToolCompleteEvent, ToolStartEvent
+    from locus.rag import RAGRetriever
 
     embedder = get_embedder()
     model = get_model()
@@ -509,7 +510,7 @@ def get_embedder():
         return get_embedder()
 
     if os.environ.get("COHERE_API_KEY"):
-        from tulip.rag.embeddings import CohereEmbeddings
+        from locus.rag.embeddings import CohereEmbeddings
 
         return CohereEmbeddings(model="embed-english-v3.0")
 

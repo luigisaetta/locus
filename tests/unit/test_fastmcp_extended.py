@@ -1,19 +1,20 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for the rest of ``tulip.integrations.fastmcp``.
+"""Coverage tests for the rest of ``locus.integrations.fastmcp``.
 
 Existing tests cover the wrapper builder + handle_request paths. This
 file targets:
 
-- ``TulipMCPServer._create_mcp`` registering tools + the ``run_agent``
+- ``LocusMCPServer._create_mcp`` registering tools + the ``run_agent``
   / ``run_agent_stream`` decorated tools.
 - ``run_agent_stream`` selecting the final-message event.
 - ``MCPClient.connect`` dispatching to HTTP / stdio.
 - ``_connect_http`` ImportError-on-mcp branch + URL guard + bearer auth +
   TLS verify factory.
 - ``_connect_stdio`` ImportError + OSV malware pre-check.
-- ``MCPClient.to_tulip_tools`` legacy converter.
+- ``MCPClient.to_locus_tools`` legacy converter.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tulip.integrations.fastmcp import MCPClient, TulipMCPServer
+from locus.integrations.fastmcp import LocusMCPServer, MCPClient
 
 
 pytest.importorskip("fastmcp")
@@ -76,7 +77,7 @@ class _StubAgent:
 
 
 # ---------------------------------------------------------------------------
-# TulipMCPServer._create_mcp + decorated tool bodies
+# LocusMCPServer._create_mcp + decorated tool bodies
 # ---------------------------------------------------------------------------
 
 
@@ -102,7 +103,7 @@ class TestCreateMcp:
 
         # Patch fastmcp.FastMCP at the class level.
         with patch("fastmcp.FastMCP", _StubFastMCP):
-            server = TulipMCPServer(agent=_StubAgent())
+            server = LocusMCPServer(agent=_StubAgent())
             mcp = server._create_mcp()
         assert isinstance(mcp, _StubFastMCP)
         # Three tool registrations: 'search' (from registry), run_agent,
@@ -135,7 +136,7 @@ class TestCreateMcp:
                 return _decorator
 
         with patch("fastmcp.FastMCP", _StubFastMCP):
-            server = TulipMCPServer(agent=agent)
+            server = LocusMCPServer(agent=agent)
             server._create_mcp()
         run_stream = next(c for c in captured if c.__name__ == "run_agent_stream")
         out = await run_stream("hi")
@@ -158,7 +159,7 @@ class TestCreateMcp:
                 return _decorator
 
         with patch("fastmcp.FastMCP", _StubFastMCP):
-            server = TulipMCPServer(agent=agent)
+            server = LocusMCPServer(agent=agent)
             server._create_mcp()
         run_stream = next(c for c in captured if c.__name__ == "run_agent_stream")
         out = await run_stream("hi")
@@ -247,7 +248,7 @@ class TestConnectStdioGuards:
     @pytest.mark.asyncio
     async def test_osv_blocks_malicious_package(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Patch the OSV pre-check to flag the launcher.
-        from tulip.integrations import osv
+        from locus.integrations import osv
 
         monkeypatch.setattr(
             osv,
@@ -258,19 +259,19 @@ class TestConnectStdioGuards:
             server_command=["npx", "@evil/mcp-server"],
             verify_packages=True,
         )
-        from tulip.core.errors import ValidationError
+        from locus.core.errors import ValidationError
 
         with pytest.raises(ValidationError, match="MCP launch blocked"):
             await client._connect_stdio()
 
 
 # ---------------------------------------------------------------------------
-# to_tulip_tools
+# to_locus_tools
 # ---------------------------------------------------------------------------
 
 
-class TestToTulipTools:
-    def test_converts_mcp_dicts_to_tulip_tools(self, monkeypatch: pytest.MonkeyPatch) -> None:
+class TestToLocusTools:
+    def test_converts_mcp_dicts_to_locus_tools(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import asyncio
 
         client = MCPClient(base_url="https://x.example")
@@ -288,12 +289,12 @@ class TestToTulipTools:
                 "inputSchema": {"type": "object", "properties": {}},
             }
         ]
-        # to_tulip_tools uses asyncio.get_event_loop().run_until_complete
+        # to_locus_tools uses asyncio.get_event_loop().run_until_complete
         # internally, which needs an event loop set on the current thread.
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            out = client.to_tulip_tools(tools)
+            out = client.to_locus_tools(tools)
         finally:
             loop.close()
             asyncio.set_event_loop(None)

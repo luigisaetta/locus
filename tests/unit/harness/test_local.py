@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""LocalBackend: the output buffer and process groups. Ported from tulip-code."""
+"""LocalBackend: the output buffer and process groups. Ported from locus-code."""
 
 from __future__ import annotations
 
@@ -14,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from tulip.harness import BackendError, JobError, LocalBackend
-from tulip.harness.local import Output, kill_group
+from locus.harness import BackendError, JobError, LocalBackend
+from locus.harness.local import Output, kill_group
 
 
 def test_output_keeps_the_head_and_the_latest_tail() -> None:
@@ -79,7 +80,7 @@ def test_a_collected_backend_kills_what_it_started(tmp_path: Path) -> None:
 def test_finished_jobs_are_forgotten_oldest_first(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from tulip.harness import local
+    from locus.harness import local
 
     monkeypatch.setattr(local, "MAX_FINISHED", 2)
     backend = LocalBackend(tmp_path)
@@ -137,7 +138,7 @@ def test_an_unreadable_file_is_permission_denied(tmp_path: Path) -> None:
 def test_a_large_file_is_not_hashed_to_stat_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from tulip.harness import local
+    from locus.harness import local
 
     monkeypatch.setattr(local, "HASH_LIMIT", 3)
     (tmp_path / "big").write_text("0123456789")
@@ -149,7 +150,7 @@ def test_a_large_file_is_not_hashed_to_stat_it(
 def test_huge_files_are_skipped_by_the_grep_walk(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from tulip.harness import local
+    from locus.harness import local
 
     monkeypatch.setattr(local, "GREP_MAX_FILE_BYTES", 3)
     (tmp_path / "big.txt").write_text("needle needle")

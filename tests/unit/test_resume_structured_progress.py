@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """A resumed turn reports tools exactly like a fresh one.
 
@@ -16,17 +17,17 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from tulip.agent import Agent
-from tulip.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
-from tulip.core.events import (
+from locus.agent import Agent
+from locus.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
+from locus.core.events import (
     InterruptEvent,
     TerminateEvent,
     ToolCompleteEvent,
     ToolProgressEvent,
 )
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools import ToolOutput, report_progress, tool
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools import ToolOutput, report_progress, tool
 
 
 @tool

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """What the audit chain does and does not detect.
 
@@ -16,7 +17,7 @@ import dataclasses
 
 import pytest
 
-from tulip.control.audit import AuditRecord, AuditTrail, _entry_hash
+from locus.control.audit import AuditRecord, AuditTrail, _entry_hash
 
 
 def _trail(n: int = 4) -> AuditTrail:

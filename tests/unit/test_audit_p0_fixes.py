@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Regression guards for defects found in the 2026-08 SDK audit.
 
@@ -18,7 +19,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from tulip.multiagent.graph import StateGraph
+from locus.multiagent.graph import StateGraph
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -26,19 +27,19 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # --------------------------------------------------------------------------
 # #86 — MCPClient was advertised in the README capability matrix while absent
-# from ``tulip.integrations.__all__``, so the documented import raised.
+# from ``locus.integrations.__all__``, so the documented import raised.
 # --------------------------------------------------------------------------
 
 
 def test_mcp_client_is_importable_from_the_package_root() -> None:
-    from tulip.integrations import MCPClient
+    from locus.integrations import MCPClient
 
     assert MCPClient is not None
 
 
 def test_mcp_client_is_public_api() -> None:
     """DEPRECATION.md defines public API as membership in ``__all__``."""
-    from tulip import integrations
+    from locus import integrations
 
     assert "MCPClient" in integrations.__all__
 
@@ -58,7 +59,7 @@ def test_starlette_is_not_a_core_dependency() -> None:
     core = _pyproject()["project"]["dependencies"]
     assert not [d for d in core if d.startswith("starlette")], (
         "starlette is imported nowhere under src/; keep it in the dev extra "
-        "so `pip install tulip-agents` does not pull it."
+        "so `pip install locus-sdk` does not pull it."
     )
 
 
@@ -207,7 +208,7 @@ _WEATHER_TOOL = {
 
 @pytest.mark.asyncio
 async def test_mock_model_emits_a_tool_call_when_tools_are_bound() -> None:
-    from tulip.core.messages import Message
+    from locus.core.messages import Message
 
     resp = await _mock_model().complete(
         [Message.user("What is the weather in Paris?")], tools=[_WEATHER_TOOL]
@@ -218,7 +219,7 @@ async def test_mock_model_emits_a_tool_call_when_tools_are_bound() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_model_synthesises_schema_valid_arguments() -> None:
-    from tulip.core.messages import Message
+    from locus.core.messages import Message
 
     resp = await _mock_model().complete(
         [Message.user("What is the weather in Paris?")], tools=[_WEATHER_TOOL]
@@ -231,7 +232,7 @@ async def test_mock_model_synthesises_schema_valid_arguments() -> None:
 @pytest.mark.asyncio
 async def test_mock_model_answers_in_prose_once_a_tool_has_replied() -> None:
     """Without this the mock would loop until the iteration cap."""
-    from tulip.core.messages import Message, ToolResult
+    from locus.core.messages import Message, ToolResult
 
     messages = [
         Message.user("What is the weather in Paris?"),
@@ -244,7 +245,7 @@ async def test_mock_model_answers_in_prose_once_a_tool_has_replied() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_model_returns_prose_when_no_tools_are_bound() -> None:
-    from tulip.core.messages import Message
+    from locus.core.messages import Message
 
     resp = await _mock_model().complete([Message.user("Hello there")], tools=None)
     assert not resp.tool_calls

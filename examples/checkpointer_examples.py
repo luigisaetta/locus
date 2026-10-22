@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Checkpointer Examples - Durable investigation state across backends.
 
@@ -21,8 +22,8 @@ import asyncio
 
 def create_sample_state():
     """Create a sample investigation state for testing."""
-    from tulip.core.messages import Message, Role
-    from tulip.core.state import AgentState
+    from locus.core.messages import Message, Role
+    from locus.core.state import AgentState
 
     state = AgentState(
         agent_id="ir-copilot",
@@ -80,7 +81,7 @@ async def example_memory_checkpointer():
     print("1. MemoryCheckpointer Example")
     print("=" * 60)
 
-    from tulip.memory.backends import MemoryCheckpointer
+    from locus.memory.backends import MemoryCheckpointer
 
     # Create backend
     backend = MemoryCheckpointer()
@@ -134,12 +135,12 @@ async def example_redis_backend():
     print("=" * 60)
 
     try:
-        from tulip.memory.backends import RedisBackend
+        from locus.memory.backends import RedisBackend
 
         # Create backend
         backend = RedisBackend(
             url="redis://localhost:6379",
-            prefix="tulip:demo:",
+            prefix="locus:demo:",
             ttl_seconds=3600,  # Optional: expire after 1 hour
         )
         print("\nConnecting to Redis...")
@@ -203,13 +204,13 @@ async def example_postgresql_backend():
     print("=" * 60)
 
     try:
-        from tulip.memory.backends import PostgreSQLBackend
+        from locus.memory.backends import PostgreSQLBackend
 
         # Create backend
         backend = PostgreSQLBackend(
             host="localhost",
             port=5432,
-            database="tulip_demo",
+            database="locus_demo",
             user="postgres",
             password="",
             table_name="agent_checkpoints",
@@ -283,13 +284,13 @@ async def example_mysql_backend():
     print("=" * 60)
 
     try:
-        from tulip.memory.backends import MySQLBackend
+        from locus.memory.backends import MySQLBackend
 
         # Create backend
         backend = MySQLBackend(
             host="localhost",
             port=3306,
-            database="tulip_demo",
+            database="locus_demo",
             user="root",
             password="",
             table_name="agent_checkpoints",
@@ -363,12 +364,12 @@ async def example_opensearch_backend():
     print("=" * 60)
 
     try:
-        from tulip.memory.backends import OpenSearchBackend
+        from locus.memory.backends import OpenSearchBackend
 
         # Create backend
         backend = OpenSearchBackend(
             hosts=["localhost:9200"],
-            index_name="tulip-demo-checkpoints",
+            index_name="locus-demo-checkpoints",
         )
         print("\nConnecting to OpenSearch...")
 
@@ -438,7 +439,7 @@ async def example_s3_backend():
     try:
         import os
 
-        from tulip.memory.backends import S3Backend
+        from locus.memory.backends import S3Backend
 
         # Check for S3 credentials
         if not os.environ.get("S3_BUCKET"):
@@ -477,7 +478,7 @@ async def example_s3_backend():
 
     except ImportError:
         print("\nSkipping: boto3 not installed")
-        print("Install with: pip install 'tulip-agents[s3]'")
+        print("Install with: pip install 'locus-sdk[s3]'")
     except Exception as e:
         print(f"\nSkipping: {e}")
 
@@ -498,9 +499,9 @@ async def example_agent_with_checkpointing():
     print("7. Agent with Checkpointing (Full Integration)")
     print("=" * 60)
 
-    from tulip.core.messages import Message, Role
-    from tulip.core.state import AgentState
-    from tulip.memory.backends import FileCheckpointer, MemoryCheckpointer
+    from locus.core.messages import Message, Role
+    from locus.core.state import AgentState
+    from locus.memory.backends import FileCheckpointer, MemoryCheckpointer
 
     # ==========================================================================
     # Option 1: Using MemoryCheckpointer (for testing)
@@ -561,7 +562,7 @@ async def example_agent_with_checkpointing():
     print("    - s3_checkpointer(bucket='...', endpoint_url='...')")
 
     print("\n  Example with Redis:")
-    print("    from tulip.memory.backends import redis_checkpointer")
+    print("    from locus.memory.backends import redis_checkpointer")
     print("    checkpointer = redis_checkpointer('redis://localhost:6379')")
     print("    agent = Agent(model=model, checkpointer=checkpointer)")
 
@@ -571,8 +572,8 @@ async def example_agent_with_checkpointing():
     print("\nFull Agent + Checkpointer Pattern:")
     print("-" * 40)
     print("""
-    from tulip.agent import Agent
-    from tulip.memory.backends import redis_checkpointer
+    from locus.agent import Agent
+    from locus.memory.backends import redis_checkpointer
 
     # Create checkpointer
     checkpointer = redis_checkpointer("redis://localhost:6379")
@@ -601,7 +602,7 @@ async def example_agent_with_checkpointing():
 async def main():
     """Run all examples."""
     print("=" * 60)
-    print("Tulip Checkpointer Examples — durable investigation state")
+    print("Locus Checkpointer Examples — durable investigation state")
     print("=" * 60)
 
     # Run examples

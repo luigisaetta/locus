@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Multi-index OpenSearch Deep Research demo.
 
@@ -29,11 +30,11 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
-from tulip.deepagent import create_deepagent
-from tulip.models import get_model
-from tulip.rag import OpenAIEmbeddings, RAGRetriever
-from tulip.rag.stores.base import Document
-from tulip.rag.stores.opensearch import OpenSearchVectorStore
+from locus.deepagent import create_deepagent
+from locus.models import get_model
+from locus.rag import OpenAIEmbeddings, RAGRetriever
+from locus.rag.stores.base import Document
+from locus.rag.stores.opensearch import OpenSearchVectorStore
 
 
 # Benign, education-level threat-intelligence facts (no live IOCs; RFC 5737
@@ -71,7 +72,7 @@ CVE_CORPUS = [
 
 
 def _parse_hosts(endpoint: str) -> list[str]:
-    """Return the endpoint as the single-host list of URL strings tulip expects."""
+    """Return the endpoint as the single-host list of URL strings locus expects."""
     return [endpoint]
 
 
@@ -101,16 +102,16 @@ async def main() -> int:
     password = os.environ["OPENSEARCH_PASSWORD"]
     verify_certs = os.environ.get("OPENSEARCH_VERIFY_CERTS", "true").lower() == "true"
 
-    model_id = os.environ.get("TULIP_RESEARCH_MODEL", "anthropic:claude-sonnet-4-6")
+    model_id = os.environ.get("LOCUS_RESEARCH_MODEL", "anthropic:claude-sonnet-4-6")
 
     run_id = uuid.uuid4().hex[:8].lower()
-    intel_index = f"tulip_intel_{run_id}"
-    cve_index = f"tulip_cve_{run_id}"
+    intel_index = f"locus_intel_{run_id}"
+    cve_index = f"locus_cve_{run_id}"
     out_dir = Path(__file__).parent / "output"
     out_dir.mkdir(exist_ok=True)
 
     print("=" * 70)
-    print("MULTI-INDEX OPENSEARCH DEEP RESEARCH — TULIP PORT")
+    print("MULTI-INDEX OPENSEARCH DEEP RESEARCH — LOCUS PORT")
     print("=" * 70)
     print(f"  OpenSearch  : {endpoint} (user={username})")
     print(f"  Indices     : {intel_index}, {cve_index}")
@@ -194,7 +195,7 @@ async def main() -> int:
         # spawns a new thread + loop and the OpenSearch clients (bound to
         # *this* loop) silently return empty results when invoked from
         # the agent's tool calls running in the other loop.
-        from tulip.core.events import (
+        from locus.core.events import (
             TerminateEvent,
             ToolCompleteEvent,
             ToolStartEvent,

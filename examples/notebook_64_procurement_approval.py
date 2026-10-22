@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 64: Customer-support concession approval with risk-tiered gates.
 
@@ -42,14 +43,14 @@ against the cost of the make-good and the downside of a denial.
 - output_schema=ConcessionDecision keeps SCRIBE's terminal artifact typed.
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_64_procurement_approval.py
 
     # Offline / no credentials:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_64_procurement_approval.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_64_procurement_approval.py
 
     # Pin a strong-enough model for the structured ConcessionDecision schema:
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_64_procurement_approval.py
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_64_procurement_approval.py
 """
 
 from __future__ import annotations
@@ -60,10 +61,10 @@ from typing import Any
 from config import get_model
 from pydantic import BaseModel, Field
 
-from tulip.agent import Agent, AgentConfig
-from tulip.core import Command, interrupt
-from tulip.core.events import TerminateEvent
-from tulip.multiagent.graph import END, START, StateGraph
+from locus.agent import Agent, AgentConfig
+from locus.core import Command, interrupt
+from locus.core.events import TerminateEvent
+from locus.multiagent.graph import END, START, StateGraph
 
 
 # Data shape for the terminal artifact.

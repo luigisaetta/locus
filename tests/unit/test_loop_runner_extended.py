@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.loop.runner``.
+"""Coverage tests for ``locus.loop.runner``.
 
 The existing ``test_loop_runner.py`` builds the runner but doesn't drive
 its ``run()`` / ``run_to_completion()`` / ``BatchRunner`` / streaming
@@ -18,14 +19,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tulip.core.events import (
+from locus.core.events import (
     LoopEvent,
     TerminateEvent,
     ThinkEvent,
 )
-from tulip.core.state import AgentState
-from tulip.loop.react import ReActLoop
-from tulip.loop.runner import (
+from locus.core.state import AgentState
+from locus.loop.react import ReActLoop
+from locus.loop.runner import (
     BatchRunner,
     LoopRunner,
     StreamingCollector,

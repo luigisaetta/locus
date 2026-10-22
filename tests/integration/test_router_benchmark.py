@@ -1,11 +1,12 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Routing-accuracy benchmark for ``tulip.router``.
+"""Routing-accuracy benchmark for ``locus.router``.
 
 This is the load-bearing artifact behind the SDK's headline claim:
 **bounded graph generation via typed goal frames is more accurate than
-free-form LLM routing**. Every PR that touches ``tulip.router`` should
+free-form LLM routing**. Every PR that touches ``locus.router`` should
 re-run this benchmark; the table it prints is the empirical evidence
 behind the design.
 
@@ -47,8 +48,8 @@ from typing import Literal
 import pytest
 from pydantic import BaseModel, Field
 
-from tulip import Agent
-from tulip.router import (
+from locus import Agent
+from locus.router import (
     CapabilityIndex,
     CognitiveCompiler,
     GoalFrame,
@@ -59,10 +60,10 @@ from tulip.router import (
     TaskType,
     builtin_protocols,
 )
-from tulip.router.protocol import NoMatchingProtocolError
-from tulip.router.runtime import FrameExtractionError
-from tulip.tools.decorator import tool
-from tulip.tools.registry import create_registry
+from locus.router.protocol import NoMatchingProtocolError
+from locus.router.runtime import FrameExtractionError
+from locus.tools.decorator import tool
+from locus.tools.registry import create_registry
 
 
 # Opt-in, and marked slow. This file is a benchmark, not a regression test:
@@ -72,9 +73,9 @@ from tulip.tools.registry import create_registry
 # looks like a hang — the run stops advancing at this file with nothing to
 # indicate why.
 #
-# The docstring above asks that every PR touching ``tulip.router`` re-run it,
+# The docstring above asks that every PR touching ``locus.router`` re-run it,
 # which stays true: set RUN_ROUTER_BENCHMARK=1. Same shape as
-# RUN_A2A_INTEGRATION and TULIP_MYSQL_INTEGRATION elsewhere in this suite.
+# RUN_A2A_INTEGRATION and LOCUS_MYSQL_INTEGRATION elsewhere in this suite.
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.requires_model,
@@ -126,7 +127,7 @@ CORPUS: tuple[CorpusEntry, ...] = (
         "direct_response",
     ),
     CorpusEntry(
-        "Briefly summarise what Tulip is.",
+        "Briefly summarise what Locus is.",
         TaskType.EXPLAIN,
         "direct_response",
     ),

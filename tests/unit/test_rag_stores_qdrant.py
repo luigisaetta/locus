@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for the Qdrant vector store.
 
@@ -12,8 +13,8 @@ import pytest
 
 pytest.importorskip("qdrant_client")
 
-from tulip.rag.stores.base import Document  # noqa: E402
-from tulip.rag.stores.qdrant import QdrantVectorStore  # noqa: E402
+from locus.rag.stores.base import Document  # noqa: E402
+from locus.rag.stores.qdrant import QdrantVectorStore  # noqa: E402
 
 
 def _store() -> QdrantVectorStore:

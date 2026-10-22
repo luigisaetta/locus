@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Tulip "hello world" deepagent demo.
+"""Locus "hello world" deepagent demo.
 
 Two `@tool` functions + `create_deepagent(...)`, asking the agent to
 call both tools in one turn.
 
 Run:
-    TULIP_MODEL=anthropic:claude-sonnet-4-6 \\
+    LOCUS_MODEL=anthropic:claude-sonnet-4-6 \\
     ANTHROPIC_API_KEY=sk-ant-... \\
     python examples/projects/deep-research/demo_hello_world.py
 """
@@ -18,9 +19,9 @@ from __future__ import annotations
 import os
 import sys
 
-from tulip.deepagent import create_deepagent
-from tulip.models import get_model
-from tulip.tools import tool
+from locus.deepagent import create_deepagent
+from locus.models import get_model
+from locus.tools import tool
 
 
 @tool
@@ -36,9 +37,9 @@ def fetch_advisory(vendor: str) -> str:
 
 
 def main() -> int:
-    model_id = os.environ.get("TULIP_MODEL", "anthropic:claude-sonnet-4-6")
+    model_id = os.environ.get("LOCUS_MODEL", "anthropic:claude-sonnet-4-6")
 
-    print("== tulip hello-world deepagent ==")
+    print("== locus hello-world deepagent ==")
     print(f"   model      : {model_id}")
     print(f"   tools      : lookup_cve, fetch_advisory")
     print()

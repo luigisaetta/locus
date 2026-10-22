@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for the Chroma vector store.
 
@@ -20,8 +21,8 @@ try:
 except Exception as exc:  # noqa: BLE001
     pytest.skip(f"chromadb unavailable: {exc}", allow_module_level=True)
 
-from tulip.rag.stores.base import Document  # noqa: E402
-from tulip.rag.stores.chroma import ChromaVectorStore  # noqa: E402
+from locus.rag.stores.base import Document  # noqa: E402
+from locus.rag.stores.chroma import ChromaVectorStore  # noqa: E402
 
 
 def _store() -> ChromaVectorStore:

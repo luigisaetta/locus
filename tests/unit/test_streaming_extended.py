@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Extended unit tests for streaming module."""
 
@@ -7,18 +8,18 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tulip.core.events import (
+from locus.core.events import (
+    LocusEvent,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
     ToolStartEvent,
-    TulipEvent,
 )
-from tulip.streaming.handler import BaseStreamHandler, CompositeHandler
+from locus.streaming.handler import BaseStreamHandler, CompositeHandler
 
 
-class TestTulipEvents:
-    """Tests for Tulip event types."""
+class TestLocusEvents:
+    """Tests for Locus event types."""
 
     def test_think_event(self):
         """Test ThinkEvent creation."""
@@ -106,7 +107,7 @@ class TestBaseStreamHandler:
 
         # Create concrete implementation
         class TestHandler(BaseStreamHandler):
-            async def on_event(self, event: TulipEvent) -> None:
+            async def on_event(self, event: LocusEvent) -> None:
                 pass
 
         handler = TestHandler()
@@ -118,7 +119,7 @@ class TestBaseStreamHandler:
         received_events = []
 
         class TestHandler(BaseStreamHandler):
-            async def on_event(self, event: TulipEvent) -> None:
+            async def on_event(self, event: LocusEvent) -> None:
                 received_events.append(event)
 
         handler = TestHandler()

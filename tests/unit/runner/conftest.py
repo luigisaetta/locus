@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""A fake Tulip gateway for the runner protocol tests."""
+"""A fake Locus gateway for the runner protocol tests."""
 
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ from typing import Any
 import httpx
 import pytest
 
-from tulip.runner.client import GatewayClient, RunnerConfig
+from locus.runner.client import GatewayClient, RunnerConfig
 
 
 TOKEN = "wl-secret-token-value"  # noqa: S105 — a test value

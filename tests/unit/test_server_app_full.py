@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Full coverage tests for ``tulip.server.app`` (AgentServer).
+"""Full coverage tests for ``locus.server.app`` (AgentServer).
 
 Existing ``test_server_threads.py`` covers the thread routes. These
 tests exercise the rest of ``server/app.py``:
@@ -26,13 +27,13 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from tulip.core.events import (
+from locus.core.events import (
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
     ToolStartEvent,
 )
-from tulip.server.app import (
+from locus.server.app import (
     AgentServer,
     _is_loopback,
     _principal_key,
@@ -291,7 +292,7 @@ class TestInvoke:
 
     def test_invoke_success_helper_directly(self) -> None:
         """The ``_invoke_success`` mapping is the single source of truth."""
-        from tulip.server.app import _INVOKE_SUCCESS_REASONS, _invoke_success
+        from locus.server.app import _INVOKE_SUCCESS_REASONS, _invoke_success
 
         # Documented success reasons.
         assert frozenset({"complete", "confidence_met", "terminal_tool"}) == _INVOKE_SUCCESS_REASONS
@@ -345,7 +346,7 @@ class TestStream:
     def test_unknown_event_type_falls_through_to_event_type_field(self) -> None:
         # Provide a duck-typed event the server doesn't recognise — it
         # should still be serialised as ``{"type": event.event_type, ...}``.
-        from tulip.core.events import ModelChunkEvent
+        from locus.core.events import ModelChunkEvent
 
         agent = _StubAgent(
             events=[
@@ -438,6 +439,6 @@ class TestDocsGate:
         def boom() -> None:
             raise RuntimeError("no settings")
 
-        monkeypatch.setattr("tulip.core.config.get_settings", boom)
+        monkeypatch.setattr("locus.core.config.get_settings", boom)
         server = AgentServer(agent=_StubAgent(), allow_unauthenticated=True)
         assert server._resolve_docs_enabled() is False

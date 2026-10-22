@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``TerminateEvent`` says what the segment cost and, on failure, why.
 
@@ -16,19 +17,19 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.agent.runtime_loop import _error_text
-from tulip.core.events import TerminateEvent
-from tulip.core.messages import Message, ToolCall
-from tulip.core.state import AgentState
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.models.base import ModelResponse
-from tulip.models.metadata import ModelMetadata, register_metadata
-from tulip.testing import FunctionModel
+from locus.agent import Agent
+from locus.agent.runtime_loop import _error_text
+from locus.core.events import TerminateEvent
+from locus.core.messages import Message, ToolCall
+from locus.core.state import AgentState
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.models.base import ModelResponse
+from locus.models.metadata import ModelMetadata, register_metadata
+from locus.testing import FunctionModel
 
 
-_PRICED = "tulip-test-terminate-priced"
-_UNPRICED = "tulip-test-terminate-unpriced"
+_PRICED = "locus-test-terminate-priced"
+_UNPRICED = "locus-test-terminate-unpriced"
 
 register_metadata(
     ModelMetadata(

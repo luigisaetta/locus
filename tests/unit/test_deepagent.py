@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for ``tulip.deepagent`` — the research-shaped Agent factory
+"""Unit tests for ``locus.deepagent`` — the research-shaped Agent factory
 and provider protocol.
 
 These tests don't touch a model provider — they verify the factory
@@ -14,14 +15,14 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
-from tulip import (
+from locus import (
     Grounding,
     ItemRef,
     KnowledgeProvider,
     KnowledgeRow,
     create_deepagent,
 )
-from tulip.core.termination import (
+from locus.core.termination import (
     AndCondition,
     ConfidenceMet,
     MaxIterations,
@@ -29,7 +30,7 @@ from tulip.core.termination import (
     TokenLimit,
     ToolCalled,
 )
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
 
 
 class _Echo(BaseModel):
@@ -50,7 +51,7 @@ def _stub_env(monkeypatch: pytest.MonkeyPatch) -> None:
 class TestCreateDeepagent:
     def test_returns_agent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _stub_env(monkeypatch)
-        from tulip import Agent
+        from locus import Agent
 
         agent = create_deepagent(
             model="openai:gpt-4o-mini",
@@ -105,7 +106,7 @@ class TestCreateDeepagent:
         ``TokenLimit`` term to the termination algebra. Previously the
         80K default silently killed any run whose long input prompt
         ate the cumulative budget before the model wrote output —
-        verified empirically against gpt-5.5 + Tulip's deepagent
+        verified empirically against gpt-5.5 + Locus's deepagent
         kernel (see CHANGELOG)."""
         _stub_env(monkeypatch)
         agent = create_deepagent(
@@ -299,8 +300,8 @@ class TestTypedTerminalBypass:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # The state machine must not stop on a task_complete name match.
-        from tulip.core.messages import Message, ToolCall
-        from tulip.core.state import AgentState
+        from locus.core.messages import Message, ToolCall
+        from locus.core.state import AgentState
 
         _stub_env(monkeypatch)
         agent = create_deepagent(

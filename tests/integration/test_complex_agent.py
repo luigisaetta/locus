@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for complex agent scenarios."""
 
@@ -8,7 +9,7 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel, Field
 
-from tulip.core.structured import parse_structured
+from locus.core.structured import parse_structured
 
 
 pytestmark = pytest.mark.integration
@@ -82,8 +83,8 @@ class TestCheckpointBackends:
     @pytest.mark.asyncio
     async def test_memory_backend(self):
         """Test in-memory checkpoint backend."""
-        from tulip.core.state import AgentState
-        from tulip.memory.backends import MemoryCheckpointer
+        from locus.core.state import AgentState
+        from locus.memory.backends import MemoryCheckpointer
 
         backend = MemoryCheckpointer()
 

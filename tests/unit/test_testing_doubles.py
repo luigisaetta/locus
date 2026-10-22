@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for ``tulip.testing``.
+"""Unit tests for ``locus.testing``.
 
 The doubles exist because there was no supported way to test an agent: this
 suite alone carried thirteen private ``_ScriptedModel`` classes, each slightly
@@ -13,11 +14,11 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.messages import Message
-from tulip.core.protocols import ModelProtocol
-from tulip.testing import FunctionModel, ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.core.messages import Message
+from locus.core.protocols import ModelProtocol
+from locus.testing import FunctionModel, ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 @tool
@@ -191,7 +192,7 @@ async def test_streamed_doubles_carry_their_tool_calls() -> None:
     failure this asserts against, and it is the reason the assertion is on the
     CHUNKS rather than on the agent's behaviour.
     """
-    from tulip.testing import FunctionModel, ScriptedModel, tool_call
+    from locus.testing import FunctionModel, ScriptedModel, tool_call
 
     for model in (
         ScriptedModel([tool_call("issue_refund", order_id="ord-1")]),

@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.memory.backends.mysql._MySQLConnectionPool``.
+"""Coverage tests for ``locus.memory.backends.mysql._MySQLConnectionPool``.
 
 Targets the pool-internal branches the main MySQL suite leaves uncovered:
 the MySQL-specific error tuple, the wait-then-reconnect path when a queued
@@ -17,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from tulip.memory.backends.mysql import MySQLConfig, _MySQLConnectionPool
+from locus.memory.backends.mysql import MySQLConfig, _MySQLConnectionPool
 
 
 # ---------------------------------------------------------------------------

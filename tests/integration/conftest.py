@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration test configuration with smart service detection.
 
@@ -66,12 +67,12 @@ def postgres_available() -> bool:
 def mysql_available() -> bool:
     """Check if MySQL is available and configured."""
     # Require an explicit opt-in to avoid connecting to random local mysql.
-    if os.getenv("TULIP_MYSQL_INTEGRATION") != "1":
+    if os.getenv("LOCUS_MYSQL_INTEGRATION") != "1":
         return False
 
     host = os.getenv("MYSQL_HOST", "localhost")
-    user = os.getenv("MYSQL_USER", "tulip")
-    database = os.getenv("MYSQL_DB", "tulip_test")
+    user = os.getenv("MYSQL_USER", "locus")
+    database = os.getenv("MYSQL_DB", "locus_test")
 
     if not (host and user and database):
         return False
@@ -138,7 +139,7 @@ skip_without_mysql = pytest.mark.skipif(
     not mysql_available(),
     reason=(
         "MySQL integration tests are opt-in "
-        "(set TULIP_MYSQL_INTEGRATION=1 and MYSQL_HOST/PORT or start MySQL)"
+        "(set LOCUS_MYSQL_INTEGRATION=1 and MYSQL_HOST/PORT or start MySQL)"
     ),
 )
 
@@ -179,14 +180,14 @@ def _build_model():
     """
     # OpenAI (preferred)
     if openai_available():
-        from tulip.models.native.openai import OpenAIModel
+        from locus.models.native.openai import OpenAIModel
 
         model_id = os.getenv("OPENAI_MODEL_ID", "gpt-4o-mini")
         return OpenAIModel(model=model_id, max_tokens=8192)
 
     # Anthropic fallback — cheapest path for iteration.
     if anthropic_available():
-        from tulip.models.native.anthropic import AnthropicModel
+        from locus.models.native.anthropic import AnthropicModel
 
         model_id = os.getenv("ANTHROPIC_MODEL_ID", "claude-haiku-4-5")
         return AnthropicModel(model=model_id, max_tokens=512)

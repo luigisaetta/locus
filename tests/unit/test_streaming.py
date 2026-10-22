@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for the streaming system."""
 
@@ -8,15 +9,15 @@ import json
 
 import pytest
 
-from tulip.core.events import (
+from locus.core.events import (
+    LocusEvent,
     ModelChunkEvent,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
     ToolStartEvent,
-    TulipEvent,
 )
-from tulip.streaming import (
+from locus.streaming import (
     AsyncSSEHandler,
     BufferingHandler,
     CompositeHandler,
@@ -37,7 +38,7 @@ class TestStreamHandler:
         """StreamHandler is a valid protocol."""
 
         class MyHandler:
-            async def on_event(self, event: TulipEvent) -> None:
+            async def on_event(self, event: LocusEvent) -> None:
                 pass
 
             async def on_complete(self) -> None:
@@ -566,14 +567,14 @@ class TestSSEHandler:
     @pytest.mark.asyncio
     async def test_event_ids(self):
         """Events get sequential IDs."""
-        handler = SSEHandler(include_id=True, id_prefix="tulip_")
+        handler = SSEHandler(include_id=True, id_prefix="locus_")
 
         await handler.on_event(ThinkEvent(iteration=1))
         await handler.on_event(ThinkEvent(iteration=2))
 
         messages = handler.get_messages()
-        assert messages[0].id == "tulip_1"
-        assert messages[1].id == "tulip_2"
+        assert messages[0].id == "locus_1"
+        assert messages[1].id == "locus_2"
 
     @pytest.mark.asyncio
     async def test_no_ids_when_disabled(self):
@@ -799,7 +800,7 @@ class TestEventTypeSupport:
     @pytest.mark.asyncio
     async def test_all_loop_events(self):
         """SSE handler supports all loop events."""
-        from tulip.core.events import (
+        from locus.core.events import (
             GroundingEvent,
             ReflectEvent,
             TerminateEvent,
@@ -838,7 +839,7 @@ class TestEventTypeSupport:
     @pytest.mark.asyncio
     async def test_model_events(self):
         """SSE handler supports model events."""
-        from tulip.core.events import ModelChunkEvent, ModelCompleteEvent
+        from locus.core.events import ModelChunkEvent, ModelCompleteEvent
 
         handler = SSEHandler()
 
@@ -851,7 +852,7 @@ class TestEventTypeSupport:
     @pytest.mark.asyncio
     async def test_multi_agent_events(self):
         """SSE handler supports multi-agent events."""
-        from tulip.core.events import (
+        from locus.core.events import (
             OrchestratorDecisionEvent,
             SpecialistCompleteEvent,
             SpecialistStartEvent,
@@ -887,7 +888,7 @@ class TestEventTypeSupport:
     @pytest.mark.asyncio
     async def test_causal_events(self):
         """SSE handler supports causal events."""
-        from tulip.core.events import CausalEdgeEvent, CausalNodeEvent
+        from locus.core.events import CausalEdgeEvent, CausalNodeEvent
 
         handler = SSEHandler()
 

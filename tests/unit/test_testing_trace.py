@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for AgentTestClient and AgentTrace.
 
@@ -13,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from tulip import Agent, tool
-from tulip.testing import AgentTestClient, AgentTrace, ScriptedModel, text, tool_call
+from locus import Agent, tool
+from locus.testing import AgentTestClient, AgentTrace, ScriptedModel, text, tool_call
 
 
 @tool

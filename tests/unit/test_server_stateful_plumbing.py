@@ -1,10 +1,11 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Plumbing tests for server-stateful model transports.
 
 Server-stateful transports (e.g. :class:`OCIResponsesModel`) own the
-conversation thread server-side. Tulip sends only the input added since
+conversation thread server-side. Locus sends only the input added since
 the last call and threads a continuation token via
 :attr:`ModelResponse.provider_state` /
 :attr:`AgentState.provider_state`.
@@ -23,10 +24,10 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from tulip.agent import Agent
-from tulip.core.messages import Message, ToolCall
-from tulip.core.state import AgentState
-from tulip.models.base import ModelResponse
+from locus.agent import Agent
+from locus.core.messages import Message, ToolCall
+from locus.core.state import AgentState
+from locus.models.base import ModelResponse
 
 
 class _StatefulFakeModel:
@@ -113,7 +114,7 @@ def test_server_stateful_threads_provider_state_across_turns() -> None:
     """Subsequent turns reference the server thread via provider_state."""
     tool_call = ToolCall(id="call_x", name="noop", arguments={})
 
-    from tulip.tools.decorator import tool
+    from locus.tools.decorator import tool
 
     @tool
     def noop() -> str:

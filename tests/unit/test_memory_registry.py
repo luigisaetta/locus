@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for memory registry module."""
 
@@ -7,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tulip.memory.registry import (
+from locus.memory.registry import (
     _CHECKPOINTERS,
     get_checkpointer,
     list_checkpointers,
@@ -163,9 +164,9 @@ class TestRedisCheckpointer:
         # Mock the redis_checkpointer to avoid actual connection
         mock_cp = MagicMock()
 
-        with patch("tulip.memory.backends.adapters.redis_checkpointer", return_value=mock_cp):
+        with patch("locus.memory.backends.adapters.redis_checkpointer", return_value=mock_cp):
             # Re-register to use patched version
-            from tulip.memory.registry import _CHECKPOINTERS
+            from locus.memory.registry import _CHECKPOINTERS
 
             original_factory = _CHECKPOINTERS.get("redis")
 
@@ -291,7 +292,7 @@ class TestRedisFactoryConfigHint:
             return MagicMock()
 
         # Patch redis_checkpointer at module level
-        with patch("tulip.memory.backends.adapters.redis_checkpointer", mock_redis_checkpointer):
+        with patch("locus.memory.backends.adapters.redis_checkpointer", mock_redis_checkpointer):
             # Re-register with patched import
             def redis_factory(config_hint=None, **kwargs):
                 if config_hint:
@@ -465,7 +466,7 @@ class TestActualRedisFactory:
             pytest.skip("Redis not available")
 
         # Patch at the right level to catch the actual factory invocation
-        with patch("tulip.memory.backends.adapters.redis_checkpointer") as mock_redis:
+        with patch("locus.memory.backends.adapters.redis_checkpointer") as mock_redis:
             mock_redis.return_value = MagicMock()
 
             # Need to re-invoke the factory, so patch before calling
@@ -473,7 +474,7 @@ class TestActualRedisFactory:
 
             # The actual factory from _register_defaults
             def actual_redis_factory(config_hint=None, **kwargs):
-                from tulip.memory.backends.adapters import redis_checkpointer
+                from locus.memory.backends.adapters import redis_checkpointer
 
                 if config_hint:
                     if not config_hint.startswith("redis://"):
@@ -497,13 +498,13 @@ class TestActualRedisFactory:
         if "redis" not in providers:
             pytest.skip("Redis not available")
 
-        with patch("tulip.memory.backends.adapters.redis_checkpointer") as mock_redis:
+        with patch("locus.memory.backends.adapters.redis_checkpointer") as mock_redis:
             mock_redis.return_value = MagicMock()
 
             original = _CHECKPOINTERS["redis"]
 
             def actual_redis_factory(config_hint=None, **kwargs):
-                from tulip.memory.backends.adapters import redis_checkpointer
+                from locus.memory.backends.adapters import redis_checkpointer
 
                 if config_hint:
                     if not config_hint.startswith("redis://"):

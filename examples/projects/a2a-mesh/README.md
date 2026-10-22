@@ -1,6 +1,6 @@
-# a2a-mesh — multi-process Tulip security agents over A2A
+# a2a-mesh — multi-process Locus security agents over A2A
 
-A runnable example of three Tulip agents talking to each other across
+A runnable example of three Locus agents talking to each other across
 process boundaries via the Agent-to-Agent (A2A) protocol — HTTP + SSE
 with capability-based discovery via `AgentCard`. The mesh models a SOC
 where a threat-intel service and an alert-triage service run as separate
@@ -52,13 +52,13 @@ network calls to a model provider). To run live, set the provider
 before booting each service:
 
 ```bash
-export TULIP_MODEL_PROVIDER=openai
-export TULIP_MODEL_ID=gpt-4o
+export LOCUS_MODEL_PROVIDER=openai
+export LOCUS_MODEL_ID=gpt-4o
 export OPENAI_API_KEY=sk-...
 make intel
 ```
 
-Anthropic works the same way (`TULIP_MODEL_PROVIDER=anthropic
+Anthropic works the same way (`LOCUS_MODEL_PROVIDER=anthropic
 ANTHROPIC_API_KEY=...`). The model factory is in
 [`src/a2a_mesh/_model.py`](src/a2a_mesh/_model.py).
 
@@ -76,7 +76,7 @@ which:
    enrich the indicators behind the alert.
 
 Both calls use `A2AClient`, so the wire format is the typed JSON
-envelope from [`tulip.a2a.protocol`][a2a]. Streaming is also
+envelope from [`locus.a2a.protocol`][a2a]. Streaming is also
 demonstrated — pass `--stream` to `python -m a2a_mesh.orchestrator` and
 events from the remote agent stream over SSE in real time.
 
@@ -84,7 +84,7 @@ events from the remote agent stream over SSE in real time.
 
 A2A is for the case where each agent runs **as its own service**:
 different teams, different deploy cadences, different tenancy, possibly
-different runtimes (a Tulip agent calling a non-Tulip A2A peer or vice
+different runtimes (a Locus agent calling a non-Locus A2A peer or vice
 versa) — e.g. a threat-intel platform and a SOC's triage stack owned by
 two teams. Single-process mesh? Use [Orchestrator + Specialists][orch]
 instead — this project is the cross-process equivalent.
@@ -130,6 +130,6 @@ Vite proxies `/api/intel/*` and `/api/triage/*` to the two services,
 so it works against the same `make intel` / `make triage` pair from
 above.
 
-[t34]: https://github.com/tuliplabs-ai/tulip-agents/blob/main/examples/notebook_28_a2a_protocol.py
-[a2a]: https://github.com/tuliplabs-ai/tulip-agents/blob/main/src/tulip/a2a/protocol.py
-[orch]: https://tulipagents.ai/concepts/multi-agent/orchestrator/
+[t34]: https://github.com/oracle/locus/blob/main/examples/notebook_28_a2a_protocol.py
+[a2a]: https://github.com/oracle/locus/blob/main/src/locus/a2a/protocol.py
+[orch]: https://locusagents.oracle.com/concepts/multi-agent/orchestrator/

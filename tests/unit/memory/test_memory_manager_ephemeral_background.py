@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The injected memory block is ephemeral; extraction can run in the background.
 
@@ -22,14 +23,14 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.events import InterruptEvent, TerminateEvent
-from tulip.core.messages import Message, Role, ToolCall
-from tulip.memory.backends import MemoryCheckpointer
-from tulip.memory.manager import LLMMemoryManager, Memory, MemoryType
-from tulip.memory.store import InMemoryStore
-from tulip.models.base import ModelResponse
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.core.events import InterruptEvent, TerminateEvent
+from locus.core.messages import Message, Role, ToolCall
+from locus.memory.backends import MemoryCheckpointer
+from locus.memory.manager import LLMMemoryManager, Memory, MemoryType
+from locus.memory.store import InMemoryStore
+from locus.models.base import ModelResponse
+from locus.tools.decorator import tool
 
 
 class _RecordingModel:
@@ -197,12 +198,12 @@ async def test_background_extraction_does_not_delay_the_run() -> None:
     assert terminate_at < 0.25
     assert finished_at < 0.25  # the generator closed without waiting either
     assert manager.pending_extractions == 1
-    assert await manager.store.get(("tulip_memory", "project"), "last_turn") is None
+    assert await manager.store.get(("locus_memory", "project"), "last_turn") is None
 
     # drain() flushes the job.
     await agent.drain_memory()
     assert manager.pending_extractions == 0
-    saved = await manager.store.get(("tulip_memory", "project"), "last_turn")
+    saved = await manager.store.get(("locus_memory", "project"), "last_turn")
     assert saved is not None
     assert saved["content"] == "hello"
 
@@ -216,7 +217,7 @@ async def test_inline_mode_still_waits_for_extraction() -> None:
 
     assert manager.extract_mode == "inline"
     assert manager.pending_extractions == 0
-    assert await manager.store.get(("tulip_memory", "project"), "last_turn") is not None
+    assert await manager.store.get(("locus_memory", "project"), "last_turn") is not None
 
 
 async def test_background_extractor_failure_is_reported_not_raised(
@@ -228,7 +229,7 @@ async def test_background_extractor_failure_is_reported_not_raised(
     async def fake_emit(event_type: str, /, **data: Any) -> None:
         emitted.append((event_type, data))
 
-    monkeypatch.setattr(importlib.import_module("tulip.observability.emit"), "emit", fake_emit)
+    monkeypatch.setattr(importlib.import_module("locus.observability.emit"), "emit", fake_emit)
     manager = LLMMemoryManager(
         store=InMemoryStore(),
         extract_fn=_slow_extractor(0.01, fail=True),
@@ -268,7 +269,7 @@ async def test_background_jobs_of_one_namespace_run_in_order() -> None:
     await manager.drain()
 
     assert log == ["start first", "end first", "start second", "end second"]
-    saved = await manager.store.get(("tulip_memory", "project"), "last_turn")
+    saved = await manager.store.get(("locus_memory", "project"), "last_turn")
     assert saved is not None
     assert saved["content"] == "second"  # the later turn's write wins
 
@@ -309,7 +310,7 @@ async def test_bounded_drain_leaves_jobs_running() -> None:
     assert manager.pending_extractions == 1
     await manager.drain()
     assert manager.pending_extractions == 0
-    assert await manager.store.get(("tulip_memory", "project"), "last_turn") is not None
+    assert await manager.store.get(("locus_memory", "project"), "last_turn") is not None
 
 
 def test_run_sync_drains_background_extraction() -> None:
@@ -323,7 +324,7 @@ def test_run_sync_drains_background_extraction() -> None:
     agent.run_sync("two")  # a second loop: primitives of the first are not reused
 
     assert manager.pending_extractions == 0
-    saved = asyncio.run(manager.store.get(("tulip_memory", "project"), "last_turn"))
+    saved = asyncio.run(manager.store.get(("locus_memory", "project"), "last_turn"))
     assert saved is not None
     assert saved["content"] == "two"
 

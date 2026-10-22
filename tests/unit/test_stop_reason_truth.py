@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Every way a run ends is reported as what it was.
 
@@ -18,18 +19,18 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.agent.result import STOP_REASONS, normalize_stop_reason
-from tulip.agent.runtime_loop import _normalize_stop_reason as runtime_normalize
-from tulip.core.events import TerminateEvent
-from tulip.core.messages import Message, Role, ToolCall, ToolResult
-from tulip.models.base import ModelResponse
-from tulip.models.metadata import ModelMetadata, register_metadata
-from tulip.testing import FunctionModel, ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.agent.result import STOP_REASONS, normalize_stop_reason
+from locus.agent.runtime_loop import _normalize_stop_reason as runtime_normalize
+from locus.core.events import TerminateEvent
+from locus.core.messages import Message, Role, ToolCall, ToolResult
+from locus.models.base import ModelResponse
+from locus.models.metadata import ModelMetadata, register_metadata
+from locus.testing import FunctionModel, ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
-_PRICED = "tulip-test-stop-reason-priced"
+_PRICED = "locus-test-stop-reason-priced"
 register_metadata(
     ModelMetadata(
         model_id=_PRICED,
@@ -225,7 +226,7 @@ async def test_an_empty_first_reply_keeps_the_direct_final_answer_call() -> None
 
 @pytest.mark.asyncio
 async def test_an_empty_reply_in_a_resumed_turn_is_sent_back_too() -> None:
-    from tulip.core.state import AgentState, ToolExecution
+    from locus.core.state import AgentState, ToolExecution
 
     model = ScriptedModel(
         [

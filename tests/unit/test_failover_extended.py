@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Extra coverage for ``tulip.models.failover``.
+"""Extra coverage for ``locus.models.failover``.
 
 The base ``test_failover.py`` covers the headline status-code paths.
 This file fills in:
@@ -27,7 +28,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tulip.models.failover import FailoverReason, classify
+from locus.models.failover import FailoverReason, classify
 
 
 # ---------------------------------------------------------------------------

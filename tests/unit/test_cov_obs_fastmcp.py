@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Extra coverage for tulip.integrations.fastmcp — missing branches.
+"""Extra coverage for locus.integrations.fastmcp — missing branches.
 
 Note: no module-level pytestmark — asyncio_mode=auto picks up async tests
 automatically, and sync tests must stay sync to avoid PytestWarning errors.
@@ -14,7 +15,7 @@ import types
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from tulip.integrations.fastmcp import MCPClient, TulipMCPServer
+from locus.integrations.fastmcp import LocusMCPServer, MCPClient
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +56,7 @@ def _inject_fake_fastmcp(monkeypatch) -> type:
 
 
 # ---------------------------------------------------------------------------
-# TulipMCPServer._create_mcp — run_agent closure (lines 349, 350)
+# LocusMCPServer._create_mcp — run_agent closure (lines 349, 350)
 # ---------------------------------------------------------------------------
 
 
@@ -73,7 +74,7 @@ class TestCreateMcpRunAgentClosure:
         mock_agent._initialize = MagicMock()
         mock_agent.run_sync = MagicMock(return_value=mock_result)
 
-        server = TulipMCPServer(agent=mock_agent)
+        server = LocusMCPServer(agent=mock_agent)
         mcp = server._create_mcp()
 
         # Invoke the registered closure through the fake FastMCP.
@@ -98,7 +99,7 @@ class TestCreateMcpRunAgentClosure:
 
         mock_agent.run = empty_run
 
-        server = TulipMCPServer(agent=mock_agent)
+        server = LocusMCPServer(agent=mock_agent)
         mcp = server._create_mcp()
 
         result = await mcp.call_tool("run_agent_stream", arguments={"prompt": "test"})
@@ -106,16 +107,16 @@ class TestCreateMcpRunAgentClosure:
 
 
 # ---------------------------------------------------------------------------
-# TulipMCPServer.run — creates _mcp when None (line 375)
+# LocusMCPServer.run — creates _mcp when None (line 375)
 # ---------------------------------------------------------------------------
 
 
-class TestTulipMCPServerRun:
+class TestLocusMCPServerRun:
     def test_run_creates_mcp_when_none(self):
         """server.run() when _mcp is None calls _create_mcp (line 375)."""
         mock_agent = MagicMock()
 
-        server = TulipMCPServer(agent=mock_agent)
+        server = LocusMCPServer(agent=mock_agent)
         assert server._mcp is None
 
         mock_mcp = MagicMock()
@@ -129,7 +130,7 @@ class TestTulipMCPServerRun:
     def test_run_reuses_existing_mcp(self):
         """server.run() when _mcp already exists does NOT call _create_mcp."""
         mock_agent = MagicMock()
-        server = TulipMCPServer(agent=mock_agent)
+        server = LocusMCPServer(agent=mock_agent)
 
         mock_mcp = MagicMock()
         server._mcp = mock_mcp  # pre-set
@@ -294,17 +295,17 @@ class TestConnectStdioFullPath:
 
 
 # ---------------------------------------------------------------------------
-# MCPClient.to_tulip_tools — lines 701-722 (sync — need to provide event loop)
+# MCPClient.to_locus_tools — lines 701-722 (sync — need to provide event loop)
 # Line 710: return await self.call_tool(name, kwargs)
 # ---------------------------------------------------------------------------
 
 
-class TestToTulipTools:
-    def test_to_tulip_tools_creates_tool_list_and_covers_line_710(self, monkeypatch):
-        """to_tulip_tools creates Tool objects from MCP tool dicts (line 717).
+class TestToLocusTools:
+    def test_to_locus_tools_creates_tool_list_and_covers_line_710(self, monkeypatch):
+        """to_locus_tools creates Tool objects from MCP tool dicts (line 717).
         The func closure (line 710) is exercised by calling the returned fn.
 
-        to_tulip_tools calls asyncio.get_event_loop().run_until_complete() internally,
+        to_locus_tools calls asyncio.get_event_loop().run_until_complete() internally,
         which requires a running-but-not-yet-started loop in the calling thread.
         We monkeypatch asyncio.get_event_loop to provide a fresh one.
 
@@ -341,7 +342,7 @@ class TestToTulipTools:
                 },
             ]
 
-            tools = client.to_tulip_tools(mcp_tools)  # line 717: run_until_complete
+            tools = client.to_locus_tools(mcp_tools)  # line 717: run_until_complete
             assert len(tools) == 2
             assert tools[0].name == "search"
             assert tools[1].name == "fetch"
@@ -352,9 +353,9 @@ class TestToTulipTools:
         finally:
             loop.close()
 
-    def test_to_tulip_tools_empty_list(self):
-        """to_tulip_tools on empty list returns empty list without touching
+    def test_to_locus_tools_empty_list(self):
+        """to_locus_tools on empty list returns empty list without touching
         asyncio.get_event_loop (no tools to iterate over)."""
         client = MCPClient(base_url="https://example.com")
-        tools = client.to_tulip_tools([])
+        tools = client.to_locus_tools([])
         assert tools == []

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for the 0.2.0b23 ``total_token_budget`` rename.
 
@@ -11,7 +12,7 @@ and verify the fix end-to-end against a stub model:
     iteration 1, exiting with empty (or near-empty) output. This was
     happening silently before the rename because callers passed
     ``max_tokens=65536`` expecting the per-completion meaning every
-    LLM SDK uses, but Tulip interpreted it as the run-level cap.
+    LLM SDK uses, but Locus interpreted it as the run-level cap.
   - **Verify the fix**: with the default ``total_token_budget=None``
     a long-prompt run terminates only via ``MaxIterations`` / the
     submit_tool path — no token-based termination interferes.
@@ -19,7 +20,7 @@ and verify the fix end-to-end against a stub model:
     new factory raises ``TypeError`` instead of silently flowing
     through to the per-completion field.
 
-The tests use Tulip's stub model surface so no provider
+The tests use Locus's stub model surface so no provider
 credentials are required.
 """
 
@@ -28,14 +29,14 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
-from tulip import create_deepagent
-from tulip.core.termination import (
+from locus import create_deepagent
+from locus.core.termination import (
     AndCondition,
     MaxIterations,
     OrCondition,
     TokenLimit,
 )
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
 
 
 class _Echo(BaseModel):

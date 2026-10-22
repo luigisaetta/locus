@@ -1,8 +1,9 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Coverage tests for ``AgentRuntimeMixin._run_from_state`` (the resume
-loop) and ``Agent.resume`` in ``tulip.agent``.
+loop) and ``Agent.resume`` in ``locus.agent``.
 
 ``_run_from_state`` is driven directly with constructed states and scripted
 models so each branch (time/termination/should_terminate stops, no-tool
@@ -17,16 +18,16 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.events import InterruptEvent, TerminateEvent, ToolCompleteEvent
-from tulip.core.interrupt import InterruptException, InterruptValue
-from tulip.core.messages import Message, Role, ToolCall
-from tulip.core.state import AgentState
-from tulip.core.termination import MaxIterations
-from tulip.memory.checkpointer import BaseCheckpointer
-from tulip.models.base import ModelResponse
-from tulip.tools.decorator import tool
-from tulip.tools.executor import SequentialExecutor
+from locus.agent import Agent
+from locus.core.events import InterruptEvent, TerminateEvent, ToolCompleteEvent
+from locus.core.interrupt import InterruptException, InterruptValue
+from locus.core.messages import Message, Role, ToolCall
+from locus.core.state import AgentState
+from locus.core.termination import MaxIterations
+from locus.memory.checkpointer import BaseCheckpointer
+from locus.models.base import ModelResponse
+from locus.tools.decorator import tool
+from locus.tools.executor import SequentialExecutor
 
 
 class _ScriptedModel:
@@ -545,7 +546,7 @@ async def test_resumed_loop_fires_tool_hooks_and_honors_cancel() -> None:
     """The resume loop runs the SAME before/after tool hook seam as run() —
     a playbook tracker or admit()-style gate must not go blind after an
     answer, and a hook cancel must stop the body from executing."""
-    from tulip.hooks.provider import AfterToolCallEvent, BeforeToolCallEvent, HookProvider
+    from locus.hooks.provider import AfterToolCallEvent, BeforeToolCallEvent, HookProvider
 
     seen: dict[str, list[str]] = {"before": [], "after": []}
 
@@ -597,7 +598,7 @@ async def test_interrupt_fields_survive_park_and_repark() -> None:
     ask-again park after resume — so a console can render a form."""
     import json as _json
 
-    from tulip.tools.decorator import tool as _tool
+    from locus.tools.decorator import tool as _tool
 
     @_tool(name="ask_form")
     def ask_form(question: str) -> str:

@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for ``tulip.server.adapters.GraphRunnable`` (closes #213).
+"""Unit tests for ``locus.server.adapters.GraphRunnable`` (closes #213).
 
 The adapter lets ``AgentServer`` / ``A2AServer`` publish a graph by
 making it look like an Agent. The tests use a scripted graph stand-in
@@ -17,9 +18,9 @@ from typing import Any
 
 import pytest
 
-from tulip.core.events import TerminateEvent, ThinkEvent
-from tulip.multiagent.graph import StreamEvent, StreamMode
-from tulip.server import GraphRunnable
+from locus.core.events import TerminateEvent, ThinkEvent
+from locus.multiagent.graph import StreamEvent, StreamMode
+from locus.server import GraphRunnable
 
 
 class _ScriptedGraph:
@@ -164,7 +165,7 @@ async def test_thread_id_and_metadata_accepted_but_ignored() -> None:
 @pytest.mark.asyncio
 async def test_satisfies_agent_contract_for_a2a_server() -> None:
     """``A2AServer`` and ``AgentServer`` duck-type their ``agent`` argument
-    to ``run(prompt, thread_id=..., metadata=...) -> AsyncIterator[TulipEvent]``.
+    to ``run(prompt, thread_id=..., metadata=...) -> AsyncIterator[LocusEvent]``.
     Verify ``GraphRunnable`` actually matches that signature so wiring it
     in doesn't surface at runtime."""
     import inspect

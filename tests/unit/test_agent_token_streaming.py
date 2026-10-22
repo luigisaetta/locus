@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``Agent.run(stream_tokens=True)`` surfaces model chunks from the loop.
 
@@ -15,10 +16,10 @@ from typing import Any
 
 import pytest
 
-from tulip import Agent
-from tulip.core.events import ModelChunkEvent, TerminateEvent
-from tulip.core.messages import Message
-from tulip.models.base import ModelResponse
+from locus import Agent
+from locus.core.events import ModelChunkEvent, TerminateEvent
+from locus.core.messages import Message
+from locus.models.base import ModelResponse
 
 
 class _StreamingModel:

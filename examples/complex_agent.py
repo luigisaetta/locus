@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Full SOC analyst agent — the complete tool-using triage workflow.
 
 A senior-analyst agent that works a shift-handover request end to end:
@@ -16,7 +17,7 @@ This example shows:
 
 It runs offline against the bundled mock model by default via
 ``config.get_model`` and upgrades to a live provider when
-``TULIP_MODEL_PROVIDER`` (plus the matching API key) is set.
+``LOCUS_MODEL_PROVIDER`` (plus the matching API key) is set.
 
 All security data below (IPs, hashes, incidents) is invented and uses
 documentation-safe placeholders (RFC 5737 addresses, EICAR-style test
@@ -34,9 +35,9 @@ from typing import Any
 from config import check_structured_output_capable, get_model
 from pydantic import BaseModel, Field
 
-from tulip.agent import Agent
-from tulip.core.structured import create_schema_prompt, parse_structured
-from tulip.tools import tool
+from locus.agent import Agent
+from locus.core.structured import create_schema_prompt, parse_structured
+from locus.tools import tool
 
 
 _SAFE_MATH_BIN_OPS = {
@@ -465,12 +466,12 @@ Structure your responses with:
 async def run_complex_agent():
     """Run the SOC agent demonstration."""
     print("=" * 60)
-    print("TULIP SOC Analyst Agent Demo")
+    print("LOCUS SOC Analyst Agent Demo")
     print("=" * 60)
     print()
 
     # Pick up the configured provider (mock by default; live when
-    # TULIP_MODEL_PROVIDER + credentials are set).
+    # LOCUS_MODEL_PROVIDER + credentials are set).
     model = get_model(max_tokens=2048)
 
     # Create agent with all tools

@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage-gap tests for tulip.reasoning.reflexion.
+"""Coverage-gap tests for locus.reasoning.reflexion.
 
 Targets the specific uncovered lines:
   - 175 (dead code — unreachable after the line 168 guard)
@@ -15,9 +16,9 @@ Targets the specific uncovered lines:
 
 from __future__ import annotations
 
-from tulip.core.messages import ToolCall
-from tulip.core.state import AgentState, ReasoningStep, ToolExecution
-from tulip.reasoning.reflexion import (
+from locus.core.messages import ToolCall
+from locus.core.state import AgentState, ReasoningStep, ToolExecution
+from locus.reasoning.reflexion import (
     AssessmentCategory,
     ReflectionResult,
     Reflector,

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for model providers (mocked)."""
 
@@ -9,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tulip.core.messages import Message
+from locus.core.messages import Message
 
 
 # =============================================================================
@@ -28,7 +29,7 @@ class TestOpenAIModel:
 
     def test_init_default_config(self, mock_openai):
         """Initialize with default configuration."""
-        from tulip.models.native.openai import OpenAIModel
+        from locus.models.native.openai import OpenAIModel
 
         model = OpenAIModel()
 
@@ -38,7 +39,7 @@ class TestOpenAIModel:
 
     def test_init_custom_config(self, mock_openai):
         """Initialize with custom configuration."""
-        from tulip.models.native.openai import OpenAIModel
+        from locus.models.native.openai import OpenAIModel
 
         model = OpenAIModel(
             model="gpt-4",
@@ -55,7 +56,7 @@ class TestOpenAIModel:
 
     def test_convert_messages(self, mock_openai):
         """Convert messages to OpenAI format."""
-        from tulip.models.native.openai import OpenAIModel
+        from locus.models.native.openai import OpenAIModel
 
         model = OpenAIModel()
         messages = [
@@ -72,7 +73,7 @@ class TestOpenAIModel:
 
     def test_convert_tools(self, mock_openai):
         """Convert tools to proper OpenAI format."""
-        from tulip.models.native.openai import OpenAIModel
+        from locus.models.native.openai import OpenAIModel
 
         model = OpenAIModel()
         tools = [
@@ -92,7 +93,7 @@ class TestOpenAIModel:
     @pytest.mark.asyncio
     async def test_complete(self, mock_openai):
         """Test complete method."""
-        from tulip.models.native.openai import OpenAIModel
+        from locus.models.native.openai import OpenAIModel
 
         model = OpenAIModel()
 
@@ -124,7 +125,7 @@ class TestOpenAIModel:
     @pytest.mark.asyncio
     async def test_complete_with_tool_calls(self, mock_openai):
         """Test complete with tool call response."""
-        from tulip.models.native.openai import OpenAIModel
+        from locus.models.native.openai import OpenAIModel
 
         model = OpenAIModel()
 
@@ -172,21 +173,21 @@ class TestModelRegistry:
 
     def test_get_model_invalid_format(self):
         """Get model with invalid format raises error."""
-        from tulip.models.registry import get_model
+        from locus.models.registry import get_model
 
         with pytest.raises(ValueError, match="must be 'provider:model'"):
             get_model("invalid_no_colon")
 
     def test_get_model_unknown_provider(self):
         """Get model with unknown provider raises error."""
-        from tulip.models.registry import get_model
+        from locus.models.registry import get_model
 
         with pytest.raises(ValueError, match="Unknown provider"):
             get_model("unknown:model")
 
     def test_list_providers(self):
         """List available providers."""
-        from tulip.models.registry import list_providers
+        from locus.models.registry import list_providers
 
         providers = list_providers()
 
@@ -195,7 +196,7 @@ class TestModelRegistry:
 
     def test_register_and_get_custom_provider(self):
         """Test registering and getting a custom provider."""
-        from tulip.models.registry import _PROVIDERS, get_model, register_provider
+        from locus.models.registry import _PROVIDERS, get_model, register_provider
 
         # Create a mock model
         mock_model = MagicMock()
@@ -221,7 +222,7 @@ class TestModelRegistry:
 
     def test_get_model_openai(self):
         """Test getting OpenAI model through registry."""
-        from tulip.models.registry import get_model, list_providers
+        from locus.models.registry import get_model, list_providers
 
         if "openai" in list_providers():
             model = get_model("openai:gpt-4o")
@@ -241,7 +242,7 @@ class TestAnthropicModel:
     def test_create_model(self):
         """Create an Anthropic model with default config."""
         pytest.importorskip("anthropic")
-        from tulip.models.native.anthropic import AnthropicModel
+        from locus.models.native.anthropic import AnthropicModel
 
         model = AnthropicModel(model="claude-sonnet-4-6", api_key="test-key")
         assert model.config.model == "claude-sonnet-4-6"
@@ -250,7 +251,7 @@ class TestAnthropicModel:
     def test_convert_messages_extracts_system(self):
         """System message extracted separately for Anthropic API."""
         pytest.importorskip("anthropic")
-        from tulip.models.native.anthropic import AnthropicModel
+        from locus.models.native.anthropic import AnthropicModel
 
         model = AnthropicModel(api_key="test")
         system, messages = model._convert_messages(
@@ -266,7 +267,7 @@ class TestAnthropicModel:
     def test_convert_tools(self):
         """OpenAI-format tools converted to Anthropic format."""
         pytest.importorskip("anthropic")
-        from tulip.models.native.anthropic import AnthropicModel
+        from locus.models.native.anthropic import AnthropicModel
 
         model = AnthropicModel(api_key="test")
         tools = model._convert_tools(
@@ -288,7 +289,7 @@ class TestAnthropicModel:
     def test_registry_has_anthropic(self):
         """Anthropic provider registered in model registry."""
         pytest.importorskip("anthropic")
-        from tulip.models.registry import list_providers
+        from locus.models.registry import list_providers
 
         assert "anthropic" in list_providers()
 
@@ -302,8 +303,8 @@ class TestAnthropicModel:
         pytest.importorskip("anthropic")
         from pydantic import BaseModel
 
-        from tulip.core.structured import build_response_format
-        from tulip.models.native.anthropic import AnthropicModel
+        from locus.core.structured import build_response_format
+        from locus.models.native.anthropic import AnthropicModel
 
         class Reply(BaseModel):
             answer: str
@@ -331,9 +332,9 @@ class TestAnthropicModel:
 
         from pydantic import BaseModel
 
-        from tulip.core.messages import Message
-        from tulip.core.structured import build_response_format, parse_structured
-        from tulip.models.native.anthropic import AnthropicModel
+        from locus.core.messages import Message
+        from locus.core.structured import build_response_format, parse_structured
+        from locus.models.native.anthropic import AnthropicModel
 
         class Reply(BaseModel):
             answer: str

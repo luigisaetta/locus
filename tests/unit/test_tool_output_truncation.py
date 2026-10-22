@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """An oversized tool result keeps its head and tail, not just its head.
 
@@ -13,12 +14,12 @@ from typing import Any
 
 import pytest
 
-from tulip.agent.agent import Agent
-from tulip.agent.config import AgentConfig
-from tulip.agent.runtime_loop import truncate_tool_output
-from tulip.core.messages import Message, Role, ToolCall
-from tulip.models import ModelResponse
-from tulip.tools.decorator import tool
+from locus.agent.agent import Agent
+from locus.agent.config import AgentConfig
+from locus.agent.runtime_loop import truncate_tool_output
+from locus.core.messages import Message, Role, ToolCall
+from locus.models import ModelResponse
+from locus.tools.decorator import tool
 
 
 class TestTruncateToolOutput:

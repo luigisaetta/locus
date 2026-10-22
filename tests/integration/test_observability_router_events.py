@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """End-to-end test that the router emits the canonical event sequence
 on the :class:`EventBus` for one cognitive dispatch.
@@ -15,8 +16,8 @@ import asyncio
 
 import pytest
 
-from tulip.observability import StreamEvent, get_event_bus, reset_event_bus
-from tulip.router import (
+from locus.observability import StreamEvent, get_event_bus, reset_event_bus
+from locus.router import (
     CapabilityIndex,
     CognitiveCompiler,
     Complexity,
@@ -27,9 +28,9 @@ from tulip.router import (
     TaskType,
     builtin_protocols,
 )
-from tulip.router.protocol import NoMatchingProtocolError
-from tulip.tools.decorator import tool
-from tulip.tools.registry import create_registry
+from locus.router.protocol import NoMatchingProtocolError
+from locus.tools.decorator import tool
+from locus.tools.registry import create_registry
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]

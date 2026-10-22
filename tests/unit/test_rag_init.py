@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for RAG module __init__ (lazy imports)."""
 
@@ -11,7 +12,7 @@ class TestRAGDirectImports:
 
     def test_import_embedding_base_classes(self):
         """Test importing embedding base classes."""
-        from tulip.rag import (
+        from locus.rag import (
             BaseEmbedding,
             EmbeddingConfig,
             EmbeddingProvider,
@@ -25,7 +26,7 @@ class TestRAGDirectImports:
 
     def test_import_store_base_classes(self):
         """Test importing store base classes."""
-        from tulip.rag import (
+        from locus.rag import (
             BaseVectorStore,
             Document,
             SearchResult,
@@ -41,14 +42,14 @@ class TestRAGDirectImports:
 
     def test_import_retriever(self):
         """Test importing retriever."""
-        from tulip.rag import RAGRetriever, RetrievalResult
+        from locus.rag import RAGRetriever, RetrievalResult
 
         assert RAGRetriever is not None
         assert RetrievalResult is not None
 
     def test_import_multimodal(self):
         """Test importing multimodal classes."""
-        from tulip.rag import (
+        from locus.rag import (
             ContentType,
             MultimodalProcessor,
             ProcessedContent,
@@ -62,7 +63,7 @@ class TestRAGDirectImports:
 
     def test_import_tools(self):
         """Test importing tools."""
-        from tulip.rag import (
+        from locus.rag import (
             RAGToolkit,
             create_rag_context_tool,
             create_rag_tool,
@@ -78,14 +79,14 @@ class TestRAGLazyImports:
 
     def test_lazy_import_in_memory_store(self):
         """Test lazy importing InMemoryVectorStore."""
-        from tulip.rag import InMemoryVectorStore
+        from locus.rag import InMemoryVectorStore
 
         assert InMemoryVectorStore is not None
 
     def test_lazy_import_opensearch_store(self):
         """Test lazy importing OpenSearchVectorStore."""
         try:
-            from tulip.rag import OpenSearchVectorStore
+            from locus.rag import OpenSearchVectorStore
 
             assert OpenSearchVectorStore is not None
         except ImportError:
@@ -93,7 +94,7 @@ class TestRAGLazyImports:
 
     def test_lazy_import_unknown_raises(self):
         """Test that unknown attribute raises AttributeError."""
-        from tulip import rag
+        from locus import rag
 
         with pytest.raises(AttributeError, match="has no attribute"):
             _ = rag.NonExistentClass
@@ -104,7 +105,7 @@ class TestRAGAll:
 
     def test_all_defined(self):
         """Test that __all__ is defined."""
-        from tulip import rag
+        from locus import rag
 
         assert hasattr(rag, "__all__")
         assert isinstance(rag.__all__, list)

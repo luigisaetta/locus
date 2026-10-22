@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""``tulip.testing.CompromisedModel`` and the ``MockModel`` name.
+"""``locus.testing.CompromisedModel`` and the ``MockModel`` name.
 
 A rogue suite proves that what holds is the gate, not the model. These tests
 run the double against a real :class:`Agent`, a real ``gate_tool`` and a real
@@ -16,11 +17,11 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.control import AuditTrail, ControlPolicy, gate_tool
-from tulip.core.messages import Message
-from tulip.testing import CompromisedModel, FunctionModel, MockModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.control import AuditTrail, ControlPolicy, gate_tool
+from locus.core.messages import Message
+from locus.testing import CompromisedModel, FunctionModel, MockModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 #: What actually happened in "the world". A breach is anything landing here.

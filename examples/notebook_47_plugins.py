@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 47: plugins — package cloud-cost triage as a reusable extension.
 
 Plugins bundle hooks (and optionally tools) into one reusable object —
@@ -18,14 +19,14 @@ relevant hook method runs automatically. Three pieces:
   next step returns ``stop_reason="cancelled"``.
 
 Run it:
-    # The bundled mock model is the default; set TULIP_MODEL_PROVIDER for a live provider.
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_47_plugins.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_47_plugins.py
 
     # Offline:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_47_plugins.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_47_plugins.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``TULIP_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 """
 
@@ -35,9 +36,9 @@ import time
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
-from tulip.hooks.plugin import Plugin, hook
-from tulip.tools.decorator import tool
+from locus.agent import Agent, AgentConfig
+from locus.hooks.plugin import Plugin, hook
+from locus.tools.decorator import tool
 
 
 # =============================================================================

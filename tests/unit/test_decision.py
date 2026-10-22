@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Tests for :mod:`tulip.decision` — offline, against a fake OpenAI-compatible server."""
+"""Tests for :mod:`locus.decision` — offline, against a fake OpenAI-compatible server."""
 
 from __future__ import annotations
 
@@ -15,8 +16,8 @@ from typing import Any
 import httpx
 import pytest
 
-from tulip.control import Action, ApprovalOutcome, AuditTrail, ControlPolicy, approve
-from tulip.decision import (
+from locus.control import Action, ApprovalOutcome, AuditTrail, ControlPolicy, approve
+from locus.decision import (
     ADMIT_FIELD,
     LETTERS,
     SYSTEM_PROMPT,

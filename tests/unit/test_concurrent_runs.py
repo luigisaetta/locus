@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """One Agent instance, many concurrent runs: per-run state must not leak.
 
@@ -14,13 +15,13 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from tulip.agent import Agent
-from tulip.core.events import TerminateEvent
-from tulip.core.state import AgentState
-from tulip.core.termination import TerminationCondition
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.testing import _RecordingModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.core.events import TerminateEvent
+from locus.core.state import AgentState
+from locus.core.termination import TerminationCondition
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.testing import _RecordingModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 class _EchoFirstModel(_RecordingModel):

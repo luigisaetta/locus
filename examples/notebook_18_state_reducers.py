@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 18: Merging multi-check payment signals with state reducers.
 
@@ -16,12 +17,12 @@ velocity spike, an AVS mismatch, and a failed 3-D Secure challenge.
 - Multiple reducers on one schema — each field merges independently.
 
 Run it:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_18_state_reducers.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_18_state_reducers.py
 
-The default provider is the bundled mock model; set TULIP_MODEL_PROVIDER for a live provider.
-Set TULIP_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
-TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o
-(or TULIP_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER for a live provider.
+Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
 provider: ollama, vllm, groq, together, openrouter, ...).
 """
 
@@ -32,8 +33,8 @@ from typing import Annotated
 from config import get_model
 from pydantic import BaseModel
 
-from tulip.agent import Agent
-from tulip.core import (
+from locus.agent import Agent
+from locus.core import (
     Message,
     add_messages,
     add_numbers,
@@ -41,8 +42,8 @@ from tulip.core import (
     last_value,
     merge_dict,
 )
-from tulip.core.reducers import reducer
-from tulip.multiagent import END, START, StateGraph
+from locus.core.reducers import reducer
+from locus.multiagent import END, START, StateGraph
 
 
 async def _llm_call(
@@ -145,7 +146,7 @@ async def example_builtin_reducers():
     """add_messages appends case-log turns, add_numbers sums numeric fields."""
     print("=== Part 2: Built-in reducers ===\n")
     note = await _llm_call(
-        "In one sentence, when would you use add_messages vs add_numbers in a Tulip payment graph?"
+        "In one sentence, when would you use add_messages vs add_numbers in a Locus payment graph?"
     )
     print(f"AI note: {note}")
 

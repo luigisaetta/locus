@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for Agent with real models.
 
@@ -12,15 +13,15 @@ from __future__ import annotations
 
 import pytest
 
-from tests._safe_math import safe_math_eval
-from tulip.agent import Agent, AgentResult, ReflexionConfig
-from tulip.core.events import (
+from locus.agent import Agent, AgentResult, ReflexionConfig
+from locus.core.events import (
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
     ToolStartEvent,
 )
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
+from tests._safe_math import safe_math_eval
 
 
 # Skip all tests if no API key is available
@@ -527,8 +528,8 @@ class TestRealReflector:
     @pytest.mark.asyncio
     async def test_reflexion_with_real_model(self, model):
         """Agent with reflexion=True completes and produces reflection events."""
-        from tulip.agent import ReflexionConfig
-        from tulip.core.events import ReflectEvent
+        from locus.agent import ReflexionConfig
+        from locus.core.events import ReflectEvent
 
         @tool
         def lookup(topic: str) -> str:
@@ -577,8 +578,8 @@ class TestRealGrounding:
     @pytest.mark.asyncio
     async def test_grounding_evaluates_before_final(self, model):
         """Agent with grounding=True evaluates claims before responding."""
-        from tulip.agent import GroundingConfig
-        from tulip.core.events import GroundingEvent
+        from locus.agent import GroundingConfig
+        from locus.core.events import GroundingEvent
 
         @tool
         def fact_lookup(topic: str) -> str:
@@ -841,7 +842,7 @@ class TestSwarmOrchestration:
     @pytest.mark.asyncio
     async def test_swarm_executes_tasks(self, model):
         """Swarm distributes tasks among specialized agents."""
-        from tulip.multiagent.swarm import Swarm, SwarmAgent
+        from locus.multiagent.swarm import Swarm, SwarmAgent
 
         researcher = SwarmAgent(
             name="researcher",
@@ -886,7 +887,7 @@ class TestAgentHandoff:
     @pytest.mark.asyncio
     async def test_handoff_researcher_to_writer(self, model):
         """Researcher hands off findings to writer."""
-        from tulip.multiagent.handoff import Handoff, HandoffAgent, HandoffReason
+        from locus.multiagent.handoff import Handoff, HandoffAgent, HandoffReason
 
         researcher = HandoffAgent(
             id="researcher",
@@ -931,8 +932,8 @@ class TestOrchestratorRouting:
     @pytest.mark.asyncio
     async def test_orchestrator_single_specialist(self, model):
         """Orchestrator routes task to a single specialist and summarizes."""
-        from tulip.multiagent.orchestrator import Orchestrator
-        from tulip.multiagent.specialist import Specialist
+        from locus.multiagent.orchestrator import Orchestrator
+        from locus.multiagent.specialist import Specialist
 
         researcher = Specialist(
             id="health_researcher",
@@ -965,8 +966,8 @@ class TestOrchestratorRouting:
     @pytest.mark.asyncio
     async def test_orchestrator_multiple_specialists(self, model):
         """Orchestrator coordinates two specialists and correlates findings."""
-        from tulip.multiagent.orchestrator import Orchestrator
-        from tulip.multiagent.specialist import Specialist
+        from locus.multiagent.orchestrator import Orchestrator
+        from locus.multiagent.specialist import Specialist
 
         researcher = Specialist(
             id="researcher",
@@ -1011,7 +1012,7 @@ class TestCompositionPrimitives:
     @pytest.mark.asyncio
     async def test_sequential_pipeline(self, model):
         """Sequential pipeline: researcher -> writer."""
-        from tulip.agent import Agent, AgentConfig, SequentialPipeline
+        from locus.agent import Agent, AgentConfig, SequentialPipeline
 
         researcher = Agent(
             config=AgentConfig(
@@ -1039,7 +1040,7 @@ class TestCompositionPrimitives:
     @pytest.mark.asyncio
     async def test_loop_agent_with_condition(self, model):
         """Loop agent iterates and stops on condition."""
-        from tulip.agent import Agent, AgentConfig, LoopAgent
+        from locus.agent import Agent, AgentConfig, LoopAgent
 
         improver = Agent(
             config=AgentConfig(
@@ -1076,8 +1077,8 @@ class TestEvaluationFramework:
 
     def test_eval_runner_with_real_model(self, model):
         """EvalRunner scores agent against real test cases."""
-        from tulip.agent import Agent, AgentConfig
-        from tulip.evaluation import EvalCase, EvalRunner
+        from locus.agent import Agent, AgentConfig
+        from locus.evaluation import EvalCase, EvalRunner
 
         agent = Agent(
             config=AgentConfig(
@@ -1121,8 +1122,8 @@ class TestHooksReverseOrdering:
 
     def test_after_hooks_reverse_with_real_model(self, model):
         """After hooks fire last-registered-first on real model calls."""
-        from tulip.agent import Agent, AgentConfig
-        from tulip.hooks.provider import HookProvider
+        from locus.agent import Agent, AgentConfig
+        from locus.hooks.provider import HookProvider
 
         order = []
 
@@ -1182,8 +1183,8 @@ class TestHooksE2E:
 
     def test_audit_hook_observes_model_calls(self, model):
         """Audit hook sees every model call with correct event data."""
-        from tulip.agent import Agent, AgentConfig
-        from tulip.hooks.provider import HookProvider
+        from locus.agent import Agent, AgentConfig
+        from locus.hooks.provider import HookProvider
 
         log = []
 
@@ -1219,9 +1220,9 @@ class TestHooksE2E:
 
     def test_security_hook_cancels_tool(self, model):
         """Security hook blocks a tool call, agent explains the block."""
-        from tulip.agent import Agent, AgentConfig
-        from tulip.hooks.provider import HookProvider
-        from tulip.tools.decorator import tool
+        from locus.agent import Agent, AgentConfig
+        from locus.hooks.provider import HookProvider
+        from locus.tools.decorator import tool
 
         @tool
         def send_alert(message: str) -> str:
@@ -1270,7 +1271,7 @@ class TestHooksE2E:
 
     def test_write_protection_enforced_at_runtime(self, model):
         """Read-only fields on events raise AttributeError in real execution."""
-        from tulip.hooks.provider import BeforeModelCallEvent, BeforeToolCallEvent
+        from locus.hooks.provider import BeforeModelCallEvent, BeforeToolCallEvent
 
         # Model event: tools is read-only
         event = BeforeModelCallEvent(messages=[], tools=[{"type": "function"}])
@@ -1310,11 +1311,11 @@ class TestAnthropicProvider:
         if not api_key:
             pytest.skip("ANTHROPIC_API_KEY not set")
 
-        from tulip.core.messages import Message
-        from tulip.models.native.anthropic import AnthropicModel
+        from locus.core.messages import Message
+        from locus.models.native.anthropic import AnthropicModel
 
         model = AnthropicModel(
-            model=os.environ.get("TULIP_ANTHROPIC_TEST_MODEL", "claude-sonnet-4-6"), api_key=api_key
+            model=os.environ.get("LOCUS_ANTHROPIC_TEST_MODEL", "claude-sonnet-4-6"), api_key=api_key
         )
         response = await model.complete(
             [
@@ -1344,8 +1345,8 @@ class TestGuardrailsDepth:
 
     def test_output_pii_redaction_with_real_model(self, model):
         """OutputFilterHook redacts PII from real model responses."""
-        from tulip.agent import Agent, AgentConfig
-        from tulip.hooks.builtin.guardrails import OutputFilterHook
+        from locus.agent import Agent, AgentConfig
+        from locus.hooks.builtin.guardrails import OutputFilterHook
 
         hook = OutputFilterHook(redact_pii=True)
         agent = Agent(
@@ -1365,8 +1366,8 @@ class TestGuardrailsDepth:
 
     def test_topic_policy_with_real_model(self, model):
         """TopicPolicy does not interfere with safe topics."""
-        from tulip.agent import Agent, AgentConfig
-        from tulip.hooks.builtin.guardrails import OutputFilterHook, TopicPolicy
+        from locus.agent import Agent, AgentConfig
+        from locus.hooks.builtin.guardrails import OutputFilterHook, TopicPolicy
 
         hook = OutputFilterHook(
             redact_pii=False,
@@ -1409,8 +1410,8 @@ class TestSkillsSystem:
 
     def test_agent_activates_skill(self, model):
         """Agent sees skill catalog, activates relevant skill, follows instructions."""
-        from tulip.agent import Agent, AgentConfig
-        from tulip.skills import Skill
+        from locus.agent import Agent, AgentConfig
+        from locus.skills import Skill
 
         skill = Skill(
             name="security-audit",
@@ -1456,8 +1457,8 @@ class TestSkillsSystem:
 
     def test_agent_selects_correct_skill(self, model):
         """Agent picks the right skill from multiple options."""
-        from tulip.agent import Agent, AgentConfig
-        from tulip.skills import Skill
+        from locus.agent import Agent, AgentConfig
+        from locus.skills import Skill
 
         code_skill = Skill(
             name="code-review",
@@ -1497,8 +1498,8 @@ class TestSkillsSystem:
         """Skills loaded from SKILL.md files work with real model."""
         from pathlib import Path
 
-        from tulip.agent import Agent, AgentConfig
-        from tulip.skills import Skill
+        from locus.agent import Agent, AgentConfig
+        from locus.skills import Skill
 
         skills_dir = Path(__file__).parent.parent.parent / "examples" / "skills"
         if not skills_dir.exists():
@@ -1533,8 +1534,8 @@ class TestPluginSystem:
 
     def test_plugin_hooks_fire(self, model):
         """Plugin with @hook fires on real model calls."""
-        from tulip.agent import Agent, AgentConfig
-        from tulip.hooks.plugin import Plugin, hook
+        from locus.agent import Agent, AgentConfig
+        from locus.hooks.plugin import Plugin, hook
 
         class AuditPlugin(Plugin):
             name = "audit"
@@ -1566,7 +1567,7 @@ class TestPluginSystem:
 
     def test_callback_handler_receives_events(self, model):
         """Plain function callback receives events from real model."""
-        from tulip.agent import Agent, AgentConfig
+        from locus.agent import Agent, AgentConfig
 
         events = []
         agent = Agent(
@@ -1584,7 +1585,7 @@ class TestPluginSystem:
 
     def test_cancel_signal(self, model):
         """Cancel signal stops agent immediately."""
-        from tulip.agent import Agent, AgentConfig
+        from locus.agent import Agent, AgentConfig
 
         agent = Agent(
             config=AgentConfig(
@@ -1610,10 +1611,10 @@ class TestModelRetryHook:
         """Hook retries on empty response then gets real answer."""
         from unittest.mock import MagicMock
 
-        from tulip.agent import Agent, AgentConfig
-        from tulip.core.messages import Message
-        from tulip.hooks.builtin.retry import ModelRetryHook
-        from tulip.models.base import ModelResponse
+        from locus.agent import Agent, AgentConfig
+        from locus.core.messages import Message
+        from locus.hooks.builtin.retry import ModelRetryHook
+        from locus.models.base import ModelResponse
 
         call_count = 0
         mock_model = MagicMock()
@@ -1653,12 +1654,12 @@ class TestToolHotReload:
         import tempfile
         from pathlib import Path
 
-        from tulip.tools.watcher import load_tools_from_file
+        from locus.tools.watcher import load_tools_from_file
 
         with tempfile.TemporaryDirectory() as d:
             f = Path(d) / "math_tool.py"
             f.write_text(
-                "from tulip.tools.decorator import tool\n\n"
+                "from locus.tools.decorator import tool\n\n"
                 "@tool\n"
                 "def add(a: int, b: int) -> str:\n"
                 '    """Add two numbers."""\n'
@@ -1676,8 +1677,8 @@ class TestToolHotReload:
         import time
         from pathlib import Path
 
-        from tulip.tools.registry import ToolRegistry
-        from tulip.tools.watcher import ToolWatcher
+        from locus.tools.registry import ToolRegistry
+        from locus.tools.watcher import ToolWatcher
 
         with tempfile.TemporaryDirectory() as d:
             registry = ToolRegistry()
@@ -1690,7 +1691,7 @@ class TestToolHotReload:
             watcher.start()
             time.sleep(0.5)
             (Path(d) / "new_tool.py").write_text(
-                "from tulip.tools.decorator import tool\n\n"
+                "from locus.tools.decorator import tool\n\n"
                 "@tool\n"
                 "def fresh(x: str) -> str:\n"
                 '    """Fresh."""\n'
@@ -1724,9 +1725,9 @@ class TestSteering:
         structural equivalent (a tool body behind ``admit()``) holds under the
         same model, which is the distinction the gate exists to draw.
         """
-        from tulip.agent import Agent, AgentConfig
-        from tulip.hooks.builtin.steering import SteeringHook
-        from tulip.tools.decorator import tool
+        from locus.agent import Agent, AgentConfig
+        from locus.hooks.builtin.steering import SteeringHook
+        from locus.tools.decorator import tool
 
         @tool
         def delete_data(table: str) -> str:
@@ -1774,8 +1775,8 @@ class TestA2AProtocol:
         pytest.importorskip("fastapi")
         from fastapi.testclient import TestClient
 
-        from tulip.a2a import A2AServer
-        from tulip.agent import Agent, AgentConfig
+        from locus.a2a import A2AServer
+        from locus.agent import Agent, AgentConfig
 
         agent = Agent(
             config=AgentConfig(
@@ -1813,12 +1814,12 @@ class TestComposableTermination:
 
     def test_termination_conditions_composable(self, model):
         """Termination conditions combine with | and & operators."""
-        from tulip.core.termination import MaxIterations, TextMention, TokenLimit
+        from locus.core.termination import MaxIterations, TextMention, TokenLimit
 
         # OR: either triggers
         cond = MaxIterations(2) | TextMention("DONE")
-        from tulip.core.messages import Message
-        from tulip.core.state import AgentState
+        from locus.core.messages import Message
+        from locus.core.state import AgentState
 
         state = AgentState(agent_id="t").with_iteration(3)
         stop, reason = cond.check(state)
@@ -1847,7 +1848,7 @@ class TestOutputKey:
 
     def test_output_key_saves_to_state(self, model):
         """Agent with output_key saves final message to state metadata."""
-        from tulip.agent import Agent, AgentConfig
+        from locus.agent import Agent, AgentConfig
 
         agent = Agent(
             config=AgentConfig(
@@ -1872,7 +1873,7 @@ class TestDynamicSystemPrompt:
 
     def test_dynamic_prompt_receives_context(self, model):
         """System prompt callable receives context and generates prompt."""
-        from tulip.agent import Agent, AgentConfig
+        from locus.agent import Agent, AgentConfig
 
         def dynamic_prompt(context):
             role = context.get("metadata", {}).get("role", "assistant")

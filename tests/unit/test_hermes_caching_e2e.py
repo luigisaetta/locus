@@ -1,22 +1,23 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration test for prompt-cache breakpoint helpers (D.2).
 
 Verifies that the cache-control marker survives the round-trip
-through Tulip's message-handling layer alongside the model metadata
+through Locus's message-handling layer alongside the model metadata
 registry — the typical end-to-end path a user adopts.
 """
 
 from __future__ import annotations
 
-from tulip.core.messages import Message
-from tulip.models.caching import (
+from locus.core.messages import Message
+from locus.models.caching import (
     CACHE_CONTROL_KEY,
     is_cache_breakpoint,
     mark_cache_breakpoint,
 )
-from tulip.models.metadata import metadata_for
+from locus.models.metadata import metadata_for
 
 
 class TestCacheGatedOnMetadata:
@@ -60,7 +61,7 @@ class TestRoundTripThroughSerialization:
 
 class TestPreservesOtherMessageFields:
     def test_assistant_with_tool_calls(self) -> None:
-        from tulip.core.messages import ToolCall
+        from locus.core.messages import ToolCall
 
         original = Message.assistant(
             content="calling tool",

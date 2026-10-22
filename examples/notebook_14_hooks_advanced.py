@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 14: RELEASE GUARD — guardrails around a deploy-ops agent.
 
@@ -7,7 +8,7 @@ Notebook 12 covered hook basics. Here we build RELEASE GUARD, the
 platform team's change-gating layer: the hooks that sit between a
 deploy-ops agent and its tools and refuse the actions that would tear
 down running infrastructure or violate a change freeze. This notebook
-focuses on the safety properties Tulip enforces on the event objects
+focuses on the safety properties Locus enforces on the event objects
 hooks see, and on the control lever a hook pulls mid-flight —
 ``event.cancel`` to block a destructive tool call. Write-protected
 events are what keep the change log honest: a hook cannot quietly
@@ -31,9 +32,9 @@ Key ideas:
 Run it:
     .venv/bin/python examples/notebook_14_hooks_advanced.py
 
-The default provider is the mock model; set TULIP_MODEL_PROVIDER for a live one (e.g.
+The default provider is the mock model; set LOCUS_MODEL_PROVIDER for a live one (e.g.
 ``openai`` or ``anthropic``). Set
-``TULIP_MODEL_PROVIDER=mock`` for offline runs; OpenAI and Anthropic
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs; OpenAI and Anthropic
 also work.
 
 Prerequisite: notebook 12.
@@ -43,9 +44,9 @@ import asyncio
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
-from tulip.hooks.provider import HookProvider
-from tulip.tools.decorator import tool
+from locus.agent import Agent, AgentConfig
+from locus.hooks.provider import HookProvider
+from locus.tools.decorator import tool
 
 
 # =============================================================================
@@ -117,7 +118,7 @@ async def example_write_protection():
     """Probe a BeforeToolCallEvent directly — see what mutations are allowed."""
     print("\n=== Part 2: Write Protection ===\n")
 
-    from tulip.hooks.provider import BeforeToolCallEvent
+    from locus.hooks.provider import BeforeToolCallEvent
 
     event = BeforeToolCallEvent(
         tool_name="scale_deployment", tool_call_id="c1", arguments={"replicas": 10}
@@ -141,7 +142,7 @@ async def example_write_protection():
     agent = Agent(model=get_model(max_tokens=80), system_prompt="Reply in one short sentence.")
     t0 = _t.perf_counter()
     res = await agent.arun(
-        "In one sentence, why does Tulip mark BeforeToolCallEvent.tool_name as "
+        "In one sentence, why does Locus mark BeforeToolCallEvent.tool_name as "
         "read-only while letting hooks edit `arguments` and `cancel` — and why "
         "does that matter for an infrastructure change log?"
     )

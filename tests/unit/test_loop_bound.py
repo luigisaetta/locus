@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Async clients that must not outlive the loop that built them.
 
@@ -31,10 +32,10 @@ import pathlib
 
 import pytest
 
-from tulip.core.loop_bound import loop_bound, loop_key_for
+from locus.core.loop_bound import loop_bound, loop_key_for
 
 
-SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "tulip"
+SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "locus"
 
 
 class _Owner:
@@ -182,7 +183,7 @@ def test_no_async_client_is_cached_without_a_loop_key() -> None:
     assert not offenders, "\n  ".join(
         [
             "these cache an async client without keying it on the event loop; "
-            "use tulip.core.loop_bound.loop_bound:",
+            "use locus.core.loop_bound.loop_bound:",
             *offenders,
         ]
     )

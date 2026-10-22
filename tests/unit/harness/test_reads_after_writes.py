@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """A workspace read is not repeatable: the agent loop must run it again after a write.
 
@@ -12,12 +13,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tulip import Agent
-from tulip.harness import LocalBackend, build_harness
-from tulip.harness.ledger import ReadLedger
-from tulip.harness.tools import FACTORIES
-from tulip.harness.tools.common import HarnessConfig, HarnessContext
-from tulip.testing import ScriptedModel, text, tool_call
+from locus import Agent
+from locus.harness import LocalBackend, build_harness
+from locus.harness.ledger import ReadLedger
+from locus.harness.tools import FACTORIES
+from locus.harness.tools.common import HarnessConfig, HarnessContext
+from locus.testing import ScriptedModel, text, tool_call
 
 
 def test_no_harness_tool_is_idempotent(tmp_path: Path) -> None:

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for ``GET /threads/{tid}`` and ``DELETE /threads/{tid}``.
 
@@ -37,8 +38,8 @@ def _build_state(thread_id: str) -> Any:
     A MagicMock would slip through Pydantic's serializer with garbage values;
     we want the round-trip to look like a real production response.
     """
-    from tulip.core.messages import Message
-    from tulip.core.state import AgentState, ToolExecution
+    from locus.core.messages import Message
+    from locus.core.state import AgentState, ToolExecution
 
     state = AgentState()
     state = state.with_message(Message.system("You are helpful."))
@@ -71,7 +72,7 @@ class TestNoCheckpointer:
     def test_get_thread_returns_404(self):
         from fastapi.testclient import TestClient
 
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         server = AgentServer(agent=_make_agent(None))
         client = TestClient(server.app)
@@ -82,7 +83,7 @@ class TestNoCheckpointer:
     def test_delete_thread_returns_404(self):
         from fastapi.testclient import TestClient
 
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         server = AgentServer(agent=_make_agent(None))
         client = TestClient(server.app)
@@ -100,7 +101,7 @@ class TestGetThread:
     def test_returns_state_payload(self):
         from fastapi.testclient import TestClient
 
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         state = _build_state("user-c42")
         ckp = MagicMock()
@@ -125,7 +126,7 @@ class TestGetThread:
     def test_404_when_thread_missing(self):
         from fastapi.testclient import TestClient
 
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         ckp = MagicMock()
         ckp.load = AsyncMock(return_value=None)
@@ -140,7 +141,7 @@ class TestDeleteThread:
     def test_deletes_existing_thread(self):
         from fastapi.testclient import TestClient
 
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         ckp = MagicMock()
         ckp.delete = AsyncMock(return_value=True)
@@ -153,7 +154,7 @@ class TestDeleteThread:
     def test_idempotent_when_missing(self):
         from fastapi.testclient import TestClient
 
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         ckp = MagicMock()
         ckp.delete = AsyncMock(return_value=False)
@@ -176,7 +177,7 @@ class TestPrincipalScoping:
         """
         from fastapi.testclient import TestClient
 
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         state = _build_state("t1")
         ckp = MagicMock()
@@ -200,7 +201,7 @@ class TestPrincipalScoping:
     def test_two_keys_get_different_namespaces(self):
         from fastapi.testclient import TestClient
 
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         ckp = MagicMock()
         ckp.load = AsyncMock(return_value=None)
@@ -224,7 +225,7 @@ class TestAuthRequired:
     def test_get_threads_rejected_without_bearer(self):
         from fastapi.testclient import TestClient
 
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         ckp = MagicMock()
         ckp.load = AsyncMock(return_value=None)
@@ -236,7 +237,7 @@ class TestAuthRequired:
     def test_delete_threads_rejected_without_bearer(self):
         from fastapi.testclient import TestClient
 
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         ckp = MagicMock()
         ckp.delete = AsyncMock(return_value=True)

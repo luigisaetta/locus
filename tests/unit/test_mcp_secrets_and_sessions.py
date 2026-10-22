@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Per-run MCP headers: never persisted, typed failures, bounded sessions.
 
@@ -27,20 +28,20 @@ from tests._mcp_deps import require_server_deps
 
 require_server_deps()
 
+from locus.agent import Agent  # noqa: E402
+from locus.core.events import ToolCompleteEvent  # noqa: E402
+from locus.integrations.fastmcp import (  # noqa: E402
+    MCPClient,
+    MCPConnectionError,
+    MCPRequestContext,
+)
+from locus.memory.backends.file import FileCheckpointer  # noqa: E402
+from locus.testing import ScriptedModel, text, tool_call  # noqa: E402
 from tests.unit.test_mcp_fidelity import (  # noqa: E402
     _free_port,
     _LoopbackServer,
     _ProcessServer,
 )
-from tulip.agent import Agent  # noqa: E402
-from tulip.core.events import ToolCompleteEvent  # noqa: E402
-from tulip.integrations.fastmcp import (  # noqa: E402
-    MCPClient,
-    MCPConnectionError,
-    MCPRequestContext,
-)
-from tulip.memory.backends.file import FileCheckpointer  # noqa: E402
-from tulip.testing import ScriptedModel, text, tool_call  # noqa: E402
 
 
 SECRET = "tok-7f3a9c-DO-NOT-PERSIST"  # noqa: S105 — a test marker, not a credential
@@ -278,7 +279,7 @@ async def test_session_open_and_close_are_logged(
 ) -> None:
     client = _client(server.url, session_key=_principal)
     client.headers_provider = lambda _r: {"Authorization": f"Bearer {SECRET}", "X-User-Id": "u"}
-    with caplog.at_level("INFO", logger="tulip.integrations.fastmcp"):
+    with caplog.at_level("INFO", logger="locus.integrations.fastmcp"):
         await client.call_tool("auth_digest", {})
         await client.close()
     messages = [r.getMessage() for r in caplog.records]

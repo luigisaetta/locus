@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.a2a.protocol`` — server + client edge paths.
+"""Coverage tests for ``locus.a2a.protocol`` — server + client edge paths.
 
 Drives the error responses, JSON-RPC error codes, streaming/SSE branches,
 task-lifecycle guards, and the v1/legacy client method splits that the
@@ -20,7 +21,7 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
-from tulip.a2a import (
+from locus.a2a import (
     A2AClient,
     A2AServer,
     DataPart,
@@ -30,16 +31,16 @@ from tulip.a2a import (
     TaskState,
     TextPart,
 )
-from tulip.a2a.protocol import (
+from locus.a2a.protocol import (
     _extract_user_text,
     _TaskStore,
 )
-from tulip.a2a.spec import (
+from locus.a2a.spec import (
     FileWithBytes,
     FileWithUri,
     TaskStatus,
 )
-from tulip.core.events import TerminateEvent, ThinkEvent, ToolStartEvent
+from locus.core.events import TerminateEvent, ThinkEvent, ToolStartEvent
 
 
 # ---------------------------------------------------------------------------

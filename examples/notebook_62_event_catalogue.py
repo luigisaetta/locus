@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 62: The event taxonomy as a compliance artifact.
 
 When a PCI DSS assessor asks "what can your payment agents do, and how
 would you know they did it?" — the question behind a payments-operations
 monitoring control — the answer is the event catalogue. Every component
-in Tulip emits typed events under one stable prefix: agent.*,
+in Locus emits typed events under one stable prefix: agent.*,
 multiagent.*, composition.*, router.*, rag.*, memory.*, a2a.*, skills.*,
-deepagent.*. The EV_* constants in tulip.observability.emit are the
+deepagent.*. The EV_* constants in locus.observability.emit are the
 canonical registry — change one place, propagates everywhere — so the
 artifact you hand an assessor is generated from the code itself, not a
 spreadsheet that drifts out of date the day after it's signed.
@@ -20,11 +21,11 @@ spreadsheet that drifts out of date the day after it's signed.
   LoopAgent machinery) that surfaces composition.* events end-to-end.
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_62_event_catalogue.py
 
     # Offline / no credentials:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_62_event_catalogue.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_62_event_catalogue.py
 """
 
 from __future__ import annotations
@@ -35,9 +36,9 @@ from collections import defaultdict
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.agent.composition import LoopAgent, SequentialPipeline
-from tulip.observability import get_event_bus, run_context
+from locus.agent import Agent
+from locus.agent.composition import LoopAgent, SequentialPipeline
+from locus.observability import get_event_bus, run_context
 
 
 # Part 1: enumerate the EV_* constants at runtime so the audit artifact
@@ -47,7 +48,7 @@ from tulip.observability import get_event_bus, run_context
 def part1_catalogue_tour() -> None:
     print("\n--- Part 1: canonical event_type catalogue ---")
 
-    emit_mod = sys.modules["tulip.observability.emit"]
+    emit_mod = sys.modules["locus.observability.emit"]
     by_prefix: dict[str, list[str]] = defaultdict(list)
     for name in dir(emit_mod):
         if not name.startswith("EV_"):

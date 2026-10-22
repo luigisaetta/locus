@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Parity: the gateway evaluates `when` exactly as the registry parses it.
 
-The vectors below are the registry's own (``tulip_registry`` tests/unit/test_when.py),
+The vectors below are the registry's own (``locus_registry`` tests/unit/test_when.py),
 copied verbatim. A condition the registry accepted at publish must mean the same thing
 when a run reaches the branch; if either side changes, both copies change.
 """
@@ -14,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from tulip.playbooks.v2.when import (
+from locus.playbooks.v2.when import (
     MAX_WHEN_DEPTH,
     MAX_WHEN_LENGTH,
     WhenSyntaxError,

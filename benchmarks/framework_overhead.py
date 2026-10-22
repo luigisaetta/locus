@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""What Tulip costs you, with the model held still.
+"""What Locus costs you, with the model held still.
 
 An agent framework should be a thin runtime. The only way to say that
 honestly is to measure the part that is ours and publish it, so this file
-measures Tulip with the model replaced by :class:`tulip.testing.ScriptedModel`
+measures Locus with the model replaced by :class:`locus.testing.ScriptedModel`
 — a double that returns a canned turn immediately.
 
 That is the whole trick. Against a real provider every number here would be
@@ -72,12 +73,12 @@ def _measure(fn: Callable[[], Any], *, iterations: int, warmup: int) -> dict[str
 
 
 def _measure_import() -> dict[str, float]:
-    """Cost of ``import tulip`` in a cold interpreter.
+    """Cost of ``import locus`` in a cold interpreter.
 
     Measured in a subprocess because an import happens once per process and
     is cached thereafter — timing it in-process measures a dict lookup.
     """
-    code = "import time; t=time.perf_counter(); import tulip; print((time.perf_counter()-t)*1000)"
+    code = "import time; t=time.perf_counter(); import locus; print((time.perf_counter()-t)*1000)"
     samples = []
     for _ in range(5):
         out = subprocess.run(
@@ -99,8 +100,8 @@ def _measure_import() -> dict[str, float]:
 
 def build_cases() -> list[tuple[str, str, Callable[[], Any], int]]:
     """Each case is (key, human label, thunk, iterations)."""
-    from tulip import Agent, tool
-    from tulip.testing import ScriptedModel, text, tool_call
+    from locus import Agent, tool
+    from locus.testing import ScriptedModel, text, tool_call
 
     @tool
     def add(a: int, b: int) -> int:
@@ -145,8 +146,8 @@ def build_cases() -> list[tuple[str, str, Callable[[], Any], int]]:
 
 def measure_memory() -> dict[str, float]:
     """Peak Python heap for one agent doing one turn."""
-    from tulip import Agent, tool
-    from tulip.testing import ScriptedModel, text
+    from locus import Agent, tool
+    from locus.testing import ScriptedModel, text
 
     @tool
     def add(a: int, b: int) -> int:
@@ -175,13 +176,13 @@ def main() -> int:
     ap.add_argument("--quick", action="store_true", help="fewer iterations, for smoke runs")
     args = ap.parse_args()
 
-    import tulip
+    import locus
 
     results: dict[str, Any] = {
-        "tulip_version": tulip.__version__,
+        "locus_version": locus.__version__,
         "python": sys.version.split()[0],
         "platform": sys.platform,
-        "model": "tulip.testing.ScriptedModel (no network, no inference)",
+        "model": "locus.testing.ScriptedModel (no network, no inference)",
     }
 
     results["import"] = _measure_import()
@@ -197,13 +198,13 @@ def main() -> int:
         return 0
 
     print(
-        f"\ntulip {results['tulip_version']} · python {results['python']} · {results['platform']}"
+        f"\nlocus {results['locus_version']} · python {results['python']} · {results['platform']}"
     )
     print("model replaced by ScriptedModel — every number below is framework time\n")
     print(f"  {'operation':<32} {'median':>10} {'p95':>10} {'iqr':>9}")
     print(f"  {'-' * 32} {'-' * 10} {'-' * 10} {'-' * 9}")
     imp = results["import"]
-    print(f"  {'import tulip (cold process)':<32} {imp['median_ms']:>9.2f}ms {'—':>10} {'—':>9}")
+    print(f"  {'import locus (cold process)':<32} {imp['median_ms']:>9.2f}ms {'—':>10} {'—':>9}")
     for key, _label, _fn, _i in build_cases():
         r = results[key]
         print(

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``FallbackChain`` reports which tier served EACH call.
 
@@ -16,11 +17,11 @@ from typing import Any
 
 import pytest
 
-from tulip.core.events import ModelChunkEvent
-from tulip.core.messages import Message
-from tulip.core.warnings import TulipDeprecationWarning
-from tulip.models.fallback import FallbackChain, ServedTier, served_tier
-from tulip.testing import text
+from locus.core.events import ModelChunkEvent
+from locus.core.messages import Message
+from locus.core.warnings import LocusDeprecationWarning
+from locus.models.fallback import FallbackChain, ServedTier, served_tier
+from locus.testing import text
 
 
 class OverloadedError(Exception):
@@ -87,7 +88,7 @@ async def test_concurrent_completes_each_report_their_own_tier() -> None:
 
     # The shared attribute describes whichever call finished last (the slow
     # primary one) — the race the per-call report exists to avoid.
-    with pytest.warns(TulipDeprecationWarning):
+    with pytest.warns(LocusDeprecationWarning):
         assert chain.last_tier == 0
 
 

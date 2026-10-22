@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """build_harness: the tool set, the single gate, the preview, the prompt."""
 
@@ -11,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from tulip.control import ControlPolicy, gate_tool
-from tulip.harness import (
+from locus.control import ControlPolicy, gate_tool
+from locus.harness import (
     ALL_TOOLS,
     DEFAULT_TOOLS,
     PATCH_TOOLS,
@@ -21,8 +22,8 @@ from tulip.harness import (
     MemoryBackend,
     build_harness,
 )
-from tulip.harness.labels import KIND_EXEC
-from tulip.tools.decorator import Tool
+from locus.harness.labels import KIND_EXEC
+from locus.tools.decorator import Tool
 
 
 def test_the_default_set_is_everything_but_apply_patch(tmp_path: Path) -> None:
@@ -57,11 +58,11 @@ def test_unknown_tools_are_refused() -> None:
 def test_ungated_shell_on_the_host_is_logged_loudly(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    with caplog.at_level(logging.WARNING, logger="tulip.harness.toolset"):
+    with caplog.at_level(logging.WARNING, logger="locus.harness.toolset"):
         build_harness(LocalBackend(tmp_path))
     assert "ungated shell tools" in caplog.text
     caplog.clear()
-    with caplog.at_level(logging.WARNING, logger="tulip.harness.toolset"):
+    with caplog.at_level(logging.WARNING, logger="locus.harness.toolset"):
         build_harness(LocalBackend(tmp_path), wrap=lambda t, spec: t)
         build_harness(LocalBackend(tmp_path), tools=["read"])
     assert caplog.text == ""

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for ``Agent(gsar=GSARConfig(...))`` integration.
 
@@ -23,13 +24,13 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.agent.config import AgentConfig, GSARConfig
-from tulip.core.messages import Message, ToolCall
-from tulip.models.base import ModelResponse
-from tulip.reasoning.gsar import Claim, EvidenceType
-from tulip.reasoning.gsar_judge import JudgeOutput
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.agent.config import AgentConfig, GSARConfig
+from locus.core.messages import Message, ToolCall
+from locus.models.base import ModelResponse
+from locus.reasoning.gsar import Claim, EvidenceType
+from locus.reasoning.gsar_judge import JudgeOutput
+from locus.tools.decorator import tool
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for delta checkpointer."""
 
@@ -7,8 +8,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from tulip.core.state import AgentState
-from tulip.memory.delta import (
+from locus.core.state import AgentState
+from locus.memory.delta import (
     CheckpointMetadata,
     DeltaCheckpoint,
     DeltaCheckpointer,

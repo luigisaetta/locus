@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 35: structured output — typed support schemas a help desk can consume.
 
 A support agent's reply is only useful to the rest of the help desk if a
@@ -7,7 +8,7 @@ downstream workflow can parse it — route the ticket, update the CRM, fire
 a satisfaction survey. So every part extracts typed JSON and prints a
 ``[model call: X.XXs · prompt→completion tokens]`` banner so you can see
 the round-trip happen. The typed contracts are ordinary Pydantic models —
-the same ``ContactPoint``, ``Resolution``, and priority enums a Tulip
+the same ``ContactPoint``, ``Resolution``, and priority enums a Locus
 support agent emits ticket updates with.
 
 - ``extract_json`` and ``parse_structured`` — pull JSON out of a model
@@ -25,14 +26,14 @@ support agent emits ticket updates with.
   signal a downstream grounding step uses to abstain.
 
 Run it:
-    # The bundled mock model is the default; set TULIP_MODEL_PROVIDER for a live provider.
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_35_structured_output.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_35_structured_output.py
 
     # Offline:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_35_structured_output.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_35_structured_output.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key (or set ``TULIP_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key (or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``).
 - A model that supports constrained JSON decoding for Part 8 — the
   ``check_structured_output_capable()`` helper exits cleanly under mock.
@@ -46,8 +47,8 @@ from enum import StrEnum
 from config import get_model
 from pydantic import BaseModel, Field
 
-from tulip.agent import Agent
-from tulip.core.structured import (
+from locus.agent import Agent
+from locus.core.structured import (
     StructuredOutputError,
     create_output_instructions,
     create_schema_prompt,

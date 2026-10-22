@@ -1,11 +1,12 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 13: stream a payment review to an ops dashboard with SSE.
 
 SSE is the simplest way to push live payment-review updates from a
 Python backend to a payments operations dashboard — one HTTP response,
-one event per line. Tulip ships two handlers that turn the agent event
+one event per line. Locus ships two handlers that turn the agent event
 stream into SSE wire format: a buffered ``SSEHandler`` and a queue-based
 ``AsyncSSEHandler`` for true streaming.
 
@@ -26,19 +27,19 @@ Run it:
 
 This notebook does not call an LLM — it only exercises the SSE
 plumbing, so no provider configuration is needed. The mock provider is
-still a fine default if you set ``TULIP_MODEL_PROVIDER=mock``.
+still a fine default if you set ``LOCUS_MODEL_PROVIDER=mock``.
 """
 
 import asyncio
 from datetime import UTC, datetime
 
-from tulip.core.events import (
+from locus.core.events import (
+    LocusEvent,
     ThinkEvent,
     ToolCompleteEvent,
     ToolStartEvent,
-    TulipEvent,
 )
-from tulip.streaming.sse import (
+from locus.streaming.sse import (
     AsyncSSEHandler,
     SSEHandler,
     SSEMessage,
@@ -226,7 +227,7 @@ async def main():
     # =========================================================================
     print("\n=== Part 8: Custom Serialization ===\n")
 
-    def custom_serializer(event: TulipEvent) -> dict:
+    def custom_serializer(event: LocusEvent) -> dict:
         """Trim the payload to type, timestamp, and one content field."""
         return {
             "type": event.event_type,
@@ -254,7 +255,7 @@ async def main():
     print("""
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
-from tulip.streaming.sse import AsyncSSEHandler, create_sse_response_headers
+from locus.streaming.sse import AsyncSSEHandler, create_sse_response_headers
 
 app = FastAPI()
 
@@ -286,7 +287,7 @@ async def run_agent(handler):
     print("-" * 40)
 
     # =========================================================================
-    # Part 10: every Tulip event type the handlers know how to render
+    # Part 10: every Locus event type the handlers know how to render
     # =========================================================================
     print("\n=== Part 10: Supported Event Types ===\n")
 

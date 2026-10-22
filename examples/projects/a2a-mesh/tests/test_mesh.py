@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """In-process integration test for the A2A mesh.
 
 Boots both A2AServers via FastAPI's TestClient (no real network),
@@ -16,7 +17,7 @@ from fastapi.testclient import TestClient
 
 
 # Force MockModel for the test even if the user has env vars set.
-os.environ["TULIP_MODEL_PROVIDER"] = "mock"
+os.environ["LOCUS_MODEL_PROVIDER"] = "mock"
 
 from a2a_mesh.orchestrator import pick  # noqa: E402
 from a2a_mesh.soc_triage import build_server as build_triage  # noqa: E402

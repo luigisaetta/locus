@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``gate_tool`` with an advisor, and with a verdict worked out for each call.
 
@@ -17,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from tulip.control import (
+from locus.control import (
     Action,
     AdmissionError,
     AuditTrail,
@@ -27,8 +28,8 @@ from tulip.control import (
     admit_sync,
     gate_tool,
 )
-from tulip.control.verification import VerificationResult
-from tulip.tools.decorator import Tool, tool
+from locus.control.verification import VerificationResult
+from locus.tools.decorator import Tool, tool
 
 
 def _sender(sent: list[str]) -> Tool:

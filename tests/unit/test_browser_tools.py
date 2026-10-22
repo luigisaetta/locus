@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Browser tools against a fake page: what the model can reach, and what it can't.
 
@@ -15,8 +16,8 @@ from typing import Any
 
 import pytest
 
-from tulip.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
-from tulip.tools.browser import (
+from locus.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
+from locus.tools.browser import (
     READ_LABELS,
     SUBMIT_LABELS,
     WRITE_LABELS,
@@ -193,7 +194,7 @@ async def test_without_playwright_the_error_says_how_to_install_it(
     monkeypatch.setitem(sys.modules, "playwright", None)
     monkeypatch.setitem(sys.modules, "playwright.async_api", None)
 
-    with pytest.raises(BrowserError, match=r"tulip-agents\[browser\]"):
+    with pytest.raises(BrowserError, match=r"locus-sdk\[browser\]"):
         await BrowserSession().page()
 
 

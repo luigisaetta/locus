@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """A final answer delivered as a schema-valid tool call, and held to it."""
 
@@ -11,13 +12,13 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.events import TerminateEvent, ToolCompleteEvent
-from tulip.core.messages import Message, ToolCall
-from tulip.core.state import ToolExecution
-from tulip.models.base import ModelResponse
-from tulip.tools.output import ToolOutput
-from tulip.tools.structured_output import (
+from locus.agent import Agent
+from locus.core.events import TerminateEvent, ToolCompleteEvent
+from locus.core.messages import Message, ToolCall
+from locus.core.state import ToolExecution
+from locus.models.base import ModelResponse
+from locus.tools.output import ToolOutput
+from locus.tools.structured_output import (
     ACCEPTED,
     SchemaError,
     StructuredOutputTool,

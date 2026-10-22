@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``ToolOutput`` and ``report_progress`` for local tools.
 
@@ -16,12 +17,12 @@ import pickle
 import time
 from typing import Any
 
-from tulip.agent import Agent
-from tulip.core.events import ToolCompleteEvent, ToolProgressEvent, ToolStartEvent
-from tulip.hooks.provider import AfterToolCallEvent, HookPriority, HookProvider
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools import ToolOutput, report_progress, tool
-from tulip.tools.context import current_tool_context, progress_sink
+from locus.agent import Agent
+from locus.core.events import ToolCompleteEvent, ToolProgressEvent, ToolStartEvent
+from locus.hooks.provider import AfterToolCallEvent, HookPriority, HookProvider
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools import ToolOutput, report_progress, tool
+from locus.tools.context import current_tool_context, progress_sink
 
 
 @tool
@@ -166,7 +167,7 @@ def test_report_progress_without_a_listener_is_a_no_op() -> None:
 
 
 def test_lazy_model_exports() -> None:
-    from tulip import models
+    from locus import models
 
     assert models.FallbackChain.__name__ == "FallbackChain"
     assert models.CircuitBreaker.__name__ == "CircuitBreaker"

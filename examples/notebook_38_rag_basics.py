@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 38: RAG basics — a cloud Well-Architected knowledge base.
 
 Retrieval-Augmented Generation (RAG) grounds an agent's answers in your
@@ -43,8 +44,8 @@ import sys
 
 from config import get_embedder
 
-from tulip.rag import InMemoryVectorStore, OpenAIEmbeddings, RAGRetriever
-from tulip.rag.stores.base import Document
+from locus.rag import InMemoryVectorStore, OpenAIEmbeddings, RAGRetriever
+from locus.rag.stores.base import Document
 
 
 def _missing_env() -> list[str]:
@@ -52,7 +53,7 @@ def _missing_env() -> list[str]:
 
 
 def _get_embedder() -> OpenAIEmbeddings:
-    # id comes from TULIP_EMBEDDING_MODEL so this runs against a
+    # id comes from LOCUS_EMBEDDING_MODEL so this runs against a
     # self-hosted embedding endpoint too, not only api.openai.com
     return get_embedder()
 
@@ -185,7 +186,7 @@ async def using_rag_retriever():
         """,
         """
         A vector store keeps embeddings in a structure that supports fast
-        nearest-neighbour search. Tulip ships in-memory, pgvector,
+        nearest-neighbour search. Locus ships in-memory, pgvector,
         OpenSearch, Qdrant, and Chroma stores behind one interface —
         the same API whether the Index holds five Well-Architected
         practices or the full framework plus every team runbook.

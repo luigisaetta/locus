@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Durable agent runs on DBOS, against a SQLite system database.
 
@@ -21,20 +22,20 @@ pytest.importorskip("dbos")
 
 from dbos import DBOS  # noqa: E402
 
-from tulip.agent import Agent  # noqa: E402
-from tulip.control import Action, ControlPolicy, FileApprovals, gate_tool  # noqa: E402
-from tulip.core.messages import Message, Role  # noqa: E402
-from tulip.durable.dbos import (  # noqa: E402
+from locus.agent import Agent  # noqa: E402
+from locus.control import Action, ControlPolicy, FileApprovals, gate_tool  # noqa: E402
+from locus.core.messages import Message, Role  # noqa: E402
+from locus.durable.dbos import (  # noqa: E402
     InterruptedSegmentError,
     pending_decision,
     register_agents,
     signal_decided,
     start_agent_run,
 )
-from tulip.durable.segments import SegmentError, run_agent_segment  # noqa: E402
-from tulip.memory.backends.file import FileCheckpointer  # noqa: E402
-from tulip.testing import FunctionModel, text, tool_call  # noqa: E402
-from tulip.tools.decorator import tool  # noqa: E402
+from locus.durable.segments import SegmentError, run_agent_segment  # noqa: E402
+from locus.memory.backends.file import FileCheckpointer  # noqa: E402
+from locus.testing import FunctionModel, text, tool_call  # noqa: E402
+from locus.tools.decorator import tool  # noqa: E402
 
 
 if TYPE_CHECKING:
@@ -49,7 +50,7 @@ def system_db(tmp_path: Path) -> Iterator[str]:
 
 
 def _launch(url: str) -> None:
-    DBOS(config={"name": "tulip-test", "system_database_url": url, "run_admin_server": False})
+    DBOS(config={"name": "locus-test", "system_database_url": url, "run_admin_server": False})
     DBOS.launch()
 
 
@@ -117,7 +118,7 @@ async def test_a_held_refund_waits_for_a_person_and_runs_once(
     _launch(system_db)
 
     handle = await start_agent_run(agent=name, prompt="refund o1", thread_id="t1")
-    assert handle.workflow_id == "tulip-t1"
+    assert handle.workflow_id == "locus-t1"
     pending = await _wait_for_pause(handle.workflow_id)
     assert pending.status == "paused"
     assert pending.approval_id

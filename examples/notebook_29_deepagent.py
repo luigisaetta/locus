@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 29: DeepAgent — scoped service-fleet reliability review grounded in prior notes.
 
@@ -10,7 +11,7 @@ termination algebra, plus opt-in filesystem scratchspace, todo tracking,
 subagent spawning, and datastore auto-wiring. Here the agent runs a scoped
 reliability review over a service-fleet inventory — the pre-release readiness
 step of an on-call rotation, bounded to the services a deploy window actually
-touches. The result is a plain ``tulip.Agent`` — every hook, checkpointer,
+touches. The result is a plain ``locus.Agent`` — every hook, checkpointer,
 and observability primitive in the SDK attaches normally.
 
 - Typed termination: ``(ToolCalled('submit') & ConfidenceMet(0.85))
@@ -33,9 +34,9 @@ and observability primitive in the SDK attaches normally.
 Run it:
     python examples/notebook_29_deepagent.py
 
-The default provider is the bundled mock model; set TULIP_MODEL_PROVIDER
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER
 to openai / anthropic for a live model. Set
-``TULIP_MODEL_PROVIDER=mock`` for offline runs.
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
 - Notebook 06 (Agent basics).
@@ -51,14 +52,14 @@ import asyncio
 from config import get_embedder, get_model
 from pydantic import BaseModel, Field
 
-from tulip.deepagent import (
+from locus.deepagent import (
     SubAgentDef,
     TodoState,
     create_deepagent,
     make_todo_tools,
 )
-from tulip.observability import get_event_bus, run_context
-from tulip.tools import tool
+from locus.observability import get_event_bus, run_context
+from locus.tools import tool
 
 
 # =============================================================================
@@ -338,7 +339,7 @@ async def part5_datastores() -> None:
             print(f"  - {n}")
         return
 
-    from tulip.rag import OpenAIEmbeddings, QdrantVectorStore, RAGRetriever
+    from locus.rag import OpenAIEmbeddings, QdrantVectorStore, RAGRetriever
 
     embedder = get_embedder()
     probe = await embedder.embed_query("probe")
@@ -354,7 +355,7 @@ async def part5_datastores() -> None:
         # rather than ending the notebook on a traceback.
         print(
             "\n[incident_notes_datastore] skipped — this part needs the qdrant "
-            'extra: pip install "tulip-agents[qdrant]"'
+            'extra: pip install "locus-sdk[qdrant]"'
         )
         return
     retriever = RAGRetriever(embedder=embedder, store=store)

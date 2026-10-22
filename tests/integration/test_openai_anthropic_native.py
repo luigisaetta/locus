@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """End-to-end smoke tests against the **native** OpenAI and Anthropic SDKs.
 
@@ -24,7 +25,7 @@ each direct SDK:
   both providers.
 * **idempotent dedup** — ``@tool(idempotent=True)`` short-circuits a repeat
   call on both providers.
-* **hook exports** — ``ModelRetryHook`` from ``tulip.hooks.builtin`` attaches
+* **hook exports** — ``ModelRetryHook`` from ``locus.hooks.builtin`` attaches
   to an Agent and the run completes.
 """
 
@@ -35,8 +36,8 @@ import os
 import pytest
 from pydantic import BaseModel, Field
 
-from tulip.core.termination import MaxIterations
-from tulip.tools.decorator import tool
+from locus.core.termination import MaxIterations
+from locus.tools.decorator import tool
 
 
 _OPENAI = bool(os.environ.get("OPENAI_API_KEY"))
@@ -47,8 +48,8 @@ pytestmark = pytest.mark.integration
 
 
 # Cheap, fast default models. Override via env if needed.
-_OPENAI_MODEL = os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini")
-_ANTHROPIC_MODEL = os.environ.get("TULIP_ANTHROPIC_TEST_MODEL", "claude-haiku-4-5-20251001")
+_OPENAI_MODEL = os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini")
+_ANTHROPIC_MODEL = os.environ.get("LOCUS_ANTHROPIC_TEST_MODEL", "claude-haiku-4-5-20251001")
 
 
 # =============================================================================
@@ -103,7 +104,7 @@ def openai_model():
     if not _OPENAI:
         pytest.skip("OPENAI_API_KEY not set")
     pytest.importorskip("openai")
-    from tulip.models.native.openai import OpenAIModel
+    from locus.models.native.openai import OpenAIModel
 
     return OpenAIModel(model=_OPENAI_MODEL)
 
@@ -113,7 +114,7 @@ def anthropic_model():
     if not _ANTHROPIC:
         pytest.skip("ANTHROPIC_API_KEY not set")
     pytest.importorskip("anthropic")
-    from tulip.models.native.anthropic import AnthropicModel
+    from locus.models.native.anthropic import AnthropicModel
 
     return AnthropicModel(model=_ANTHROPIC_MODEL)
 
@@ -127,7 +128,7 @@ class TestOpenAINative:
     """Direct hits against OpenAI's API with ``OPENAI_API_KEY``."""
 
     def test_structured_output_round_trip(self, openai_model):
-        from tulip.agent import Agent
+        from locus.agent import Agent
 
         agent = Agent(
             model=openai_model,
@@ -149,7 +150,7 @@ class TestOpenAINative:
         assert len(result.parsed.vendors) == 3
 
     def test_max_iterations_caps_loop(self, openai_model):
-        from tulip.agent import Agent
+        from locus.agent import Agent
 
         agent = Agent(
             model=openai_model,
@@ -168,7 +169,7 @@ class TestOpenAINative:
         )
 
     def test_idempotent_dedup_short_circuits(self, openai_model):
-        from tulip.agent import Agent
+        from locus.agent import Agent
 
         _InvoiceCounter.n = 0
         agent = Agent(
@@ -195,8 +196,8 @@ class TestOpenAINative:
         assert _InvoiceCounter.n < len(invoice_calls)
 
     def test_model_retry_hook_attaches_and_runs(self, openai_model):
-        from tulip.agent import Agent
-        from tulip.hooks.builtin import ModelRetryHook
+        from locus.agent import Agent
+        from locus.hooks.builtin import ModelRetryHook
 
         agent = Agent(
             model=openai_model,
@@ -223,7 +224,7 @@ class TestAnthropicNative:
     """
 
     def test_structured_output_round_trip(self, anthropic_model):
-        from tulip.agent import Agent
+        from locus.agent import Agent
 
         agent = Agent(
             model=anthropic_model,
@@ -247,7 +248,7 @@ class TestAnthropicNative:
         assert len(result.parsed.vendors) == 3
 
     def test_max_iterations_caps_loop(self, anthropic_model):
-        from tulip.agent import Agent
+        from locus.agent import Agent
 
         agent = Agent(
             model=anthropic_model,
@@ -266,7 +267,7 @@ class TestAnthropicNative:
         )
 
     def test_idempotent_dedup_short_circuits(self, anthropic_model):
-        from tulip.agent import Agent
+        from locus.agent import Agent
 
         _InvoiceCounter.n = 0
         agent = Agent(
@@ -293,8 +294,8 @@ class TestAnthropicNative:
         assert _InvoiceCounter.n < len(invoice_calls)
 
     def test_model_retry_hook_attaches_and_runs(self, anthropic_model):
-        from tulip.agent import Agent
-        from tulip.hooks.builtin import ModelRetryHook
+        from locus.agent import Agent
+        from locus.hooks.builtin import ModelRetryHook
 
         agent = Agent(
             model=anthropic_model,

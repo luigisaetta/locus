@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage-gap tests for :mod:`tulip.control.verification`.
+"""Coverage-gap tests for :mod:`locus.control.verification`.
 
 Edge-case branches of ``verify`` and the bundled skeptics, all offline.
 """
@@ -11,7 +12,7 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from tulip.control.verification import (
+from locus.control.verification import (
     AdversarialSkeptic,
     EvidenceQualitySkeptic,
     FindingLike,
@@ -26,7 +27,7 @@ from tulip.control.verification import (
 
 async def test_verify_mapping_with_severity_enum() -> None:
     """Line 92: _parse_severity receives a Severity instance directly."""
-    from tulip.control.taxonomy import Severity
+    from locus.control.taxonomy import Severity
 
     finding: FindingLike = {
         "title": "test",
@@ -95,12 +96,12 @@ async def test_adversarial_skeptic_string_model_resolved() -> None:
 
     class _FakeModel:
         async def complete(self, messages, tools=None, **kwargs):  # noqa: ANN001, ANN003
-            from tulip.core.messages import Message
-            from tulip.models.base import ModelResponse
+            from locus.core.messages import Message
+            from locus.models.base import ModelResponse
 
             return ModelResponse(message=Message.assistant(content=review), usage={})
 
-    with patch("tulip.models.registry.get_model", return_value=_FakeModel()):
+    with patch("locus.models.registry.get_model", return_value=_FakeModel()):
         skeptic = AdversarialSkeptic("anthropic:mock")
         finding: FindingLike = {
             "title": "t",
@@ -123,14 +124,14 @@ async def test_adversarial_skeptic_unparseable_output_is_weak() -> None:
 
     class _BadModel:
         async def complete(self, messages, tools=None, **kwargs):  # noqa: ANN001, ANN003
-            from tulip.core.messages import Message
-            from tulip.models.base import ModelResponse
+            from locus.core.messages import Message
+            from locus.models.base import ModelResponse
 
             # {} is valid JSON but fails _AdversarialReview validation (missing 'supported')
             return ModelResponse(message=Message.assistant(content="{}"), usage={})
 
-    from tulip.control.findings import Evidence
-    from tulip.control.taxonomy import Severity
+    from locus.control.findings import Evidence
+    from locus.control.taxonomy import Severity
 
     finding = Evidence(
         title="test",
@@ -159,13 +160,13 @@ async def test_adversarial_skeptic_unsupported_no_objections_appends_concern() -
 
     class _UnsupportedModel:
         async def complete(self, messages, tools=None, **kwargs):  # noqa: ANN001, ANN003
-            from tulip.core.messages import Message
-            from tulip.models.base import ModelResponse
+            from locus.core.messages import Message
+            from locus.models.base import ModelResponse
 
             return ModelResponse(message=Message.assistant(content=review), usage={})
 
-    from tulip.control.findings import Evidence
-    from tulip.control.taxonomy import Severity
+    from locus.control.findings import Evidence
+    from locus.control.taxonomy import Severity
 
     finding = Evidence(
         title="test",
@@ -193,8 +194,8 @@ async def test_adversarial_skeptic_with_mapping_finding_no_description() -> None
 
     class _Model:
         async def complete(self, messages, tools=None, **kwargs):  # noqa: ANN001, ANN003
-            from tulip.core.messages import Message
-            from tulip.models.base import ModelResponse
+            from locus.core.messages import Message
+            from locus.models.base import ModelResponse
 
             return ModelResponse(message=Message.assistant(content=review), usage={})
 
@@ -229,8 +230,8 @@ async def test_evidence_quality_skeptic_no_refs_fatal() -> None:
 
 async def test_evidence_quality_skeptic_high_single_ref_concern() -> None:
     """Line 162: HIGH severity + 1 ref → concern appended."""
-    from tulip.control.findings import Evidence
-    from tulip.control.taxonomy import Severity
+    from locus.control.findings import Evidence
+    from locus.control.taxonomy import Severity
 
     finding = Evidence(
         title="cert expired",
@@ -253,8 +254,8 @@ async def test_adversarial_skeptic_model_error_fails_safe() -> None:
         async def complete(self, *args, **kwargs):  # noqa: ANN002, ANN003, ANN201
             raise RuntimeError("provider down")
 
-    from tulip.control.findings import Evidence
-    from tulip.control.taxonomy import Severity
+    from locus.control.findings import Evidence
+    from locus.control.taxonomy import Severity
 
     finding = Evidence(
         title="t",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run Tulip notebooks with a specific model provider.
+"""Run Locus notebooks with a specific model provider.
 
 This script configures the environment and runs notebooks to verify
 they work correctly with real LLM providers.
@@ -28,15 +28,15 @@ from pathlib import Path
 # Provider configurations.
 PROVIDERS = {
     "mock": {
-        "TULIP_MODEL_PROVIDER": "mock",
+        "LOCUS_MODEL_PROVIDER": "mock",
     },
     "openai": {
-        "TULIP_MODEL_PROVIDER": "openai",
-        "TULIP_MODEL_ID": "gpt-4o",
+        "LOCUS_MODEL_PROVIDER": "openai",
+        "LOCUS_MODEL_ID": "gpt-4o",
     },
     "anthropic": {
-        "TULIP_MODEL_PROVIDER": "anthropic",
-        "TULIP_MODEL_ID": "claude-sonnet-4-6",
+        "LOCUS_MODEL_PROVIDER": "anthropic",
+        "LOCUS_MODEL_ID": "claude-sonnet-4-6",
     },
 }
 
@@ -75,7 +75,7 @@ def run_notebook(notebook: Path, env: dict[str, str], timeout: int = 120) -> boo
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Tulip notebooks")
+    parser = argparse.ArgumentParser(description="Run Locus notebooks")
     parser.add_argument(
         "--provider",
         choices=list(PROVIDERS.keys()),
@@ -120,7 +120,7 @@ def main():
 
     # Apply overrides
     if args.model:
-        env["TULIP_MODEL_ID"] = args.model
+        env["LOCUS_MODEL_ID"] = args.model
 
     print(f"Provider: {args.provider}")
     print(f"Config: {env}")

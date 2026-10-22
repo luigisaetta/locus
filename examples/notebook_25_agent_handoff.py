@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 25: Support tier escalation — L1 → L2 → L3 handoff with typed context.
 
@@ -29,12 +30,12 @@ transfer, reason, and confidence value is recorded for the QA review.
 Run it:
     .venv/bin/python examples/notebook_25_agent_handoff.py
 
-The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
 (or anthropic) and the matching credentials to use a live model. Set
-``TULIP_MODEL_PROVIDER=mock`` for offline runs.
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
-This notebook fires ~9 handoffs serially, so it can use Tulip's "Model B"
-slot — a second, typically cheaper model id read from ``TULIP_MODEL_ID_B``
+This notebook fires ~9 handoffs serially, so it can use Locus's "Model B"
+slot — a second, typically cheaper model id read from ``LOCUS_MODEL_ID_B``
 — for the L1 front-line seat. With Model B unset, the slot collapses to Model A.
 
 Prerequisites:
@@ -47,9 +48,9 @@ import time
 
 from config import get_model, get_model_b, print_config
 
-from tulip.core.messages import Message
-from tulip.core.state import AgentState
-from tulip.multiagent.handoff import (
+from locus.core.messages import Message
+from locus.core.state import AgentState
+from locus.multiagent.handoff import (
     HandoffContext,
     HandoffReason,
     create_handoff_agent,
@@ -106,8 +107,8 @@ async def main():
     print("  L1 -> L3 (escalation)")
     print("  L2 -> L3 (escalation)")
 
-    # The L1 front-line seat reads from Tulip's "Model B" slot
-    # (env: TULIP_MODEL_ID_B). Set a cheaper/faster model there to cut
+    # The L1 front-line seat reads from Locus's "Model B" slot
+    # (env: LOCUS_MODEL_ID_B). Set a cheaper/faster model there to cut
     # round-trip latency; falls back to Model A when unset.
     triage_model = get_model_b(max_tokens=2000)
     model = get_model(max_tokens=2000)

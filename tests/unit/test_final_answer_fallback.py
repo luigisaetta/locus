@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``AgentConfig.final_answer_fallback``: what the run says when the last
 draft still fails the final-answer verifier.
@@ -16,17 +17,17 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.agent.verification import FinalAnswerContext
-from tulip.core.events import (
+from locus.agent import Agent
+from locus.agent.verification import FinalAnswerContext
+from locus.core.events import (
     FinalAnswerVerificationEvent,
+    LocusEvent,
     ModelChunkEvent,
     TerminateEvent,
-    TulipEvent,
 )
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 SAFE = "I could not confirm that. Here is what I can say for sure."
@@ -67,19 +68,19 @@ def _agent(model: Any, fallback: Any, **kwargs: Any) -> Agent:
     )
 
 
-async def _collect(stream: Any) -> list[TulipEvent]:
+async def _collect(stream: Any) -> list[LocusEvent]:
     return [e async for e in stream]
 
 
-def _streamed(events: list[TulipEvent]) -> str:
+def _streamed(events: list[LocusEvent]) -> str:
     return "".join(e.content or "" for e in events if isinstance(e, ModelChunkEvent))
 
 
-def _terminate(events: list[TulipEvent]) -> TerminateEvent:
+def _terminate(events: list[LocusEvent]) -> TerminateEvent:
     return next(e for e in events if isinstance(e, TerminateEvent))
 
 
-def _verdicts(events: list[TulipEvent]) -> list[FinalAnswerVerificationEvent]:
+def _verdicts(events: list[LocusEvent]) -> list[FinalAnswerVerificationEvent]:
     return [e for e in events if isinstance(e, FinalAnswerVerificationEvent)]
 
 

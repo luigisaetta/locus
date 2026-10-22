@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Tests for secret redaction patterns in ``tulip.tools.executor``.
+"""Tests for secret redaction patterns in ``locus.tools.executor``.
 
 Covers both the existing ``_sanitize_error`` surface (tool-execution errors)
 and the broader ``redact_sensitive_text`` helper introduced alongside the
@@ -12,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.tools.executor import (
+from locus.tools.executor import (
     _sanitize_error,
     redact_sensitive_text,
 )

@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for sandboxed tool execution (`tulip.tools.sandbox`).
+"""Unit tests for sandboxed tool execution (`locus.tools.sandbox`).
 
-The ``SubprocessSandbox`` tests mirror the tulip-sandbox conformance
+The ``SubprocessSandbox`` tests mirror the locus-sandbox conformance
 invariants: code runs and is contained, timeouts report instead of hanging,
 the host environment never reaches the box, runs don't share a filesystem,
 and ``run_tool`` recovers the function's return value.
@@ -16,12 +17,12 @@ from typing import Any
 
 import pytest
 
-from tulip.agent.hook_orchestrator import HookOrchestrator
-from tulip.control.policy import ControlPolicy
-from tulip.hooks.provider import BeforeToolCallEvent, HookPriority
-from tulip.observability import get_event_bus, reset_event_bus, run_context
-from tulip.tools import tool
-from tulip.tools.sandbox import (
+from locus.agent.hook_orchestrator import HookOrchestrator
+from locus.control.policy import ControlPolicy
+from locus.hooks.provider import BeforeToolCallEvent, HookPriority
+from locus.observability import get_event_bus, reset_event_bus, run_context
+from locus.tools import tool
+from locus.tools.sandbox import (
     SandboxEnforcerHook,
     SandboxError,
     SandboxExecutionError,
@@ -131,9 +132,9 @@ class TestSubprocessSandbox:
             SubprocessSandbox().run_code("pass", manifest=manifest)
 
     def test_host_env_is_never_inherited(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("TULIP_TEST_HOST_SECRET", "s3cr3t")
+        monkeypatch.setenv("LOCUS_TEST_HOST_SECRET", "s3cr3t")
         res = SubprocessSandbox().run_code(
-            "import os; print(os.environ.get('TULIP_TEST_HOST_SECRET', 'ABSENT'))"
+            "import os; print(os.environ.get('LOCUS_TEST_HOST_SECRET', 'ABSENT'))"
         )
         assert res.ok
         assert "ABSENT" in res.stdout
@@ -226,7 +227,7 @@ class TestNormalizeAndResolve:
         assert isinstance(resolve_sandbox(SandboxSpec(provider="local")), SubprocessSandbox)
 
     def test_env_var_picks_the_default_provider(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("TULIP_SANDBOX", "subprocess")
+        monkeypatch.setenv("LOCUS_SANDBOX", "subprocess")
         assert isinstance(resolve_sandbox(SandboxSpec()), SubprocessSandbox)
 
     def test_an_unregistered_provider_name_fails_closed(
@@ -245,7 +246,7 @@ class TestNormalizeAndResolve:
             resolve_sandbox(SandboxSpec(provider=42))
 
     def test_provider_label_forms(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("TULIP_SANDBOX", raising=False)
+        monkeypatch.delenv("LOCUS_SANDBOX", raising=False)
         assert provider_label(SandboxSpec()) == "subprocess"
         assert provider_label(SandboxSpec(provider="docker")) == "docker"
         assert provider_label(SandboxSpec(provider=_FakeProvider())) == "_FakeProvider"
@@ -306,14 +307,14 @@ class TestSandboxedToolExecution:
         assert '"total": 5' in result
 
     async def test_execute_does_not_see_host_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("TULIP_TEST_HOST_SECRET", "s3cr3t")
+        monkeypatch.setenv("LOCUS_TEST_HOST_SECRET", "s3cr3t")
 
         @tool(sandbox=True)
         def peek() -> dict:
             """Peek at the environment."""
             import os  # noqa: PLC0415
 
-            return {"secret": os.environ.get("TULIP_TEST_HOST_SECRET", "ABSENT")}
+            return {"secret": os.environ.get("LOCUS_TEST_HOST_SECRET", "ABSENT")}
 
         result = await peek.execute()
         assert "ABSENT" in result

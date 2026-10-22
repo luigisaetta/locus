@@ -1,5 +1,6 @@
-# Copyright 2026 Tulip Labs
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Agent definitions from Markdown files, in the formats people already have.
 
@@ -17,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from tulip.agent.specs import (
+from locus.agent.specs import (
     AgentSpec,
     _mini_yaml,
     load_agent_file,
@@ -113,7 +114,7 @@ def test_opencode_file(yaml_impl: str) -> None:
     assert spec.metadata["permission"]["bash"] == {"git push": "ask"}
 
 
-def test_tulip_file_with_lists_and_deny(yaml_impl: str) -> None:
+def test_locus_file_with_lists_and_deny(yaml_impl: str) -> None:
     text = """---
 name: planner
 description: >

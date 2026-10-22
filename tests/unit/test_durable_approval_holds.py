@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """A held action pauses the run, waits for a named person, and survives a restart.
 
@@ -17,8 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.control import (
+from locus.agent import Agent
+from locus.control import (
     Action,
     AdmissionError,
     AuditTrail,
@@ -29,10 +30,10 @@ from tulip.control import (
     call_digest,
     gate_tool,
 )
-from tulip.core.events import InterruptEvent, TerminateEvent, ToolCompleteEvent
-from tulip.memory.backends.file import FileCheckpointer
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools.decorator import Tool, tool
+from locus.core.events import InterruptEvent, TerminateEvent, ToolCompleteEvent
+from locus.memory.backends.file import FileCheckpointer
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools.decorator import Tool, tool
 
 
 if TYPE_CHECKING:

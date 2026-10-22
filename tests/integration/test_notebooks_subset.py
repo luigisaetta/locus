@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for notebooks 13-21.
 
@@ -41,7 +42,7 @@ class TestNotebook13StructuredOutput:
         """Test extracting JSON from plain text."""
         import json
 
-        from tulip.core.structured import extract_json
+        from locus.core.structured import extract_json
 
         raw_text = '{"name": "Alice", "age": 30}'
         result = extract_json(raw_text)
@@ -52,7 +53,7 @@ class TestNotebook13StructuredOutput:
         """Test extracting JSON from markdown code blocks."""
         import json
 
-        from tulip.core.structured import extract_json
+        from locus.core.structured import extract_json
 
         markdown = """Here's the data:
 ```json
@@ -67,7 +68,7 @@ class TestNotebook13StructuredOutput:
         """Test parsing into Pydantic model."""
         from pydantic import BaseModel
 
-        from tulip.core.structured import parse_structured
+        from locus.core.structured import parse_structured
 
         class Person(BaseModel):
             name: str
@@ -84,7 +85,7 @@ class TestNotebook13StructuredOutput:
         """Test handling parse failures."""
         from pydantic import BaseModel
 
-        from tulip.core.structured import parse_structured
+        from locus.core.structured import parse_structured
 
         class Person(BaseModel):
             name: str
@@ -100,7 +101,7 @@ class TestNotebook13StructuredOutput:
         """Test schema prompt generation."""
         from pydantic import BaseModel, Field
 
-        from tulip.core.structured import create_schema_prompt
+        from locus.core.structured import create_schema_prompt
 
         class Task(BaseModel):
             name: str = Field(..., description="Task name")
@@ -121,8 +122,8 @@ class TestNotebook14ReasoningPatterns:
 
     def test_reflector_assessment(self):
         """Test Reflector evaluation."""
-        from tulip.core.state import AgentState, ToolExecution
-        from tulip.reasoning import AssessmentCategory, Reflector
+        from locus.core.state import AgentState, ToolExecution
+        from locus.reasoning import AssessmentCategory, Reflector
 
         reflector = Reflector(loop_threshold=3)
         state = AgentState(agent_id="test")
@@ -141,9 +142,9 @@ class TestNotebook14ReasoningPatterns:
 
     def test_reflector_loop_detection(self):
         """Test loop detection in Reflector."""
-        from tulip.core.messages import ToolCall
-        from tulip.core.state import AgentState, ReasoningStep, ToolExecution
-        from tulip.reasoning import AssessmentCategory, Reflector
+        from locus.core.messages import ToolCall
+        from locus.core.state import AgentState, ReasoningStep, ToolExecution
+        from locus.reasoning import AssessmentCategory, Reflector
 
         reflector = Reflector(loop_threshold=3)
         state = AgentState(agent_id="test")
@@ -170,7 +171,7 @@ class TestNotebook14ReasoningPatterns:
 
     def test_grounding_evaluator(self):
         """Test grounding evaluation."""
-        from tulip.reasoning import GroundingEvaluator
+        from locus.reasoning import GroundingEvaluator
 
         evaluator = GroundingEvaluator(replan_threshold=0.5)
 
@@ -183,7 +184,7 @@ class TestNotebook14ReasoningPatterns:
 
     def test_grounding_convenience_function(self):
         """Test evaluate_grounding convenience function."""
-        from tulip.reasoning import evaluate_grounding
+        from locus.reasoning import evaluate_grounding
 
         result = evaluate_grounding(
             claims=["Test claim"],
@@ -195,7 +196,7 @@ class TestNotebook14ReasoningPatterns:
 
     def test_causal_chain_creation(self):
         """Test creating causal chains."""
-        from tulip.reasoning import CausalChain, NodeType, RelationshipType
+        from locus.reasoning import CausalChain, NodeType, RelationshipType
 
         chain = CausalChain()
 
@@ -209,7 +210,7 @@ class TestNotebook14ReasoningPatterns:
 
     def test_causal_chain_root_cause_detection(self):
         """Test identifying root causes."""
-        from tulip.reasoning import CausalChain, RelationshipType
+        from locus.reasoning import CausalChain, RelationshipType
 
         chain = CausalChain()
 
@@ -230,7 +231,7 @@ class TestNotebook14ReasoningPatterns:
 
     def test_build_causal_chain(self):
         """Test building chain from events."""
-        from tulip.reasoning import build_causal_chain
+        from locus.reasoning import build_causal_chain
 
         events = [
             {"label": "Error occurred"},
@@ -252,7 +253,7 @@ class TestNotebook15Playbooks:
 
     def test_playbook_step_creation(self):
         """Test creating playbook steps."""
-        from tulip.playbooks import PlaybookStep
+        from locus.playbooks import PlaybookStep
 
         step = PlaybookStep(
             id="step_1",
@@ -267,7 +268,7 @@ class TestNotebook15Playbooks:
 
     def test_playbook_creation(self):
         """Test creating playbooks."""
-        from tulip.playbooks import Playbook, PlaybookStep
+        from locus.playbooks import Playbook, PlaybookStep
 
         steps = [
             PlaybookStep(id="s1", description="Step 1"),
@@ -287,7 +288,7 @@ class TestNotebook15Playbooks:
 
     def test_playbook_get_step(self):
         """Test getting step by ID."""
-        from tulip.playbooks import Playbook, PlaybookStep
+        from locus.playbooks import Playbook, PlaybookStep
 
         playbook = Playbook(
             id="test",
@@ -306,7 +307,7 @@ class TestNotebook15Playbooks:
 
     def test_playbook_plan_progress(self):
         """Test playbook plan progress tracking."""
-        from tulip.playbooks import Playbook, PlaybookPlan, PlaybookStep, StepExecution, StepStatus
+        from locus.playbooks import Playbook, PlaybookPlan, PlaybookStep, StepExecution, StepStatus
 
         playbook = Playbook(
             id="test",
@@ -339,7 +340,7 @@ class TestNotebook16AgentHandoff:
 
     def test_handoff_agent_creation(self):
         """Test creating handoff agents."""
-        from tulip.multiagent.handoff import create_handoff_agent
+        from locus.multiagent.handoff import create_handoff_agent
 
         agent = create_handoff_agent(
             name="Test Agent",
@@ -352,7 +353,7 @@ class TestNotebook16AgentHandoff:
 
     def test_handoff_context_creation(self):
         """Test creating handoff context."""
-        from tulip.multiagent.handoff import HandoffContext, HandoffReason
+        from locus.multiagent.handoff import HandoffContext, HandoffReason
 
         context = HandoffContext(
             source_agent_id="agent_1",
@@ -367,7 +368,7 @@ class TestNotebook16AgentHandoff:
 
     def test_handoff_context_to_prompt(self):
         """Test converting context to prompt."""
-        from tulip.multiagent.handoff import HandoffContext, HandoffReason
+        from locus.multiagent.handoff import HandoffContext, HandoffReason
 
         context = HandoffContext(
             source_agent_id="agent_1",
@@ -383,7 +384,7 @@ class TestNotebook16AgentHandoff:
 
     def test_handoff_reasons(self):
         """Test handoff reason enum."""
-        from tulip.multiagent.handoff import HandoffReason
+        from locus.multiagent.handoff import HandoffReason
 
         reasons = list(HandoffReason)
         assert len(reasons) >= 4
@@ -401,7 +402,7 @@ class TestNotebook17OrchestratorPattern:
 
     def test_specialist_creation(self):
         """Test creating specialists."""
-        from tulip.multiagent.specialist import Specialist
+        from locus.multiagent.specialist import Specialist
 
         specialist = Specialist(
             name="Test Specialist",
@@ -415,7 +416,7 @@ class TestNotebook17OrchestratorPattern:
 
     def test_prebuilt_specialists(self):
         """Test pre-built specialist factories."""
-        from tulip.multiagent.specialist import (
+        from locus.multiagent.specialist import (
             create_code_analyst,
             create_log_analyst,
             create_metrics_analyst,
@@ -434,7 +435,7 @@ class TestNotebook17OrchestratorPattern:
 
     def test_routing_decision(self):
         """Test routing decision creation."""
-        from tulip.multiagent import RoutingDecision
+        from locus.multiagent import RoutingDecision
 
         decision = RoutingDecision(
             decision_type="invoke",
@@ -456,7 +457,7 @@ class TestNotebook18SpecialistAgents:
 
     def test_specialist_playbook(self):
         """Test specialist playbooks."""
-        from tulip.multiagent.specialist import Playbook, PlaybookStep
+        from locus.multiagent.specialist import Playbook, PlaybookStep
 
         playbook = Playbook(
             name="Test Playbook",
@@ -473,7 +474,7 @@ class TestNotebook18SpecialistAgents:
 
     def test_playbook_to_prompt(self):
         """Test playbook prompt generation."""
-        from tulip.multiagent.specialist import Playbook, PlaybookStep
+        from locus.multiagent.specialist import Playbook, PlaybookStep
 
         playbook = Playbook(
             name="Debug Procedure",
@@ -490,7 +491,7 @@ class TestNotebook18SpecialistAgents:
 
     def test_specialist_with_playbooks(self):
         """Test specialist with playbook selection."""
-        from tulip.multiagent.specialist import Playbook, PlaybookStep, Specialist
+        from locus.multiagent.specialist import Playbook, PlaybookStep, Specialist
 
         playbook1 = Playbook(
             name="Performance Analysis",
@@ -527,7 +528,7 @@ class TestNotebook19GuardrailsSecurity:
 
     def test_guardrail_config(self):
         """Test guardrail configuration."""
-        from tulip.hooks.builtin.guardrails import GuardrailAction, GuardrailConfig
+        from locus.hooks.builtin.guardrails import GuardrailAction, GuardrailConfig
 
         config = GuardrailConfig(
             block_dangerous_tools=frozenset({"exec", "eval"}),
@@ -542,8 +543,8 @@ class TestNotebook19GuardrailsSecurity:
     @pytest.mark.asyncio
     async def test_guardrails_hook_tool_blocking(self):
         """Test tool blocking in guardrails."""
-        from tulip.core.events import BeforeToolCallEvent
-        from tulip.hooks.builtin.guardrails import GuardrailConfig, GuardrailsHook
+        from locus.core.events import BeforeToolCallEvent
+        from locus.hooks.builtin.guardrails import GuardrailConfig, GuardrailsHook
 
         config = GuardrailConfig(
             block_dangerous_tools=frozenset({"dangerous_tool"}),
@@ -562,7 +563,7 @@ class TestNotebook19GuardrailsSecurity:
 
     def test_guardrail_actions(self):
         """Test guardrail action types."""
-        from tulip.hooks.builtin.guardrails import GuardrailAction
+        from locus.hooks.builtin.guardrails import GuardrailAction
 
         actions = list(GuardrailAction)
         assert GuardrailAction.BLOCK in actions
@@ -572,8 +573,8 @@ class TestNotebook19GuardrailsSecurity:
     @pytest.mark.asyncio
     async def test_content_filter_hook(self):
         """Test content filter hook."""
-        from tulip.core.state import AgentState
-        from tulip.hooks.builtin.guardrails import ContentFilterHook
+        from locus.core.state import AgentState
+        from locus.hooks.builtin.guardrails import ContentFilterHook
 
         hook = ContentFilterHook(
             blocked_words=["forbidden"],
@@ -601,8 +602,8 @@ class TestNotebook20CheckpointBackends:
     @pytest.mark.asyncio
     async def test_memory_checkpointer(self):
         """Test in-memory checkpointer with AgentState."""
-        from tulip.core.state import AgentState
-        from tulip.memory.backends.memory import MemoryCheckpointer
+        from locus.core.state import AgentState
+        from locus.memory.backends.memory import MemoryCheckpointer
 
         checkpointer = MemoryCheckpointer()
 
@@ -628,8 +629,8 @@ class TestNotebook20CheckpointBackends:
     @pytest.mark.asyncio
     async def test_file_checkpointer(self):
         """Test file-based checkpointer with AgentState."""
-        from tulip.core.state import AgentState
-        from tulip.memory.backends.file import FileCheckpointer
+        from locus.core.state import AgentState
+        from locus.memory.backends.file import FileCheckpointer
 
         with tempfile.TemporaryDirectory() as temp_dir:
             checkpointer = FileCheckpointer(base_dir=temp_dir)
@@ -648,7 +649,7 @@ class TestNotebook20CheckpointBackends:
     @pytest.mark.asyncio
     async def test_checkpointer_capabilities(self):
         """Test checkpointer capability inspection."""
-        from tulip.memory.backends.memory import MemoryCheckpointer
+        from locus.memory.backends.memory import MemoryCheckpointer
 
         checkpointer = MemoryCheckpointer()
 
@@ -668,7 +669,7 @@ class TestNotebook21SSEStreaming:
 
     def test_sse_message_format(self):
         """Test SSE message formatting."""
-        from tulip.streaming.sse import SSEMessage
+        from locus.streaming.sse import SSEMessage
 
         msg = SSEMessage(
             event="test",
@@ -683,7 +684,7 @@ class TestNotebook21SSEStreaming:
 
     def test_sse_multiline_data(self):
         """Test SSE with multi-line data."""
-        from tulip.streaming.sse import SSEMessage
+        from locus.streaming.sse import SSEMessage
 
         msg = SSEMessage(
             event="code",
@@ -696,8 +697,8 @@ class TestNotebook21SSEStreaming:
     @pytest.mark.asyncio
     async def test_sse_handler(self):
         """Test SSE handler buffering."""
-        from tulip.core.events import ThinkEvent
-        from tulip.streaming.sse import SSEHandler
+        from locus.core.events import ThinkEvent
+        from locus.streaming.sse import SSEHandler
 
         handler = SSEHandler(include_id=True, id_prefix="e_")
 
@@ -715,7 +716,7 @@ class TestNotebook21SSEStreaming:
     @pytest.mark.asyncio
     async def test_sse_handler_error(self):
         """Test SSE handler error handling."""
-        from tulip.streaming.sse import SSEHandler
+        from locus.streaming.sse import SSEHandler
 
         handler = SSEHandler()
 
@@ -733,8 +734,8 @@ class TestNotebook21SSEStreaming:
         """Test async SSE handler streaming."""
         import asyncio
 
-        from tulip.core.events import ThinkEvent
-        from tulip.streaming.sse import AsyncSSEHandler
+        from locus.core.events import ThinkEvent
+        from locus.streaming.sse import AsyncSSEHandler
 
         handler = AsyncSSEHandler()
 
@@ -758,7 +759,7 @@ class TestNotebook21SSEStreaming:
 
     def test_sse_response_headers(self):
         """Test SSE response headers."""
-        from tulip.streaming.sse import create_sse_response_headers
+        from locus.streaming.sse import create_sse_response_headers
 
         headers = create_sse_response_headers()
 

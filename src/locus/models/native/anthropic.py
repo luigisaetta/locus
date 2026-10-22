@@ -1,0 +1,794 @@
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
+
+"""Anthropic model provider."""
+
+from __future__ import annotations
+
+import os
+import re
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
+
+from pydantic import BaseModel, Field
+
+from locus.core.events import ModelChunkEvent
+from locus.core.loop_bound import loop_bound
+from locus.core.media import (
+    EARLIER_IMAGE_OMITTED,
+    has_images,
+    recent_image_positions,
+    split_content,
+    strip_images,
+)
+from locus.core.messages import Message, Role, ToolCall
+from locus.models.base import ModelConfig, ModelResponse
+
+
+if TYPE_CHECKING:
+    import anthropic
+
+
+# Models that reject `temperature` with `invalid_request_error: temperature is
+# deprecated for this model`. Anthropic started doing this with Claude Opus 4.7
+# and it extends to the Claude 5 family (sonnet-5 confirmed live — issue #29).
+# Match on stable prefixes so we don't need to bump the list every time
+# Anthropic publishes a new minor version.
+_TEMPERATURE_DEPRECATED_PREFIXES: tuple[str, ...] = (
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-opus-4-9",
+    "claude-sonnet-5",
+    "claude-opus-5",
+    "claude-haiku-5",
+    "claude-fable-5",
+    "claude-mythos-5",
+)
+
+
+def _tool_result_content(content: str | None, *, send_images: bool) -> str | list[dict[str, Any]]:
+    """A tool result as Anthropic ``tool_result`` content: text, or text and image blocks.
+
+    Screenshots embedded with :func:`locus.core.media.encode_image` become image
+    blocks; only the latest few are sent, older ones become a placeholder.
+    """
+    text = content or ""
+    if not has_images(text):
+        return text
+    if not send_images:
+        return strip_images(text, EARLIER_IMAGE_OMITTED)
+    blocks: list[dict[str, Any]] = []
+    for part in split_content(text):
+        if isinstance(part, str):
+            blocks.append({"type": "text", "text": part})
+        else:
+            blocks.append(
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": part.media_type, "data": part.data},
+                }
+            )
+    return blocks
+
+
+def _system_note_block(text: str) -> dict[str, Any]:
+    """A mid-run system message as a user-turn text block, marked as guidance."""
+    return {"type": "text", "text": f"<system-note>\n{text}\n</system-note>"}
+
+
+def _as_blocks(content: str | list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """User-turn content as a block list, so two turns can be concatenated."""
+    if isinstance(content, str):
+        return [{"type": "text", "text": content}] if content else []
+    return list(content)
+
+
+def _merge_user_turns(turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge runs of adjacent user turns into one, ``tool_result`` blocks first.
+
+    A turn that is not merged with anything keeps its original shape, so a
+    plain ``user`` string stays a string on the wire.
+    """
+    merged: list[dict[str, Any]] = []
+    for turn in turns:
+        if turn["role"] == "user" and merged and merged[-1]["role"] == "user":
+            blocks = _as_blocks(merged[-1]["content"]) + _as_blocks(turn["content"])
+            results = [b for b in blocks if b.get("type") == "tool_result"]
+            rest = [b for b in blocks if b.get("type") != "tool_result"]
+            merged[-1] = {"role": "user", "content": results + rest}
+        else:
+            merged.append(turn)
+    return merged
+
+
+#: A Claude id's trailing ``-<major>-<minor>`` version, which OpenRouter writes
+#: ``-<major>.<minor>`` (``claude-sonnet-5-5`` is ``anthropic/claude-sonnet-5.5``).
+_DASHED_VERSION = re.compile(r"^(claude-[a-z]+-\d+)-(\d)$")
+_DOTTED_VERSION = re.compile(r"^(claude-[a-z]+-\d+)\.(\d)$")
+#: A dated snapshot suffix (``-20251001``), which OpenRouter's slugs do not carry.
+_SNAPSHOT = re.compile(r"-\d{8}$")
+
+#: Maximum ``cache_control`` breakpoints Anthropic accepts in one request.
+MAX_CACHE_BREAKPOINTS = 4
+
+
+def native_model_id(model_id: str) -> str:
+    """Anthropic's own id for ``model_id``, also when given as an OpenRouter slug.
+
+    ``anthropic/claude-sonnet-5.5`` is ``claude-sonnet-5-5``; any other id is
+    returned as it is. The model's capabilities (which ids reject
+    ``temperature``) are keyed on Anthropic's ids.
+    """
+    bare = model_id.removeprefix("anthropic/")
+    return _DOTTED_VERSION.sub(r"\1-\2", bare)
+
+
+def openrouter_model_id(model_id: str) -> str:
+    """OpenRouter's slug for a Claude model (``claude-sonnet-5-5`` → ``anthropic/claude-sonnet-5.5``).
+
+    An id that already names a vendor (contains ``/``) is returned unchanged.
+    """
+    if "/" in model_id:
+        return model_id
+    bare = _SNAPSHOT.sub("", model_id)
+    return "anthropic/" + _DASHED_VERSION.sub(r"\1.\2", bare)
+
+
+def _is_openrouter(base_url: str | None) -> bool:
+    host = urlparse(base_url).hostname if base_url else None
+    return bool(host) and (host == "openrouter.ai" or str(host).endswith(".openrouter.ai"))
+
+
+def _rejects_temperature(model_id: str) -> bool:
+    """Return True if the named Claude model rejects the `temperature` param.
+
+    Public so callers (or wrappers) can pre-flight the same check without
+    relying on a 400 round-trip to the API.
+    """
+    model_id = native_model_id(model_id)
+    return any(model_id.startswith(p) for p in _TEMPERATURE_DEPRECATED_PREFIXES)
+
+
+def _with_cache_breakpoint(message: dict[str, Any]) -> dict[str, Any]:
+    """``message`` with ``cache_control`` on its last content block.
+
+    The prefix up to and including that block is written to the cache, and
+    read back by the next request that starts with it.
+    """
+    blocks = _as_blocks(message["content"])
+    if not blocks:
+        return message
+    last = {**blocks[-1], "cache_control": {"type": "ephemeral"}}
+    return {**message, "content": [*blocks[:-1], last]}
+
+
+def _rolling_breakpoints(messages: list[dict[str, Any]], slots: int) -> list[dict[str, Any]]:
+    """Mark the end of the conversation, and the user turn before it, for caching.
+
+    The breakpoint on the latest message caches the whole request; the next
+    request, which starts with all of it (the history only grows between
+    compactions), reads it back and pays full price only for what it added.
+    Anthropic looks back a limited number of blocks from a breakpoint for an
+    earlier cache entry, so when a slot is free the previous user turn gets
+    one too: a turn that added many blocks still finds the last one written.
+    """
+    if slots <= 0 or not messages:
+        return messages
+    # Every turn as a block list: a breakpoint turns the turn it lands on into
+    # one, and that turn must look the same in the next request, where the
+    # breakpoint has moved on, or the prefix would differ there.
+    marked = [{**m, "content": _as_blocks(m["content"]) or m["content"]} for m in messages]
+    targets = [len(marked) - 1]
+    if slots > 1:
+        earlier = next(
+            (i for i in range(len(marked) - 2, -1, -1) if marked[i]["role"] == "user"), None
+        )
+        if earlier is not None:
+            targets.append(earlier)
+    for index in targets:
+        marked[index] = _with_cache_breakpoint(marked[index])
+    return marked
+
+
+def _reported_cost(usage: Any) -> float | None:
+    """The call's cost in USD when the endpoint reports one (OpenRouter does)."""
+    cost = getattr(usage, "cost", None)
+    if isinstance(cost, bool) or not isinstance(cost, int | float):
+        return None
+    return float(cost)
+
+
+def _usage_dict(usage: Any) -> dict[str, int]:
+    """Token usage in Locus's keys, prompt-cache counters included.
+
+    Anthropic reports the cache counters only when prompt caching is in play;
+    surfacing them lets ``AgentResult.metrics`` show cache hits and savings.
+    """
+    out = {
+        "prompt_tokens": usage.input_tokens,
+        "completion_tokens": usage.output_tokens,
+    }
+    cache_creation = getattr(usage, "cache_creation_input_tokens", None)
+    cache_read = getattr(usage, "cache_read_input_tokens", None)
+    if isinstance(cache_creation, int):
+        out["cache_creation_input_tokens"] = cache_creation
+    if isinstance(cache_read, int):
+        out["cache_read_input_tokens"] = cache_read
+    return out
+
+
+class AnthropicConfig(ModelConfig):
+    """Configuration for Anthropic models."""
+
+    model: str = "claude-sonnet-4-6"
+    max_tokens: int = 4096
+    temperature: float = 0.7
+    top_p: float = 0.9
+    api_key: str | None = Field(default=None, description="Anthropic API key")
+    base_url: str | None = Field(
+        default=None,
+        description=(
+            "Custom API base URL: any endpoint that speaks the Messages API. "
+            "Unset, ANTHROPIC_BASE_URL applies, then api.anthropic.com. "
+            "OpenRouter serves it at https://openrouter.ai/api; a Claude id "
+            "such as claude-sonnet-5-5 is then sent as OpenRouter's slug "
+            "(anthropic/claude-sonnet-5.5)."
+        ),
+    )
+    auth_token: str | None = Field(
+        default=None,
+        description=(
+            "Bearer token sent as ``Authorization`` instead of an ``x-api-key`` "
+            "(what OpenRouter and most gateways take). Unset, "
+            "ANTHROPIC_AUTH_TOKEN applies. With a token, an ANTHROPIC_API_KEY "
+            "in the environment is not sent: an Anthropic key never goes to "
+            "another vendor's endpoint unless passed as api_key explicitly."
+        ),
+    )
+    default_headers: dict[str, str] | None = Field(
+        default=None,
+        description=(
+            "Extra HTTP headers sent on every request. Needed to call the "
+            "API directly from a browser (Pyodide/WASM): pass "
+            "{'anthropic-dangerous-direct-browser-access': 'true'} so the "
+            "CORS preflight is accepted."
+        ),
+    )
+    prompt_cache: bool = Field(
+        default=False,
+        description=(
+            "When True, mark the system prompt, the tool catalog and the "
+            "end of the conversation (a rolling breakpoint, at most four in "
+            "all) with Anthropic's `cache_control: ephemeral`, so each request "
+            "reads the previous one's prefix back at ~1/10x cost. Default "
+            "False for backward compatibility."
+        ),
+    )
+
+    # Production-safety knobs — same posture as the OpenAI provider.
+    # The anthropic SDK retries 5xx + connection errors with exponential
+    # backoff between attempts; default of 3 / 120s matches OpenAIConfig
+    # and gives reasoning + tool-heavy turns enough headroom.
+    max_retries: int = Field(
+        default=3,
+        ge=0,
+        description="Retry budget for transient errors (overloaded, 5xx, network).",
+    )
+    request_timeout: float = Field(
+        default=120.0,
+        gt=0,
+        description="Per-request timeout in seconds.",
+    )
+
+
+class AnthropicModel(BaseModel):
+    """Anthropic model provider.
+
+    Supports Claude 4.6, 4.5, 3.5 models with streaming and tool calling.
+
+    Example:
+        >>> model = AnthropicModel(model="claude-sonnet-4-6")
+        >>> response = await model.complete([Message.user("Hello!")])
+    """
+
+    config: AnthropicConfig
+    _client: anthropic.AsyncAnthropic | None = None
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    @property
+    def supports_structured_output(self) -> bool:
+        """Anthropic doesn't ship OpenAI-style ``response_format``.
+
+        The agent loop falls back to the prompted-JSON path with
+        post-hoc parsing for Anthropic models.
+        """
+        return False
+
+    def __init__(
+        self,
+        model: str = "claude-sonnet-4-6",
+        api_key: str | None = None,
+        base_url: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+        prompt_cache: bool = False,
+        default_headers: dict[str, str] | None = None,
+        auth_token: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        config = AnthropicConfig(
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            auth_token=auth_token,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            prompt_cache=prompt_cache,
+            default_headers=default_headers,
+            **kwargs,
+        )
+        super().__init__(config=config)
+
+    @property
+    def client(self) -> anthropic.AsyncAnthropic:
+        """Get or create the Anthropic client.
+
+        Configured with explicit ``max_retries`` + ``timeout`` so a
+        transient 529 (overloaded) / 5xx / connection reset doesn't
+        kill the agent loop on the first try. Retries use exponential
+        backoff inside the anthropic SDK.
+        """
+
+        def build() -> anthropic.AsyncAnthropic:
+            import anthropic  # noqa: PLC0415
+
+            token = self._auth_token()
+            client = anthropic.AsyncAnthropic(
+                api_key=self.config.api_key,
+                auth_token=token,
+                base_url=self.base_url,
+                max_retries=self.config.max_retries,
+                timeout=self.config.request_timeout,
+                default_headers=self.config.default_headers,
+            )
+            if token is not None and self.config.api_key is None:
+                # Some SDK versions read ANTHROPIC_API_KEY whatever else is
+                # passed; with a bearer token for another endpoint that key
+                # must not ride along.
+                client.api_key = None
+            return client
+
+        # Bound to the loop that built it — see locus.core.loop_bound.
+        return loop_bound(self, "_client", build)
+
+    @property
+    def base_url(self) -> str | None:
+        """The endpoint requests go to: the configured one, else ANTHROPIC_BASE_URL."""
+        return self.config.base_url or os.environ.get("ANTHROPIC_BASE_URL") or None
+
+    def _auth_token(self) -> str | None:
+        return self.config.auth_token or os.environ.get("ANTHROPIC_AUTH_TOKEN") or None
+
+    @property
+    def wire_model(self) -> str:
+        """The model id as the endpoint names it.
+
+        OpenRouter's Messages API takes its own slugs, so a Claude id is
+        translated there; an id already written as a slug is sent unchanged.
+        """
+        if _is_openrouter(self.base_url):
+            return openrouter_model_id(self.config.model)
+        return self.config.model
+
+    async def close(self) -> None:
+        """Close the underlying httpx client.
+
+        ``Agent.run_sync`` calls this in a ``finally`` block so the
+        loop-bound httpx connections are shut down inside the same
+        event loop that opened them. Without this, the next
+        ``asyncio.run`` invocation closes the prior loop and the
+        leftover client's ``__del__`` later tries to ``aclose`` against
+        it, raising ``RuntimeError: Event loop is closed``.
+        """
+        if self._client is not None:
+            try:
+                await self._client.close()
+            finally:
+                self._client = None
+
+    async def __aenter__(self) -> AnthropicModel:
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        await self.close()
+
+    def _convert_messages(self, messages: list[Message]) -> tuple[str | None, list[dict[str, Any]]]:
+        """Convert Locus messages to Anthropic format.
+
+        Returns ``(system_prompt, messages)`` since Anthropic takes the system
+        prompt separately. The system prompt is every leading system message
+        joined in order; see :meth:`_split_messages` for where later ones go.
+        """
+        system_parts, anthropic_messages = self._split_messages(messages)
+        return ("\n\n".join(system_parts) or None), anthropic_messages
+
+    def _split_messages(self, messages: list[Message]) -> tuple[list[str], list[dict[str, Any]]]:
+        """Split Locus messages into system prompt parts and Anthropic turns.
+
+        The Messages API has one ``system`` field and a strictly alternating
+        user/assistant conversation, while Locus histories carry system
+        messages in two places:
+
+        - **Leading** ones (the agent's instructions, a memory block placed
+          right after them) form the system prompt, kept in order.
+        - **Later** ones are notes the agent loop adds mid-run — budget and
+          iteration-limit notices, grounding and verification reminders. Each
+          becomes a ``<system-note>`` text block in the user turn at its
+          position, the way Anthropic recommends steering a conversation that
+          is already under way. Lifting them into ``system`` instead would
+          either replace the agent's instructions (what this adapter used to
+          do: the last system message won) or move the note away from the
+          point in the run it refers to.
+
+        Adjacent user turns are then merged so roles alternate, with
+        ``tool_result`` blocks first in each merged turn: the API requires the
+        results to open the user turn that follows a ``tool_use``, and a note
+        must never sit between the two.
+        """
+        system_parts: list[str] = []
+        anthropic_messages: list[dict[str, Any]] = []
+        with_images = recent_image_positions(
+            [m.content if m.role == Role.TOOL else None for m in messages]
+        )
+        leading = True
+
+        for index, msg in enumerate(messages):
+            if msg.role == Role.SYSTEM:
+                if not msg.content:
+                    continue
+                if leading:
+                    system_parts.append(msg.content)
+                else:
+                    anthropic_messages.append(
+                        {"role": "user", "content": [_system_note_block(msg.content)]}
+                    )
+                continue
+            leading = False
+
+            if msg.role == Role.ASSISTANT:
+                content: list[dict[str, Any]] = []
+                if msg.content:
+                    content.append({"type": "text", "text": msg.content})
+                for tc in msg.tool_calls:
+                    content.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": tc.arguments,
+                        }
+                    )
+                anthropic_messages.append(
+                    {"role": "assistant", "content": content or msg.content or ""}
+                )
+
+            elif msg.role == Role.TOOL:
+                anthropic_messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": msg.tool_call_id or "",
+                                "content": _tool_result_content(
+                                    msg.content, send_images=index in with_images
+                                ),
+                            }
+                        ],
+                    }
+                )
+
+            elif msg.role == Role.USER:
+                # A user turn may embed images (``encode_image``) — a harness
+                # attaching a screenshot or a diagram the person referenced.
+                # Every one is sent: the person chose them, unlike a stream
+                # of tool screenshots where only the latest few matter.
+                anthropic_messages.append(
+                    {
+                        "role": "user",
+                        "content": _tool_result_content(msg.content, send_images=True),
+                    }
+                )
+
+        anthropic_messages = _merge_user_turns(anthropic_messages)
+
+        # Anthropic requires the last message to be a user turn — it does not
+        # support assistant-prefill. Strip any trailing assistant messages, but
+        # only when the conversation has at least one user message (i.e. it is
+        # a real multi-turn exchange, not a lone assistant message being
+        # converted for inspection).
+        has_user = any(m["role"] == "user" for m in anthropic_messages)
+        if has_user:
+            while anthropic_messages and anthropic_messages[-1]["role"] == "assistant":
+                anthropic_messages.pop()
+
+        return system_parts, anthropic_messages
+
+    def _convert_tools(self, tools: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+        """Convert OpenAI-format tools to Anthropic format."""
+        if not tools:
+            return None
+
+        anthropic_tools = []
+        for tool in tools:
+            native = (tool.get("native") or {}).get("anthropic")
+            if isinstance(native, dict):
+                anthropic_tools.append({k: v for k, v in native.items() if not k.startswith("_")})
+                continue
+            func = tool.get("function", tool)
+            anthropic_tools.append(
+                {
+                    "name": func["name"],
+                    "description": func.get("description", ""),
+                    "input_schema": func.get("parameters", {"type": "object", "properties": {}}),
+                }
+            )
+        return anthropic_tools
+
+    @staticmethod
+    def _native_betas(tools: list[dict[str, Any]] | None) -> dict[str, str]:
+        """The ``anthropic-beta`` header the native tools in ``tools`` need, if any."""
+        betas: list[str] = []
+        for tool in tools or []:
+            native = (tool.get("native") or {}).get("anthropic")
+            beta = native.get("_beta") if isinstance(native, dict) else None
+            if isinstance(beta, str) and beta not in betas:
+                betas.append(beta)
+        return {"anthropic-beta": ",".join(betas)} if betas else {}
+
+    _STRUCTURED_TOOL_NAME = "respond_with_schema"
+
+    def _structured_output_tool(self, response_format: dict[str, Any]) -> dict[str, Any]:
+        """Translate an OpenAI-style ``response_format`` into an Anthropic tool.
+
+        Anthropic does not support a ``response_format`` parameter; the
+        idiomatic way to enforce a JSON schema is to declare a single tool
+        whose ``input_schema`` is the desired schema and force the model to
+        call it via ``tool_choice``. We name the tool ``respond_with_schema``
+        and re-use the underlying schema name as the tool description so the
+        model picks up any high-level docstring.
+        """
+        json_schema = response_format.get("json_schema", {}) or {}
+        schema = json_schema.get("schema") or {}
+        description = (
+            json_schema.get("description")
+            or f"Return your final answer as a {json_schema.get('name', 'JSON')} object."
+        )
+        return {
+            "name": self._STRUCTURED_TOOL_NAME,
+            "description": description,
+            "input_schema": schema or {"type": "object", "properties": {}},
+        }
+
+    def _request_params(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None,
+        kwargs: dict[str, Any],
+    ) -> tuple[dict[str, Any], bool]:
+        """The Messages API request for a call, and whether it is structured.
+
+        Shared by :meth:`complete` and :meth:`stream` so the two cannot
+        drift: ``stream()`` used to build its own, and silently dropped
+        ``temperature``, prompt caching (system prompt and tool catalog) and
+        ``response_format`` — a streaming agent paid full price for every
+        cached turn and ran at the server's default temperature.
+        """
+        system_parts, anthropic_messages = self._split_messages(messages)
+        anthropic_tools = self._convert_tools(tools) or []
+        #: ``cache_control`` markers placed so far; Anthropic accepts four.
+        breakpoints = 0
+
+        params: dict[str, Any] = {
+            "model": self.wire_model,
+            "messages": anthropic_messages,
+            "max_tokens": kwargs.get("max_tokens") or self.config.max_tokens,
+        }
+        # Claude Opus 4.7 (and presumably later 4.x reasoning models) reject
+        # `temperature` with `invalid_request_error: temperature is deprecated
+        # for this model`. Silently drop the param for those models — locus's
+        # own agent runtime_loop always passes `temperature=config.temperature`
+        # in `complete_kwargs`, so honouring "caller intent" would still 400
+        # every Agent(model="claude-opus-4-7") on the first turn. The
+        # wrapper's job here is to keep the agent loop running; callers who
+        # need the parameter back can pin to a model that accepts it.
+        if not _rejects_temperature(self.config.model):
+            temperature = kwargs.get("temperature", self.config.temperature)
+            # ``None`` means the caller wants the server's default (see
+            # ModelConfig.temperature) — send nothing rather than a value.
+            if temperature is not None:
+                params["temperature"] = temperature
+        if system_parts:
+            # When prompt-caching is enabled, send the system prompt as a
+            # block list with ``cache_control: ephemeral`` so subsequent
+            # turns reuse the cached input at ~1/10x cost (Anthropic
+            # ephemeral cache TTL is ~5 min). The first block — the agent's
+            # own instructions — carries a breakpoint of its own, so a block
+            # that changes per turn after it (a recalled-memory block) does
+            # not cost the instructions their cache hit; the last block's
+            # breakpoint covers the whole system prompt when nothing changed.
+            if self.config.prompt_cache:
+                last = len(system_parts) - 1
+                breakpoints += 1 if last == 0 else 2
+                params["system"] = [
+                    {
+                        "type": "text",
+                        "text": part,
+                        **({"cache_control": {"type": "ephemeral"}} if i in (0, last) else {}),
+                    }
+                    for i, part in enumerate(system_parts)
+                ]
+            else:
+                params["system"] = "\n\n".join(system_parts)
+
+        # Structured-output mode: emulate ``response_format`` via tool-use.
+        response_format = kwargs.get("response_format")
+        structured_mode = (
+            isinstance(response_format, dict) and response_format.get("type") == "json_schema"
+        )
+        if structured_mode:
+            assert isinstance(response_format, dict)  # narrowed by structured_mode
+            anthropic_tools.append(self._structured_output_tool(response_format))
+            params["tool_choice"] = {
+                "type": "tool",
+                "name": self._STRUCTURED_TOOL_NAME,
+            }
+
+        if anthropic_tools:
+            # Cache the tool catalog too — it's typically the same across
+            # turns and can be large. Anthropic walks the cache_control
+            # markers in order; tagging the last tool covers the catalog.
+            if self.config.prompt_cache and anthropic_tools:
+                breakpoints += 1
+                anthropic_tools = [
+                    *anthropic_tools[:-1],
+                    {
+                        **anthropic_tools[-1],
+                        "cache_control": {"type": "ephemeral"},
+                    },
+                ]
+            params["tools"] = anthropic_tools
+
+        if self.config.prompt_cache:
+            # The conversation itself, which is most of a long run's request:
+            # without a breakpoint here only the instructions and tools are
+            # ever read from cache.
+            params["messages"] = _rolling_breakpoints(
+                anthropic_messages, MAX_CACHE_BREAKPOINTS - breakpoints
+            )
+
+        beta_headers = self._native_betas(tools)
+        if beta_headers:
+            params["extra_headers"] = beta_headers
+
+        return params, structured_mode
+
+    async def complete(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> ModelResponse:
+        """Complete a chat request.
+
+        Recognises an OpenAI-style ``response_format={"type": "json_schema", ...}``
+        kwarg and translates it into Anthropic's tool-use mechanism: a synthetic
+        ``respond_with_schema`` tool is appended to the call and ``tool_choice``
+        is pinned to it. The tool arguments are then surfaced as the message
+        content (canonical JSON) so callers can parse them with
+        :func:`locus.core.structured.parse_structured` exactly as they would
+        with native ``response_format`` providers.
+        """
+        import json as _json
+
+        params, structured_mode = self._request_params(messages, tools, kwargs)
+        response = await self.client.messages.create(**params)
+
+        # Parse response
+        content: str | None = None
+        tool_calls: list[ToolCall] = []
+        structured_payload: dict[str, Any] | None = None
+
+        for block in response.content:
+            if block.type == "text":
+                content = (content or "") + block.text
+            elif block.type == "tool_use":
+                if structured_mode and block.name == self._STRUCTURED_TOOL_NAME:
+                    structured_payload = block.input if isinstance(block.input, dict) else {}
+                    continue
+                tool_calls.append(
+                    ToolCall(
+                        id=block.id,
+                        name=block.name,
+                        arguments=block.input if isinstance(block.input, dict) else {},
+                    )
+                )
+
+        # In structured mode, surface the tool's arguments as the message
+        # content so downstream ``parse_structured`` can validate it.
+        if structured_mode and structured_payload is not None:
+            content = _json.dumps(structured_payload)
+
+        usage: dict[str, int] = _usage_dict(response.usage) if response.usage else {}
+
+        return ModelResponse(
+            message=Message.assistant(content=content, tool_calls=tool_calls),
+            usage=usage,
+            stop_reason=response.stop_reason,
+            cost_usd=_reported_cost(response.usage) if response.usage else None,
+        )
+
+    async def stream(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ModelChunkEvent]:
+        """Stream a chat response.
+
+        Sends the same request :meth:`complete` does — temperature, prompt
+        caching, native-tool betas and ``response_format`` included — and
+        reports the same usage, cache counters included.
+        """
+        import json as _json
+
+        params, structured_mode = self._request_params(messages, tools, kwargs)
+
+        async with self.client.messages.stream(**params) as stream:
+            async for text in stream.text_stream:
+                yield ModelChunkEvent(content=text)
+
+            # ``text_stream`` yields text and nothing else — tool_use blocks,
+            # usage and the stop reason live on the assembled message. Without
+            # reading it, a streaming tool-using agent silently loses every
+            # tool call and cannot be metered.
+            final = await stream.get_final_message()
+
+        # ``final.content`` is a union of block types (text, thinking, tool_use,
+        # …); only tool_use carries id/name/input, so read them defensively
+        # rather than narrowing against a shape that grows with the API.
+        tool_calls: list[ToolCall] = []
+        for block in final.content or []:
+            if getattr(block, "type", None) != "tool_use":
+                continue
+            block_input = getattr(block, "input", None)
+            arguments = block_input if isinstance(block_input, dict) else {}
+            name = str(getattr(block, "name", "") or "")
+            if structured_mode and name == self._STRUCTURED_TOOL_NAME:
+                # Same contract as complete(): the schema tool's arguments
+                # are the answer, delivered as content.
+                yield ModelChunkEvent(content=_json.dumps(arguments))
+                continue
+            tool_calls.append(
+                ToolCall(
+                    id=str(getattr(block, "id", "") or ""),
+                    name=name,
+                    arguments=arguments,
+                )
+            )
+        if tool_calls:
+            yield ModelChunkEvent(tool_calls=tool_calls)
+
+        usage: dict[str, int] | None = None
+        if final.usage is not None:
+            usage = _usage_dict(final.usage)
+
+        yield ModelChunkEvent(
+            done=True,
+            usage=usage,
+            stop_reason=final.stop_reason,
+            cost_usd=_reported_cost(final.usage) if final.usage is not None else None,
+        )

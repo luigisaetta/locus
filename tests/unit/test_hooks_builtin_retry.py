@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for ``tulip.hooks.builtin.retry`` (ModelRetryHook).
+"""Unit tests for ``locus.hooks.builtin.retry`` (ModelRetryHook).
 
 Drives the retry budget, the empty-response gate, and the
 exponential-backoff delay calculation. Uses ``monkeypatch`` to skip
@@ -14,10 +15,10 @@ from dataclasses import dataclass
 
 import pytest
 
-from tulip.core.messages import Message
-from tulip.hooks.builtin.retry import ModelRetryHook
-from tulip.hooks.provider import HookPriority
-from tulip.models.base import ModelResponse
+from locus.core.messages import Message
+from locus.hooks.builtin.retry import ModelRetryHook
+from locus.hooks.provider import HookPriority
+from locus.models.base import ModelResponse
 
 
 @dataclass
@@ -38,7 +39,7 @@ def _content_response() -> ModelResponse:
 
 def _tool_call_response() -> ModelResponse:
     # Empty content but with a tool call — should NOT trigger retry.
-    from tulip.core.messages import ToolCall
+    from locus.core.messages import ToolCall
 
     return ModelResponse(
         message=Message.assistant(
@@ -55,7 +56,7 @@ def _no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_sleep(_: float) -> None:
         return None
 
-    monkeypatch.setattr("tulip.hooks.builtin.retry.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("locus.hooks.builtin.retry.asyncio.sleep", fake_sleep)
 
 
 class TestConstruction:
@@ -133,7 +134,7 @@ class TestBackoffCalculation:
         async def capture_sleep(delay: float) -> None:
             recorded.append(delay)
 
-        monkeypatch.setattr("tulip.hooks.builtin.retry.asyncio.sleep", capture_sleep)
+        monkeypatch.setattr("locus.hooks.builtin.retry.asyncio.sleep", capture_sleep)
 
         hook = ModelRetryHook(
             max_retries=10,

@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.memory.compactor.LLMCompactor`` internals.
+"""Coverage tests for ``locus.memory.compactor.LLMCompactor`` internals.
 
 Covers the early-return arms of ``async_apply`` and the small helper
 methods (``_split_system``, ``_grow_tail``, ``_compact_without_llm``
@@ -12,8 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from tulip.core.messages import Message, Role
-from tulip.memory.compactor import LLMCompactor, _is_async
+from locus.core.messages import Message, Role
+from locus.memory.compactor import LLMCompactor, _is_async
 
 
 def _user(content: str) -> Message:

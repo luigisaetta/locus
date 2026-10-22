@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for the OpenAI-compatible provider table.
 
@@ -16,7 +17,7 @@ These tests guard the parts that are easy to get wrong:
 - the closure binds per iteration (a bare closure over the loop variable
   gives every provider the *last* table entry — the classic late-binding
   bug, and it would be invisible until someone used a non-final provider);
-- resolution precedence is explicit > TULIP_ override > vendor env > default;
+- resolution precedence is explicit > LOCUS_ override > vendor env > default;
 - local servers work with no key, hosted ones fail with a message naming the
   variable to set;
 - ``/v1/responses`` is never auto-selected against a custom base URL, which
@@ -29,13 +30,13 @@ import sys
 
 import pytest
 
-from tulip.models.providers import (
+from locus.models.providers import (
     COMPATIBLE_PROVIDERS,
     CompatibleProvider,
     provider_table,
     register_compatible_providers,
 )
-from tulip.models.registry import get_model, list_providers
+from locus.models.registry import get_model, list_providers
 
 
 def test_every_table_entry_is_registered() -> None:
@@ -80,24 +81,24 @@ def test_explicit_base_url_wins_over_default() -> None:
     assert model.config.base_url == "https://example.test/v1"
 
 
-def test_tulip_env_override_wins_over_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TULIP_OLLAMA_BASE_URL", "http://gpu-box:11434/v1")
+def test_locus_env_override_wins_over_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LOCUS_OLLAMA_BASE_URL", "http://gpu-box:11434/v1")
     model = get_model("ollama:qwen3")
     assert model.config.base_url == "http://gpu-box:11434/v1"
 
 
 def test_vendor_env_override_is_honoured(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("TULIP_VLLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LOCUS_VLLM_BASE_URL", raising=False)
     monkeypatch.setenv("VLLM_BASE_URL", "http://serving:8000/v1")
     model = get_model("vllm:mistral-7b")
     assert model.config.base_url == "http://serving:8000/v1"
 
 
-def test_tulip_override_beats_vendor_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_locus_override_beats_vendor_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VLLM_BASE_URL", "http://vendor:8000/v1")
-    monkeypatch.setenv("TULIP_VLLM_BASE_URL", "http://tulip:8000/v1")
+    monkeypatch.setenv("LOCUS_VLLM_BASE_URL", "http://locus:8000/v1")
     model = get_model("vllm:mistral-7b")
-    assert model.config.base_url == "http://tulip:8000/v1"
+    assert model.config.base_url == "http://locus:8000/v1"
 
 
 def test_local_provider_needs_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -127,7 +128,7 @@ def test_explicit_key_wins_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_escape_hatch_requires_a_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("TULIP_OPENAI_COMPATIBLE_BASE_URL", raising=False)
+    monkeypatch.delenv("LOCUS_OPENAI_COMPATIBLE_BASE_URL", raising=False)
     with pytest.raises(ValueError, match="base_url"):
         get_model("openai-compatible:whatever")
 
@@ -152,7 +153,7 @@ def test_responses_api_never_auto_selected_on_custom_base_url() -> None:
 
 def test_model_id_with_a_colon_survives(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ollama tags look like ``qwen3:4b``; only the first colon splits."""
-    monkeypatch.delenv("TULIP_OLLAMA_BASE_URL", raising=False)
+    monkeypatch.delenv("LOCUS_OLLAMA_BASE_URL", raising=False)
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
     model = get_model("ollama:qwen3:4b")
     assert model.config.model == "qwen3:4b"
@@ -172,16 +173,16 @@ def test_provider_table_lists_every_prefix() -> None:
     assert "`anthropic`" in table
 
 
-def test_tulip_base_url_env_name_is_shell_safe() -> None:
+def test_locus_base_url_env_name_is_shell_safe() -> None:
     """``openai-compatible`` must not produce a variable with a dash in it."""
     spec = CompatibleProvider(prefix="openai-compatible", base_url=None, env_key="X", label="X")
-    assert spec.tulip_base_url_env == "TULIP_OPENAI_COMPATIBLE_BASE_URL"
+    assert spec.locus_base_url_env == "LOCUS_OPENAI_COMPATIBLE_BASE_URL"
 
 
 # --------------------------------------------------------------------------
 # Registration degrades gracefully when an optional dependency is absent.
 # Each provider block is wrapped in try/except ImportError precisely so that
-# `pip install tulip-agents` with no extras still imports; these tests
+# `pip install locus-sdk` with no extras still imports; these tests
 # exercise those branches instead of leaving them as untested prose.
 # --------------------------------------------------------------------------
 
@@ -189,8 +190,8 @@ def test_tulip_base_url_env_name_is_shell_safe() -> None:
 @pytest.mark.parametrize(
     ("blocked", "absent_prefix", "still_present"),
     [
-        ("tulip.models.native.openai", "openai", "anthropic"),
-        ("tulip.models.native.anthropic", "anthropic", "openai"),
+        ("locus.models.native.openai", "openai", "anthropic"),
+        ("locus.models.native.anthropic", "anthropic", "openai"),
     ],
 )
 def test_a_missing_provider_dep_does_not_break_registration(
@@ -200,7 +201,7 @@ def test_a_missing_provider_dep_does_not_break_registration(
     still_present: str,
 ) -> None:
     """One uninstalled provider must not take the registry down with it."""
-    from tulip.models import registry
+    from locus.models import registry
 
     monkeypatch.setattr(registry, "_PROVIDERS", {})
     # ``None`` in sys.modules makes ``import`` raise ImportError, which is
@@ -217,10 +218,10 @@ def test_missing_compatible_table_does_not_break_registration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The native providers survive even if the compatible table is gone."""
-    from tulip.models import registry
+    from locus.models import registry
 
     monkeypatch.setattr(registry, "_PROVIDERS", {})
-    monkeypatch.setitem(sys.modules, "tulip.models.providers", None)
+    monkeypatch.setitem(sys.modules, "locus.models.providers", None)
 
     registry._register_defaults()
 
@@ -230,6 +231,6 @@ def test_missing_compatible_table_does_not_break_registration(
 
 def test_registry_is_restored_after_the_degradation_tests() -> None:
     """Guard against the monkeypatched registry leaking into other tests."""
-    from tulip.models.registry import list_providers
+    from locus.models.registry import list_providers
 
     assert len(list_providers()) >= 18

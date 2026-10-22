@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Text the model did not author is data, never instructions — whatever its source.
 
@@ -17,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.memory.scrubber import (
+from locus.memory.scrubber import (
     build_memory_context_block,
     build_untrusted_context_block,
     sanitize_context,

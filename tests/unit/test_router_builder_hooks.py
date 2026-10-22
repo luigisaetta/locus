@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Hooks reach every agent a protocol builder emits — leaves included.
 
@@ -24,11 +25,11 @@ from typing import Any
 
 import pytest
 
-from tulip.router.capability import Capability, CapabilityIndex
-from tulip.router.goal_frame import Complexity, GoalFrame, Risk, TaskType
-from tulip.router.protocol import BuilderContext, builtin_protocols
-from tulip.tools.decorator import tool
-from tulip.tools.registry import create_registry
+from locus.router.capability import Capability, CapabilityIndex
+from locus.router.goal_frame import Complexity, GoalFrame, Risk, TaskType
+from locus.router.protocol import BuilderContext, builtin_protocols
+from locus.tools.decorator import tool
+from locus.tools.registry import create_registry
 
 
 class _Sentinel:
@@ -165,7 +166,7 @@ def test_the_multi_agent_shapes_really_do_have_leaves() -> None:
 
 def test_a_builder_may_add_its_own_hooks_on_top() -> None:
     """Merged, not overwritten — a shape-specific hook must not drop the caller's."""
-    from tulip.router.protocol import _agent
+    from locus.router.protocol import _agent
 
     tools = create_registry(lookup)
     caps = CapabilityIndex(tools)

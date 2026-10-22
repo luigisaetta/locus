@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for evidence-grounded findings (``tulip.control.grounded``).
+"""Unit tests for evidence-grounded findings (``locus.control.grounded``).
 
 Covers the core invariant — a ``Evidence`` only exists when its evidence
 clears the GSAR proceed threshold, otherwise an ``Abstention`` is
@@ -13,7 +14,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from tulip.control import (
+from locus.control import (
     Abstention,
     AtlasTechnique,
     Evidence,
@@ -30,7 +31,7 @@ from tulip.control import (
     is_finding,
     severity_at_least,
 )
-from tulip.reasoning.gsar import (
+from locus.reasoning.gsar import (
     DEFAULT_TAU_PROCEED,
     Claim,
     Decision,
@@ -266,7 +267,7 @@ def test_taxonomy_sizes_lock_against_drift() -> None:
 
 def test_top_level_reexports() -> None:
     """The security surface is importable from the package root."""
-    import tulip
+    import locus
 
-    assert tulip.Severity is Severity
-    assert tulip.ground_finding is ground_finding
+    assert locus.Severity is Severity
+    assert locus.ground_finding is ground_finding

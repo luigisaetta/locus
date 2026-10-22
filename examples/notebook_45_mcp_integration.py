@@ -1,19 +1,20 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 45: MCP integration — wire support tooling into an agent.
 
 MCP (Model Context Protocol) is the open standard that lets AI
 assistants call tools running in a different process — exactly how a
 support desk wires its order system, help center, and billing services
-into an agent without bundling them. Tulip speaks both sides of it.
+into an agent without bundling them. Locus speaks both sides of it.
 
-- Publish a Tulip support agent as an MCP server — tools and the
+- Publish a Locus support agent as an MCP server — tools and the
   agent's own ``run_agent`` become MCP methods.
-- Connect a Tulip agent to an external MCP server (an order system, a
+- Connect a Locus agent to an external MCP server (an order system, a
   knowledge base) and use its tools as ordinary ``@tool``-decorated
   callables.
 - Convert tool schemas in both directions
-  (``tulip_tool_to_mcp`` / ``mcp_tool_to_tulip``).
+  (``locus_tool_to_mcp`` / ``mcp_tool_to_locus``).
 - Handle ``tools/list`` and ``tools/call`` requests programmatically.
 - A **refund-eligibility probe** exposed as an MCP tool: it reads order
   signals (days since delivery, item condition, order value), a
@@ -26,14 +27,14 @@ The configured provider drives the agent. The MCP layer is transport-only
 mock data (invented orders, fixed signals) — no live order system.
 
 Run it:
-    # The bundled mock model is the default; set TULIP_MODEL_PROVIDER for a live provider.
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_45_mcp_integration.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_45_mcp_integration.py
 
     # Offline:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_45_mcp_integration.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_45_mcp_integration.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``TULIP_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 - Optional: ``pip install fastmcp`` to exercise live request handling.
 
@@ -50,13 +51,13 @@ from collections.abc import Mapping
 from config import get_model, print_config
 from pydantic import BaseModel
 
-from tulip.agent import Agent
-from tulip.integrations.fastmcp import (
-    TulipMCPServer,
+from locus.agent import Agent
+from locus.integrations.fastmcp import (
+    LocusMCPServer,
     create_mcp_server,
-    tulip_tool_to_mcp,
+    locus_tool_to_mcp,
 )
-from tulip.reasoning.gsar import (
+from locus.reasoning.gsar import (
     Claim,
     Decision,
     EvidenceType,
@@ -64,7 +65,7 @@ from tulip.reasoning.gsar import (
     decide,
     gsar_score,
 )
-from tulip.tools import tool
+from locus.tools import tool
 
 
 _SAFE_MATH_BIN_OPS = {
@@ -99,7 +100,7 @@ def _safe_math_eval(expression: str) -> float:
 
 
 # =============================================================================
-# Part 1: Three ordinary Tulip support tools. Nothing MCP-specific yet.
+# Part 1: Three ordinary Locus support tools. Nothing MCP-specific yet.
 #         All data is mock — invented order ids, canned articles.
 # =============================================================================
 
@@ -186,8 +187,8 @@ def check_refund_eligibility(signals_json: str) -> str:
     return _classify_eligibility(signals).model_dump_json()
 
 
-def example_tulip_tools():
-    print("=== Part 1: Tulip Support Tools ===\n")
+def example_locus_tools():
+    print("=== Part 1: Locus Support Tools ===\n")
 
     print("Tool: order_status")
     print(f"  Name: {order_status.name}")
@@ -207,21 +208,21 @@ def example_tulip_tools():
 
 
 # =============================================================================
-# Part 2: Schema conversion — Tulip tool -> MCP shape and back.
+# Part 2: Schema conversion — Locus tool -> MCP shape and back.
 # =============================================================================
 
 
 def example_tool_conversion():
     print("=== Part 2: Tool Conversion ===\n")
 
-    mcp_schema = tulip_tool_to_mcp(order_status)
+    mcp_schema = locus_tool_to_mcp(order_status)
 
-    print("Tulip tool converted to MCP schema:")
+    print("Locus tool converted to MCP schema:")
     print(json.dumps(mcp_schema, indent=2))
     print()
 
-    print("MCP tools can be converted to Tulip tools using mcp_tool_to_tulip()")
-    print("This lets a Tulip agent use tools from external MCP servers —")
+    print("MCP tools can be converted to Locus tools using mcp_tool_to_locus()")
+    print("This lets a Locus agent use tools from external MCP servers —")
     print("an order system, a returns service, a knowledge base — without bundling them.")
     print()
 
@@ -248,7 +249,7 @@ def example_mcp_server():
 
     server = create_mcp_server(
         agent=agent,
-        name="tulip-support-desk",
+        name="locus-support-desk",
         version="1.0.0",
     )
 
@@ -299,7 +300,7 @@ async def example_mcp_requests():
         system_prompt="You are a customer-support assistant.",
     )
 
-    server = TulipMCPServer(agent=agent, name="test-support-server")
+    server = LocusMCPServer(agent=agent, name="test-support-server")
 
     list_request = {"method": "tools/list", "params": {}}
     list_response = await server.handle_request(list_request)
@@ -323,14 +324,14 @@ async def example_mcp_requests():
 
 
 # =============================================================================
-# Part 5: Consume an external MCP server's tools as Tulip tools.
+# Part 5: Consume an external MCP server's tools as Locus tools.
 # =============================================================================
 
 
 def example_mcp_client():
     print("=== Part 5: MCP Client ===\n")
 
-    print("MCPClient lets Tulip agents use tools from external MCP servers —")
+    print("MCPClient lets Locus agents use tools from external MCP servers —")
     print("e.g. your team's order system or returns service running out of process.")
     print()
 
@@ -348,13 +349,13 @@ def example_mcp_client():
     result = await client.call_tool("order_status", {"order_id": "ORD-1001"})
     print(f"Result: {result}")
 
-    # Convert MCP tools to Tulip tools
-    tulip_tools = client.to_tulip_tools(tools)
+    # Convert MCP tools to Locus tools
+    locus_tools = client.to_locus_tools(tools)
 
-    # Use in a Tulip agent
+    # Use in a Locus agent
     agent = Agent(
         model=model,
-        tools=tulip_tools,  # Tools from the MCP server!
+        tools=locus_tools,  # Tools from the MCP server!
         system_prompt="Resolve tickets with the available tools.",
     )
 
@@ -567,7 +568,7 @@ async def main():
     print_config()
     print()
 
-    example_tulip_tools()
+    example_locus_tools()
     example_tool_conversion()
     example_mcp_server()
     await example_mcp_requests()

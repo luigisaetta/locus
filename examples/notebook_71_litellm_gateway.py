@@ -1,10 +1,11 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 71: Routing cloud-ops agent traffic through the LiteLLM AI Gateway.
 
 This notebook is the runnable companion to
-``docs/how-to/litellm-gateway.md``. It does **not** add a new Tulip
-model class — it uses Tulip's existing :class:`OpenAIModel` pointed at
+``docs/how-to/litellm-gateway.md``. It does **not** add a new Locus
+model class — it uses Locus's existing :class:`OpenAIModel` pointed at
 a LiteLLM AI Gateway URL. For an always-on cloud-operations fleet this
 is an operational win, not just plumbing: the gateway fronts your
 upstream providers (OpenAI, Anthropic, and any other LiteLLM-supported
@@ -18,9 +19,9 @@ Key concepts:
   scaffolding. The gateway is what carries the platform-grade pieces:
   virtual keys, per-team budgets, fallback chains, centralised
   observability, cost tracking, caching, guardrails.
-- Tulip consumes the gateway through ``OpenAIModel(base_url=...)``.
-  No new Tulip class is needed; the gateway is OpenAI-shaped by design.
-- The gateway holds the upstream provider credentials. Tulip only holds
+- Locus consumes the gateway through ``OpenAIModel(base_url=...)``.
+  No new Locus class is needed; the gateway is OpenAI-shaped by design.
+- The gateway holds the upstream provider credentials. Locus only holds
   the gateway-issued virtual key, so provider API keys never land on
   the cloud-ops agent host at all — one less secret to leak when an
   agent workload is compromised.
@@ -145,14 +146,14 @@ def _print_gateway_health(url: str, key: str) -> None:
 
 
 async def _run_agent(url: str, key: str, model_alias: str) -> None:
-    """Build a Tulip cloud-ops agent pointed at the gateway and run basic prompts."""
-    from tulip.agent import Agent
-    from tulip.models.native.openai import OpenAIModel
+    """Build a Locus cloud-ops agent pointed at the gateway and run basic prompts."""
+    from locus.agent import Agent
+    from locus.models.native.openai import OpenAIModel
 
     print(f"=== Cloud-ops agent vs. {model_alias} (via gateway) ===\n")
 
     # The OPENAI-COMPATIBLE client. ``base_url`` is the gateway endpoint;
-    # ``api_key`` is a gateway-issued virtual key. Tulip carries NO provider
+    # ``api_key`` is a gateway-issued virtual key. Locus carries NO provider
     # credentials here — the gateway holds the upstream provider keys.
     model = OpenAIModel(
         model=model_alias,
@@ -180,9 +181,9 @@ async def _run_agent(url: str, key: str, model_alias: str) -> None:
 
 
 async def _run_streaming(url: str, key: str, model_alias: str) -> None:
-    from tulip.agent import Agent
-    from tulip.core.events import ModelChunkEvent
-    from tulip.models.native.openai import OpenAIModel
+    from locus.agent import Agent
+    from locus.core.events import ModelChunkEvent
+    from locus.models.native.openai import OpenAIModel
 
     print(f"=== Streaming vs. {model_alias} (via gateway) ===\n")
 

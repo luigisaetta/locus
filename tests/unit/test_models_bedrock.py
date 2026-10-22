@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for the Bedrock provider — no credentials, no network.
 
@@ -22,14 +23,14 @@ import json
 
 import pytest
 
-from tulip.core.messages import Message, Role, ToolCall, ToolResult
-from tulip.models.registry import get_model, list_providers
+from locus.core.messages import Message, Role, ToolCall, ToolResult
+from locus.models.registry import get_model, list_providers
 
 
 boto3 = pytest.importorskip("boto3", reason="bedrock extra not installed")
 from botocore.stub import ANY, Stubber  # noqa: E402 — after importorskip
 
-from tulip.models.native.bedrock import BedrockModel, _loads_or_empty  # noqa: E402
+from locus.models.native.bedrock import BedrockModel, _loads_or_empty  # noqa: E402
 
 
 MODEL_ID = "us.amazon.nova-micro-v1:0"

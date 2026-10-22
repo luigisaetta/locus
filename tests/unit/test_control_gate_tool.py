@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Gating a Tulip tool.
+"""Gating a Locus tool.
 
 Wrap one tool and the model's decision goes through `admit()` before anything
 happens, instead of a hand-written try/except around every tool.
@@ -18,10 +19,10 @@ import json
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.control import Action, AdmissionError, AuditTrail, ControlPolicy, gate_tool
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.control import Action, AdmissionError, AuditTrail, ControlPolicy, gate_tool
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 PAID: list[tuple[str, float]] = []
@@ -147,7 +148,7 @@ def test_a_refusal_reaches_the_model_as_a_readable_result() -> None:
 
 
 def test_the_refusal_shape_matches_the_framework_bridges() -> None:
-    """A policy should read the same whether the agent is Tulip-native or
+    """A policy should read the same whether the agent is Locus-native or
     wrapped from LangChain; two shapes would make that a per-framework detail."""
     gated = gate_tool(issue_refund, policy=_policy(), action=_by_amount)
 
@@ -245,8 +246,8 @@ async def test_gating_a_sandboxed_tool_keeps_the_sandbox() -> None:
     """
     from unittest.mock import AsyncMock, patch
 
-    from tulip.tools.decorator import Tool
-    from tulip.tools.sandbox import SandboxSpec
+    from locus.tools.decorator import Tool
+    from locus.tools.sandbox import SandboxSpec
 
     ran_on_host: list[str] = []
 
@@ -275,8 +276,8 @@ async def test_a_refused_sandboxed_tool_never_reaches_the_sandbox() -> None:
     side effect happens and only the *report* of it is gated."""
     from unittest.mock import AsyncMock, patch
 
-    from tulip.tools.decorator import Tool
-    from tulip.tools.sandbox import SandboxSpec
+    from locus.tools.decorator import Tool
+    from locus.tools.sandbox import SandboxSpec
 
     @tool
     def run_code(src: str) -> str:
@@ -300,7 +301,7 @@ async def test_a_refused_sandboxed_tool_never_reaches_the_sandbox() -> None:
 def test_the_wrapper_does_not_carry_the_sandbox_field() -> None:
     """Setting it on the wrapper would short-circuit ``execute`` and skip the
     gate entirely — a gated tool that is not gated."""
-    from tulip.tools.sandbox import SandboxSpec
+    from locus.tools.sandbox import SandboxSpec
 
     @tool
     def run_code(src: str) -> str:
@@ -344,7 +345,7 @@ def _production(name: str, kwargs: dict) -> Action:
 def test_a_plain_object_satisfies_the_bridge_protocol() -> None:
     """Structural on purpose: any object with ``submit`` and ``state`` is a
     bridge, with no import of this package."""
-    from tulip.control import ApprovalBridge
+    from locus.control import ApprovalBridge
 
     assert isinstance(_Broker(), ApprovalBridge)
 

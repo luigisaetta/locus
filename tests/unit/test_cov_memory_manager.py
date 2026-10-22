@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.memory.manager``.
+"""Coverage tests for ``locus.memory.manager``.
 
 Targets the branches the end-to-end suite skips: the empty-extraction
 early return in ``on_session_end``, the ``retrieve`` fallback path for
@@ -13,14 +14,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from tulip.core.messages import Message, Role
-from tulip.core.state import AgentState
-from tulip.memory.manager import (
+from locus.core.messages import Message, Role
+from locus.core.state import AgentState
+from locus.memory.manager import (
     LLMMemoryManager,
     MemoryType,
     _heuristic_extract,
 )
-from tulip.memory.store import InMemoryStore
+from locus.memory.store import InMemoryStore
 
 
 # ---------------------------------------------------------------------------

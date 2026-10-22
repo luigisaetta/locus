@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Regression guard for the GSAR grounding decision benchmark.
 
@@ -10,8 +11,8 @@ thresholds — a guard against regressions in `gsar_score` / `decide` /
 
 from __future__ import annotations
 
-from tulip.reasoning.grounding_eval import GroundingBenchmark, bundled_cases, run_benchmark
-from tulip.reasoning.gsar import Decision, GSARThresholds, decide, gsar_score
+from locus.reasoning.grounding_eval import GroundingBenchmark, bundled_cases, run_benchmark
+from locus.reasoning.gsar import Decision, GSARThresholds, decide, gsar_score
 
 
 def test_reference_thresholds_separate_cleanly() -> None:

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``AgentConfig.model_retry``: the loop retries transient model-call failures.
 
@@ -21,17 +22,17 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent, ModelRetryConfig
-from tulip.agent import model_retry as retry_mod
-from tulip.agent.model_retry import call_with_retry, retry_after_seconds
-from tulip.core.events import (
+from locus.agent import Agent, ModelRetryConfig
+from locus.agent import model_retry as retry_mod
+from locus.agent.model_retry import call_with_retry, retry_after_seconds
+from locus.core.events import (
+    LocusEvent,
     ModelChunkEvent,
     ModelRetryEvent,
     TerminateEvent,
-    TulipEvent,
 )
-from tulip.core.messages import Message
-from tulip.testing import FunctionModel, text
+from locus.core.messages import Message
+from locus.testing import FunctionModel, text
 
 
 class FakeHTTPError(Exception):
@@ -71,15 +72,15 @@ def _agent(model: Any, **kwargs: Any) -> Agent:
     return Agent(model=model, reflexion=False, grounding=False, **kwargs)
 
 
-async def _events(agent: Agent, **kwargs: Any) -> list[TulipEvent]:
+async def _events(agent: Agent, **kwargs: Any) -> list[LocusEvent]:
     return [e async for e in agent.run("hi", **kwargs)]
 
 
 async def _events_until(
     agent: Agent, error: type[BaseException], match: str | None = None
-) -> list[TulipEvent]:
+) -> list[LocusEvent]:
     """The events a run yields before it raises ``error``."""
-    seen: list[TulipEvent] = []
+    seen: list[LocusEvent] = []
 
     async def drive() -> None:
         async for event in agent.run("hi"):
@@ -90,7 +91,7 @@ async def _events_until(
     return seen
 
 
-def _retries(events: list[TulipEvent]) -> list[ModelRetryEvent]:
+def _retries(events: list[LocusEvent]) -> list[ModelRetryEvent]:
     return [e for e in events if isinstance(e, ModelRetryEvent)]
 
 

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for multi-agent orchestration."""
 
@@ -12,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tulip.core.messages import Message
-from tulip.core.protocols import ModelResponse
-from tulip.core.state import AgentState
-from tulip.multiagent import (
+from locus.core.messages import Message
+from locus.core.protocols import ModelResponse
+from locus.core.state import AgentState
+from locus.multiagent import (
     Edge,
     HandoffContext,
     HandoffReason,
@@ -258,7 +259,7 @@ class TestGraph:
     @pytest.mark.asyncio
     async def test_execute_linear_graph(self):
         """Execute linear graph in order."""
-        from tulip.multiagent import END, START
+        from locus.multiagent import END, START
 
         execution_order = []
 
@@ -294,7 +295,7 @@ class TestGraph:
     @pytest.mark.asyncio
     async def test_execute_parallel_graph(self):
         """Execute independent nodes in parallel."""
-        from tulip.multiagent import END, START
+        from locus.multiagent import END, START
 
         graph = create_graph()
 
@@ -333,7 +334,7 @@ class TestGraph:
     @pytest.mark.asyncio
     async def test_execute_passes_data_between_nodes(self):
         """Data flows between connected nodes."""
-        from tulip.multiagent import END, START
+        from locus.multiagent import END, START
 
         graph = create_graph()
 
@@ -910,7 +911,7 @@ class TestHandoffAgent:
     @pytest.mark.asyncio
     async def test_receive_handoff_with_tools(self, mock_model):
         """Agent receives handoff with tools."""
-        from tulip.tools.decorator import tool
+        from locus.tools.decorator import tool
 
         @tool
         def test_tool(x: int) -> str:
@@ -1184,7 +1185,7 @@ class TestMultiAgentIntegration:
             result = await spec2.execute(f"Summarize: {analysis}")
             return {"summary": result.output}
 
-        from tulip.multiagent import END, START
+        from locus.multiagent import END, START
 
         graph = create_graph()
 

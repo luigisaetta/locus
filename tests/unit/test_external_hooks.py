@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Command and HTTP hooks: the protocol, and what each event does to a run.
 
@@ -21,18 +22,18 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.events import FinalAnswerVerificationEvent, TerminateEvent, TulipEvent
-from tulip.hooks import (
+from locus.agent import Agent
+from locus.core.events import FinalAnswerVerificationEvent, LocusEvent, TerminateEvent
+from locus.hooks import (
     ExternalHooks,
     HookBlockedError,
     HookCommand,
     HookConfig,
     HookRun,
 )
-from tulip.hooks.provider import AfterToolCallEvent, BeforeToolCallEvent
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.hooks.provider import AfterToolCallEvent, BeforeToolCallEvent
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 def _script(tmp_path: Path, name: str, body: str) -> str:
@@ -70,7 +71,7 @@ def bash(command: str) -> str:
     return f"ran: {command}"
 
 
-async def _collect(agent: Agent, prompt: str) -> list[TulipEvent]:
+async def _collect(agent: Agent, prompt: str) -> list[LocusEvent]:
     return [e async for e in agent.run(prompt)]
 
 
@@ -155,7 +156,7 @@ def test_the_event_arrives_on_stdin_and_the_environment_names_the_project(tmp_pa
     command = _script(
         tmp_path,
         "record",
-        f"event['env'] = os.environ['TULIP_PROJECT_DIR'], os.environ['TULIP_HOOK_EVENT'], "
+        f"event['env'] = os.environ['LOCUS_PROJECT_DIR'], os.environ['LOCUS_HOOK_EVENT'], "
         f"os.environ['EXTRA']\nopen({str(seen)!r}, 'w').write(json.dumps(event))\n",
     )
     hooks, runs = _hooks(
@@ -476,8 +477,8 @@ async def test_user_prompt_submit_adds_context_or_refuses(tmp_path: Path) -> Non
 
 
 async def test_user_prompt_submit_context_after_a_non_text_prompt(tmp_path: Path) -> None:
-    from tulip.core.messages import Message
-    from tulip.core.state import AgentState
+    from locus.core.messages import Message
+    from locus.core.state import AgentState
 
     hooks, _ = _hooks(_config("UserPromptSubmit", "echo extra"), tmp_path)
     state = AgentState(messages=(Message.assistant("hi"),))
@@ -549,7 +550,7 @@ async def test_a_stop_block_without_a_reason_still_says_why(tmp_path: Path) -> N
 
 
 async def test_the_small_cases(tmp_path: Path) -> None:
-    from tulip.hooks import HookPriority
+    from locus.hooks import HookPriority
 
     legacy = _script(
         tmp_path, "legacy", "print(json.dumps({'decision': 'approve', 'reason': 'ok'}))\n"
@@ -563,7 +564,7 @@ async def test_the_small_cases(tmp_path: Path) -> None:
 
     quiet = _script(tmp_path, "quiet", "pass\n")
     hooks, _ = _hooks(_config("UserPromptSubmit", quiet), tmp_path)
-    from tulip.core.state import AgentState
+    from locus.core.state import AgentState
 
     state = AgentState()
     assert await hooks.on_before_invocation("p", state) is state

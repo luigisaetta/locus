@@ -1,13 +1,14 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 07: giving an agent tools.
 
 A model on its own can only answer from what is already in its context. It
 cannot tell you which image digest is actually running in production, or
 whether a service is passing its health checks right now. Tools let the
-agent reach out, get a real answer, and bring it back. Tulip runs this as
-a small ReAct loop: the model decides whether to call a tool, Tulip runs
+agent reach out, get a real answer, and bring it back. Locus runs this as
+a small ReAct loop: the model decides whether to call a tool, Locus runs
 it, the result goes into the next model call.
 
 The scenario is a deployment-readiness check. The agent looks up a
@@ -36,7 +37,7 @@ Run it:
     .venv/bin/python examples/notebook_07_agent_with_tools.py
 
 The default provider is the bundled deterministic mock model, so this
-runs offline with no credentials. Set ``TULIP_MODEL_PROVIDER=openai`` (or
+runs offline with no credentials. Set ``LOCUS_MODEL_PROVIDER=openai`` (or
 ``anthropic``) and the matching key for a live model.
 
 Prerequisite: notebook 06.
@@ -48,8 +49,8 @@ from datetime import UTC, datetime
 # Import shared config
 from config import get_model, print_config
 
-from tulip.agent import Agent
-from tulip.tools import tool
+from locus.agent import Agent
+from locus.tools import tool
 
 
 # --- The fictional estate -------------------------------------------------

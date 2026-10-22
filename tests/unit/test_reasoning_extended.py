@@ -1,16 +1,17 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Extended unit tests for reasoning module."""
 
 import pytest
 
-from tulip.reasoning.grounding import (
+from locus.reasoning.grounding import (
     ClaimEvaluation,
     GroundingEvaluator,
     GroundingResult,
 )
-from tulip.reasoning.reflexion import (
+from locus.reasoning.reflexion import (
     AssessmentCategory,
     ReflectionResult,
     Reflector,
@@ -168,7 +169,7 @@ class TestReflectorReflect:
 
     def test_reflect_no_executions(self, reflector):
         """Test reflect with no tool executions."""
-        from tulip.core.state import AgentState
+        from locus.core.state import AgentState
 
         state = AgentState(run_id="test", messages=[], tool_executions=())
         result = reflector.reflect(state)
@@ -180,7 +181,7 @@ class TestReflectorReflect:
 
     def test_reflect_with_successful_execution(self, reflector):
         """Test reflect with successful tool execution."""
-        from tulip.core.state import AgentState, ToolExecution
+        from locus.core.state import AgentState, ToolExecution
 
         execution = ToolExecution(
             tool_name="search",
@@ -202,7 +203,7 @@ class TestReflectorReflect:
 
     def test_reflect_with_mixed_executions(self, reflector):
         """Test reflect with mixed success and failure."""
-        from tulip.core.state import AgentState, ToolExecution
+        from locus.core.state import AgentState, ToolExecution
 
         success_exec = ToolExecution(
             tool_name="search",
@@ -240,8 +241,8 @@ class TestReflectorLoopDetection:
 
     def test_detect_single_tool_loop(self, reflector):
         """Test detecting repeated same tool call across iterations."""
-        from tulip.core.messages import ToolCall
-        from tulip.core.state import AgentState, ReasoningStep
+        from locus.core.messages import ToolCall
+        from locus.core.state import AgentState, ReasoningStep
 
         state = AgentState(run_id="test")
         for i in range(3):
@@ -259,8 +260,8 @@ class TestReflectorLoopDetection:
 
     def test_detect_alternating_loop(self):
         """Test detecting alternating tool pattern across iterations."""
-        from tulip.core.messages import ToolCall
-        from tulip.core.state import AgentState, ReasoningStep
+        from locus.core.messages import ToolCall
+        from locus.core.state import AgentState, ReasoningStep
 
         reflector = Reflector(loop_threshold=4)
 
@@ -279,7 +280,7 @@ class TestReflectorLoopDetection:
 
     def test_no_loop_with_varied_tools(self, reflector):
         """Test no loop detected with varied tool calls."""
-        from tulip.core.state import AgentState
+        from locus.core.state import AgentState
 
         state = AgentState(
             run_id="test",
@@ -301,7 +302,7 @@ class TestReflectorConfidenceDelta:
             diminishing_returns=True,
         )
 
-        from tulip.core.state import AgentState, ToolExecution
+        from locus.core.state import AgentState, ToolExecution
 
         execution = ToolExecution(
             tool_name="search",
@@ -341,7 +342,7 @@ class TestReflectorConfidenceDelta:
             diminishing_returns=False,
         )
 
-        from tulip.core.state import AgentState, ToolExecution
+        from locus.core.state import AgentState, ToolExecution
 
         execution = ToolExecution(
             tool_name="search",
@@ -372,7 +373,7 @@ class TestReflectorCustomParameters:
         reflector = Reflector(loop_threshold=5)
         assert reflector.loop_threshold == 5
 
-        from tulip.core.state import AgentState
+        from locus.core.state import AgentState
 
         # 3 repeated calls should not trigger loop with threshold of 5
         state = AgentState(
@@ -392,7 +393,7 @@ class TestReflectorCustomParameters:
             error_penalty=0.3,
         )
 
-        from tulip.core.state import AgentState, ToolExecution
+        from locus.core.state import AgentState, ToolExecution
 
         # With higher success weight, same success gives higher delta
         execution = ToolExecution(

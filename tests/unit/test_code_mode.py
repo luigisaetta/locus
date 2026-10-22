@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """#176 — code mode: in-program tool calls clear the same seam as loop calls.
 
@@ -17,10 +18,10 @@ from typing import Any
 
 import pytest
 
-from tulip.agent.hook_orchestrator import HookOrchestrator
-from tulip.tools.code_mode import create_code_tool
-from tulip.tools.decorator import tool
-from tulip.tools.registry import create_registry
+from locus.agent.hook_orchestrator import HookOrchestrator
+from locus.tools.code_mode import create_code_tool
+from locus.tools.decorator import tool
+from locus.tools.registry import create_registry
 
 
 @tool
@@ -82,7 +83,7 @@ class TestSeamParity:
     async def test_gate_holds_inside_the_program(self) -> None:
         """The headline property: admit() refuses the in-program call, the
         effect never runs, and the program gets a catchable refusal."""
-        from tulip.control import ControlPolicy, gate_tool
+        from locus.control import ControlPolicy, gate_tool
 
         EFFECTS.clear()
         gated = gate_tool(
@@ -155,7 +156,7 @@ class TestSeamParity:
 
 class TestAgentWiring:
     def test_run_code_registered_only_under_code_mode(self) -> None:
-        from tulip.agent import Agent
+        from locus.agent import Agent
 
         class _Stub:
             async def complete(self, messages: Any, **kwargs: Any) -> Any:

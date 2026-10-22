@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Summarising compaction: a long run keeps working when its context fills.
 
@@ -18,19 +19,19 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent, CompactionConfig
-from tulip.core.events import CompactionEvent, TerminateEvent
-from tulip.core.messages import Message, Role, ToolCall
-from tulip.memory.compaction import (
+from locus.agent import Agent, CompactionConfig
+from locus.core.events import CompactionEvent, TerminateEvent
+from locus.core.messages import Message, Role, ToolCall
+from locus.memory.compaction import (
     CLEARED_OUTPUT_KEY,
     SUMMARY_SYSTEM_PROMPT,
     CompactionTracker,
     ContextCompactor,
     is_summary_message,
 )
-from tulip.models.base import ModelResponse
-from tulip.testing import FunctionModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.models.base import ModelResponse
+from locus.testing import FunctionModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 # --- helpers ----------------------------------------------------------------
@@ -203,7 +204,7 @@ def _long_session() -> list[Message]:
         Message(
             role=Role.SYSTEM,
             content="[Long-term Memory] prefers uv",
-            metadata={"tulip_memory_block": True},
+            metadata={"locus_memory_block": True},
         )
     )
     for i in range(6, 16):
@@ -229,7 +230,7 @@ async def test_a_summary_keeps_the_head_the_latest_user_turn_and_a_verbatim_tail
     assert is_summary_message(out[2])
     assert "port the parser" in (out[2].content or "")
     assert any(m.content == "ALSO: keep the old API working" for m in out), "latest user turn"
-    assert any(m.metadata.get("tulip_memory_block") for m in out), "memory block is pinned"
+    assert any(m.metadata.get("locus_memory_block") for m in out), "memory block is pinned"
     tail = [m for m in out[3:] if m.role in (Role.ASSISTANT, Role.TOOL)]
     assert tail == messages[-len(tail) :], "the tail is the newest turns, verbatim"
     assert 1 <= len(tail) // 2 <= compactor.tail_turns
@@ -592,7 +593,7 @@ async def test_a_200_step_session_in_a_small_window_still_remembers_its_first_de
 
 @pytest.mark.asyncio
 async def test_compaction_reaches_the_observability_bus(monkeypatch: pytest.MonkeyPatch) -> None:
-    from tulip.observability import agent_bridge
+    from locus.observability import agent_bridge
 
     published: list[tuple[str, dict[str, Any]]] = []
 
@@ -600,7 +601,7 @@ async def test_compaction_reaches_the_observability_bus(monkeypatch: pytest.Monk
         published.append((name, fields))
 
     monkeypatch.setattr(agent_bridge, "emit", record)
-    await agent_bridge.bridge_tulip_event(
+    await agent_bridge.bridge_locus_event(
         CompactionEvent(
             iteration=4,
             stage="summarize",
@@ -630,7 +631,7 @@ async def test_compaction_reaches_the_observability_bus(monkeypatch: pytest.Monk
 
 @pytest.mark.parametrize(("flag", "enabled"), [(True, True), (False, False), (None, True)])
 def test_compaction_accepts_a_plain_flag(flag: bool | None, enabled: bool) -> None:
-    from tulip.agent import AgentConfig
+    from locus.agent import AgentConfig
 
     assert AgentConfig(model="openai:gpt-4o", compaction=flag).compaction.enabled is enabled
 
@@ -643,7 +644,7 @@ def test_a_summary_model_named_by_string_is_resolved(monkeypatch: pytest.MonkeyP
         names.append(name)
         return built
 
-    monkeypatch.setattr("tulip.agent.agent.get_model", fake_get_model)
+    monkeypatch.setattr("locus.agent.agent.get_model", fake_get_model)
     agent = _agent(
         lambda m, t: text("ok"), compaction=CompactionConfig(summary_model="openai:gpt-4o-mini")
     )

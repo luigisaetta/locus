@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Live: ``Agent(playbook=...)`` enforces step compliance across providers.
 
@@ -20,10 +21,10 @@ import os
 
 import pytest
 
-from tulip.core.termination import MaxIterations
-from tulip.playbooks.hook import PlaybookEnforcerHook
-from tulip.playbooks.models import Playbook, PlaybookStep
-from tulip.tools.decorator import tool
+from locus.core.termination import MaxIterations
+from locus.playbooks.hook import PlaybookEnforcerHook
+from locus.playbooks.models import Playbook, PlaybookStep
+from locus.tools.decorator import tool
 
 
 pytestmark = [pytest.mark.integration]
@@ -37,19 +38,19 @@ def _build_openai():
     if not _OPENAI:
         return None
     pytest.importorskip("openai")
-    from tulip.models.native.openai import OpenAIModel
+    from locus.models.native.openai import OpenAIModel
 
-    return OpenAIModel(model=os.environ.get("TULIP_OPENAI_TEST_MODEL", "gpt-4o-mini"))
+    return OpenAIModel(model=os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini"))
 
 
 def _build_anthropic():
     if not _ANTHROPIC:
         return None
     pytest.importorskip("anthropic")
-    from tulip.models.native.anthropic import AnthropicModel
+    from locus.models.native.anthropic import AnthropicModel
 
     return AnthropicModel(
-        model=os.environ.get("TULIP_ANTHROPIC_TEST_MODEL", "claude-haiku-4-5-20251001")
+        model=os.environ.get("LOCUS_ANTHROPIC_TEST_MODEL", "claude-haiku-4-5-20251001")
     )
 
 
@@ -114,7 +115,7 @@ def test_playbook_enforces_step_sequence_live(factory):
     if model is None:
         pytest.skip("provider credentials missing")
 
-    from tulip.agent import Agent
+    from locus.agent import Agent
 
     playbook = _build_playbook()
     hook = PlaybookEnforcerHook(playbook)

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 50: Guardrails — indirect prompt injection via untrusted tool output.
 
 This is the prompt-injection showcase. A triage agent (WARDEN, the
@@ -10,7 +11,7 @@ into the output of a tool the agent itself called, which then tries to
 talk the agent into exfiltrating data or invoking a destructive tool
 (LLM02 Sensitive Information Disclosure / LLM06 Excessive Agency). The
 guardrail scans that tool output, and the detection is surfaced as a
-grounded ``Evidence`` via ``tulip.control.ground_finding`` — the
+grounded ``Evidence`` via ``locus.control.ground_finding`` — the
 embedded instruction is the evidence, so the finding ships only because
 it traces to the tool-output row that carried it.
 
@@ -24,14 +25,14 @@ it traces to the tool-output row that carried it.
 - Secret-leakage filtering and stacked hooks via HookRegistry.
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_50_guardrails_security.py
 
     # Offline / no credentials:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_50_guardrails_security.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_50_guardrails_security.py
 
     # Pin a specific model:
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_50_guardrails_security.py
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_50_guardrails_security.py
 """
 
 import asyncio
@@ -39,8 +40,8 @@ import time
 
 from config import get_model, print_config
 
-from tulip.agent import Agent
-from tulip.control import (
+from locus.agent import Agent
+from locus.control import (
     AtlasTechnique,
     Indicator,
     IndicatorType,
@@ -49,17 +50,17 @@ from tulip.control import (
     ground_finding,
     is_finding,
 )
-from tulip.core.events import AfterToolCallEvent, BeforeToolCallEvent
-from tulip.core.state import AgentState
-from tulip.hooks import HookRegistry
-from tulip.hooks.builtin.guardrails import (
+from locus.core.events import AfterToolCallEvent, BeforeToolCallEvent
+from locus.core.state import AgentState
+from locus.hooks import HookRegistry
+from locus.hooks.builtin.guardrails import (
     ContentFilterHook,
     GuardrailAction,
     GuardrailConfig,
     GuardrailsHook,
     GuardrailViolation,
 )
-from tulip.reasoning.gsar import Claim, EvidenceType, Partition
+from locus.reasoning.gsar import Claim, EvidenceType, Partition
 
 
 # Helper used by every Part: one model call with a timing/token banner so
@@ -213,8 +214,8 @@ async def main():
     # The evidence is the tool-output row that carried the instruction:
     # the claim is TOOL_MATCH provenance, so ground_finding clears the
     # GSAR threshold and a Evidence ships. An unsupported claim (e.g. "this
-    # is TULIP-STORM") would stay ungrounded and drag the score down.
-    print("\n--- Grounding the detection via tulip.control ---")
+    # is LOCUS-STORM") would stay ungrounded and drag the score down.
+    print("\n--- Grounding the detection via locus.control ---")
     if flagged:
         _offending, violation = flagged[0]
         rule = violation.rule_name if violation else "blocked_content"

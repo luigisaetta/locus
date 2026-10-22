@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Two more settings that existed, were documented, and did nothing.
 
@@ -26,13 +27,13 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.agent.config import GSARConfig
-from tulip.core.errors import GSARValidationError
-from tulip.core.messages import Message, ToolCall
-from tulip.models.base import ModelResponse
-from tulip.reasoning.gsar_judge import BaseGSARJudge, JudgeOutput
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.agent.config import GSARConfig
+from locus.core.errors import GSARValidationError
+from locus.core.messages import Message, ToolCall
+from locus.models.base import ModelResponse
+from locus.reasoning.gsar_judge import BaseGSARJudge, JudgeOutput
+from locus.tools.decorator import tool
 
 
 @tool
@@ -129,7 +130,7 @@ class _Vouching(BaseGSARJudge):
     async def judge(
         self, *, report_synthesis: str, evidence_corpus: str, **kwargs: Any
     ) -> JudgeOutput:
-        from tulip.reasoning.gsar import Claim, EvidenceType
+        from locus.reasoning.gsar import Claim, EvidenceType
 
         return JudgeOutput(
             grounding_score=1.0,
@@ -196,9 +197,9 @@ async def test_without_gsar_the_flag_is_irrelevant() -> None:
 
 
 def test_the_error_is_part_of_the_public_hierarchy() -> None:
-    """A caller catching TulipError should catch this too, and the kind is what
+    """A caller catching LocusError should catch this too, and the kind is what
     structured logging groups on."""
-    from tulip.core.errors import TulipError
+    from locus.core.errors import LocusError
 
-    assert issubclass(GSARValidationError, TulipError)
+    assert issubclass(GSARValidationError, LocusError)
     assert GSARValidationError.kind == "gsar_validation_error"

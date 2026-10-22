@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """End-to-end integration test for the LLM compactor (C.3).
 
-Exercises :class:`~tulip.memory.compactor.LLMCompactor` against the
+Exercises :class:`~locus.memory.compactor.LLMCompactor` against the
 session-scoped ``model`` fixture in ``conftest.py`` (OpenAI or
 Anthropic, depending on environment). The fixture auto-skips when no
 model service is configured.
@@ -19,8 +20,8 @@ from typing import Any
 
 import pytest
 
-from tulip.core.messages import Message, Role
-from tulip.memory.compactor import LLMCompactor
+from locus.core.messages import Message, Role
+from locus.memory.compactor import LLMCompactor
 
 
 pytestmark = pytest.mark.integration
@@ -53,7 +54,7 @@ def long_conversation() -> list[Message]:
 
 def _build_summarize_fn(model: Any) -> Any:
     """Return an async summarize_fn that uses ``model.generate``."""
-    from tulip.core.messages import Message as Msg
+    from locus.core.messages import Message as Msg
 
     async def _summarise(middle: list[Message], previous: str | None) -> str:
         instructions = (

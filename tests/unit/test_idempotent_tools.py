@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Idempotent-tool deduplication in the Execute node.
 
@@ -14,11 +15,11 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.core.messages import Message, ToolCall
-from tulip.core.state import AgentState, ToolExecution
-from tulip.loop.nodes import ExecuteNode, _find_matching_execution
-from tulip.tools.decorator import tool
-from tulip.tools.registry import ToolRegistry
+from locus.core.messages import Message, ToolCall
+from locus.core.state import AgentState, ToolExecution
+from locus.loop.nodes import ExecuteNode, _find_matching_execution
+from locus.tools.decorator import tool
+from locus.tools.registry import ToolRegistry
 
 
 def _state_with_pending_calls(base: AgentState, calls: list[ToolCall]) -> AgentState:
@@ -173,12 +174,12 @@ class TestExecuteNodeIdempotentDedup:
 class TestBuiltinsGetTodayDate:
     def test_get_today_date_is_marked_idempotent(self):
         """The built-in date tool should be cache-safe across a single run."""
-        from tulip.tools.builtins import get_today_date
+        from locus.tools.builtins import get_today_date
 
         assert get_today_date.idempotent is True
 
     def test_get_today_date_returns_expected_keys(self):
-        from tulip.tools.builtins import get_today_date
+        from locus.tools.builtins import get_today_date
 
         result = get_today_date.fn()
         assert {"today", "weekday", "year", "tomorrow", "next_7_days_by_weekday"} <= result.keys()

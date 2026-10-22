@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for :class:`PgMemory`'s construction-time width rules.
 
@@ -13,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.memory.store_backends.postgresql import PGVECTOR_ANN_MAX_DIM, PgMemory
+from locus.memory.store_backends.postgresql import PGVECTOR_ANN_MAX_DIM, PgMemory
 
 
 _DSN = "postgresql://u:p@127.0.0.1:5432/db"  # never connected to
@@ -96,7 +97,7 @@ class TestDriverIsCheckedAtConstruction:
             PgMemory(_DSN)
         message = str(excinfo.value)
         assert "asyncpg" in message
-        assert "tulip-agents[pgvector]" in message, "say which extra installs it"
+        assert "locus-sdk[pgvector]" in message, "say which extra installs it"
 
     def test_construction_succeeds_when_the_driver_is_present(self):
         # No connection is made at construction, so this only proves the check

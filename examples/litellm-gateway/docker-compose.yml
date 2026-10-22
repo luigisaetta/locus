@@ -25,8 +25,8 @@
 #     -d '{"models":["gpt-4o"],"max_budget":5.00,"duration":"24h",
 #          "metadata":{"team":"platform-demo"}}'
 #
-#   # 6. Point Tulip at the gateway with the virtual key from (5):
-#   #   from tulip.models.native.openai import OpenAIModel
+#   # 6. Point Locus at the gateway with the virtual key from (5):
+#   #   from locus.models.native.openai import OpenAIModel
 #   #   model = OpenAIModel(
 #   #       model="gpt-4o",
 #   #       api_key="<virtual-key-from-step-5>",
@@ -40,7 +40,7 @@ services:
     # ``ghcr.io/berriai/litellm:main-stable``; override with
     # ``LITELLM_IMAGE`` if you mirror it internally.
     image: ${LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-stable}
-    container_name: tulip-litellm-gateway
+    container_name: locus-litellm-gateway
     ports:
     - 4000:4000
     depends_on:
@@ -80,7 +80,7 @@ services:
     # Any image that exposes the standard postgres entrypoint + env
     # vars (POSTGRES_DB / POSTGRES_USER / POSTGRES_PASSWORD) works.
     image: ${LITELLM_DB_IMAGE:-postgres:17-alpine}
-    container_name: tulip-litellm-db
+    container_name: locus-litellm-db
     environment:
       POSTGRES_DB: litellm
       POSTGRES_USER: litellm

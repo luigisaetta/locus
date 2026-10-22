@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 67: Payments-support voice assistant — voice in, voice out.
 
@@ -40,13 +41,13 @@ Prerequisites: an OpenAI API key with access to an audio-capable model
 question on first run).
 
 Run it
-    TULIP_MODEL_PROVIDER=openai \\
+    LOCUS_MODEL_PROVIDER=openai \\
     OPENAI_API_KEY=sk-... \\
     python examples/notebook_67_audio_chat.py
 
     afplay notebook_67_answer.wav   # macOS
 
-Note: with TULIP_MODEL_PROVIDER=mock (or no OPENAI_API_KEY) the
+Note: with LOCUS_MODEL_PROVIDER=mock (or no OPENAI_API_KEY) the
 notebook runs fully offline — it skips the network and produces a
 short simulated PCM-16 reply so you can read the event flow before
 wiring real credentials.
@@ -100,7 +101,7 @@ OFFLINE_TRANSCRIPT = (
 
 def _is_offline() -> bool:
     """True when we should skip the network (mock provider or no key)."""
-    provider = os.environ.get("TULIP_MODEL_PROVIDER", "").lower() or "mock"
+    provider = os.environ.get("LOCUS_MODEL_PROVIDER", "").lower() or "mock"
     return provider == "mock" or not os.environ.get("OPENAI_API_KEY")
 
 

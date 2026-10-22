@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """PgCheckpointer on a real Postgres: threads, retention, and tenants kept apart.
 
@@ -17,12 +18,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.messages import Message
-from tulip.core.state import AgentState
-from tulip.memory.backends import PgCheckpointer
-from tulip.memory.retention import MESSAGE_TIME_KEY
-from tulip.testing import ScriptedModel, text
+from locus.agent import Agent
+from locus.core.messages import Message
+from locus.core.state import AgentState
+from locus.memory.backends import PgCheckpointer
+from locus.memory.retention import MESSAGE_TIME_KEY
+from locus.testing import ScriptedModel, text
 
 
 try:
@@ -32,8 +33,8 @@ except ImportError:  # pragma: no cover - conftest is always importable under py
 
 pytestmark = [pytest.mark.integration, skip_without_postgres]
 
-_TABLE = "tulip_checkpoints_it"
-_ROLE = "tulip_cp_rls_test"
+_TABLE = "locus_checkpoints_it"
+_ROLE = "locus_cp_rls_test"
 _ROLE_PW = "cp_rls_test_pw"  # noqa: S105 - ephemeral local test role, dropped on teardown
 
 
@@ -158,12 +159,12 @@ async def test_rls_confines_a_raw_scan_and_refuses_a_cross_tenant_write(app_dsn:
         # No tenant pinned: RLS shows nothing at all.
         assert await conn.fetch(f"SELECT tenant FROM {_TABLE}") == []  # noqa: S608 - test constant
         async with conn.transaction():
-            await conn.execute("SELECT set_config('tulip.tenant', 'acme', true)")
+            await conn.execute("SELECT set_config('locus.tenant', 'acme', true)")
             rows = await conn.fetch(f"SELECT tenant FROM {_TABLE}")  # noqa: S608 - test constant
             assert {r["tenant"] for r in rows} == {"acme"}
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await conn.execute(
-                "SET LOCAL tulip.tenant = 'acme'; "  # noqa: S608 - test constant
+                "SET LOCAL locus.tenant = 'acme'; "  # noqa: S608 - test constant
                 f"INSERT INTO {_TABLE} (tenant, thread_id, checkpoint_id, data) "
                 "VALUES ('globex', 't', 'evil', '{}'::jsonb)"
             )
@@ -214,15 +215,15 @@ async def test_retention_on_save_and_purge_of_idle_threads(app_dsn: str) -> None
 
 
 async def test_an_old_layout_table_is_refused(app_dsn: str) -> None:
-    await _admin("DROP TABLE IF EXISTS tulip_checkpoints_old_it")
+    await _admin("DROP TABLE IF EXISTS locus_checkpoints_old_it")
     await _admin(
-        "CREATE TABLE tulip_checkpoints_old_it (thread_id text PRIMARY KEY, "
+        "CREATE TABLE locus_checkpoints_old_it (thread_id text PRIMARY KEY, "
         "checkpoint_id text, data jsonb NOT NULL)"
     )
-    cp = PgCheckpointer(_dsn(), table="tulip_checkpoints_old_it")
+    cp = PgCheckpointer(_dsn(), table="locus_checkpoints_old_it")
     try:
         with pytest.raises(RuntimeError, match="another layout"):
             await cp.load("t")
     finally:
         await cp.close()
-        await _admin("DROP TABLE IF EXISTS tulip_checkpoints_old_it")
+        await _admin("DROP TABLE IF EXISTS locus_checkpoints_old_it")

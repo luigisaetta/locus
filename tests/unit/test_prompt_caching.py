@@ -1,12 +1,13 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Tests for prompt-cache breakpoint helpers in ``tulip.models.caching``."""
+"""Tests for prompt-cache breakpoint helpers in ``locus.models.caching``."""
 
 from __future__ import annotations
 
-from tulip.core.messages import Message
-from tulip.models.caching import (
+from locus.core.messages import Message
+from locus.models.caching import (
     CACHE_CONTROL_KEY,
     is_cache_breakpoint,
     mark_cache_breakpoint,

@@ -1,12 +1,13 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Attributing an event to the agent that produced it.
 
 ``docs/concepts/multi-agent.md`` promised this outright — *"``agent_name`` is
 set on every event so you can attribute output to the specialist that produced
 it"* — and ``production.md`` matched on it in an example. It did not exist:
-``grep -rn "agent_name" src/tulip/`` returned nothing, and ``TulipEvent`` is
+``grep -rn "agent_name" src/locus/`` returned nothing, and ``LocusEvent`` is
 frozen without ``extra="allow"``, so it could not even be set from outside.
 
 The claim was worth keeping rather than deleting. Without it, a caller merging
@@ -24,10 +25,10 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.events import ThinkEvent, TulipEvent
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.core.events import LocusEvent, ThinkEvent
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 @tool
@@ -36,7 +37,7 @@ def lookup(query: str) -> str:
     return "found it"
 
 
-async def _events(agent: Agent, prompt: str = "go") -> list[TulipEvent]:
+async def _events(agent: Agent, prompt: str = "go") -> list[LocusEvent]:
     return [event async for event in agent.run(prompt)]
 
 

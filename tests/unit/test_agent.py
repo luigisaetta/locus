@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for Agent class."""
 
@@ -9,8 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests._safe_math import safe_math_eval
-from tulip.agent import (
+from locus.agent import (
     Agent,
     AgentConfig,
     AgentResult,
@@ -18,16 +18,17 @@ from tulip.agent import (
     GroundingConfig,
     ReflexionConfig,
 )
-from tulip.core.events import (
+from locus.core.events import (
     ReflectEvent,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
 )
-from tulip.core.messages import Message, ToolCall, ToolResult
-from tulip.core.state import AgentState, ToolExecution
-from tulip.models.base import ModelResponse
-from tulip.tools.decorator import tool
+from locus.core.messages import Message, ToolCall, ToolResult
+from locus.core.state import AgentState, ToolExecution
+from locus.models.base import ModelResponse
+from locus.tools.decorator import tool
+from tests._safe_math import safe_math_eval
 
 
 # =============================================================================
@@ -204,7 +205,7 @@ class TestAgentInitialization:
 
     def test_init_with_model_string(self, mock_model, sample_tools, monkeypatch):
         """Test initialization with model string."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         agent = Agent(
             model="openai:gpt-4o",
@@ -228,7 +229,7 @@ class TestAgentInitialization:
 
     def test_init_with_reflexion_bool(self, mock_model, monkeypatch):
         """Test initialization with reflexion=True."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         agent = Agent(
             model="openai:gpt-4o",
@@ -240,7 +241,7 @@ class TestAgentInitialization:
 
     def test_init_with_grounding_bool(self, mock_model, monkeypatch):
         """Test initialization with grounding=True."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         agent = Agent(
             model="openai:gpt-4o",
@@ -252,7 +253,7 @@ class TestAgentInitialization:
 
     def test_init_with_reflexion_config(self, mock_model, monkeypatch):
         """Test initialization with ReflexionConfig object."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         config = ReflexionConfig(confidence_threshold=0.75)
         agent = Agent(
@@ -265,7 +266,7 @@ class TestAgentInitialization:
 
     def test_init_with_grounding_config(self, mock_model, monkeypatch):
         """Test initialization with GroundingConfig object."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         config = GroundingConfig(threshold=0.8)
         agent = Agent(
@@ -278,7 +279,7 @@ class TestAgentInitialization:
 
     def test_init_with_config_object(self, mock_model, sample_tools, monkeypatch):
         """Test initialization with AgentConfig object."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         config = AgentConfig(
             model="openai:gpt-4o",
@@ -384,9 +385,9 @@ class TestAgentInitialization:
 
     def test_sequential_executor_config(self, mock_model, sample_tools, monkeypatch):
         """Test sequential executor is used when configured."""
-        from tulip.tools.executor import SequentialExecutor
+        from locus.tools.executor import SequentialExecutor
 
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         config = AgentConfig(
             model="openai:gpt-4o",
@@ -503,7 +504,7 @@ class TestAgentRun:
     @pytest.mark.asyncio
     async def test_simple_completion(self, mock_model, monkeypatch):
         """Test simple completion without tools."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         # Setup mock response
         mock_model.complete.return_value = ModelResponse(
@@ -531,7 +532,7 @@ class TestAgentRun:
     @pytest.mark.asyncio
     async def test_think_event_prefers_response_reasoning(self, mock_model, monkeypatch):
         """Reasoning models: ThinkEvent.reasoning uses the CoT channel."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("The answer is 42."),
@@ -556,7 +557,7 @@ class TestAgentRun:
         self, mock_model, monkeypatch
     ):
         """MagicMock reasoning must not leak into ThinkEvent (Pydantic safety)."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         # A MagicMock leaked through ``complete`` (integration-style stubs)
         # is truthy but not a str — the loop must fall back to content.
@@ -578,7 +579,7 @@ class TestAgentRun:
     @pytest.mark.asyncio
     async def test_tool_execution(self, mock_model, sample_tool, monkeypatch):
         """Test execution with tool call."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         # First response: tool call
         tool_call = ToolCall(id="call_1", name="calculator", arguments={"expression": "2+2"})
@@ -623,7 +624,7 @@ class TestAgentRun:
     @pytest.mark.asyncio
     async def test_max_iterations(self, mock_model, sample_tool, monkeypatch):
         """Test that max_iterations is respected."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         # Always return a tool call
         tool_call = ToolCall(id="call_1", name="calculator", arguments={"expression": "1+1"})
@@ -650,7 +651,7 @@ class TestAgentRun:
     @pytest.mark.asyncio
     async def test_with_hooks(self, mock_model, mock_hook, monkeypatch):
         """Test that hooks are called."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Done"),
@@ -673,7 +674,7 @@ class TestAgentRun:
     @pytest.mark.asyncio
     async def test_reflexion_integration(self, mock_model, sample_tool, monkeypatch):
         """Test Reflexion integration."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         # First response: tool call
         tool_call = ToolCall(id="call_1", name="calculator", arguments={"expression": "2+2"})
@@ -721,7 +722,7 @@ class TestAgentRunSync:
 
     def test_run_sync(self, mock_model, monkeypatch):
         """Test synchronous execution."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Hello!"),
@@ -740,7 +741,7 @@ class TestAgentRunSync:
 
     def test_invoke_alias(self, mock_model, monkeypatch):
         """Test that invoke() is an alias for run_sync()."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Hello!"),
@@ -775,7 +776,7 @@ class TestAgentArun:
     @pytest.mark.asyncio
     async def test_arun_returns_result_with_final_message(self, mock_model, monkeypatch):
         """await agent.arun(...) returns an AgentResult carrying the final message."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Hello from arun!"),
@@ -794,7 +795,7 @@ class TestAgentArun:
     @pytest.mark.asyncio
     async def test_arun_matches_run_sync(self, mock_model, monkeypatch):
         """arun and run_sync produce equivalent results for the same input."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Same answer"),
@@ -813,7 +814,7 @@ class TestAgentArun:
     @pytest.mark.asyncio
     async def test_arun_records_metrics(self, mock_model, sample_tool, monkeypatch):
         """arun surfaces ExecutionMetrics — iterations, tool_calls, tokens."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         tool_call = ToolCall(id="call_1", name="calculator", arguments={"expression": "2+2"})
         first_response = ModelResponse(
@@ -841,7 +842,7 @@ class TestAgentArun:
         """arun runs the structured-output coercion path (output_schema set)."""
         from pydantic import BaseModel
 
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         class Answer(BaseModel):
             value: int
@@ -875,7 +876,7 @@ class TestToolLoopDetection:
     @pytest.mark.asyncio
     async def test_detects_tool_loop(self, mock_model, sample_tool, monkeypatch):
         """Test that tool loops are detected."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         # Always return the same tool call
         tool_call = ToolCall(id="call_1", name="calculator", arguments={"expression": "1+1"})
@@ -912,7 +913,7 @@ class TestEventStreaming:
     @pytest.mark.asyncio
     async def test_event_order(self, mock_model, sample_tool, monkeypatch):
         """Test that events are emitted in correct order."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         tool_call = ToolCall(id="call_1", name="calculator", arguments={"expression": "1+1"})
         first_response = ModelResponse(
@@ -950,7 +951,7 @@ class TestEventStreaming:
     @pytest.mark.asyncio
     async def test_event_timestamps(self, mock_model, monkeypatch):
         """Test that events have timestamps."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Hello!"),
@@ -985,7 +986,7 @@ class TestAgentCheckpointer:
     @pytest.mark.asyncio
     async def test_agent_saves_checkpoint(self, mock_model, mock_checkpointer, monkeypatch):
         """Test agent saves checkpoint after iteration."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Done!"),
@@ -1009,10 +1010,10 @@ class TestAgentCheckpointer:
         self, mock_model, mock_checkpointer, monkeypatch
     ):
         """Test agent loads existing checkpoint on thread continuation."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         # Create existing state
-        from tulip.core.state import AgentState
+        from locus.core.state import AgentState
 
         existing_state = AgentState(
             run_id="existing",
@@ -1047,14 +1048,14 @@ class TestAgentConversationManager:
     @pytest.mark.asyncio
     async def test_agent_uses_conversation_manager(self, mock_model, monkeypatch):
         """Test agent uses conversation manager."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Managed response"),
             usage={"total_tokens": 50},
         )
 
-        from tulip.memory.conversation import SlidingWindowManager
+        from locus.memory.conversation import SlidingWindowManager
 
         manager = SlidingWindowManager(window_size=10)
 
@@ -1080,7 +1081,7 @@ class TestAgentAdditionalConfig:
 
     def test_invoke_alias(self, mock_model, monkeypatch):
         """Test invoke is alias for run_sync."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Done"),
@@ -1094,7 +1095,7 @@ class TestAgentAdditionalConfig:
 
     def test_agent_with_custom_temperature(self, mock_model, monkeypatch):
         """Test agent with custom temperature."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Response"),
@@ -1114,7 +1115,7 @@ class TestAgentAdditionalConfig:
 
     def test_agent_with_max_tokens(self, mock_model, monkeypatch):
         """Test agent with max_tokens."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Response"),
@@ -1143,7 +1144,7 @@ class TestToolExecutionErrors:
     @pytest.mark.asyncio
     async def test_tool_exception_is_caught(self, mock_model, monkeypatch):
         """Test that exceptions during tool execution are caught."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         @tool
         async def failing_tool() -> str:
@@ -1179,7 +1180,7 @@ class TestToolExecutionErrors:
     @pytest.mark.asyncio
     async def test_tool_error_count_tracked(self, mock_model, monkeypatch):
         """Test that tool errors are counted in metrics."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         @tool
         async def failing_tool() -> str:
@@ -1222,7 +1223,7 @@ class TestModelErrors:
     @pytest.mark.asyncio
     async def test_model_exception_is_raised(self, mock_model, monkeypatch):
         """Test that model exceptions are raised and wrapped."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.side_effect = RuntimeError("Model API error")
 
@@ -1247,7 +1248,7 @@ class TestAgentStateManagement:
     @pytest.mark.asyncio
     async def test_initial_state_has_system_message(self, mock_model, monkeypatch):
         """Test initial state contains system message."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Hello!"),
@@ -1271,7 +1272,7 @@ class TestAgentStateManagement:
     @pytest.mark.asyncio
     async def test_state_tracks_iterations(self, mock_model, sample_tool, monkeypatch):
         """Test that state tracks iterations correctly."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         tool_call = ToolCall(id="call_1", name="calculator", arguments={"expression": "1+1"})
         first_response = ModelResponse(
@@ -1308,7 +1309,7 @@ class TestTerminalTools:
     @pytest.mark.asyncio
     async def test_terminal_tool_stops_execution(self, mock_model, monkeypatch):
         """Test that calling a terminal tool stops execution."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         @tool
         def done(result: str) -> str:
@@ -1347,7 +1348,7 @@ class TestHookExecution:
     @pytest.mark.asyncio
     async def test_hooks_are_called(self, mock_model, mock_hook, monkeypatch):
         """Test that hooks are called during agent run."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         mock_model.complete.return_value = ModelResponse(
             message=Message.assistant("Hello!"),
@@ -1369,7 +1370,7 @@ class TestHookExecution:
     @pytest.mark.asyncio
     async def test_tool_hooks_are_called(self, mock_model, sample_tool, mock_hook, monkeypatch):
         """Test that tool hooks are called during tool execution."""
-        monkeypatch.setattr("tulip.agent.agent.get_model", lambda m: mock_model)
+        monkeypatch.setattr("locus.agent.agent.get_model", lambda m: mock_model)
 
         tool_call = ToolCall(id="call_1", name="calculator", arguments={"expression": "1+1"})
         first_response = ModelResponse(
@@ -1805,7 +1806,7 @@ class TestAutoConversationManager:
         """SlidingWindowManager when the model's context length is unknown."""
         agent = Agent(model=mock_model, tools=[])
         assert agent._conversation_manager is not None
-        from tulip.memory.conversation import SlidingWindowManager
+        from locus.memory.conversation import SlidingWindowManager
 
         assert isinstance(agent._conversation_manager, SlidingWindowManager)
         assert agent._conversation_manager.window_size == 40  # max(20, 20*2)
@@ -1814,7 +1815,7 @@ class TestAutoConversationManager:
         """Window scales with max_iterations."""
         agent = Agent(model=mock_model, tools=[], max_iterations=100)
         assert agent._conversation_manager is not None
-        from tulip.memory.conversation import SlidingWindowManager
+        from locus.memory.conversation import SlidingWindowManager
 
         assert isinstance(agent._conversation_manager, SlidingWindowManager)
         assert agent._conversation_manager.window_size == 200  # max(20, 100*2)
@@ -1822,14 +1823,14 @@ class TestAutoConversationManager:
     def test_created_for_small_iterations_too(self, mock_model):
         """A short run can still overflow the window on one large tool output."""
         agent = Agent(model=mock_model, tools=[], max_iterations=5)
-        from tulip.memory.conversation import SlidingWindowManager
+        from locus.memory.conversation import SlidingWindowManager
 
         assert isinstance(agent._conversation_manager, SlidingWindowManager)
         assert agent._conversation_manager.window_size == 20  # max(20, 5*2)
 
     def test_explicit_manager_used(self, mock_model):
         """Explicit conversation_manager overrides auto-creation."""
-        from tulip.memory.conversation import NullManager
+        from locus.memory.conversation import NullManager
 
         null_mgr = NullManager()
         agent = Agent(model=mock_model, tools=[], conversation_manager=null_mgr)
@@ -1892,7 +1893,7 @@ class TestSummarizingManagerAsync:
     @pytest.mark.asyncio
     async def test_async_apply_with_async_summarize_fn(self):
         """async_apply calls async summarize_fn properly."""
-        from tulip.memory.conversation import SummarizingManager
+        from locus.memory.conversation import SummarizingManager
 
         summarize_called = False
 
@@ -1913,7 +1914,7 @@ class TestSummarizingManagerAsync:
     @pytest.mark.asyncio
     async def test_async_apply_under_threshold(self):
         """async_apply returns all messages when under threshold."""
-        from tulip.memory.conversation import SummarizingManager
+        from locus.memory.conversation import SummarizingManager
 
         manager = SummarizingManager(threshold=20, keep_recent=5)
         messages = [Message.user(f"Msg {i}") for i in range(3)]
@@ -1924,7 +1925,7 @@ class TestSummarizingManagerAsync:
     @pytest.mark.asyncio
     async def test_async_apply_fallback_to_sync(self):
         """async_apply falls back to sync when no async summarize_fn."""
-        from tulip.memory.conversation import SummarizingManager
+        from locus.memory.conversation import SummarizingManager
 
         manager = SummarizingManager(threshold=5, keep_recent=2)
         messages = [Message.user(f"Message {i}") for i in range(10)]
@@ -1944,7 +1945,7 @@ class TestRealGrounding:
 
     def test_extract_claims(self):
         """Claims extracted from response text correctly."""
-        from tulip.agent.agent import Agent
+        from locus.agent.agent import Agent
 
         response = (
             "Python is a popular programming language. "
@@ -1961,7 +1962,7 @@ class TestRealGrounding:
 
     def test_gather_evidence(self):
         """Evidence gathered from tool executions correctly."""
-        from tulip.agent.agent import Agent
+        from locus.agent.agent import Agent
 
         state = AgentState()
         state = state.with_tool_execution(
@@ -2017,7 +2018,7 @@ class TestRealGrounding:
         async for event in agent.run("Tell me about Python"):
             events.append(event)
 
-        from tulip.core.events import GroundingEvent
+        from locus.core.events import GroundingEvent
 
         grounding_events = [e for e in events if isinstance(e, GroundingEvent)]
         assert len(grounding_events) == 0
@@ -2056,7 +2057,7 @@ class TestRealGrounding:
 
         mock_model.complete = grounding_model
 
-        from tulip.agent import GroundingConfig
+        from locus.agent import GroundingConfig
 
         agent = Agent(
             model=mock_model,
@@ -2069,7 +2070,7 @@ class TestRealGrounding:
         async for event in agent.run("Tell me about AI"):
             events.append(event)
 
-        from tulip.core.events import GroundingEvent
+        from locus.core.events import GroundingEvent
 
         grounding_events = [e for e in events if isinstance(e, GroundingEvent)]
         assert len(grounding_events) >= 1
@@ -2119,7 +2120,7 @@ class TestRealReflector:
 
         mock_model.complete = looping_model
 
-        from tulip.agent import ReflexionConfig
+        from locus.agent import ReflexionConfig
 
         agent = Agent(
             model=mock_model,
@@ -2138,7 +2139,7 @@ class TestRealReflector:
         assert terminate.reason == "tool_loop"
 
         # Should have had reflection events during the run
-        from tulip.core.events import ReflectEvent
+        from locus.core.events import ReflectEvent
 
         reflect_events = [e for e in events if isinstance(e, ReflectEvent)]
         assert len(reflect_events) >= 1
@@ -2180,7 +2181,7 @@ class TestRealReflector:
 
         mock_model.complete = progressing_model
 
-        from tulip.agent import ReflexionConfig
+        from locus.agent import ReflexionConfig
 
         agent = Agent(
             model=mock_model,
@@ -2193,7 +2194,7 @@ class TestRealReflector:
         async for event in agent.run("Research topic"):
             events.append(event)
 
-        from tulip.core.events import ReflectEvent
+        from locus.core.events import ReflectEvent
 
         reflect_events = [e for e in events if isinstance(e, ReflectEvent)]
         assert len(reflect_events) >= 1
@@ -2228,7 +2229,7 @@ class TestRealReflector:
         async for event in agent.run("Do it"):
             events.append(event)
 
-        from tulip.core.events import ReflectEvent
+        from locus.core.events import ReflectEvent
 
         reflect_events = [e for e in events if isinstance(e, ReflectEvent)]
         assert len(reflect_events) == 0
@@ -2273,7 +2274,7 @@ class TestRealReflector:
 
         mock_model.complete = progressing_model
 
-        from tulip.agent import ReflexionConfig
+        from locus.agent import ReflexionConfig
 
         agent = Agent(
             model=mock_model,
@@ -2286,7 +2287,7 @@ class TestRealReflector:
         async for event in agent.run("Research topics"):
             events.append(event)
 
-        from tulip.core.events import ReflectEvent
+        from locus.core.events import ReflectEvent
 
         reflect_events = [e for e in events if isinstance(e, ReflectEvent)]
         # Should have reflection events with new_findings assessment
@@ -2565,7 +2566,7 @@ class TestRunSyncStatePreservation:
 
     def test_run_sync_preserves_confidence(self, mock_model):
         """run_sync state has correct confidence when reflexion is used."""
-        from tulip.agent import ReflexionConfig
+        from locus.agent import ReflexionConfig
 
         @tool
         def research(q: str) -> str:
@@ -2640,7 +2641,7 @@ class TestCompletionMode:
 
         mock_model.complete = persistent_model
 
-        from tulip.agent import ReflexionConfig
+        from locus.agent import ReflexionConfig
 
         agent = Agent(
             model=mock_model,
@@ -2879,7 +2880,7 @@ class TestInterruptResume:
     @pytest.mark.asyncio
     async def test_interrupt_yields_interrupt_event(self, mock_model):
         """When ask_user is called, agent yields InterruptEvent and pauses."""
-        from tulip.core.events import InterruptEvent
+        from locus.core.events import InterruptEvent
 
         call_count = 0
 
@@ -3165,7 +3166,7 @@ class TestAgentAsTool:
 
     def test_as_tool_returns_tool(self, mock_model):
         """as_tool() returns a Tool instance."""
-        from tulip.tools.decorator import Tool
+        from locus.tools.decorator import Tool
 
         mock_model.complete = AsyncMock(
             return_value=ModelResponse(message=Message.assistant("I'm a sub-agent."))
@@ -3394,7 +3395,7 @@ class TestPlanningStep:
     @pytest.mark.asyncio
     async def test_replan_injected_when_stuck(self, mock_model):
         """Replan suggestion injected when reflexion detects stuck + planning enabled."""
-        from tulip.agent import ReflexionConfig
+        from locus.agent import ReflexionConfig
 
         @tool
         def broken_tool(q: str) -> str:
@@ -3468,7 +3469,7 @@ class TestSwarmOrchestration:
     @pytest.mark.asyncio
     async def test_swarm_distributes_tasks(self):
         """Swarm distributes tasks among agents."""
-        from tulip.multiagent.swarm import Swarm, SwarmAgent
+        from locus.multiagent.swarm import Swarm, SwarmAgent
 
         mock_model = MagicMock()
         mock_model.complete = AsyncMock(
@@ -3495,7 +3496,7 @@ class TestSwarmOrchestration:
     @pytest.mark.asyncio
     async def test_swarm_shared_context(self):
         """Agents share findings through SharedContext."""
-        from tulip.multiagent.swarm import SharedContext
+        from locus.multiagent.swarm import SharedContext
 
         ctx = SharedContext()
         await ctx.add_finding("key1", "value1", "agent_1")
@@ -3512,7 +3513,7 @@ class TestSwarmOrchestration:
     @pytest.mark.asyncio
     async def test_swarm_capability_matching(self):
         """Agents only claim tasks matching their capabilities."""
-        from tulip.multiagent.swarm import Swarm, SwarmAgent
+        from locus.multiagent.swarm import Swarm, SwarmAgent
 
         mock_model = MagicMock()
         mock_model.complete = AsyncMock(
@@ -3537,7 +3538,7 @@ class TestSwarmOrchestration:
     @pytest.mark.asyncio
     async def test_swarm_handles_agent_failure(self):
         """Swarm handles agent failures gracefully."""
-        from tulip.multiagent.swarm import Swarm, SwarmAgent
+        from locus.multiagent.swarm import Swarm, SwarmAgent
 
         failing_model = MagicMock()
         failing_model.complete = AsyncMock(side_effect=RuntimeError("Model crashed"))
@@ -3565,7 +3566,7 @@ class TestAgentHandoff:
     @pytest.mark.asyncio
     async def test_handoff_transfers_context(self):
         """Handoff creates context and target agent receives it."""
-        from tulip.multiagent.handoff import (
+        from locus.multiagent.handoff import (
             Handoff,
             HandoffAgent,
             HandoffReason,
@@ -3602,7 +3603,7 @@ class TestAgentHandoff:
     @pytest.mark.asyncio
     async def test_handoff_chain(self):
         """Chain of handoffs: A → B → C."""
-        from tulip.multiagent.handoff import Handoff, HandoffAgent
+        from locus.multiagent.handoff import Handoff, HandoffAgent
 
         mock_model = MagicMock()
         mock_model.complete = AsyncMock(
@@ -3629,7 +3630,7 @@ class TestAgentHandoff:
     @pytest.mark.asyncio
     async def test_handoff_to_unknown_agent_fails(self):
         """Handoff to non-existent agent returns error."""
-        from tulip.multiagent.handoff import Handoff, HandoffAgent, HandoffReason
+        from locus.multiagent.handoff import Handoff, HandoffAgent, HandoffReason
 
         source = HandoffAgent(id="src", name="Source", model=MagicMock())
         manager = Handoff(name="test")
@@ -3648,7 +3649,7 @@ class TestAgentHandoff:
     @pytest.mark.asyncio
     async def test_handoff_context_has_findings(self):
         """HandoffContext includes findings from source agent."""
-        from tulip.multiagent.handoff import HandoffContext, HandoffReason
+        from locus.multiagent.handoff import HandoffContext, HandoffReason
 
         context = HandoffContext(
             handoff_id="h1",
@@ -3677,8 +3678,8 @@ class TestOrchestratorRouting:
     @pytest.mark.asyncio
     async def test_orchestrator_routes_and_executes(self):
         """Orchestrator routes task to specialists and produces summary."""
-        from tulip.multiagent.orchestrator import Orchestrator
-        from tulip.multiagent.specialist import Specialist
+        from locus.multiagent.orchestrator import Orchestrator
+        from locus.multiagent.specialist import Specialist
 
         mock_model = MagicMock()
 
@@ -3733,8 +3734,8 @@ class TestOrchestratorRouting:
     @pytest.mark.asyncio
     async def test_orchestrator_multiple_specialists(self):
         """Orchestrator can invoke multiple specialists."""
-        from tulip.multiagent.orchestrator import Orchestrator
-        from tulip.multiagent.specialist import Specialist
+        from locus.multiagent.orchestrator import Orchestrator
+        from locus.multiagent.specialist import Specialist
 
         mock_model = MagicMock()
 
@@ -3783,8 +3784,8 @@ class TestOrchestratorRouting:
     @pytest.mark.asyncio
     async def test_orchestrator_without_model_invokes_all(self):
         """Orchestrator without routing model invokes all specialists."""
-        from tulip.multiagent.orchestrator import Orchestrator
-        from tulip.multiagent.specialist import Specialist
+        from locus.multiagent.orchestrator import Orchestrator
+        from locus.multiagent.specialist import Specialist
 
         spec_model = MagicMock()
         spec_model.complete = AsyncMock(
@@ -3820,8 +3821,8 @@ class TestOrchestratorRouting:
     @pytest.mark.asyncio
     async def test_orchestrator_retries_empty_specialist(self):
         """Orchestrator retries when specialist returns empty output."""
-        from tulip.multiagent.orchestrator import Orchestrator
-        from tulip.multiagent.specialist import Specialist
+        from locus.multiagent.orchestrator import Orchestrator
+        from locus.multiagent.specialist import Specialist
 
         call_count = 0
 
@@ -3867,7 +3868,7 @@ class TestSequentialPipeline:
     @pytest.mark.asyncio
     async def test_sequential_chains_output(self):
         """Sequential pipeline passes output from one agent to the next."""
-        from tulip.agent.composition import SequentialPipeline
+        from locus.agent.composition import SequentialPipeline
 
         outputs_seen = []
 
@@ -3900,7 +3901,7 @@ class TestSequentialPipeline:
     @pytest.mark.asyncio
     async def test_sequential_custom_template(self):
         """Sequential pipeline uses custom prompt template."""
-        from tulip.agent.composition import SequentialPipeline
+        from locus.agent.composition import SequentialPipeline
 
         prompts = []
 
@@ -3925,7 +3926,7 @@ class TestSequentialPipeline:
     @pytest.mark.asyncio
     async def test_sequential_single_agent(self):
         """Sequential pipeline works with a single agent."""
-        from tulip.agent.composition import SequentialPipeline
+        from locus.agent.composition import SequentialPipeline
 
         class FakeAgent:
             def run_sync(self, prompt):
@@ -3945,7 +3946,7 @@ class TestSequentialPipeline:
     @pytest.mark.asyncio
     async def test_sequential_handles_error(self):
         """Sequential pipeline handles agent errors gracefully."""
-        from tulip.agent.composition import SequentialPipeline
+        from locus.agent.composition import SequentialPipeline
 
         class FailingAgent:
             def run_sync(self, prompt):
@@ -3964,7 +3965,7 @@ class TestParallelPipeline:
     @pytest.mark.asyncio
     async def test_parallel_runs_all_agents(self):
         """Parallel pipeline runs all agents and collects results."""
-        from tulip.agent.composition import ParallelPipeline
+        from locus.agent.composition import ParallelPipeline
 
         class FakeAgent:
             def __init__(self, name):
@@ -3992,7 +3993,7 @@ class TestParallelPipeline:
     @pytest.mark.asyncio
     async def test_parallel_merge_last(self):
         """Parallel pipeline with 'last' merge strategy."""
-        from tulip.agent.composition import ParallelPipeline
+        from locus.agent.composition import ParallelPipeline
 
         class FakeAgent:
             def __init__(self, val):
@@ -4017,7 +4018,7 @@ class TestParallelPipeline:
     @pytest.mark.asyncio
     async def test_parallel_custom_task_map(self):
         """Parallel pipeline with per-agent custom tasks."""
-        from tulip.agent.composition import ParallelPipeline
+        from locus.agent.composition import ParallelPipeline
 
         prompts = {}
 
@@ -4050,7 +4051,7 @@ class TestLoopAgent:
     @pytest.mark.asyncio
     async def test_loop_stops_on_condition(self):
         """Loop stops when condition returns True."""
-        from tulip.agent.composition import LoopAgent
+        from locus.agent.composition import LoopAgent
 
         call_count = 0
 
@@ -4079,7 +4080,7 @@ class TestLoopAgent:
     @pytest.mark.asyncio
     async def test_loop_respects_max_loops(self):
         """Loop stops at max_loops even if condition never met."""
-        from tulip.agent.composition import LoopAgent
+        from locus.agent.composition import LoopAgent
 
         class FakeAgent:
             def run_sync(self, prompt):
@@ -4102,7 +4103,7 @@ class TestLoopAgent:
     @pytest.mark.asyncio
     async def test_loop_custom_prompt(self):
         """Loop uses custom prompt template for iterations."""
-        from tulip.agent.composition import LoopAgent
+        from locus.agent.composition import LoopAgent
 
         prompts = []
 
@@ -4134,7 +4135,7 @@ class TestCompositionHelpers:
     @pytest.mark.asyncio
     async def test_sequential_helper(self):
         """sequential() creates a SequentialPipeline."""
-        from tulip.agent.composition import SequentialPipeline, sequential
+        from locus.agent.composition import SequentialPipeline, sequential
 
         class FakeAgent:
             def run_sync(self, prompt):
@@ -4152,7 +4153,7 @@ class TestCompositionHelpers:
     @pytest.mark.asyncio
     async def test_parallel_helper(self):
         """parallel() creates a ParallelPipeline."""
-        from tulip.agent.composition import ParallelPipeline, parallel
+        from locus.agent.composition import ParallelPipeline, parallel
 
         class FakeAgent:
             def run_sync(self, prompt):
@@ -4170,7 +4171,7 @@ class TestCompositionHelpers:
     @pytest.mark.asyncio
     async def test_loop_helper(self):
         """loop() creates a LoopAgent."""
-        from tulip.agent.composition import LoopAgent, loop
+        from locus.agent.composition import LoopAgent, loop
 
         class FakeAgent:
             def run_sync(self, prompt):
@@ -4197,7 +4198,7 @@ class TestEvalCase:
 
     def test_create_basic_case(self):
         """Create a basic eval case."""
-        from tulip.evaluation import EvalCase
+        from locus.evaluation import EvalCase
 
         case = EvalCase(
             name="test_basic",
@@ -4210,7 +4211,7 @@ class TestEvalCase:
 
     def test_create_full_case(self):
         """Create a case with all fields."""
-        from tulip.evaluation import EvalCase
+        from locus.evaluation import EvalCase
 
         case = EvalCase(
             name="complex",
@@ -4231,7 +4232,7 @@ class TestEvalRunner:
 
     def test_run_passing_case(self):
         """Runner evaluates a passing case."""
-        from tulip.evaluation import EvalCase, EvalRunner
+        from locus.evaluation import EvalCase, EvalRunner
 
         class FakeAgent:
             def run_sync(self, prompt):
@@ -4260,7 +4261,7 @@ class TestEvalRunner:
 
     def test_run_failing_case(self):
         """Runner evaluates a failing case."""
-        from tulip.evaluation import EvalCase, EvalRunner
+        from locus.evaluation import EvalCase, EvalRunner
 
         class FakeAgent:
             def run_sync(self, prompt):
@@ -4288,7 +4289,7 @@ class TestEvalRunner:
 
     def test_run_tool_check(self):
         """Runner checks tool usage."""
-        from tulip.evaluation import EvalCase, EvalRunner
+        from locus.evaluation import EvalCase, EvalRunner
 
         class FakeAgent:
             def run_sync(self, prompt):
@@ -4325,7 +4326,7 @@ class TestEvalRunner:
 
     def test_run_not_contains_check(self):
         """Runner checks output does NOT contain excluded strings."""
-        from tulip.evaluation import EvalCase, EvalRunner
+        from locus.evaluation import EvalCase, EvalRunner
 
         class FakeAgent:
             def run_sync(self, prompt):
@@ -4350,7 +4351,7 @@ class TestEvalRunner:
 
     def test_run_iteration_budget(self):
         """Runner checks iteration budget."""
-        from tulip.evaluation import EvalCase, EvalRunner
+        from locus.evaluation import EvalCase, EvalRunner
 
         class FakeAgent:
             def run_sync(self, prompt):
@@ -4383,7 +4384,7 @@ class TestEvalRunner:
 
     def test_run_multiple_cases(self):
         """Runner evaluates multiple cases."""
-        from tulip.evaluation import EvalCase, EvalRunner
+        from locus.evaluation import EvalCase, EvalRunner
 
         call_count = 0
 
@@ -4413,7 +4414,7 @@ class TestEvalRunner:
 
     def test_run_handles_agent_error(self):
         """Runner handles agent exceptions gracefully."""
-        from tulip.evaluation import EvalCase, EvalRunner
+        from locus.evaluation import EvalCase, EvalRunner
 
         class CrashingAgent:
             def run_sync(self, prompt):
@@ -4431,7 +4432,7 @@ class TestEvalRunner:
 
     def test_report_summary(self):
         """Report generates human-readable summary."""
-        from tulip.evaluation import EvalReport, EvalResult
+        from locus.evaluation import EvalReport, EvalResult
 
         report = EvalReport(
             results=[
@@ -4469,7 +4470,7 @@ class TestModelHooks:
     @pytest.mark.asyncio
     async def test_before_model_hook_called(self):
         """on_before_model_call hook is invoked before model.complete()."""
-        from tulip.hooks.provider import HookProvider
+        from locus.hooks.provider import HookProvider
 
         hook_calls = []
 
@@ -4510,7 +4511,7 @@ class TestModelHooks:
     @pytest.mark.asyncio
     async def test_before_model_hook_modifies_messages(self):
         """on_before_model_call can modify messages before sending to model."""
-        from tulip.hooks.provider import HookProvider
+        from locus.hooks.provider import HookProvider
 
         captured_messages = []
 
@@ -4552,7 +4553,7 @@ class TestModelHooks:
     @pytest.mark.asyncio
     async def test_after_model_hook_modifies_response(self):
         """on_after_model_call can modify the model response."""
-        from tulip.hooks.provider import HookProvider
+        from locus.hooks.provider import HookProvider
 
         class FilterHook(HookProvider):
             @property
@@ -4585,7 +4586,7 @@ class TestModelHooks:
     @pytest.mark.asyncio
     async def test_multiple_model_hooks_chain(self):
         """Multiple hooks chain in priority order."""
-        from tulip.hooks.provider import HookProvider
+        from locus.hooks.provider import HookProvider
 
         order = []
 
@@ -4627,7 +4628,7 @@ class TestModelHooks:
 
     def test_hook_provider_has_model_hooks(self):
         """HookProvider base class has model hook methods."""
-        from tulip.hooks.provider import HookProvider
+        from locus.hooks.provider import HookProvider
 
         class MinimalHook(HookProvider):
             @property
@@ -4642,8 +4643,8 @@ class TestModelHooks:
     @pytest.mark.asyncio
     async def test_hook_registry_model_hooks(self):
         """HookRegistry dispatches model hook events."""
-        from tulip.hooks.provider import HookProvider
-        from tulip.hooks.registry import HookRegistry
+        from locus.hooks.provider import HookProvider
+        from locus.hooks.registry import HookRegistry
 
         calls = []
 
@@ -4679,7 +4680,7 @@ class TestHookControlFlow:
     @pytest.mark.asyncio
     async def test_cancel_tool_via_event(self):
         """Hook cancels a tool call via event.cancel."""
-        from tulip.hooks.provider import HookProvider
+        from locus.hooks.provider import HookProvider
 
         class BlockDangerousTool(HookProvider):
             @property
@@ -4740,7 +4741,7 @@ class TestHookControlFlow:
     @pytest.mark.asyncio
     async def test_retry_model_via_event(self):
         """Hook retries model call via event.retry = True."""
-        from tulip.hooks.provider import HookProvider
+        from locus.hooks.provider import HookProvider
 
         retry_count = 0
 
@@ -4784,7 +4785,7 @@ class TestHookControlFlow:
     @pytest.mark.asyncio
     async def test_retry_tool_via_event(self):
         """Hook retries tool call via event.retry = True."""
-        from tulip.hooks.provider import HookProvider
+        from locus.hooks.provider import HookProvider
 
         tool_attempts = 0
 
@@ -4843,7 +4844,7 @@ class TestHookControlFlow:
 
     def test_write_protection_blocks_readonly_fields(self):
         """Setting a read-only field on an event raises AttributeError."""
-        from tulip.hooks.provider import BeforeToolCallEvent
+        from locus.hooks.provider import BeforeToolCallEvent
 
         event = BeforeToolCallEvent(tool_name="test", tool_call_id="c1", arguments={"x": 1})
 
@@ -4862,7 +4863,7 @@ class TestHookControlFlow:
 
     def test_write_protection_on_model_events(self):
         """Model events protect read-only fields."""
-        from tulip.hooks.provider import AfterModelCallEvent, BeforeModelCallEvent
+        from locus.hooks.provider import AfterModelCallEvent, BeforeModelCallEvent
 
         before = BeforeModelCallEvent(messages=[], tools=None)
         before.messages = [Message.user("ok")]  # writable
@@ -4878,7 +4879,7 @@ class TestHookControlFlow:
     @pytest.mark.asyncio
     async def test_after_hooks_run_in_reverse_order(self):
         """After hooks fire in reverse order (last-registered-first)."""
-        from tulip.hooks.provider import HookProvider
+        from locus.hooks.provider import HookProvider
 
         order = []
 
@@ -4928,7 +4929,7 @@ class TestErrorSanitization:
 
     def test_sanitize_connection_string(self):
         """Connection strings are redacted from error messages."""
-        from tulip.tools.executor import _sanitize_error
+        from locus.tools.executor import _sanitize_error
 
         error = (
             "OperationalError: could not connect to postgresql://admin:s3cret@db.internal:5432/prod"
@@ -4940,7 +4941,7 @@ class TestErrorSanitization:
 
     def test_sanitize_file_path(self):
         """Home directory paths are redacted."""
-        from tulip.tools.executor import _sanitize_error
+        from locus.tools.executor import _sanitize_error
 
         error = "FileNotFoundError: /Users/john.doe/Projects/secret/config.yaml"
         sanitized = _sanitize_error(error)
@@ -4949,7 +4950,7 @@ class TestErrorSanitization:
 
     def test_sanitize_api_key(self):
         """API keys in errors are redacted."""
-        from tulip.tools.executor import _sanitize_error
+        from locus.tools.executor import _sanitize_error
 
         error = "AuthError: invalid api_key=sk-proj-abc123def456"
         sanitized = _sanitize_error(error)
@@ -4958,7 +4959,7 @@ class TestErrorSanitization:
 
     def test_safe_error_passes_through(self):
         """Normal errors pass through unchanged."""
-        from tulip.tools.executor import _sanitize_error
+        from locus.tools.executor import _sanitize_error
 
         error = "ValueError: expected int, got str"
         sanitized = _sanitize_error(error)
@@ -4966,7 +4967,7 @@ class TestErrorSanitization:
 
     def test_multiline_error_first_line_only(self):
         """Only first line of error is kept."""
-        from tulip.tools.executor import _sanitize_error
+        from locus.tools.executor import _sanitize_error
 
         error = "Error: something\nTraceback details\nMore internal info"
         sanitized = _sanitize_error(error)
@@ -5052,7 +5053,7 @@ class TestAgentServer:
     def test_server_creates_app(self):
         """AgentServer creates a FastAPI app."""
         pytest.importorskip("fastapi")
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         mock_agent = MagicMock()
         server = AgentServer(agent=mock_agent, title="Test Server")
@@ -5066,7 +5067,7 @@ class TestAgentServer:
         pytest.importorskip("fastapi")
         from fastapi.testclient import TestClient
 
-        from tulip.server import AgentServer
+        from locus.server import AgentServer
 
         mock_agent = MagicMock()
         server = AgentServer(agent=mock_agent)
@@ -5081,8 +5082,8 @@ class TestAgentServer:
         pytest.importorskip("fastapi")
         from fastapi.testclient import TestClient
 
-        from tulip.core.events import TerminateEvent
-        from tulip.server import AgentServer
+        from locus.core.events import TerminateEvent
+        from locus.server import AgentServer
 
         async def fake_run(*_args, **_kwargs):
             yield TerminateEvent(
@@ -5112,8 +5113,8 @@ class TestAgentServer:
         pytest.importorskip("fastapi")
         from fastapi.testclient import TestClient
 
-        from tulip.core.events import TerminateEvent
-        from tulip.server import AgentServer
+        from locus.core.events import TerminateEvent
+        from locus.server import AgentServer
 
         async def fake_run(*_args, **_kwargs):
             yield TerminateEvent(

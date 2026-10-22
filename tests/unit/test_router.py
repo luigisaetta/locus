@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for the cognitive router (`tulip.router`).
+"""Unit tests for the cognitive router (`locus.router`).
 
 Covers the deterministic core: enum ordering, GoalFrame validation,
 CapabilityIndex behaviour, ProtocolRegistry selection, PolicyGate
@@ -21,11 +22,11 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import BaseModel
 
-from tulip.agent.composition import PipelineResult
-from tulip.agent.result import AgentResult, ExecutionMetrics
-from tulip.core.state import AgentState
-from tulip.multiagent.orchestrator import OrchestratorResult
-from tulip.router import (
+from locus.agent.composition import PipelineResult
+from locus.agent.result import AgentResult, ExecutionMetrics
+from locus.core.state import AgentState
+from locus.multiagent.orchestrator import OrchestratorResult
+from locus.router import (
     HUMAN_SENTINEL,
     A2ARunnable,
     AgentRunnable,
@@ -49,12 +50,12 @@ from tulip.router import (
     TaskType,
     builtin_protocols,
 )
-from tulip.router.compiler import _ApprovalRunnable, _default_deny
-from tulip.router.runtime import FrameExtractionError
-from tulip.skills.models import Skill
-from tulip.skills.plugin import SkillsPlugin
-from tulip.tools.decorator import tool
-from tulip.tools.registry import create_registry
+from locus.router.compiler import _ApprovalRunnable, _default_deny
+from locus.router.runtime import FrameExtractionError
+from locus.skills.models import Skill
+from locus.skills.plugin import SkillsPlugin
+from locus.tools.decorator import tool
+from locus.tools.registry import create_registry
 
 
 # ---------------------------------------------------------------------------
@@ -642,7 +643,7 @@ class TestRouter:
         assert observed == [frame]
 
     def test_frame_payload_round_trips_the_requires_switches(self):
-        from tulip.observability.router_events import _frame_payload
+        from locus.observability.router_events import _frame_payload
 
         frame = _frame().model_copy(
             update={"requires_tools": True, "requires_code_generation": True}
@@ -846,7 +847,7 @@ class TestLLMProtocolPicker:
     def test_picker_short_circuits_on_single_candidate(self):
         """One candidate post-filter → picker NOT invoked, method =
         single_candidate. Verified via mock assertion."""
-        from tulip.router import LLMProtocolPicker
+        from locus.router import LLMProtocolPicker
 
         picker = MagicMock(spec=LLMProtocolPicker)
         compiler = _picker_compiler(picker)
@@ -872,7 +873,7 @@ class TestLLMProtocolPicker:
     def test_picker_happy_path_returns_pick_with_rationale(self):
         """Multiple candidates + picker → picker called, method =
         llm_picked, rationale threaded through."""
-        from tulip.router.picker import LLMProtocolPicker
+        from locus.router.picker import LLMProtocolPicker
 
         async def _fake_pick(frame, candidates):
             # Pick the second candidate, with a one-liner rationale.
@@ -899,8 +900,8 @@ class TestLLMProtocolPicker:
         rule_based_fallback. Passes ``run_id`` so the
         ``router.protocol.picker_fallback`` event is emitted on the
         bus — verified by the in-process subscriber below."""
-        from tulip.observability import get_event_bus
-        from tulip.router.picker import LLMProtocolPicker
+        from locus.observability import get_event_bus
+        from locus.router.picker import LLMProtocolPicker
 
         async def _boom(frame, candidates):
             raise RuntimeError("model unreachable")
@@ -939,7 +940,7 @@ class TestLLMProtocolPicker:
         """Picker returns id not in candidates → PickerError caught,
         rule-based fallback wins. Passes ``run_id`` so the fallback
         event fires (covers the PickerError branch in the emitter)."""
-        from tulip.router.picker import LLMProtocolPicker, PickerError
+        from locus.router.picker import LLMProtocolPicker, PickerError
 
         async def _hallucinate(frame, candidates):
             raise PickerError("picker hallucinated nonexistent_id")
@@ -960,7 +961,7 @@ class TestLLMProtocolPicker:
     def test_compile_zero_candidates_raises_without_calling_picker(self):
         """No protocol fits the filter → NoMatchingProtocolError, picker
         never invoked (saves a token on impossible dispatches)."""
-        from tulip.router.picker import LLMProtocolPicker
+        from locus.router.picker import LLMProtocolPicker
 
         picker = MagicMock(spec=LLMProtocolPicker)
         compiler = _picker_compiler(picker)
@@ -982,14 +983,14 @@ class TestLLMProtocolPickerInternals:
     def test_pick_happy_path_returns_tuple(self):
         from unittest.mock import patch
 
-        from tulip.router.picker import LLMProtocolPicker, PickedProtocol
+        from locus.router.picker import LLMProtocolPicker, PickedProtocol
 
         picker = LLMProtocolPicker(model=MagicMock())
         protocols = builtin_protocols()
         # debate + specialist_fanout both handle COMPARE.
         candidates = [p for p in protocols if p.id in ("debate", "specialist_fanout")]
 
-        with patch("tulip.agent.agent.Agent") as mock_agent_cls:
+        with patch("locus.agent.agent.Agent") as mock_agent_cls:
             mock_agent_cls.return_value.invoke.return_value = _make_agent_result(
                 "picker output",
                 parsed=PickedProtocol(
@@ -1007,13 +1008,13 @@ class TestLLMProtocolPickerInternals:
     def test_pick_parse_failure_raises_picker_error(self):
         from unittest.mock import patch
 
-        from tulip.router.picker import LLMProtocolPicker, PickerError
+        from locus.router.picker import LLMProtocolPicker, PickerError
 
         picker = LLMProtocolPicker(model=MagicMock())
         protocols = builtin_protocols()
         candidates = [p for p in protocols if p.id in ("debate", "specialist_fanout")]
 
-        with patch("tulip.agent.agent.Agent") as mock_agent_cls:
+        with patch("locus.agent.agent.Agent") as mock_agent_cls:
             # parsed=None simulates a schema-rejection from the model.
             mock_agent_cls.return_value.invoke.return_value = _make_agent_result(
                 "garbage",
@@ -1025,7 +1026,7 @@ class TestLLMProtocolPickerInternals:
     def test_pick_unknown_id_raises_picker_error(self):
         from unittest.mock import patch
 
-        from tulip.router.picker import (
+        from locus.router.picker import (
             LLMProtocolPicker,
             PickedProtocol,
             PickerError,
@@ -1035,7 +1036,7 @@ class TestLLMProtocolPickerInternals:
         protocols = builtin_protocols()
         candidates = [p for p in protocols if p.id in ("debate", "specialist_fanout")]
 
-        with patch("tulip.agent.agent.Agent") as mock_agent_cls:
+        with patch("locus.agent.agent.Agent") as mock_agent_cls:
             mock_agent_cls.return_value.invoke.return_value = _make_agent_result(
                 "x",
                 parsed=PickedProtocol(
@@ -1047,13 +1048,13 @@ class TestLLMProtocolPickerInternals:
                 asyncio.run(picker.pick(_frame(primary_goal=TaskType.COMPARE), candidates))
 
     def test_default_system_prompt_is_used(self):
-        from tulip.router.picker import _DEFAULT_SYSTEM_PROMPT, LLMProtocolPicker
+        from locus.router.picker import _DEFAULT_SYSTEM_PROMPT, LLMProtocolPicker
 
         picker = LLMProtocolPicker(model=MagicMock())
         assert picker.system_prompt == _DEFAULT_SYSTEM_PROMPT
 
     def test_custom_system_prompt_override(self):
-        from tulip.router.picker import LLMProtocolPicker
+        from locus.router.picker import LLMProtocolPicker
 
         custom = "You are a strict canonical-only picker."
         picker = LLMProtocolPicker(model=MagicMock(), system_prompt=custom)
@@ -1062,7 +1063,7 @@ class TestLLMProtocolPickerInternals:
 
 class TestDeniedProtocols:
     def _frame(self):
-        from tulip.router import Complexity, GoalFrame, Risk, TaskType
+        from locus.router import Complexity, GoalFrame, Risk, TaskType
 
         return GoalFrame(
             primary_goal=TaskType.ANSWER,
@@ -1072,7 +1073,7 @@ class TestDeniedProtocols:
         )
 
     def test_a_denied_protocol_is_refused_before_any_risk_math(self):
-        from tulip.router import PolicyGate
+        from locus.router import PolicyGate
 
         gate = PolicyGate(denied_protocols={"a2a_delegate"})
         proto = next(p for p in builtin_protocols() if p.id == "a2a_delegate")
@@ -1082,7 +1083,7 @@ class TestDeniedProtocols:
         assert "denied by policy" in verdict.reason
 
     def test_an_undenied_protocol_still_passes(self):
-        from tulip.router import PolicyGate
+        from locus.router import PolicyGate
 
         gate = PolicyGate(denied_protocols={"a2a_delegate"})
         proto = next(p for p in builtin_protocols() if p.id == "direct_response")

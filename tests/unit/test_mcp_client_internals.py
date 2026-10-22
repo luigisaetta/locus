@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """MCP client internals that a loopback server cannot easily provoke.
 
@@ -18,8 +19,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tulip.integrations import fastmcp
-from tulip.integrations.fastmcp import (
+from locus.integrations import fastmcp
+from locus.integrations.fastmcp import (
     MCPClient,
     MCPConnectionError,
     MCPRequestContext,
@@ -63,7 +64,7 @@ def test_every_content_kind_is_rendered_for_the_model() -> None:
     result = _convert_call_result(raw)
     lines = result.text.split("\n")
     assert lines[0] == "caption"
-    assert "[tulip-image media_type=image/png]" in result.text
+    assert "[locus-image media_type=image/png]" in result.text
     assert "[image: image/jpeg]" in result.text
     assert "[audio: audio/wav]" in result.text
     assert "file body" in result.text
@@ -488,9 +489,9 @@ async def test_load_tools_without_dynamic_headers_connects_once(
     assert calls == ["connect"]
 
 
-def test_to_tulip_tools_respects_the_allowlist() -> None:
+def test_to_locus_tools_respects_the_allowlist() -> None:
     client = MCPClient(allowed_tools=["keep"])
-    tools = client.to_tulip_tools(
+    tools = client.to_locus_tools(
         [{"name": "keep", "inputSchema": None}, {"name": "drop", "inputSchema": None}]
     )
     assert [t.name for t in tools] == ["keep"]

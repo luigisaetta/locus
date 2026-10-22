@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 21: Composing data-privacy agents into pipelines.
 
@@ -17,12 +18,12 @@ orchestrate them for you. Scenario: a Data Protection Impact Assessment
 - Helpers sequential() / parallel() / loop() exist for one-liners.
 
 Run it:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_21_composition.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_21_composition.py
 
-The default provider is the bundled mock model; set TULIP_MODEL_PROVIDER for a live provider.
-Set TULIP_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
-TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o
-(or TULIP_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER for a live provider.
+Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
 provider: ollama, vllm, groq, together, openrouter, ...).
 """
 
@@ -30,7 +31,7 @@ import asyncio
 
 from config import get_model
 
-from tulip.agent import (
+from locus.agent import (
     Agent,
     AgentConfig,
     LoopAgent,

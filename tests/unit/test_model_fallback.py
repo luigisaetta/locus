@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Provider failover: ``CredentialPoolModel`` streaming and ``FallbackChain``.
 
@@ -20,19 +21,19 @@ from typing import Any
 import pytest
 from pydantic import SecretStr
 
-from tulip.agent import Agent
-from tulip.core.events import ModelChunkEvent, TerminateEvent
-from tulip.core.messages import Message
-from tulip.models.credentials import Credential, CredentialPool
-from tulip.models.fallback import (
+from locus.agent import Agent
+from locus.core.events import ModelChunkEvent, TerminateEvent
+from locus.core.messages import Message
+from locus.models.credentials import Credential, CredentialPool
+from locus.models.fallback import (
     CircuitBreaker,
     CircuitState,
     FallbackChain,
     FallbackEvent,
     FallbackExhaustedError,
 )
-from tulip.models.pooled import CredentialPoolModel
-from tulip.testing import ScriptedModel, text
+from locus.models.pooled import CredentialPoolModel
+from locus.testing import ScriptedModel, text
 
 
 class APIError(Exception):
@@ -351,9 +352,9 @@ async def test_when_every_breaker_is_open_the_primary_is_tried() -> None:
 
 
 async def test_fallback_events_reach_the_telemetry_bus() -> None:
-    from tulip.observability.context import run_context
-    from tulip.observability.emit import EV_MODEL_BREAKER, EV_MODEL_FALLBACK
-    from tulip.observability.event_bus import get_event_bus
+    from locus.observability.context import run_context
+    from locus.observability.emit import EV_MODEL_BREAKER, EV_MODEL_FALLBACK
+    from locus.observability.event_bus import get_event_bus
 
     bus = get_event_bus()
     seen: list[Any] = []

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Scripted playbook runs whose full trace must not change when the engine moves.
 
@@ -233,7 +234,7 @@ def scenario_static(eng: Engine) -> dict[str, Any]:
         e = eng.engine
         pb = e.parse_playbook_v2(body)
         stamped = copy.deepcopy(body)
-        stamped.setdefault("metadata", {})["tulip.publish"] = {"at": "now"}
+        stamped.setdefault("metadata", {})["locus.publish"] = {"at": "now"}
         out[name] = {
             "is_v2": e.is_playbook_v2(body),
             "digest": e.definition_digest(body),

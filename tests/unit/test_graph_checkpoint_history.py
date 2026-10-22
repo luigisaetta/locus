@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Checkpoint history on graphs: every step saved, readable, editable, forkable.
 
@@ -15,10 +16,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tulip.core.command import Command
-from tulip.memory.backends.file import FileCheckpointer
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.multiagent.graph import END, START, GraphConfig, StateGraph
+from locus.core.command import Command
+from locus.memory.backends.file import FileCheckpointer
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.multiagent.graph import END, START, GraphConfig, StateGraph
 
 
 if TYPE_CHECKING:

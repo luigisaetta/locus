@@ -1,13 +1,14 @@
 #!/usr/bin/env python
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Check every Python snippet in this repo's Markdown against the real SDK.
 
 The tests prove the code works. Nothing proved the *documentation* works, and
 a September-2026 audit of this repo found the cost of that gap: the README
 advertised `MCPClient` in its capability matrix while the name was absent from
-`tulip.integrations.__all__`, `examples/README.md` imported two hooks from a
+`locus.integrations.__all__`, `examples/README.md` imported two hooks from a
 module that has never contained them, and the quickstart's headline snippet
 raised `SyntaxError` for every reader who pasted it. Each was a
 copy-paste-and-it-fails bug sitting in the highest-traffic file in the project,
@@ -18,9 +19,9 @@ Three checks, cheapest first:
 1. **Syntax** — every block must compile. Not merely parse: ``ast.parse``
    accepts top-level ``await`` and only ``compile`` rejects it, which is
    exactly the hole the broken quickstart went through.
-2. **Symbols** — every ``from tulip... import X`` must resolve against the
+2. **Symbols** — every ``from locus... import X`` must resolve against the
    installed SDK.
-3. **Keywords** — keyword arguments passed to an imported Tulip callable must
+3. **Keywords** — keyword arguments passed to an imported Locus callable must
    exist on it.
 
 Deliberately static. It imports the SDK but never executes a snippet, so it
@@ -187,7 +188,7 @@ def check_block(source: str) -> list[tuple[str, str]]:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
-            if not node.module or node.module.split(".")[0] != "tulip":
+            if not node.module or node.module.split(".")[0] != "locus":
                 continue
             try:
                 importlib.import_module(node.module)

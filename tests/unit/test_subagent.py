@@ -1,5 +1,6 @@
-# Copyright 2026 Tulip Labs
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """First-class subagents: isolation, rollup, cancellation, attribution.
 
@@ -27,19 +28,19 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent, SubagentResult, run_subagent
-from tulip.agent.subagent import _LinkedCancelSignal
-from tulip.core.events import (
+from locus.agent import Agent, SubagentResult, run_subagent
+from locus.agent.subagent import _LinkedCancelSignal
+from locus.core.events import (
+    LocusEvent,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
-    TulipEvent,
 )
-from tulip.core.messages import Message
-from tulip.hooks.provider import BeforeToolCallEvent, HookProvider
-from tulip.models.base import ModelResponse
-from tulip.testing import FunctionModel, ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.core.messages import Message
+from locus.hooks.provider import BeforeToolCallEvent, HookProvider
+from locus.models.base import ModelResponse
+from locus.testing import FunctionModel, ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +110,7 @@ async def test_tools_are_an_explicit_allowlist() -> None:
             text("finished"),
         ]
     )
-    events: list[TulipEvent] = []
+    events: list[LocusEvent] = []
     result = await run_subagent(
         "do the task",
         model=model,
@@ -400,9 +401,9 @@ def test_linked_signal_clear_never_clears_the_parent() -> None:
 async def test_child_events_are_observable_and_attributed() -> None:
     """No silent children: every child event reaches ``on_event``, stamped
     with the child's name so a merged stream stays legible."""
-    events: list[TulipEvent] = []
+    events: list[LocusEvent] = []
 
-    async def collect(event: TulipEvent) -> None:  # async callbacks are awaited
+    async def collect(event: LocusEvent) -> None:  # async callbacks are awaited
         events.append(event)
 
     result = await run_subagent(
@@ -446,7 +447,7 @@ async def test_hooks_gate_child_tool_calls() -> None:
             if event.tool_name == "dangerous":
                 event.cancel = "Blocked by policy"
 
-    events: list[TulipEvent] = []
+    events: list[LocusEvent] = []
     result = await run_subagent(
         "wreak havoc",
         model=ScriptedModel([tool_call("dangerous", target="prod"), text("could not")]),
@@ -469,7 +470,7 @@ async def test_hooks_gate_child_tool_calls() -> None:
 async def test_deepagent_task_tool_usage_rolls_up() -> None:
     """The pre-existing ``task_tool`` gains the rollup for free: what used to
     vanish from the parent's meter now lands on it."""
-    from tulip.deepagent.subagent import SubAgentDef, task_tool
+    from locus.deepagent.subagent import SubAgentDef, task_tool
 
     task = task_tool(
         [
@@ -523,7 +524,7 @@ async def test_child_error_propagates_after_an_error_terminate_event() -> None:
     def explode(messages: list[Message], tools: object) -> ModelResponse:
         raise RuntimeError("provider fell over")
 
-    events: list[TulipEvent] = []
+    events: list[LocusEvent] = []
     with pytest.raises(RuntimeError, match="provider fell over"):
         await run_subagent("task", model=FunctionModel(explode), on_event=events.append)
 

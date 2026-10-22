@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """PgCheckpointer without a database: the statements it sends, and the tenant it sends them for.
 
@@ -18,10 +19,10 @@ from typing import Any
 
 import pytest
 
-from tulip.core.messages import Message
-from tulip.core.state import AgentState
-from tulip.memory.backends import PgCheckpointer
-from tulip.memory.retention import MESSAGE_TIME_KEY
+from locus.core.messages import Message
+from locus.core.state import AgentState
+from locus.memory.backends import PgCheckpointer
+from locus.memory.retention import MESSAGE_TIME_KEY
 
 
 _COLUMNS = [
@@ -126,8 +127,8 @@ async def test_a_save_is_one_statement_in_one_transaction(conn: _Conn) -> None:
     kind, sql, args = data[0]
     assert kind == "execute"
     # The upsert and the prune travel together.
-    assert sql.startswith("WITH saved AS (INSERT INTO public.tulip_checkpoints")
-    assert "DELETE FROM public.tulip_checkpoints" in sql
+    assert sql.startswith("WITH saved AS (INSERT INTO public.locus_checkpoints")
+    assert "DELETE FROM public.locus_checkpoints" in sql
     assert args[:3] == ("default", "t1", checkpoint_id)
     assert args[-1] == 0  # keep_checkpoints=1 keeps none of the others
     assert conn.pins() == ["default"]
@@ -137,7 +138,7 @@ async def test_without_keep_checkpoints_a_save_is_a_plain_upsert(conn: _Conn) ->
     cp = PgCheckpointer("postgresql://stub")
     await cp.save(_state("hi"), "t1", checkpoint_id="cp-1")
     ((_, sql, args),) = conn.data_calls()
-    assert sql.startswith("INSERT INTO public.tulip_checkpoints")
+    assert sql.startswith("INSERT INTO public.locus_checkpoints")
     assert "DELETE" not in sql
     assert args[2] == "cp-1"
 
@@ -155,7 +156,7 @@ async def test_a_missing_table_is_created_with_rls(conn: _Conn) -> None:
     ddl = [c[1] for c in conn.calls if c[1].lstrip().upper().startswith(("CREATE", "ALTER"))]
     assert any("CREATE TABLE IF NOT EXISTS public.threads" in s for s in ddl)
     assert any("FORCE ROW LEVEL SECURITY" in s for s in ddl)
-    assert any("current_setting('tulip.tenant', true)" in s for s in ddl)
+    assert any("current_setting('locus.tenant', true)" in s for s in ddl)
     # The public schema is never created: that needs CREATE on the database.
     assert not any(s.startswith("CREATE SCHEMA") for s in ddl)
 

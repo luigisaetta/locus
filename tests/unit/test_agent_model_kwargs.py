@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Provider configuration travelling with the one-string model form.
 
@@ -8,7 +9,7 @@
 That was fine while every provider read its whole configuration from the
 environment and stopped being fine the moment ``openai-compatible:`` shipped —
 that prefix *requires* a ``base_url``, so through ``Agent(model=...)`` it was
-reachable only via ``TULIP_OPENAI_COMPATIBLE_BASE_URL``. Same for pointing
+reachable only via ``LOCUS_OPENAI_COMPATIBLE_BASE_URL``. Same for pointing
 ``vllm:`` or ``ollama:`` at another host, or using a per-agent key.
 
 ``model_kwargs`` closes that without giving up ``extra="forbid"``, which is
@@ -22,9 +23,9 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.agent.config import AgentConfig
-from tulip.testing import ScriptedModel, text
+from locus.agent import Agent
+from locus.agent.config import AgentConfig
+from locus.testing import ScriptedModel, text
 
 
 # --------------------------------------------------------------------------
@@ -47,7 +48,7 @@ def test_an_openai_compatible_endpoint_is_usable_without_the_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The concrete regression: this prefix has no usable default base_url."""
-    monkeypatch.delenv("TULIP_OPENAI_COMPATIBLE_BASE_URL", raising=False)
+    monkeypatch.delenv("LOCUS_OPENAI_COMPATIBLE_BASE_URL", raising=False)
 
     agent = Agent(
         model="openai-compatible:qwen3.6-35b",

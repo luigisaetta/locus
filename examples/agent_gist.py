@@ -1,6 +1,7 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
-"""Tulip Agent — IOC verdict in 15 lines.
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
+"""Locus Agent — IOC verdict in 15 lines.
 
 A one-call triage agent: hand it an indicator of compromise, get back a
 benign / suspicious / malicious verdict with the single strongest reason.
@@ -8,13 +9,13 @@ This is the smallest useful shape of the SOC's tier-1 triage agent.
 
 Uses the shared ``config.get_model`` helper, so it runs offline against
 the bundled mock model by default and upgrades to a live provider when
-``TULIP_MODEL_PROVIDER`` (plus the matching API key) is set. See
+``LOCUS_MODEL_PROVIDER`` (plus the matching API key) is set. See
 ``examples/config.py`` and ``docs/concepts/models.md``.
 """
 
 from config import get_model
 
-from tulip.agent import Agent
+from locus.agent import Agent
 
 
 def main():

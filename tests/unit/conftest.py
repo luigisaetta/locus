@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Suite-wide isolation for process-global state.
 
-``tulip.core.config`` caches one :class:`TulipSettings` per process. A test
+``locus.core.config`` caches one :class:`LocusSettings` per process. A test
 that calls ``configure({... "debug": True})`` and leaves it behind changes
 the behaviour of every later test in the same process — e.g. the SSE
 ``on_error`` payload switches from the sanitized ``"internal error"`` to the
@@ -19,7 +20,7 @@ from collections.abc import Iterator
 
 import pytest
 
-import tulip.core.config as _config
+import locus.core.config as _config
 
 
 @pytest.fixture(autouse=True)

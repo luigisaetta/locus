@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Durable agent runs on Temporal, against a local Temporal dev server.
 
@@ -23,18 +24,18 @@ from temporalio.client import WorkflowFailureError  # noqa: E402
 from temporalio.testing import WorkflowEnvironment  # noqa: E402
 from temporalio.worker import UnsandboxedWorkflowRunner  # noqa: E402
 
-from tulip.agent import Agent  # noqa: E402
-from tulip.control import Action, ControlPolicy, FileApprovals, gate_tool  # noqa: E402
-from tulip.core.messages import Message, Role  # noqa: E402
-from tulip.durable.temporal import (  # noqa: E402
+from locus.agent import Agent  # noqa: E402
+from locus.control import Action, ControlPolicy, FileApprovals, gate_tool  # noqa: E402
+from locus.core.messages import Message, Role  # noqa: E402
+from locus.durable.temporal import (  # noqa: E402
     AgentWorkflow,
     create_worker,
     signal_decided,
     start_agent_run,
 )
-from tulip.memory.backends.file import FileCheckpointer  # noqa: E402
-from tulip.testing import FunctionModel, text, tool_call  # noqa: E402
-from tulip.tools.decorator import tool  # noqa: E402
+from locus.memory.backends.file import FileCheckpointer  # noqa: E402
+from locus.testing import FunctionModel, text, tool_call  # noqa: E402
+from locus.tools.decorator import tool  # noqa: E402
 
 
 if TYPE_CHECKING:

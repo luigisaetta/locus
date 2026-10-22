@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for ``tulip.tools.watcher`` (hot-reload + initial load).
+"""Unit tests for ``locus.tools.watcher`` (hot-reload + initial load).
 
 The watcher uses ``importlib.util.spec_from_file_location`` to load
 tools from arbitrary Python files. The tests below build small
@@ -22,8 +23,8 @@ from pathlib import Path
 
 import pytest
 
-from tulip.tools.registry import ToolRegistry
-from tulip.tools.watcher import (
+from locus.tools.registry import ToolRegistry
+from locus.tools.watcher import (
     ToolWatcher,
     load_tools_from_directory,
     load_tools_from_file,
@@ -50,7 +51,7 @@ def _wait_until(predicate, what: str, timeout: float = 10.0, interval: float = 0
 
 # A reusable tool source shared by most tests.
 _TOOL_SOURCE = """
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
 
 @tool(name="echo", description="Echo back the input.")
 def echo(text: str) -> str:
@@ -358,7 +359,7 @@ class TestToolWatcherChangeSignature:
     def test_file_vanishing_between_glob_and_stat_is_skipped(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import tulip.tools.watcher as watcher_module
+        import locus.tools.watcher as watcher_module
 
         path = _write_tool_file(tmp_path, "t.py")
         watcher = ToolWatcher(tmp_path, dev_reload=True)

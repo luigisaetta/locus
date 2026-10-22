@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for console handler."""
 
@@ -7,7 +8,7 @@ import io
 
 import pytest
 
-from tulip.core.events import (
+from locus.core.events import (
     CausalEdgeEvent,
     CausalNodeEvent,
     GroundingEvent,
@@ -22,7 +23,7 @@ from tulip.core.events import (
     ToolCompleteEvent,
     ToolStartEvent,
 )
-from tulip.streaming.console import ConsoleHandler
+from locus.streaming.console import ConsoleHandler
 
 
 class TestConsoleHandler:

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 20: A customer-support ticket pipeline as a graph.
 
@@ -24,12 +25,12 @@ an uncertain automation decision never ships to the customer on its own.
 - InMemoryStore — durable key/value space that outlives a single run.
 
 Run it:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_20_advanced_patterns.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_20_advanced_patterns.py
 
-The default provider is the bundled mock model; set TULIP_MODEL_PROVIDER for a live provider.
-Set TULIP_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
-TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o
-(or TULIP_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER for a live provider.
+Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
 provider: ollama, vllm, groq, together, openrouter, ...).
 """
 
@@ -38,10 +39,10 @@ import time
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.core import Command, broadcast, end, goto, scatter
-from tulip.memory import InMemoryStore
-from tulip.multiagent import END, START, StateGraph
+from locus.agent import Agent
+from locus.core import Command, broadcast, end, goto, scatter
+from locus.memory import InMemoryStore
+from locus.multiagent import END, START, StateGraph
 
 
 async def _llm_call(
@@ -67,7 +68,7 @@ async def example_command_routing():
     """A node that returns Command picks its own queue for the ticket."""
     print("=== Part 1: Command — state and routing in one return ===\n")
     _ai_note = await _llm_call(
-        "In one sentence, why is Tulip Command better than separate edges + state writes?"
+        "In one sentence, why is Locus Command better than separate edges + state writes?"
     )
     print(f"AI rationale: {_ai_note}")
 

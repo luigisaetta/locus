@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Running an eval suite against a graph, which the docs promised and could not do.
 
@@ -20,9 +21,9 @@ from typing import Any
 
 import pytest
 
-from tulip.evaluation import EvalCase, EvalRunner, as_eval_target
-from tulip.evaluation.graph import GraphEvalTarget
-from tulip.multiagent.graph import StateGraph
+from locus.evaluation import EvalCase, EvalRunner, as_eval_target
+from locus.evaluation.graph import GraphEvalTarget
+from locus.multiagent.graph import StateGraph
 
 
 def _routing_graph() -> StateGraph:

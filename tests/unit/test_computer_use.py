@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Computer use: the tool against a fake page, and what each adapter sends.
 
@@ -17,8 +18,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tulip.control import ControlPolicy, gate_tool
-from tulip.core.media import (
+from locus.control import ControlPolicy, gate_tool
+from locus.core.media import (
     EARLIER_IMAGE_OMITTED,
     IMAGE_OMITTED,
     IMAGE_TOKEN_ESTIMATE,
@@ -31,15 +32,15 @@ from tulip.core.media import (
     strip_images,
     text_length,
 )
-from tulip.core.messages import Message, Role, ToolCall, ToolResult
-from tulip.models.native.anthropic import AnthropicModel
-from tulip.models.native.openai import (
+from locus.core.messages import Message, Role, ToolCall, ToolResult
+from locus.models.native.anthropic import AnthropicModel
+from locus.models.native.openai import (
     COMPUTER_ITEM_ID_ARG,
     RESPONSES_ITEMS_METADATA_KEY,
     OpenAIModel,
 )
-from tulip.tools.browser import BrowserError, BrowserSession
-from tulip.tools.computer import (
+from locus.tools.browser import BrowserError, BrowserSession
+from locus.tools.computer import (
     READ_LABELS,
     SAFETY_CHECK_LABEL,
     WRITE_LABELS,
@@ -54,7 +55,7 @@ PNG = b"\x89PNG\r\n\x1a\nfake-screenshot"
 
 
 # ---------------------------------------------------------------------------
-# tulip.core.media
+# locus.core.media
 # ---------------------------------------------------------------------------
 
 
@@ -77,7 +78,7 @@ class TestMedia:
         assert text_length(None) == 0
 
     def test_a_forged_marker_with_bad_base64_stays_text(self) -> None:
-        forged = "x\n[tulip-image media_type=image/png]\n@@notbase64@@\n[/tulip-image]\n"
+        forged = "x\n[locus-image media_type=image/png]\n@@notbase64@@\n[/locus-image]\n"
         assert has_images(forged)
         assert all(isinstance(part, str) for part in split_content(forged))
         assert images(forged) == []
@@ -194,7 +195,7 @@ class TestDefinition:
             _computer(start_url="https://evil.example.net/")
 
     def test_plain_tools_have_no_native_key(self) -> None:
-        from tulip.tools.decorator import tool as tool_decorator
+        from locus.tools.decorator import tool as tool_decorator
 
         @tool_decorator
         def ping() -> str:
@@ -245,7 +246,7 @@ class TestAnthropicActions:
 
     @pytest.mark.asyncio
     async def test_drag_type_key_hold_scroll(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("tulip.tools.computer.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("locus.tools.computer.asyncio.sleep", AsyncMock())
         tool, page = _computer()
         await tool.execute(action="left_click_drag", start_coordinate=[1, 2], coordinate=[3, 4])
         await tool.execute(action="type", text="hello")
@@ -297,7 +298,7 @@ class TestAnthropicActions:
 class TestOpenAIActions:
     @pytest.mark.asyncio
     async def test_single_actions(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("tulip.tools.computer.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("locus.tools.computer.asyncio.sleep", AsyncMock())
         tool, page = _computer()
         await tool.execute(action={"type": "click", "x": 1, "y": 2, "button": "wheel"})
         await tool.execute(action={"type": "double_click", "x": 3, "y": 4})
@@ -719,7 +720,7 @@ class _ScriptedModel:
     name = "stub"
 
     def __init__(self, tool_name: str) -> None:
-        from tulip.models import ModelResponse
+        from locus.models import ModelResponse
 
         self._scripted = [
             ModelResponse(
@@ -742,8 +743,8 @@ _BIG_SHOT = encode_image(PNG * 400)  # far over the 2,000-character cap
 
 
 def _tool_content(tool_fn: Any) -> str:
-    from tulip.agent.agent import Agent
-    from tulip.agent.config import AgentConfig
+    from locus.agent.agent import Agent
+    from locus.agent.config import AgentConfig
 
     agent = Agent(
         config=AgentConfig(
@@ -759,7 +760,7 @@ def _tool_content(tool_fn: Any) -> str:
 
 class TestLoopAndEstimates:
     def test_a_screenshot_is_not_truncated(self) -> None:
-        from tulip.tools.decorator import tool as tool_decorator
+        from locus.tools.decorator import tool as tool_decorator
 
         @tool_decorator
         def snap() -> str:
@@ -771,7 +772,7 @@ class TestLoopAndEstimates:
         assert base64.b64decode(images(content)[0].data) == PNG * 400
 
     def test_long_text_is_truncated_without_corrupting_an_image(self) -> None:
-        from tulip.tools.decorator import tool as tool_decorator
+        from locus.tools.decorator import tool as tool_decorator
 
         @tool_decorator
         def dump() -> str:
@@ -784,8 +785,8 @@ class TestLoopAndEstimates:
         assert len(content) < 2_100
 
     def test_token_estimates_count_images_as_images(self) -> None:
-        from tulip.core.state import AgentState
-        from tulip.memory.compactor import _char_count_tokens
+        from locus.core.state import AgentState
+        from locus.memory.compactor import _char_count_tokens
 
         message = _tool_message("t1", "abcd" + _BIG_SHOT)
         assert _char_count_tokens(message) == 1 + IMAGE_TOKEN_ESTIMATE

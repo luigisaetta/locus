@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 48: skills — a payments-ops skill library with progressive disclosure.
 
 A Skill (the AgentSkills.io shape) bundles a name, a description, and
@@ -22,14 +23,14 @@ the payments agent focused on the procedure that matters right now.
   ``assets/`` directories.
 
 Run it:
-    # The bundled mock model is the default; set TULIP_MODEL_PROVIDER for a live provider.
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_48_skills.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_48_skills.py
 
     # Offline:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_48_skills.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_48_skills.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``TULIP_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 - Optional: an ``examples/skills/`` directory with one or more
   ``SKILL.md`` files for Part 2 to find (the bundled ones include
@@ -41,8 +42,8 @@ from pathlib import Path
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
-from tulip.skills import Skill
+from locus.agent import Agent, AgentConfig
+from locus.skills import Skill
 
 
 # =============================================================================

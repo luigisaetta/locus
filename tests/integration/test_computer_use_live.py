@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The computer tool against real Chromium and a local page.
 
@@ -16,9 +17,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tulip.core.media import images
-from tulip.tools.browser import BrowserSession
-from tulip.tools.computer import computer_tool
+from locus.core.media import images
+from locus.tools.browser import BrowserSession
+from locus.tools.computer import computer_tool
 
 
 if TYPE_CHECKING:
@@ -89,10 +90,10 @@ async def test_click_type_and_screenshot_in_chromium(site: str) -> None:
         assert int.from_bytes(png[16:20], "big") == 800
 
         await computer.execute(action="left_click", coordinate=[100, 35])
-        await computer.execute(action="type", text="tulips")
+        await computer.execute(action="type", text="locuss")
         await computer.execute(action={"type": "click", "x": 60, "y": 100})
         page = await session.page()
-        assert await page.inner_text("#out") == "searched tulips"
+        assert await page.inner_text("#out") == "searched locuss"
 
         await computer.execute(action="key", text="ctrl+a")
         await computer.execute(action={"type": "keypress", "keys": ["BACKSPACE"]})

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for MCP integration utilities."""
 
@@ -7,14 +8,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tulip.integrations.fastmcp import (
+from locus.integrations.fastmcp import (
     _create_tool_wrapper,
     _json_schema_type_to_python,
     build_args_model,
-    mcp_tool_to_tulip,
-    tulip_tool_to_mcp,
+    locus_tool_to_mcp,
+    mcp_tool_to_locus,
 )
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
 
 
 class TestJsonSchemaTypeToPython:
@@ -151,8 +152,8 @@ class TestBuildArgsModel:
         assert "my_tool_with_spaces" in model.__name__
 
 
-class TestMcpToolToTulip:
-    """Tests for mcp_tool_to_tulip function."""
+class TestMcpToolToLocus:
+    """Tests for mcp_tool_to_locus function."""
 
     @pytest.mark.asyncio
     async def test_convert_simple_tool(self):
@@ -161,14 +162,14 @@ class TestMcpToolToTulip:
         async def mcp_func(query: str) -> str:
             return f"Result: {query}"
 
-        tulip_tool = mcp_tool_to_tulip(
+        locus_tool = mcp_tool_to_locus(
             name="search",
             description="Search for items",
             func=mcp_func,
         )
 
-        assert tulip_tool.name == "search"
-        assert tulip_tool.description == "Search for items"
+        assert locus_tool.name == "search"
+        assert locus_tool.description == "Search for items"
 
     @pytest.mark.asyncio
     async def test_convert_tool_returns_string(self):
@@ -177,13 +178,13 @@ class TestMcpToolToTulip:
         async def mcp_func() -> str:
             return "string result"
 
-        tulip_tool = mcp_tool_to_tulip(
+        locus_tool = mcp_tool_to_locus(
             name="test",
             description="Test",
             func=mcp_func,
         )
 
-        result = await tulip_tool.execute()
+        result = await locus_tool.execute()
         assert result == "string result"
 
     @pytest.mark.asyncio
@@ -193,18 +194,18 @@ class TestMcpToolToTulip:
         async def mcp_func() -> dict:
             return {"key": "value"}
 
-        tulip_tool = mcp_tool_to_tulip(
+        locus_tool = mcp_tool_to_locus(
             name="test",
             description="Test",
             func=mcp_func,
         )
 
-        result = await tulip_tool.execute()
+        result = await locus_tool.execute()
         assert result == '{"key": "value"}'
 
 
-class TestTulipToolToMcp:
-    """Tests for tulip_tool_to_mcp function."""
+class TestLocusToolToMcp:
+    """Tests for locus_tool_to_mcp function."""
 
     def test_convert_tool_with_parameters(self):
         """Test converting tool with parameters."""
@@ -214,7 +215,7 @@ class TestTulipToolToMcp:
             """Search for items."""
             return query
 
-        mcp_schema = tulip_tool_to_mcp(search)
+        mcp_schema = locus_tool_to_mcp(search)
 
         assert mcp_schema["name"] == "search"
         assert mcp_schema["description"] == "Search for items."
@@ -227,7 +228,7 @@ class TestTulipToolToMcp:
         def simple_tool() -> str:
             return "result"
 
-        mcp_schema = tulip_tool_to_mcp(simple_tool)
+        mcp_schema = locus_tool_to_mcp(simple_tool)
 
         assert mcp_schema["name"] == "simple_tool"
         # Description defaults to empty string if None
@@ -241,7 +242,7 @@ class TestTulipToolToMcp:
             """A tool."""
             return str(x)
 
-        mcp_schema = tulip_tool_to_mcp(my_tool)
+        mcp_schema = locus_tool_to_mcp(my_tool)
 
         assert "name" in mcp_schema
         assert "description" in mcp_schema
@@ -366,17 +367,17 @@ class TestCreateToolWrapperWithParams:
         assert result == "searched: hello"
 
 
-class TestTulipMCPServer:
-    """Tests for TulipMCPServer class."""
+class TestLocusMCPServer:
+    """Tests for LocusMCPServer class."""
 
     def test_create_server(self):
         """Test creating MCP server."""
         mock_agent = MagicMock()
-        server = mcp_tool_to_tulip.__module__  # Get module
+        server = mcp_tool_to_locus.__module__  # Get module
 
-        from tulip.integrations.fastmcp import TulipMCPServer
+        from locus.integrations.fastmcp import LocusMCPServer
 
-        server = TulipMCPServer(agent=mock_agent, name="test-server")
+        server = LocusMCPServer(agent=mock_agent, name="test-server")
 
         assert server.name == "test-server"
         assert server.version == "1.0.0"
@@ -386,9 +387,9 @@ class TestTulipMCPServer:
         """Test creating server with custom version."""
         mock_agent = MagicMock()
 
-        from tulip.integrations.fastmcp import TulipMCPServer
+        from locus.integrations.fastmcp import LocusMCPServer
 
-        server = TulipMCPServer(agent=mock_agent, name="test-server", version="2.0.0")
+        server = LocusMCPServer(agent=mock_agent, name="test-server", version="2.0.0")
 
         assert server.version == "2.0.0"
 
@@ -400,9 +401,9 @@ class TestTulipMCPServer:
         mock_agent._tool_registry.tools = {}
         mock_agent._initialize = MagicMock()
 
-        from tulip.integrations.fastmcp import TulipMCPServer
+        from locus.integrations.fastmcp import LocusMCPServer
 
-        server = TulipMCPServer(agent=mock_agent)
+        server = LocusMCPServer(agent=mock_agent)
 
         result = await server.handle_request({"method": "tools/list"})
 
@@ -423,9 +424,9 @@ class TestTulipMCPServer:
         mock_agent._tool_registry.tools = {"my_tool": my_tool}
         mock_agent._initialize = MagicMock()
 
-        from tulip.integrations.fastmcp import TulipMCPServer
+        from locus.integrations.fastmcp import LocusMCPServer
 
-        server = TulipMCPServer(agent=mock_agent)
+        server = LocusMCPServer(agent=mock_agent)
 
         result = await server.handle_request({"method": "tools/list"})
 
@@ -442,9 +443,9 @@ class TestTulipMCPServer:
         mock_agent.run_sync = MagicMock()
         mock_agent.run_sync.return_value = MagicMock(message="Hello world")
 
-        from tulip.integrations.fastmcp import TulipMCPServer
+        from locus.integrations.fastmcp import LocusMCPServer
 
-        server = TulipMCPServer(agent=mock_agent)
+        server = LocusMCPServer(agent=mock_agent)
 
         result = await server.handle_request(
             {"method": "tools/call", "params": {"name": "run_agent", "arguments": {"prompt": "Hi"}}}
@@ -468,9 +469,9 @@ class TestTulipMCPServer:
         mock_agent._tool_registry.get = MagicMock(return_value=my_tool)
         mock_agent._initialize = MagicMock()
 
-        from tulip.integrations.fastmcp import TulipMCPServer
+        from locus.integrations.fastmcp import LocusMCPServer
 
-        server = TulipMCPServer(agent=mock_agent)
+        server = LocusMCPServer(agent=mock_agent)
 
         result = await server.handle_request(
             {"method": "tools/call", "params": {"name": "my_tool", "arguments": {"x": 42}}}
@@ -494,9 +495,9 @@ class TestTulipMCPServer:
         mock_agent._tool_registry.get = MagicMock(return_value=dict_tool)
         mock_agent._initialize = MagicMock()
 
-        from tulip.integrations.fastmcp import TulipMCPServer
+        from locus.integrations.fastmcp import LocusMCPServer
 
-        server = TulipMCPServer(agent=mock_agent)
+        server = LocusMCPServer(agent=mock_agent)
 
         result = await server.handle_request(
             {"method": "tools/call", "params": {"name": "dict_tool", "arguments": {}}}
@@ -517,9 +518,9 @@ class TestTulipMCPServer:
         mock_agent._tool_registry.get = MagicMock(return_value=None)
         mock_agent._initialize = MagicMock()
 
-        from tulip.integrations.fastmcp import TulipMCPServer
+        from locus.integrations.fastmcp import LocusMCPServer
 
-        server = TulipMCPServer(agent=mock_agent)
+        server = LocusMCPServer(agent=mock_agent)
 
         result = await server.handle_request(
             {"method": "tools/call", "params": {"name": "unknown_tool", "arguments": {}}}
@@ -533,9 +534,9 @@ class TestTulipMCPServer:
         """Test handle_request for unknown method."""
         mock_agent = MagicMock()
 
-        from tulip.integrations.fastmcp import TulipMCPServer
+        from locus.integrations.fastmcp import LocusMCPServer
 
-        server = TulipMCPServer(agent=mock_agent)
+        server = LocusMCPServer(agent=mock_agent)
 
         result = await server.handle_request({"method": "unknown/method"})
 
@@ -548,7 +549,7 @@ class TestMCPClient:
 
     def test_create_client_with_base_url(self):
         """Test creating client with base_url."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(base_url="https://example.com/mcp")
 
@@ -557,7 +558,7 @@ class TestMCPClient:
 
     def test_create_client_with_server_command(self):
         """Test creating client with server_command."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(server_command=["python", "server.py"])
 
@@ -566,7 +567,7 @@ class TestMCPClient:
 
     def test_create_client_with_auth(self):
         """Test creating client with access_token."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         test_token = "test-token-value"  # noqa: S105
         client = MCPClient(base_url="https://example.com", access_token=test_token)
@@ -575,7 +576,7 @@ class TestMCPClient:
 
     def test_create_client_with_verify_ssl(self):
         """Test creating client with verify_ssl option."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(base_url="https://example.com", verify_ssl=False)
 
@@ -583,7 +584,7 @@ class TestMCPClient:
 
     def test_verify_url_defaults_on(self):
         """New SSRF guard is opt-out, not opt-in."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(base_url="https://example.com")
         assert client.verify_url is True
@@ -594,8 +595,8 @@ class TestMCPClient:
         """SSRF guard rejects cloud-metadata base_url before any HTTP dispatch."""
         import socket
 
-        from tulip.core.errors import ValidationError
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.core.errors import ValidationError
+        from locus.integrations.fastmcp import MCPClient
 
         def _fake(host, port, *a, **kw):
             return [
@@ -615,7 +616,7 @@ class TestMCPClient:
         import sys
         import types
 
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         # getaddrinfo would flag this as private, but the guard is off.
         def _fake(host, port, *a, **kw):
@@ -655,9 +656,9 @@ class TestMCPClient:
         import sys
         import types
 
-        from tulip.core.errors import ValidationError
-        from tulip.integrations import osv
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.core.errors import ValidationError
+        from locus.integrations import osv
+        from locus.integrations.fastmcp import MCPClient
 
         # Stub the mcp stdio surface so the connect path reaches our check.
         mcp_pkg = types.ModuleType("mcp")
@@ -684,7 +685,7 @@ class TestMCPClient:
         monkeypatch.setattr(
             osv, "_query_osv", lambda *a, **kw: [{"id": "MAL-TEST", "summary": "hi"}]
         )
-        monkeypatch.delenv("TULIP_MCP_SKIP_OSV", raising=False)
+        monkeypatch.delenv("LOCUS_MCP_SKIP_OSV", raising=False)
 
         client = MCPClient(server_command=["npx", "some-evil-package"])
         with pytest.raises(ValidationError, match="MAL-TEST"):
@@ -696,8 +697,8 @@ class TestMCPClient:
         import sys
         import types
 
-        from tulip.integrations import osv
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations import osv
+        from locus.integrations.fastmcp import MCPClient
 
         mcp_pkg = types.ModuleType("mcp")
 
@@ -730,7 +731,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     async def test_connect_no_config_raises(self):
         """Test connect without base_url or server_command raises."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient()
 
@@ -740,7 +741,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     async def test_connect_already_connected(self):
         """Test connect when already connected returns early."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(base_url="https://example.com")
         client._connected = True
@@ -751,7 +752,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     async def test_list_tools_not_connected_raises(self):
         """Test list_tools when not connected raises."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(base_url="https://example.com")
 
@@ -761,7 +762,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     async def test_call_tool_not_connected_raises(self):
         """Test call_tool when not connected raises."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(base_url="https://example.com")
 
@@ -771,7 +772,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     async def test_close_not_connected(self):
         """Test close when not connected."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(base_url="https://example.com")
 
@@ -782,7 +783,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     async def test_close_with_session(self):
         """Test close with active session."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(base_url="https://example.com")
         client._connected = True
@@ -798,7 +799,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     async def test_close_handles_session_error(self):
         """Test close handles session error gracefully."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(base_url="https://example.com")
         client._connected = True
@@ -815,7 +816,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     async def test_context_manager_enter(self):
         """Test async context manager enter."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(base_url="https://example.com")
         client._connected = True  # Pretend already connected
@@ -827,7 +828,7 @@ class TestMCPClient:
     @pytest.mark.asyncio
     async def test_context_manager_exit(self):
         """Test async context manager exit."""
-        from tulip.integrations.fastmcp import MCPClient
+        from locus.integrations.fastmcp import MCPClient
 
         client = MCPClient(base_url="https://example.com")
         client._connected = True
@@ -842,18 +843,18 @@ class TestCreateMCPServer:
 
     def test_create_mcp_server(self):
         """Test creating MCP server from agent."""
-        from tulip.integrations.fastmcp import TulipMCPServer, create_mcp_server
+        from locus.integrations.fastmcp import LocusMCPServer, create_mcp_server
 
         mock_agent = MagicMock()
         server = create_mcp_server(mock_agent)
 
-        assert isinstance(server, TulipMCPServer)
-        assert server.name == "tulip-agent"
+        assert isinstance(server, LocusMCPServer)
+        assert server.name == "locus-agent"
         assert server.version == "1.0.0"
 
     def test_create_mcp_server_custom_params(self):
         """Test creating MCP server with custom params."""
-        from tulip.integrations.fastmcp import create_mcp_server
+        from locus.integrations.fastmcp import create_mcp_server
 
         mock_agent = MagicMock()
         server = create_mcp_server(mock_agent, name="custom-server", version="2.0.0")

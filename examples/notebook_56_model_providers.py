@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 56: Model providers — one cloud-ops agent, swap models with a string.
 
 The Gateway is the seam every AI request in the org flows through: one
-cloud-operations agent codebase, any backing model. Tulip supports OpenAI
+cloud-operations agent codebase, any backing model. Locus supports OpenAI
 and Anthropic as first-class providers, and the same agent code runs
 against either — only the model object changes, so a platform team can
 re-platform a provider (for cost, latency, data residency, or an outage
@@ -18,14 +19,14 @@ Provider matrix:
   Registry  — get_model("provider:model_name") returns the right client.
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_56_model_providers.py
 
     # Offline / no credentials:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_56_model_providers.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_56_model_providers.py
 
     # Pin a specific model:
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_56_model_providers.py
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_56_model_providers.py
 """
 
 import asyncio
@@ -33,8 +34,8 @@ import time
 
 from config import get_model as get_configured_model
 
-from tulip.agent import Agent
-from tulip.models.registry import get_model, list_providers
+from locus.agent import Agent
+from locus.models.registry import get_model, list_providers
 
 
 async def _llm_call(
@@ -83,11 +84,11 @@ async def example_direct():
     )
 
     print("OpenAI (direct API, requires OPENAI_API_KEY):")
-    print("  from tulip.models import OpenAIModel")
+    print("  from locus.models import OpenAIModel")
     print('  model = OpenAIModel(model="gpt-4o")')
 
     print("\nAnthropic (requires ANTHROPIC_API_KEY):")
-    print("  from tulip.models.native.anthropic import AnthropicModel")
+    print("  from locus.models.native.anthropic import AnthropicModel")
     print('  model = AnthropicModel(model="claude-sonnet-4-6")')
 
 

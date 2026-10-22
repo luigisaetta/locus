@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``RedisBackend``'s client cache, which used to outlive the loop it belonged to.
 
@@ -25,7 +26,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tulip.memory.backends.redis import RedisBackend
+from locus.memory.backends.redis import RedisBackend
 
 
 def _fake_client() -> AsyncMock:

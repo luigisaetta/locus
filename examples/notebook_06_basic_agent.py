@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 06: your first agent — build LEDGER, send it a transaction, read the result.
 
@@ -34,7 +35,7 @@ Run it:
     .venv/bin/python examples/notebook_06_basic_agent.py
 
 The default provider is the bundled deterministic mock model, so this
-runs offline with no credentials. Set ``TULIP_MODEL_PROVIDER=openai`` (or
+runs offline with no credentials. Set ``LOCUS_MODEL_PROVIDER=openai`` (or
 ``anthropic``) and the matching key to send the same prompts to a live
 model.
 """
@@ -42,11 +43,11 @@ model.
 import asyncio
 import textwrap
 
-# Shared helper that builds a model from env vars (TULIP_MODEL_PROVIDER,
-# TULIP_MODEL_ID). See examples/config.py.
+# Shared helper that builds a model from env vars (LOCUS_MODEL_PROVIDER,
+# LOCUS_MODEL_ID). See examples/config.py.
 from config import get_model, print_config
 
-from tulip.agent import Agent
+from locus.agent import Agent
 
 
 # The one instruction every part of this notebook shares. Kept in one place

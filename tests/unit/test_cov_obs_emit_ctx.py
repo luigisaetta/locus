@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Extra coverage for context.py and emit.py — missing exception branches."""
 
@@ -10,8 +11,8 @@ import sys
 
 import pytest
 
-from tulip.observability import reset_event_bus
-from tulip.observability.context import (
+from locus.observability import reset_event_bus
+from locus.observability.context import (
     _owner_loop_var,
     current_run_id,
     reset_run_id,
@@ -40,7 +41,7 @@ class TestRunContextNoLoop:
         """Patching _asyncio.get_running_loop to raise inside run_context
         hits the except RuntimeError path (lines 127-130).  The context
         still binds run_id correctly; loop_token stays None."""
-        import tulip.observability.context as ctx_mod  # noqa: PLC0415
+        import locus.observability.context as ctx_mod  # noqa: PLC0415
 
         original_grl = ctx_mod._asyncio.get_running_loop
 
@@ -70,10 +71,10 @@ class TestEmitRuntimeErrorInLoopCapture:
         """When asyncio.get_running_loop() raises inside emit's loop-cache
         block (bus._owner_loop is None), the except RuntimeError:pass path
         (lines 161-162) is taken and the event is still published."""
-        emit_mod = sys.modules["tulip.observability.emit"]
+        emit_mod = sys.modules["locus.observability.emit"]
 
         reset_event_bus()
-        from tulip.observability.event_bus import get_event_bus  # noqa: PLC0415
+        from locus.observability.event_bus import get_event_bus  # noqa: PLC0415
 
         bus = get_event_bus()
         # Force bus._owner_loop to None so the cache block runs.
@@ -121,9 +122,9 @@ class TestEmitExceptionInPublish:
     async def test_emit_swallows_publish_exception(self):
         """If bus.publish raises, emit catches it (lines 167-168) and
         the caller never sees the error — telemetry must not break the SDK."""
-        emit_mod = sys.modules["tulip.observability.emit"]
+        emit_mod = sys.modules["locus.observability.emit"]
 
-        from tulip.observability.event_bus import get_event_bus  # noqa: PLC0415
+        from locus.observability.event_bus import get_event_bus  # noqa: PLC0415
 
         reset_event_bus()
         bus = get_event_bus()
@@ -158,8 +159,8 @@ class TestEmitSyncFromThread:
         the worker but inherits the run_id and owner_loop context vars.
         It must schedule the publish via run_coroutine_threadsafe
         (lines 206-207)."""
-        from tulip.observability import emit_sync  # noqa: PLC0415
-        from tulip.observability.event_bus import get_event_bus  # noqa: PLC0415
+        from locus.observability import emit_sync  # noqa: PLC0415
+        from locus.observability.event_bus import get_event_bus  # noqa: PLC0415
 
         reset_event_bus()
         bus = get_event_bus()
@@ -190,7 +191,7 @@ class TestEmitSyncFromThread:
     async def test_emit_sync_threadsafe_exception_swallowed(self):
         """If run_coroutine_threadsafe raises (e.g., loop closed), the
         exception is swallowed (lines 208-209) and emit_sync returns normally."""
-        emit_mod = sys.modules["tulip.observability.emit"]
+        emit_mod = sys.modules["locus.observability.emit"]
 
         original_rcts = emit_mod.asyncio.run_coroutine_threadsafe
 
@@ -203,7 +204,7 @@ class TestEmitSyncFromThread:
             async with run_context("rcts-test"):
 
                 def worker():
-                    from tulip.observability import emit_sync as _sync  # noqa: PLC0415
+                    from locus.observability import emit_sync as _sync  # noqa: PLC0415
 
                     _sync("rcts.event")  # must not raise
 

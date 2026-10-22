@@ -1,20 +1,21 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 37: GSAR grounded findings — a finding ships, or the agent abstains.
 
 This is the file that earns the SDK its claim: a security finding an
 agent emits is only as trustworthy as the evidence behind every
 sentence in it. An ungrounded vulnerability claim is a false positive
-*by construction* — so Tulip will not let you produce one.
+*by construction* — so Locus will not let you produce one.
 
-The primitive is :func:`tulip.control.ground_finding`. You hand it a
+The primitive is :func:`locus.control.ground_finding`. You hand it a
 candidate finding plus a GSAR partition of its claims; it scores the
-partition, and either returns a typed :class:`~tulip.control.Evidence`
-(the finding ships) or an :class:`~tulip.control.Abstention` (the
+partition, and either returns a typed :class:`~locus.control.Evidence`
+(the finding ships) or an :class:`~locus.control.Abstention` (the
 finding is withheld, with an audit record of why). There is no public
 path that constructs a ``Evidence`` without clearing the grounding bar.
 
-GSAR — Grounding-Stratified Adaptive Replanning (``tulip.reasoning.gsar``,
+GSAR — Grounding-Stratified Adaptive Replanning (``locus.reasoning.gsar``,
 from `arXiv:2604.23366 (2026) <https://arxiv.org/abs/2604.23366>`_) — is
 the scoring layer underneath. Every claim is partitioned into grounded /
 ungrounded / contradicted / complementary buckets and weighted by
@@ -43,14 +44,14 @@ Findings here carry MITRE ATLAS (``AML.Txxxx``) / OWASP LLM
 without a translation layer.
 
 Run it:
-    # The bundled mock model is the default; set TULIP_MODEL_PROVIDER for a live provider.
-    TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o python examples/notebook_37_gsar_typed_grounding.py
+    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_37_gsar_typed_grounding.py
 
     # Offline:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_37_gsar_typed_grounding.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_37_gsar_typed_grounding.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``TULIP_MODEL_PROVIDER`` to
+- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
   ``openai`` / ``anthropic`` / ``mock``.
 - Part 5 (Algorithm 1) needs a model that supports constrained JSON
   decoding for the structured-output judge; under mock it abstains
@@ -69,8 +70,8 @@ import time
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.control import (
+from locus.agent import Agent
+from locus.control import (
     AtlasTechnique,
     Evidence,
     Indicator,
@@ -80,7 +81,7 @@ from tulip.control import (
     ground_finding,
     is_finding,
 )
-from tulip.reasoning.gsar import (
+from locus.reasoning.gsar import (
     DEFAULT_WEIGHT_MAP,
     Claim,
     EvidenceType,
@@ -389,8 +390,8 @@ async def example_threshold_recalibration() -> None:
 async def example_outer_loop() -> None:
     print("\n=== Part 5: Algorithm-1 outer loop (LLM judge) ===\n")
 
-    from tulip.reasoning.gsar_evaluator import GSAREvaluator
-    from tulip.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
+    from locus.reasoning.gsar_evaluator import GSAREvaluator
+    from locus.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
 
     judge = StructuredOutputGSARJudge(model=get_model(max_tokens=2048))
 

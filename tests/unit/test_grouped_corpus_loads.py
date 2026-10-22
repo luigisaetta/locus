@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tulip.playbooks.loader import load_playbook
-from tulip.skills.models import Skill
+from locus.playbooks.loader import load_playbook
+from locus.skills.models import Skill
 
 
 CORPUS = Path(__file__).parent.parent / "fixtures" / "grouped_corpus"

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for memory and checkpointing modules."""
 
@@ -10,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tulip.core.messages import Message, Role
-from tulip.core.state import AgentState
-from tulip.memory import (
+from locus.core.messages import Message, Role
+from locus.core.state import AgentState
+from locus.memory import (
     CheckpointMetadata,
     DeltaCheckpoint,
     DeltaCheckpointer,
@@ -20,7 +21,7 @@ from tulip.memory import (
     NullManager,
     SummarizingManager,
 )
-from tulip.memory.backends import FileCheckpointer, HTTPCheckpointer, MemoryCheckpointer
+from locus.memory.backends import FileCheckpointer, HTTPCheckpointer, MemoryCheckpointer
 
 
 # =============================================================================

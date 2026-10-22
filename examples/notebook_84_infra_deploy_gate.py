@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 84: An ops agent that ships to staging on its own and waits for a human in production.
 
@@ -47,7 +48,7 @@ from __future__ import annotations
 
 import asyncio
 
-from tulip.control import Action, AdmissionError, AuditTrail, ControlPolicy, admit
+from locus.control import Action, AdmissionError, AuditTrail, ControlPolicy, admit
 
 
 # The side effect — a local stub standing in for `kubectl rollout`.

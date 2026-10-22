@@ -20,13 +20,13 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.router.capability import CapabilityIndex
-from tulip.router.compiler import CognitiveCompiler
-from tulip.router.goal_frame import Complexity, GoalFrame, Risk, TaskType
-from tulip.router.policy import PolicyGate
-from tulip.router.protocol import ProtocolRegistry, builtin_protocols
-from tulip.tools.decorator import tool
-from tulip.tools.registry import create_registry
+from locus.router.capability import CapabilityIndex
+from locus.router.compiler import CognitiveCompiler
+from locus.router.goal_frame import Complexity, GoalFrame, Risk, TaskType
+from locus.router.policy import PolicyGate
+from locus.router.protocol import ProtocolRegistry, builtin_protocols
+from locus.tools.decorator import tool
+from locus.tools.registry import create_registry
 
 
 class _Model:

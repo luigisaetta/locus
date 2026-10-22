@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for the MMR diversity re-ranker.
 
@@ -20,8 +21,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from tulip.rag.stores._mmr import _cosine, mmr_rerank
-from tulip.rag.stores.base import Document, SearchResult
+from locus.rag.stores._mmr import _cosine, mmr_rerank
+from locus.rag.stores.base import Document, SearchResult
 
 
 def _result(id_: str, embedding: list[float], score: float = 1.0) -> SearchResult:

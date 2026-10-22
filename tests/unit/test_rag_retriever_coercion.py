@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for RAGRetriever defensive type coercion.
 
@@ -16,8 +17,8 @@ from typing import Any
 
 import pytest
 
-from tulip.rag.retriever import RAGRetriever
-from tulip.rag.stores.base import BaseVectorStore, Document, SearchResult
+from locus.rag.retriever import RAGRetriever
+from locus.rag.stores.base import BaseVectorStore, Document, SearchResult
 
 
 class _StubStore(BaseVectorStore):
@@ -29,7 +30,7 @@ class _StubStore(BaseVectorStore):
 
     @property
     def config(self) -> Any:
-        from tulip.rag.stores.base import VectorStoreConfig
+        from locus.rag.stores.base import VectorStoreConfig
 
         return VectorStoreConfig(dimension=4, distance_metric="cosine", index_type="hnsw")
 
@@ -70,7 +71,7 @@ class _StubEmbedder:
     """Minimal embedder for the retriever path — no real embeddings calls."""
 
     async def embed_query(self, query: str) -> Any:
-        from tulip.rag.embeddings.base import EmbeddingResult
+        from locus.rag.embeddings.base import EmbeddingResult
 
         return EmbeddingResult(embedding=[0.0, 0.0, 0.0, 0.0], text=query, model="stub", tokens=0)
 

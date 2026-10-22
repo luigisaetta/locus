@@ -20,8 +20,8 @@ import pytest
 
 pytest.importorskip("anthropic")
 
-from tulip.core.messages import Message
-from tulip.models.native.anthropic import AnthropicModel
+from locus.core.messages import Message
+from locus.models.native.anthropic import AnthropicModel
 
 
 def _make_response_with_usage(
@@ -164,7 +164,7 @@ def test_no_cache_fields_when_anthropic_omits_them():
 
 def test_execution_metrics_have_cache_fields():
     """ExecutionMetrics carries cache_creation_input_tokens / cache_read_input_tokens."""
-    from tulip.agent.result import ExecutionMetrics
+    from locus.agent.result import ExecutionMetrics
 
     metrics = ExecutionMetrics(
         iterations=2,
@@ -179,7 +179,7 @@ def test_execution_metrics_have_cache_fields():
 
 def test_state_with_token_usage_accepts_cache_counts():
     """AgentState.with_token_usage accepts and accumulates cache counts."""
-    from tulip.core.state import AgentState
+    from locus.core.state import AgentState
 
     state = AgentState()
     state = state.with_token_usage(

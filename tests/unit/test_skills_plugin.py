@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for ``tulip.skills.plugin`` (SkillsPlugin)."""
+"""Unit tests for ``locus.skills.plugin`` (SkillsPlugin)."""
 
 from __future__ import annotations
 
@@ -10,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from tulip.core.messages import Message
-from tulip.skills.models import Skill
-from tulip.skills.plugin import SkillsPlugin
+from locus.core.messages import Message
+from locus.skills.models import Skill
+from locus.skills.plugin import SkillsPlugin
 
 
 @pytest.fixture
@@ -31,7 +32,7 @@ def beta() -> Skill:
         description="Second test skill.",
         instructions="Do beta things.",
         allowed_tools=["foo", "bar"],
-        compatibility="tulip>=0.1",
+        compatibility="locus>=0.1",
     )
 
 
@@ -138,7 +139,7 @@ class TestFormatSkillResponse:
     def test_includes_compatibility(self, beta: Skill) -> None:
         plugin = SkillsPlugin(skills=[beta])
         out = plugin._format_skill_response(beta)
-        assert "Compatibility: tulip>=0.1" in out
+        assert "Compatibility: locus>=0.1" in out
 
     def test_includes_location_when_path_set(self, tmp_path: Path) -> None:
         skill_dir = tmp_path / "loc"

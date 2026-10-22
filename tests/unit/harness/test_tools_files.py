@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """read, write, edit, multi_edit and ls, on every backend.
 
-Ported from tulip-code's tool tests: the edges rather than the happy path —
+Ported from locus-code's tool tests: the edges rather than the happy path —
 what happens outside the workspace, on a file that is not there, on a match
 that is not unique, on a file the agent has not read.
 """
@@ -14,12 +15,12 @@ import json
 
 import pytest
 
+from locus.core.media import has_images
+from locus.harness import HarnessConfig, WorkspaceBackend, build_harness
+from locus.harness.backend import MAX_READ_BYTES
+from locus.harness.toolset import Harness
+from locus.tools.output import ToolOutput
 from tests.unit.harness.conftest import get, put
-from tulip.core.media import has_images
-from tulip.harness import HarnessConfig, WorkspaceBackend, build_harness
-from tulip.harness.backend import MAX_READ_BYTES
-from tulip.harness.toolset import Harness
-from tulip.tools.output import ToolOutput
 
 
 def harness(backend: WorkspaceBackend, **config: object) -> Harness:
@@ -140,7 +141,7 @@ async def test_an_image_is_declined_for_a_model_that_cannot(workspace: Workspace
 async def test_an_oversized_image_is_declined(
     workspace: WorkspaceBackend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from tulip.harness.tools import files
+    from locus.harness.tools import files
 
     monkeypatch.setattr(files, "MAX_IMAGE_BYTES", 3)
     put(workspace, "shot.jpg", b"\xff\xd8\xff\xe0")

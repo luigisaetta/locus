@@ -1,15 +1,16 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for the tool system."""
 
 import pytest
 
-from tulip.tools import tool
-from tulip.tools.context import ToolContext
-from tulip.tools.decorator import Tool
-from tulip.tools.registry import ToolRegistry, create_registry
-from tulip.tools.schema import generate_schema, python_type_to_json_type
+from locus.tools import tool
+from locus.tools.context import ToolContext
+from locus.tools.decorator import Tool
+from locus.tools.registry import ToolRegistry, create_registry
+from locus.tools.schema import generate_schema, python_type_to_json_type
 
 
 class TestToolDecorator:

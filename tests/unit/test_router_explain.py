@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for ``router.explain()`` — the decision record.
 
@@ -16,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.router import (
+from locus.router import (
     CapabilityIndex,
     CognitiveCompiler,
     GoalFrame,
@@ -25,9 +26,9 @@ from tulip.router import (
     TaskType,
     builtin_protocols,
 )
-from tulip.router.explain import RankedProtocol, RejectedProtocol, RoutingExplanation
-from tulip.router.goal_frame import Complexity, Risk
-from tulip.tools.registry import create_registry
+from locus.router.explain import RankedProtocol, RejectedProtocol, RoutingExplanation
+from locus.router.goal_frame import Complexity, Risk
+from locus.tools.registry import create_registry
 
 
 def _compiler(**kwargs) -> CognitiveCompiler:
@@ -260,9 +261,9 @@ def _router(frame_goal: str = "diagnose", *, repeat: bool = False, **compiler_kw
     """A Router whose extractor is scripted to return one fixed frame."""
     import json
 
-    from tulip import Agent
-    from tulip.router import Router
-    from tulip.testing import ScriptedModel, text
+    from locus import Agent
+    from locus.router import Router
+    from locus.testing import ScriptedModel, text
 
     payload = json.dumps(
         {

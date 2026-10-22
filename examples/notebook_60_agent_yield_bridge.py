@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 60: Privacy-review telemetry — the agent yield bridge.
 
@@ -14,18 +15,18 @@ is visible in the run stream. ModelCompleteEvent additionally fires
 agent.tokens.used so cost dashboards subscribe without parsing the
 completion payload.
 
-- How nine yielded TulipEvent types map to agent.* bus events.
+- How nine yielded LocusEvent types map to agent.* bus events.
 - Tool-call telemetry with span_id pairing (agent.tool.started and
   agent.tool.completed share an id) — start/finish of each review step.
 - Token usage from result.metrics — the canonical source for cost
   meters and budget enforcers on always-on privacy-review automation.
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_60_agent_yield_bridge.py
 
     # Offline / no credentials:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_60_agent_yield_bridge.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_60_agent_yield_bridge.py
 """
 
 from __future__ import annotations
@@ -34,9 +35,9 @@ import asyncio
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.observability import get_event_bus, run_context
-from tulip.tools import tool
+from locus.agent import Agent
+from locus.observability import get_event_bus, run_context
+from locus.tools import tool
 
 
 @tool
@@ -90,7 +91,7 @@ async def part1_full_lifecycle() -> None:
             "Classify the sensitivity of the 'national_id' field, count PII records in "
             "the 'customers' dataset, and report both."
         ):
-            from tulip.core.events import TerminateEvent
+            from locus.core.events import TerminateEvent
 
             if isinstance(event, TerminateEvent):
                 result = event

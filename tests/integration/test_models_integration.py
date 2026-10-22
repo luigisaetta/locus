@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for model providers - requires API keys."""
 
@@ -11,7 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from tulip.core.messages import Message, ToolResult
+from locus.core.messages import Message, ToolResult
 
 
 # Skip all integration tests if not explicitly enabled
@@ -68,7 +69,7 @@ class TestOpenAIIntegration:
     @pytest.fixture
     async def model(self):
         """Create OpenAI model with proper cleanup."""
-        from tulip.models.native.openai import OpenAIModel
+        from locus.models.native.openai import OpenAIModel
 
         model = OpenAIModel(
             model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
@@ -156,7 +157,7 @@ class TestModelRegistry:
     @pytest.mark.asyncio
     async def test_get_openai_model(self):
         """Get OpenAI model from registry."""
-        from tulip.models import get_model
+        from locus.models import get_model
 
         model = get_model(f"openai:{os.getenv('OPENAI_MODEL', 'gpt-4o-mini')}", max_tokens=256)
         try:

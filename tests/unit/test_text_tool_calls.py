@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Text tool calls: only unambiguous shapes, and only when asked for.
 
@@ -14,11 +15,11 @@ from typing import Any
 
 import pytest
 
-from tulip import Agent
-from tulip.agent.text_tool_calls import parse_text_tool_calls
-from tulip.testing import ScriptedModel, text
-from tulip.tools import tool
-from tulip.tools.registry import ToolRegistry
+from locus import Agent
+from locus.agent.text_tool_calls import parse_text_tool_calls
+from locus.testing import ScriptedModel, text
+from locus.tools import tool
+from locus.tools.registry import ToolRegistry
 
 
 ran: list[tuple[str, dict[str, Any]]] = []

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Slice 3 tests — subagent dispatch + summarization wiring."""
 
@@ -7,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.deepagent import SubAgentDef, create_deepagent, task_tool
-from tulip.tools.decorator import tool
+from locus.deepagent import SubAgentDef, create_deepagent, task_tool
+from locus.tools.decorator import tool
 
 
 # ---------------------------------------------------------------------------
@@ -72,10 +73,10 @@ class TestTaskTool:
         so we don't need provider auth.
         """
 
-        # Stub tulip.agent.agent.Agent + tulip.core.events.TerminateEvent
+        # Stub locus.agent.agent.Agent + locus.core.events.TerminateEvent
         # so the subagent's run loop is deterministic.
-        from tulip.agent import agent as agent_mod
-        from tulip.core.events import TerminateEvent
+        from locus.agent import agent as agent_mod
+        from locus.core.events import TerminateEvent
 
         class _FakeAgent:
             def __init__(
@@ -166,11 +167,11 @@ class TestCreateDeepagentSlice3:
             reflexion=False,
             grounding=False,
         )
-        # No conversation manager set — agent uses tulip's default.
+        # No conversation manager set — agent uses locus's default.
         cm = getattr(agent.config, "conversation_manager", None)
         # Either None or a NullManager — both mean "no summarization".
         if cm is not None:
-            from tulip.memory.conversation import SummarizingManager
+            from locus.memory.conversation import SummarizingManager
 
             # Must NOT be a SummarizingManager.
             assert not isinstance(cm, SummarizingManager)
@@ -189,7 +190,7 @@ class TestCreateDeepagentSlice3:
             reflexion=False,
             grounding=False,
         )
-        from tulip.memory.conversation import SummarizingManager
+        from locus.memory.conversation import SummarizingManager
 
         cm = agent.config.conversation_manager
         assert isinstance(cm, SummarizingManager)

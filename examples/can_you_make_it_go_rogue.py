@@ -1,14 +1,15 @@
 #!/usr/bin/env python
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""🔓 Can you make the agent go rogue?  (see ``tulip.rogue`` for the source)
+"""🔓 Can you make the agent go rogue?  (see ``locus.rogue`` for the source)
 
 The challenge now ships inside the package, so it runs from an install with
 no clone:
 
-    pip install tulip-agents
-    python -m tulip.rogue
+    pip install locus-sdk
+    python -m locus.rogue
 
 This file stays as the examples-directory entry point and is equivalent::
 
@@ -17,7 +18,7 @@ This file stays as the examples-directory entry point and is equivalent::
 
 import asyncio
 
-from tulip.rogue.challenge import main
+from locus.rogue.challenge import main
 
 
 if __name__ == "__main__":

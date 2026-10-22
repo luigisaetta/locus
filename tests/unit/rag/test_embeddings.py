@@ -1,11 +1,12 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for embedding providers."""
 
 import pytest
 
-from tulip.rag.embeddings.base import (
+from locus.rag.embeddings.base import (
     BaseEmbedding,
     EmbeddingConfig,
     EmbeddingResult,

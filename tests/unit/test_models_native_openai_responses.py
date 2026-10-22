@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for the Responses API path of ``tulip.models.native.openai``.
+"""Unit tests for the Responses API path of ``locus.models.native.openai``.
 
 The GPT-5.6 family rejects function tools on ``/v1/chat/completions``
 whenever reasoning is active, so ``OpenAIModel`` speaks ``/v1/responses``
@@ -33,8 +34,8 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import ValidationError
 
-from tulip.core.messages import Message, ToolCall, ToolResult
-from tulip.models.native.openai import (
+from locus.core.messages import Message, ToolCall, ToolResult
+from locus.models.native.openai import (
     RESPONSES_ITEMS_METADATA_KEY,
     OpenAIModel,
     _dump_output_item,
@@ -921,7 +922,7 @@ class TestTextFormatTranslation:
 
 class TestResponsesParamIntrospection:
     def test_param_names_include_responses_fields(self) -> None:
-        import tulip.models.native.openai as mod
+        import locus.models.native.openai as mod
 
         names = mod._responses_param_names()
         assert {"store", "include", "reasoning", "text"} <= names
@@ -931,7 +932,7 @@ class TestResponsesParamIntrospection:
     ) -> None:
         import typing as _typing
 
-        import tulip.models.native.openai as mod
+        import locus.models.native.openai as mod
 
         def boom(*_a: Any, **_k: Any) -> Any:
             raise AttributeError("openai moved its request types")

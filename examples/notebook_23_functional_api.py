@@ -1,12 +1,13 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 23: Payment dispute triage with the functional API.
 
 If `StateGraph` feels like overkill for a straight-line dispute
 workflow, the functional API lets you write the same payment dispute
 triage as ordinary Python: decorate the units of work with
-`@task`, decorate the orchestrator with `@entrypoint`, and Tulip
+`@task`, decorate the orchestrator with `@entrypoint`, and Locus
 tracks timing, retries, and caching for you behind the scenes. Scenario:
 payments operations — fetch transaction, look up risk score, assess dispute.
 
@@ -16,12 +17,12 @@ payments operations — fetch transaction, look up risk score, assess dispute.
 - Same execution semantics as StateGraph, written imperatively.
 
 Run it:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_23_functional_api.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_23_functional_api.py
 
-The default provider is the bundled mock model; set TULIP_MODEL_PROVIDER for a live provider.
-Set TULIP_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
-TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o
-(or TULIP_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER for a live provider.
+Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
 provider: ollama, vllm, groq, together, openrouter, ...).
 """
 
@@ -30,8 +31,8 @@ import time
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.multiagent.functional import entrypoint, task
+from locus.agent import Agent
+from locus.multiagent.functional import entrypoint, task
 
 
 async def _llm_call(
@@ -57,7 +58,7 @@ async def example_basic():
     """Two @task functions wired together inside an @entrypoint."""
     print("=== Part 1: A two-task pipeline ===\n")
     _ai_note = await _llm_call(
-        "In one sentence, when is the Tulip functional API a better choice than StateGraph?"
+        "In one sentence, when is the Locus functional API a better choice than StateGraph?"
     )
     print(f"AI rationale: {_ai_note}")
 

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for the Cohere reranker.
 
@@ -9,8 +10,8 @@ no ``cohere`` dependency and no network access.
 
 from dataclasses import dataclass
 
-from tulip.rag.reranker.cohere import CohereReranker
-from tulip.rag.stores.base import Document, SearchResult
+from locus.rag.reranker.cohere import CohereReranker
+from locus.rag.stores.base import Document, SearchResult
 
 
 @dataclass

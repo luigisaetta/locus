@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """CLI orchestrator — discovers A2A peers, picks one by skill, delegates.
 
 Usage::
@@ -11,7 +12,7 @@ Usage::
 The orchestrator does **not** itself wrap an agent — it's a pure A2A
 client. The decision logic ("alert id → triage, indicator → threat-intel")
 is deliberately rule-based so the demo stays inspectable; in real life
-you'd put a small Tulip ``Orchestrator`` here whose specialists are
+you'd put a small Locus ``Orchestrator`` here whose specialists are
 ``A2AClient.as_tool()``-wrapped peers.
 """
 
@@ -25,7 +26,7 @@ import sys
 
 import httpx
 
-from tulip.a2a import A2AClient
+from locus.a2a import A2AClient
 
 
 DEFAULT_PEERS = (

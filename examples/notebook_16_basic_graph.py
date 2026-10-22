@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 16: Data-subject-request triage pipeline as a graph.
 
@@ -17,12 +18,12 @@ request (DSAR) intake under GDPR Article 15.
 - Streaming: emit progress events from inside a node with emit_custom.
 
 Run it:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_16_basic_graph.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_16_basic_graph.py
 
-The default provider is the bundled mock model; set TULIP_MODEL_PROVIDER for a live provider.
-Set TULIP_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
-TULIP_MODEL_PROVIDER=openai TULIP_MODEL_ID=gpt-4o
-(or TULIP_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
+The default provider is the bundled mock model; set LOCUS_MODEL_PROVIDER for a live provider.
+Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
+LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
 provider: ollama, vllm, groq, together, openrouter, ...).
 """
 
@@ -31,8 +32,8 @@ import time
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.multiagent import END, START, StateGraph
+from locus.agent import Agent
+from locus.multiagent import END, START, StateGraph
 
 
 async def _llm_call(
@@ -306,7 +307,7 @@ async def example_results():
 async def example_streaming():
     """Stream node updates and push custom progress events from inside a node."""
     print("=== Part 6: Streaming with emit_custom ===\n")
-    from tulip.multiagent import StreamMode, emit_custom
+    from locus.multiagent import StreamMode, emit_custom
 
     graph = StateGraph()
 

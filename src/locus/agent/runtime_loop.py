@@ -1,0 +1,4129 @@
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
+
+"""Agent runtime loop methods, extracted from ``Agent`` as a mixin.
+
+Holds the ReAct loop body (``run``, ``_run_from_state``, and the
+collection of model / tool / reflexion / grounding helpers it dispatches
+to). Mixed into ``Agent`` via ``class Agent(AgentRuntimeMixin, BaseModel):``
+so the public-facade class stays focused on construction, public
+entry points, and properties.
+
+Method bodies are byte-identical to their pre-extraction form on
+``Agent`` — they reach into the same ``self.config`` and ``self._*``
+private attributes. Pydantic v2 supports this kind of mixin as long as
+the mixin doesn't declare its own fields.
+
+Type-only forward references on the mixin tell mypy what attributes
+``self`` is expected to carry at runtime, so the strict pass keeps
+working without scattering ``# type: ignore`` annotations across the
+moved methods.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import contextvars
+import functools
+import logging
+import threading
+import time
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel
+
+from locus.agent.completion import AUTOMATED_NOTE_KEY, CONTINUATION_NOTE_KEY, Continuation
+from locus.agent.config import AgentConfig
+from locus.agent.model_retry import call_with_retry
+from locus.agent.result import normalize_stop_reason
+from locus.agent.run_context import (
+    PendingInterrupt,
+    RunContext,
+    claim_result_slot,
+    scrub_ephemeral_metadata,
+    split_ephemeral_metadata,
+)
+from locus.agent.subagent import enter_parent_run, exit_parent_run, fold_subagent_usage
+from locus.agent.verification import (
+    FinalAnswerContext,
+    is_ephemeral_message,
+    mark_ephemeral,
+)
+from locus.core.events import (
+    CompactionEvent,
+    CustomEvent,
+    FinalAnswerVerificationEvent,
+    GroundingEvent,
+    InterruptEvent,
+    LocusEvent,
+    ModelChunkEvent,
+    ModelRetryEvent,
+    ReflectEvent,
+    TerminateEvent,
+    ThinkEvent,
+    ToolCompleteEvent,
+    ToolStartEvent,
+)
+from locus.core.loops import warning_text
+from locus.core.media import has_images, strip_images, text_length
+from locus.core.messages import Message, Role, ToolCall, ToolResult
+from locus.core.state import AgentState, ReasoningStep, ToolExecution
+from locus.models.base import ModelResponse
+from locus.observability.mechanisms import LEAKED_TOOL_CALLS, record_mechanism
+from locus.tools.context import _progress_sink
+from locus.tools.executor import ToolContextFactory, ToolExecutor
+from locus.tools.registry import ToolRegistry
+
+
+def _usage_of(state: AgentState) -> dict[str, int] | None:
+    """The run segment's cumulative token usage, off the state counters.
+
+    ``None`` when nothing was metered (a stub or a provider that reports no
+    usage) — consumers must read absence as "unmetered", never as zero cost.
+    """
+    if state.total_tokens_used <= 0:
+        return None
+    usage = {
+        "prompt_tokens": state.prompt_tokens_used,
+        "completion_tokens": state.completion_tokens_used,
+        "total_tokens": state.total_tokens_used,
+    }
+    # Cache counts only when there were any, so a provider without caching
+    # reports exactly the three keys it always did.
+    if state.cache_read_tokens_used:
+        usage["cache_read_input_tokens"] = state.cache_read_tokens_used
+    if state.cache_creation_tokens_used:
+        usage["cache_creation_input_tokens"] = state.cache_creation_tokens_used
+    # The OpenAI-style counters, which are inside ``prompt_tokens``.
+    if state.cached_tokens_used:
+        usage["cached_tokens"] = state.cached_tokens_used
+    if state.cache_write_tokens_used:
+        usage["cache_write_tokens"] = state.cache_write_tokens_used
+    return usage
+
+
+def _reported_cost_of(state: AgentState) -> float | None:
+    """What the provider said the segment's calls cost, or ``None`` when it never said."""
+    return state.reported_cost_usd if state.reported_cost_calls else None
+
+
+def _cost_of(state: AgentState) -> float | None:
+    """The run segment's spend in USD, or ``None`` when the model is unpriced.
+
+    ``cost_usd_used`` stays 0 for an unpriced model, so it is only a number
+    worth reporting when both prices are known.
+    """
+    return state.cost_usd_used if state.priced else None
+
+
+#: The smallest ``max_iterations`` that counts as a budget for the nudge.
+_MIN_NUDGED_ITERATIONS = 10
+
+#: ``Message.metadata`` key on the budget note (see ``budget_nudge_at``),
+#: naming the budget that prompted it.
+BUDGET_NOTE_KEY = "locus_budget_note"
+
+
+#: Longest error text a TerminateEvent carries. The exception is re-raised
+#: whole; the event's copy is for display, and a provider that echoes a whole
+#: request body into its message should not turn one event into megabytes.
+_MAX_ERROR_CHARS = 2_000
+
+
+def _error_text(exc: BaseException) -> str:
+    """A one-line description of ``exc`` for ``TerminateEvent.error``."""
+    text = str(exc).strip() or type(exc).__name__
+    if not text.startswith(type(exc).__name__):
+        text = f"{type(exc).__name__}: {text}"
+    return text if len(text) <= _MAX_ERROR_CHARS else text[: _MAX_ERROR_CHARS - 1] + "…"
+
+
+def _apply_hook_result(result: ToolResult, after_tool_event: Any) -> ToolResult:
+    """Fold an after-hook's ``event.result`` replacement into the ToolResult.
+
+    Hooks receive ``content if success else None``; a different value left in
+    ``event.result`` is a replacement, as `AfterToolCallEvent` documents. A
+    non-string replacement is serialized the way ``Tool.execute`` serializes
+    tool returns, so a hook can hand back a dict without caring about the
+    wire form.
+    """
+    original = result.content if result.success else None
+    replacement = after_tool_event.result
+    if replacement is None or replacement == original:
+        return result
+    if not isinstance(replacement, str):
+        import json  # noqa: PLC0415
+
+        replacement = json.dumps(replacement, default=str)
+    return result.model_copy(update={"content": replacement})
+
+
+def _complete_event(tool_result: ToolResult, /, **overrides: Any) -> ToolCompleteEvent:
+    """The ``ToolCompleteEvent`` for a result, structured extras included."""
+    fields: dict[str, Any] = {
+        "tool_name": tool_result.name,
+        "tool_call_id": tool_result.tool_call_id,
+        "result": tool_result.content if tool_result.success else None,
+        "error": tool_result.error,
+        "duration_ms": tool_result.duration_ms,
+        "structured_content": tool_result.structured_content,
+        "content_blocks": tool_result.content_blocks,
+    }
+    fields.update(overrides)
+    return ToolCompleteEvent(**fields)
+
+
+def _invocation_arguments(tool_event: Any) -> dict[str, Any]:
+    """The arguments a tool is invoked with after the before-hooks ran.
+
+    ``event.arguments`` (what the run records) with the hooks'
+    ``event.secret_arguments`` merged over them. The secret part is used for
+    the invocation only: every persisted or emitted record of the call keeps
+    ``event.arguments``.
+    """
+    arguments: dict[str, Any] = tool_event.arguments
+    secret = getattr(tool_event, "secret_arguments", None)
+    if not secret:
+        return arguments
+    return {**arguments, **secret}
+
+
+_EXHAUSTED: Any = object()
+
+
+async def _interleave_progress(
+    stream: AsyncIterator[tuple[int, ToolResult]],
+    sink: asyncio.Queue[LocusEvent],
+) -> AsyncIterator[tuple[int, ToolResult] | LocusEvent]:
+    """Merge an executor's result stream with progress reported meanwhile.
+
+    The loop is otherwise parked on the executor for the whole batch, so
+    progress a tool reports would reach the consumer only after the tool had
+    finished — which is no progress at all. Each pull from ``stream`` runs as
+    its own task, raced against the progress queue. A tool's progress is
+    always yielded before its result. Closing this generator cancels the
+    pending pull (and with it the executor's in-flight tools) and closes
+    ``stream``.
+    """
+    loop = asyncio.get_running_loop()
+
+    def _deliver(event: LocusEvent) -> None:
+        # Sync tools report from a worker thread; the queue is loop-bound.
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if running is loop:
+            sink.put_nowait(event)
+        else:
+            loop.call_soon_threadsafe(sink.put_nowait, event)
+
+    # One context for every pull: the executor generator must see the same
+    # context variables on each step, and they must include the sink.
+    context = contextvars.copy_context()
+    context.run(_progress_sink.set, _deliver)
+    iterator = stream.__aiter__()
+    pull: asyncio.Future[Any] | None = None
+    getter: asyncio.Future[Any] | None = None
+    try:
+        while True:
+            if pull is None:
+                pull = loop.create_task(_anext_or_stop(iterator), context=context)
+            if getter is None:
+                getter = asyncio.ensure_future(sink.get())
+            await asyncio.wait({pull, getter}, return_when=asyncio.FIRST_COMPLETED)
+            if getter.done():
+                event = getter.result()
+                getter = None
+                yield event
+                continue
+            item = pull.result()
+            pull = None
+            # Progress queued in the same tick as the result still comes first.
+            while not sink.empty():
+                yield sink.get_nowait()
+            if item is _EXHAUSTED:
+                break
+            yield item
+        while not sink.empty():
+            yield sink.get_nowait()
+    finally:
+        for pending in (pull, getter):
+            if pending is not None and not pending.done():
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
+        aclose = getattr(iterator, "aclose", None)
+        if aclose is not None:
+            await aclose()
+
+
+async def _anext_or_stop(iterator: AsyncIterator[Any]) -> Any:
+    """``anext`` that returns a sentinel at exhaustion (a Task cannot raise
+    ``StopAsyncIteration`` cleanly)."""
+    try:
+        return await iterator.__anext__()
+    except StopAsyncIteration:
+        return _EXHAUSTED
+
+
+if TYPE_CHECKING:
+    from locus.agent.hook_orchestrator import HookOrchestrator
+    from locus.agent.leaked_tool_calls import UnfinishedToolCall
+    from locus.memory.conversation import ConversationManager
+    from locus.memory.manager import BaseMemoryManager
+    from locus.reasoning.grounding import GroundingEvaluator
+    from locus.reasoning.reflexion import Reflector
+
+
+def _bus_bridge(
+    fn: Callable[..., AsyncGenerator[LocusEvent, None]],
+) -> Callable[..., AsyncGenerator[LocusEvent, None]]:
+    """Decorate an ``async def run(...)`` style generator so each yielded
+    :class:`LocusEvent` is also published on the SSE bus.
+
+    No-op when no ``run_context`` is active — the underlying ``emit()``
+    short-circuits on the contextvar. Failures inside the bridge are
+    swallowed by ``emit()``; the original event is always passed
+    through to the caller, so the bridge cannot break agent execution.
+    """
+
+    def _agent_label(agent: Any) -> str | None:
+        """The name to attribute this agent's events to, or ``None``.
+
+        ``name`` is the display label a multi-agent composer sets; ``agent_id``
+        is the fallback because an unnamed agent with an explicit id is still
+        identifiable, and an id in a trace beats no attribution at all.
+        """
+        config = getattr(agent, "config", None)
+        if config is None:
+            return None
+        return getattr(config, "name", None) or getattr(config, "agent_id", None)
+
+    @functools.wraps(fn)
+    async def wrapper(*args: Any, **kwargs: Any) -> AsyncGenerator[LocusEvent, None]:
+        # Local import — no cost when telemetry is unused.
+        from locus.observability.agent_bridge import (  # noqa: PLC0415
+            bridge_locus_event,
+        )
+
+        # Every event this agent produces passes through here exactly once, so
+        # it is the one place attribution can be stamped without threading a
+        # name through 31 yield sites and 20 event classes — and the one place
+        # that cannot be forgotten when a 21st is added.
+        agent_name = _agent_label(args[0] if args else None)
+
+        # ``aclosing``: when the consumer closes this generator (``aclose()``,
+        # ``break`` inside ``contextlib.aclosing``), the run it drives is
+        # closed right here — its ``finally`` (run bookkeeping, the final
+        # checkpoint) runs before ``aclose()`` returns instead of whenever
+        # the garbage collector finalizes the orphaned inner generator.
+        async with contextlib.aclosing(fn(*args, **kwargs)) as inner:
+            async for raw in inner:
+                # Only stamp what is unattributed. A nested agent's events
+                # arrive already labelled, and relabelling them with the
+                # orchestrator's name would destroy exactly the attribution
+                # this exists to give.
+                event = (
+                    raw.model_copy(update={"agent_name": agent_name})
+                    if agent_name is not None and raw.agent_name is None
+                    else raw
+                )
+                try:
+                    await bridge_locus_event(event)
+                except Exception:  # noqa: BLE001 — telemetry never breaks the loop
+                    pass
+                yield event
+
+    return wrapper
+
+
+# Suppress an unused-import warning from the type alias.
+_ = Awaitable  # noqa: SLF001 — placeholder so mypy knows we imported it intentionally
+
+
+#: Re-exported for code that imported it from here; one copy lives in
+#: :mod:`locus.agent.result`.
+_normalize_stop_reason = normalize_stop_reason
+
+
+#: Sent back after an empty reply in a turn that is calling tools.
+_EMPTY_REPLY_NOTE = (
+    "[Empty reply] Your last reply had no text and no tool call. Continue the "
+    "task: call the tools you need next. If the task is done, write your final "
+    "answer instead."
+)
+
+#: Sent, with the tools taken away, when a reply is empty again.
+_FINAL_ANSWER_REQUEST = (
+    "[Final answer requested]\n"
+    "Your previous turn produced no visible response. "
+    "Provide your final answer to the user's question "
+    "based on the conversation so far. Do NOT call any "
+    "more tools — write the answer as plain text."
+)
+
+#: Sent back after a reply that ends inside a tool call written as text.
+_UNFINISHED_CALL_NOTE = (
+    "[Unfinished tool call — automated, not from the user] Your last reply ended "
+    "inside a tool call written as "
+    "text, so nothing was run. Make the call again through the tool interface. "
+    "If it was cut off by the output limit, send less in one call: write a large "
+    "file in parts, or change it with edits."
+)
+
+#: How many unfinished calls in a row are sent back before the reply is taken
+#: as it is: a model that cannot finish a call should not spend the run on it.
+_MAX_UNFINISHED_SENDS = 2
+
+
+#: Queued by ``_get_model_response`` when an after-model hook discards a
+#: streamed call (``retry``); never yielded to the caller.
+_DISCARDED_CALL = object()
+
+
+class _StreamProgress:
+    """Whether a streamed model call has handed any chunk to the caller yet."""
+
+    __slots__ = ("forwarded",)
+
+    def __init__(self) -> None:
+        self.forwarded = False
+
+
+def _is_reasoning_only(chunk: Any) -> bool:
+    """A streamed chunk that carries chain-of-thought and nothing else."""
+    return bool(
+        getattr(chunk, "reasoning", None)
+        and not getattr(chunk, "content", None)
+        and not getattr(chunk, "tool_calls", None)
+        and not getattr(chunk, "done", False)
+    )
+
+
+def _without_ephemeral_messages(state: AgentState) -> AgentState:
+    """``state`` minus messages marked turn-only (see locus.agent.verification)."""
+    if not any(is_ephemeral_message(m) for m in state.messages):
+        return state
+    return state.model_copy(
+        update={"messages": tuple(m for m in state.messages if not is_ephemeral_message(m))}
+    )
+
+
+def truncate_tool_output(text: str, limit: int, head_fraction: float = 0.4) -> str:
+    """``text`` cut to ``limit`` characters around a marker, keeping both ends.
+
+    The first ``limit * head_fraction`` characters and the last of the rest
+    are kept. Tools put what matters at either end: what was run at the top,
+    the verdict (a failing test, an error count) at the bottom. The marker
+    says how much was cut so the model knows the output is partial and can
+    re-run the tool more narrowly. ``text`` within ``limit`` is returned
+    unchanged; the marker is not counted against ``limit``.
+    """
+    original = len(text)
+    if limit <= 0 or original <= limit:
+        return text
+    head = int(limit * min(max(head_fraction, 0.0), 1.0))
+    tail = limit - head
+    marker = (
+        f"[OUTPUT TRUNCATED — {original - limit} of {original} chars cut; "
+        f"first {head} and last {tail} kept]"
+    )
+    if tail == 0:
+        return f"{text[:head]}\n{marker}"
+    if head == 0:
+        return f"{marker}\n{text[-tail:]}"
+    return f"{text[:head]}\n{marker}\n{text[-tail:]}"
+
+
+def _durable(state: AgentState) -> AgentState:
+    """The form of ``state`` that outlives the turn: checkpoints, the result.
+
+    A memory manager's injected block is ephemeral — it is in ``state`` so
+    every model call of the turn sees it, and is dropped here so it is never
+    persisted (the next turn injects a fresh one).
+    """
+    from locus.memory.manager import without_memory_blocks  # noqa: PLC0415
+
+    state = without_memory_blocks(state)
+    # Turn-only messages (a draft the final-answer verifier rejected, its
+    # feedback) were for the model's next attempt, not the conversation.
+    state = _without_ephemeral_messages(state)
+    # Ephemeral run metadata (``mcp_headers``: a bearer token) never reaches a
+    # checkpoint, whatever put it on the state.
+    scrubbed = scrub_ephemeral_metadata(state.metadata)
+    if len(scrubbed) != len(state.metadata):
+        state = state.model_copy(update={"metadata": scrubbed})
+    return state
+
+
+#: State metadata naming the turn's per-iteration checkpoints. It rides in the
+#: saved state itself, so a process killed mid-turn hands the list to whatever
+#: finishes the turn — ``continue_turn`` or the next ``run`` — and that final
+#: save deletes them; a list kept in memory would die with the process.
+ITERATION_CHECKPOINTS_KEY = "_locus_iteration_checkpoints"
+
+
+def _take_iteration_checkpoints(state: AgentState) -> tuple[list[str], AgentState]:
+    """The turn's iteration checkpoint ids, and ``state`` without the list."""
+    if ITERATION_CHECKPOINTS_KEY not in state.metadata:
+        return [], state
+    metadata = dict(state.metadata)
+    ids = metadata.pop(ITERATION_CHECKPOINTS_KEY) or []
+    return [str(i) for i in ids], state.model_copy(update={"metadata": metadata})
+
+
+UNFINISHED_CALL_ERROR = (
+    "The run stopped before this call returned, so its outcome is unknown: it may or "
+    "may not have taken effect. Check before calling it again."
+)
+
+
+def close_unfinished_calls(state: AgentState) -> AgentState:
+    """Answer the last assistant message's calls that have no result yet.
+
+    A provider rejects an assistant tool call with no result after it, and
+    re-running the call could repeat a side effect the stopped attempt
+    already performed. The error result keeps the conversation valid and
+    tells the model what is known: nothing about the outcome.
+    """
+    answered = {m.tool_call_id for m in state.messages if m.role == Role.TOOL and m.tool_call_id}
+    for msg in reversed(state.messages):
+        if msg.role == Role.ASSISTANT and msg.tool_calls:
+            for tc in msg.tool_calls:
+                if tc.id not in answered:
+                    state = state.with_message(
+                        Message.tool(
+                            ToolResult(
+                                tool_call_id=tc.id,
+                                name=tc.name,
+                                content="",
+                                error=UNFINISHED_CALL_ERROR,
+                            )
+                        )
+                    )
+            break
+    return state
+
+
+logger = logging.getLogger(__name__)
+
+
+class AgentRuntimeMixin:
+    """Mixin holding the ReAct loop body and reasoning helpers.
+
+    Mixed into ``Agent`` so the public-facade class stays small. The
+    type annotations below describe the agent attributes that the
+    mixin's methods read at runtime — they are *not* declared by the
+    mixin itself. ``Agent``'s ``PrivateAttr`` declarations remain the
+    source of truth for runtime construction.
+    """
+
+    if TYPE_CHECKING:
+        # These attributes live on the concrete ``Agent`` instance the
+        # mixin is mixed into. Declaring them here gives mypy enough
+        # information to type-check the moved method bodies without
+        # creating runtime fields.
+        config: AgentConfig
+        _model: Any
+        _tool_registry: ToolRegistry
+        _executor: ToolExecutor
+        _hooks: list[Any]
+        _hook_orchestrator: HookOrchestrator | None
+        _conversation_manager: ConversationManager | None
+        _observation_pack: Any
+        _model_prices: tuple[float, float] | None
+        _leaked_formats: tuple[str, ...] | None
+        _memory_manager: BaseMemoryManager | None
+        _reflector: Reflector | None
+        _grounding_evaluator: GroundingEvaluator | None
+        _grounding_model: Any
+        _auxiliary_model: Any
+        _last_run_state: AgentState | None
+        _interrupts: dict[str | None, PendingInterrupt]
+        _active_runs: dict[int, RunContext]
+        _runs_lock: threading.Lock
+        _cancel_signal: threading.Event | None
+        _initialized: bool
+        _mcp_attached: bool
+        _mcp_attached_ids: set[int]
+        _mcp_retry_at: dict[int, float]
+
+        @property
+        def is_cancelled(self) -> bool: ...
+
+        def _initialize(self) -> None: ...
+
+        def add_tools(self, tools: list[Any]) -> None: ...
+
+    # =========================================================================
+    # Per-run bookkeeping
+    # =========================================================================
+
+    def _begin_run(
+        self,
+        state: AgentState,
+        prompt: str,
+        thread_id: str | None,
+        metadata: dict[str, Any] | None,
+        *,
+        ephemeral: dict[str, Any] | None = None,
+    ) -> RunContext:
+        """Create and register the context that owns one run.
+
+        ``metadata`` may still carry ephemeral keys (direct callers); they are
+        moved to ``rc.ephemeral`` and merged with ``ephemeral``.
+        """
+        metadata, found = self._split_run_metadata(metadata)
+        rc = RunContext.create(
+            run_id=state.run_id,
+            thread_id=thread_id,
+            prompt=prompt,
+            metadata=metadata,
+            agent_name=self.config.name or self.config.agent_id,
+            termination=self.config.termination,
+            ephemeral={**found, **(ephemeral or {})},
+        )
+        with self._runs_lock:
+            self._active_runs[id(rc)] = rc
+        return rc
+
+    def _ephemeral_metadata_keys(self) -> frozenset[str]:
+        """Run-metadata keys never persisted: ``mcp_headers`` and any custom
+        ``metadata_headers_key`` a configured MCP client reads."""
+        keys: set[str] = set()
+        for client in getattr(self.config, "mcp_servers", None) or ():
+            key = getattr(client, "metadata_headers_key", None)
+            if isinstance(key, str) and key:
+                keys.add(key)
+        return frozenset(keys)
+
+    def _split_run_metadata(
+        self, metadata: dict[str, Any] | None
+    ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+        """``(persisted, ephemeral)`` halves of a run's metadata.
+
+        The ephemeral half (per-run MCP headers — a bearer token) lives on the
+        run's in-memory context only: never on the state, so never in a
+        checkpoint, an event, hook-visible ``run.metadata`` or a result.
+        """
+        return split_ephemeral_metadata(metadata, self._ephemeral_metadata_keys())
+
+    def _end_run(self, rc: RunContext, state: AgentState) -> None:
+        """Publish a run's final state and unregister it (idempotent)."""
+        state = _durable(state)
+        if rc.result_slot is not None:
+            rc.result_slot.state = state
+        # Kept for back-compat and single-run debugging only: with concurrent
+        # runs this is whichever finished last. ``arun`` never reads it.
+        self._last_run_state = state
+        with self._runs_lock:
+            self._active_runs.pop(id(rc), None)
+
+    def _run_cancelled(self, rc: RunContext) -> bool:
+        """This run was cancelled — by thread, or by a cancel-all."""
+        if rc.cancel.is_set():
+            return True
+        legacy = self._cancel_signal
+        return legacy is not None and legacy.is_set()
+
+    def _park_interrupt(self, rc: RunContext, state: AgentState) -> None:
+        """Hold a paused run in memory, keyed strictly by its thread id."""
+        self._interrupts[rc.thread_id] = PendingInterrupt(
+            state=state,
+            prompt=rc.prompt,
+            thread_id=rc.thread_id,
+            metadata=rc.metadata,
+            ephemeral=rc.ephemeral,
+        )
+
+    def _emits_progress(self, calls: list[ToolCall]) -> bool:
+        """Whether any tool in the batch streams progress (``emits_progress``)."""
+        for call in calls:
+            tool_obj = self._tool_registry.get(call.name)
+            if getattr(tool_obj, "emits_progress", False) is True:
+                return True
+        return False
+
+    async def _attach_mcp_tools(self, metadata: dict[str, Any] | None = None) -> None:
+        """Attach the tools of every configured MCP server.
+
+        ``AgentConfig.mcp_servers`` holds clients rather than URLs because
+        connecting is async and ``Agent.__init__`` is not. This runs from
+        ``run()``, where there is a loop to await on. A server attaches once;
+        later runs skip it.
+
+        A server that cannot be reached does not take the whole run down: the
+        failure is logged and the agent proceeds with the tools it does have.
+        The alternative — refusing to answer at all because an optional tool
+        source is down — is the worse default for something wired in as an
+        enhancement. The server is retried on a later run, at most every
+        ``client.reconnect_interval`` seconds (default 30), so a server that
+        was down for the first run is not lost for the agent's lifetime.
+
+        ``metadata`` is the run's metadata, which a client's per-run headers
+        (``MCPClient.headers_provider``) may need for the ``tools/list``.
+        """
+        servers = getattr(self.config, "mcp_servers", None)
+        if not servers or getattr(self, "_mcp_attached", False):
+            return
+        attached: set[int] = self._mcp_attached_ids
+        retry_at: dict[int, float] = self._mcp_retry_at
+        now = time.monotonic()
+
+        for client in servers:
+            key = id(client)
+            if key in attached or now < retry_at.get(key, 0.0):
+                continue
+            name = getattr(client, "label", None) or type(client).__name__
+            try:
+                loader = getattr(client, "load_tools", None)
+                if callable(loader):
+                    tools = await loader(metadata=metadata)
+                else:
+                    if not getattr(client, "_connected", True):
+                        await client.connect()
+                    schemas = await client.list_tools()
+                    tools = client.to_locus_tools(schemas)
+            except asyncio.CancelledError:
+                # A transport's anyio cancel scope can leak a CancelledError
+                # that is not a cancellation of this run. Only a pending
+                # cancel request on *this* task means the run is cancelled.
+                task = asyncio.current_task()
+                if task is not None and task.cancelling() > 0:
+                    raise
+                logger.warning("MCP server %s unavailable (connection cancelled); skipping", name)
+                retry_at[key] = now + float(getattr(client, "reconnect_interval", 30.0))
+                continue
+            except Exception:  # noqa: BLE001 - see below
+                # Intentionally broad: a server can fail as a connection
+                # error, a protocol error, a timeout, or a malformed
+                # schema, and none of those should decide whether the
+                # agent answers at all.
+                logger.warning("MCP server %s unavailable; skipping", name, exc_info=True)
+                retry_at[key] = now + float(getattr(client, "reconnect_interval", 30.0))
+                continue
+            attached.add(key)
+            retry_at.pop(key, None)
+            if tools:
+                self.add_tools(tools)
+                logger.info(
+                    "attached %d tool(s) from MCP server %s: %s",
+                    len(tools),
+                    name,
+                    ", ".join(t.name for t in tools),
+                )
+        self._mcp_attached = all(id(client) in attached for client in servers)
+
+    @_bus_bridge
+    async def run(
+        self,
+        prompt: str,
+        *,
+        thread_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        model_kwargs: dict[str, Any] | None = None,
+        stream_tokens: bool = False,
+    ) -> AsyncGenerator[LocusEvent, None]:
+        """
+        Run the agent with streaming events.
+
+        Args:
+            prompt: User prompt to process
+            thread_id: Optional thread ID for checkpointing
+            metadata: Additional metadata for tools
+            model_kwargs: Per-call parameters forwarded to the model for this
+                run — ``tool_choice``, ``logprobs``, ``extra_body`` and the
+                rest of the provider's request surface. Model configuration is
+                fixed for a model's lifetime, which is the wrong shape for
+                anything that has to vary per run.
+            stream_tokens: Also yield :class:`ModelChunkEvent` as the model
+                produces them, so a UI can render text and chain-of-thought as
+                they arrive instead of waiting for the turn to finish. Tool and
+                termination events are unchanged. Off by default: it changes
+                which event types a consumer sees.
+
+        Yields:
+            LocusEvent instances for each step
+        """
+        self._initialize()
+        # Attaching may list tools with the per-run MCP headers, so it sees
+        # the full metadata; nothing it is given is persisted.
+        await self._attach_mcp_tools(metadata)
+
+        # From here on the run's metadata is split: per-run secrets
+        # (``mcp_headers``) ride on the in-memory run context only, never on
+        # the state — and so never in a checkpoint, an event or a result.
+        metadata, ephemeral = self._split_run_metadata(metadata)
+
+        # Claim the enclosing ``arun``'s result slot before any await that
+        # could let a nested run of this agent start in the same context.
+        result_slot = claim_result_slot(self)
+
+        # A new user message on a thread supersedes whatever interrupt was
+        # parked for it in memory: the checkpoint this run writes is the
+        # thread's truth from now on, and resume() must not revive the stale
+        # in-memory state over it. (Thread-less runs share one slot and keep
+        # the pre-2.17 behaviour: only a new pause replaces it.)
+        if thread_id is not None:
+            self._interrupts.pop(thread_id, None)
+
+        # Create initial state
+        state = await self._create_initial_state(prompt, thread_id, metadata)
+
+        # Everything that belongs to THIS run lives on ``rc``, never on the
+        # agent: one Agent instance serves concurrent runs.
+        rc = self._begin_run(state, prompt, thread_id, metadata, ephemeral=ephemeral)
+        rc.result_slot = result_slot
+
+        # Track metrics
+        started_at = datetime.now(UTC)
+        # Whether the run has had its one note to converge (``budget_nudge_at``).
+        _budget_nudged = False
+        _total_tokens = 0
+        _tool_calls_count = 0
+        _tool_errors_count = 0
+        _reflexion_evals = 0
+        _grounding_evals = 0
+        _last_assistant_content: str | None = None
+        _last_no_tool_calls = False
+        _verifier_attempts = 0
+        # Whether an empty reply has already been sent back this turn.
+        _empty_sent_back = False
+        # Unfinished text tool calls sent back since the last call that ran.
+        _unfinished_sent_back = 0
+        # Hold a call's content chunks until we know they are not a draft the
+        # verifier will send back (``hold_final_answer_tokens``).
+        _hold_tokens = (
+            stream_tokens
+            and self.config.final_answer_verifier is not None
+            and self.config.hold_final_answer_tokens
+        )
+        _held_chunks: list[Any] = []
+
+        # The composable termination condition was copied and reset for this
+        # run by ``_begin_run``: TimeLimit's clock starts now, and no other
+        # in-flight run's clock is touched.
+        termination = rc.termination
+
+        try:
+            # Run hooks: before_invocation
+            state = await self._run_before_invocation_hooks(prompt, state)
+
+            # Inject long-term memories, after the turn's prompt.
+            if self._memory_manager is not None:
+                state = await self._memory_manager.on_session_start(state)
+        except BaseException:
+            self._end_run(rc, state)
+            raise
+
+        # Publish this run as the parent context for subagents spawned from
+        # tool bodies: links their cancellation to THIS run's signal (which
+        # both cancel(thread_id=...) and a cancel-all set) and gives their
+        # usage reports a place to land (folded each iteration). Entered right
+        # before the try whose finally exits it.
+        _subagent_ctx = enter_parent_run(
+            rc.cancel,
+            time_budget_seconds=self.config.time_budget_seconds,
+            hooks=self.config.hooks,
+            observation_pack=self._child_observation_pack(state, rc),
+        )
+
+        try:
+            # Main ReAct loop
+            _open_iteration: int | None = None
+            while True:
+                # Fold any child-agent usage reported since the last pass, so
+                # the budget checks below and every TerminateEvent count
+                # delegated spend as spend.
+                state = fold_subagent_usage(state)
+
+                # Iteration boundary. The previous iteration is closed here
+                # rather than at each exit: this loop has seven ways out, and a
+                # hook contract that depends on remembering all of them is one
+                # that breaks the next time an eighth is added.
+                if _open_iteration is not None:
+                    await self._run_iteration_end_hooks(_open_iteration, state)
+                await self._run_iteration_start_hooks(state.iteration, state)
+                _open_iteration = state.iteration
+
+                # Check time budget
+                if self.config.time_budget_seconds is not None:
+                    elapsed = (datetime.now(UTC) - started_at).total_seconds()
+                    if elapsed >= self.config.time_budget_seconds:
+                        yield TerminateEvent(
+                            reason="time_budget",
+                            iterations_used=state.iteration,
+                            final_confidence=state.confidence,
+                            usage=_usage_of(state),
+                            cost_usd=_cost_of(state),
+                            reported_cost_usd=_reported_cost_of(state),
+                            total_tool_calls=len(state.tool_executions),
+                            final_message=_last_assistant_content,
+                        )
+                        break
+
+                # Check external cancellation (this run, or cancel-all)
+                if self._run_cancelled(rc):
+                    yield TerminateEvent(
+                        reason="cancelled",
+                        iterations_used=state.iteration,
+                        final_confidence=state.confidence,
+                        usage=_usage_of(state),
+                        cost_usd=_cost_of(state),
+                        reported_cost_usd=_reported_cost_of(state),
+                        total_tool_calls=_tool_calls_count,
+                        final_message="Agent cancelled by external signal.",
+                    )
+                    break
+
+                # User-supplied composable termination condition runs first
+                # so MaxIterations(...) | TextMention("DONE") and friends
+                # actually fire before the hard-coded fallbacks.
+                if termination is not None:
+                    user_stop, user_reason = termination.check(
+                        state,
+                        last_message=_last_assistant_content or "",
+                        no_tool_calls=_last_no_tool_calls,
+                    )
+                    if user_stop:
+                        yield TerminateEvent(
+                            reason=user_reason or "complete",
+                            iterations_used=state.iteration,
+                            final_confidence=state.confidence,
+                            usage=_usage_of(state),
+                            cost_usd=_cost_of(state),
+                            reported_cost_usd=_reported_cost_of(state),
+                            total_tool_calls=len(state.tool_executions),
+                            final_message=_last_assistant_content,
+                        )
+                        break
+
+                # A loop gets a warning before it can stop the run: the model
+                # is told what it is repeating and asked to change approach.
+                state, loop_warning = self._warn_tool_loop(state)
+                if loop_warning is not None:
+                    yield loop_warning
+
+                # Check termination conditions
+                should_stop, stop_reason = state.should_terminate
+                if should_stop and stop_reason:
+                    if stop_reason == "max_iterations" and state.iteration > 0:
+                        # Inject summary request and do one final call WITHOUT tools
+                        state = state.with_message(
+                            Message.system(
+                                "[Iteration Limit Reached]\n"
+                                "You have used all available iterations. "
+                                "Provide a final summary of your findings and conclusions "
+                                "based on the work done so far. Do NOT call any more tools."
+                            )
+                        )
+                        # Call model without tool schemas to force text response.
+                        # Use the auxiliary (cheap) model when configured —
+                        # this is just a final summary, no need to spend
+                        # primary-model budget.
+                        messages = list(state.messages)
+                        if self._conversation_manager:
+                            if hasattr(self._conversation_manager, "async_apply"):
+                                messages = await self._conversation_manager.async_apply(messages)
+                            else:
+                                messages = self._conversation_manager.apply(messages)
+                        messages = self._validate_messages(messages)
+
+                        summary_model = self._auxiliary_model or self._model
+                        response = await summary_model.complete(
+                            messages=messages,
+                            tools=None,  # No tools — force text summary
+                            temperature=self.config.temperature,
+                            max_tokens=self.config.max_tokens,
+                        )
+                        prompt_toks = response.usage.get("prompt_tokens", 0)
+                        completion_toks = response.usage.get("completion_tokens", 0)
+                        _total_tokens += prompt_toks + completion_toks
+                        state = state.with_response_usage(
+                            response.usage, getattr(response, "cost_usd", None)
+                        )
+
+                        # A model that is not done answers with its next call in
+                        # its own markup, the request having no tools; that is
+                        # no summary.
+                        written = response.message.content
+                        if written and self._is_text_tool_call(written):
+                            written = None
+                        summary = (
+                            written
+                            or _last_assistant_content
+                            or self._build_fallback_summary(state)
+                        )
+                        yield TerminateEvent(
+                            reason="max_iterations",
+                            iterations_used=state.iteration,
+                            final_confidence=state.confidence,
+                            usage=_usage_of(state),
+                            cost_usd=_cost_of(state),
+                            reported_cost_usd=_reported_cost_of(state),
+                            total_tool_calls=len(state.tool_executions),
+                            final_message=summary,
+                        )
+                        break
+
+                    # All other stop reasons: hard stop
+                    yield TerminateEvent(
+                        reason=stop_reason,
+                        iterations_used=state.iteration,
+                        final_confidence=state.confidence,
+                        usage=_usage_of(state),
+                        cost_usd=_cost_of(state),
+                        reported_cost_usd=_reported_cost_of(state),
+                        total_tool_calls=len(state.tool_executions),
+                        final_message=_last_assistant_content,
+                    )
+                    break
+
+                # Increment iteration
+                state = state.next_iteration()
+
+                # Planning: inject plan prompt on first iteration
+                if self.config.planning and state.iteration == 1:
+                    state = state.with_message(
+                        Message.system(
+                            "[Planning Phase]\n"
+                            "Before taking any action, create a step-by-step plan.\n"
+                            "Format your plan as a numbered list:\n"
+                            "1. First step\n"
+                            "2. Second step\n"
+                            "...\n\n"
+                            "After stating your plan, begin executing step 1.\n"
+                            "Do NOT call tools without a plan."
+                        )
+                    )
+
+                # Budget warning in explicit mode — nudge model to complete
+                if self.config.completion_mode == "explicit":
+                    remaining = self.config.max_iterations - state.iteration
+                    if remaining == 2:
+                        state = state.with_message(
+                            Message.system(
+                                f"[Budget Warning] You have {remaining} iterations left. "
+                                "Start wrapping up. Call task_complete(summary='your findings') "
+                                "to finish, or you'll hit the iteration limit."
+                            )
+                        )
+                    elif remaining == 0:
+                        state = state.with_message(
+                            Message.system(
+                                "[Final Iteration] This is your LAST iteration. "
+                                "You MUST call task_complete now with a summary of everything "
+                                "you've found. Do NOT call any other tools."
+                            )
+                        )
+
+                if not _budget_nudged:
+                    state, nudge = self._budget_nudge(state, started_at)
+                    if nudge is not None:
+                        _budget_nudged = True
+                        yield nudge
+
+                # Get model response. When the caller asked for tokens, the
+                # model call runs as a task and its chunks are drained here, so
+                # they surface while the model is still producing rather than
+                # after it finishes.
+                if state.would_exceed_cost_budget(self.config.max_tokens or 4096):
+                    yield TerminateEvent(
+                        reason="cost_budget",
+                        iterations_used=state.iteration,
+                        final_confidence=state.confidence,
+                        usage=_usage_of(state),
+                        cost_usd=_cost_of(state),
+                        reported_cost_usd=_reported_cost_of(state),
+                        total_tool_calls=len(state.tool_executions),
+                        final_message=_last_assistant_content,
+                    )
+                    break
+
+                # Keep the request inside the window before it is sent. The
+                # compacted history replaces the state's, so the run continues
+                # from the summary on its own, with no prompt to resume.
+                state, compaction = await self._compact_context(state, rc)
+                if compaction is not None:
+                    yield compaction
+                    if compaction.exhausted:
+                        yield TerminateEvent(
+                            reason="context_exhausted",
+                            iterations_used=state.iteration,
+                            final_confidence=state.confidence,
+                            usage=_usage_of(state),
+                            cost_usd=_cost_of(state),
+                            reported_cost_usd=_reported_cost_of(state),
+                            total_tool_calls=len(state.tool_executions),
+                            final_message=f"[context exhausted] {compaction.detail}",
+                        )
+                        break
+
+                if stream_tokens:
+                    chunk_queue: asyncio.Queue[Any] = asyncio.Queue()
+                    model_task = asyncio.create_task(
+                        self._get_model_response(state, model_kwargs, chunk_queue, run=rc)
+                    )
+                    while not model_task.done() or not chunk_queue.empty():
+                        try:
+                            chunk = await asyncio.wait_for(chunk_queue.get(), timeout=0.05)
+                        except TimeoutError:
+                            continue
+                        if chunk is _DISCARDED_CALL:
+                            _held_chunks = []
+                            continue
+                        if isinstance(chunk, ModelRetryEvent):
+                            # A notice, not model text: the hold never applies.
+                            yield chunk
+                            continue
+                        if _hold_tokens and not _is_reasoning_only(chunk):
+                            _held_chunks.append(chunk)
+                            continue
+                        yield chunk
+                    response, state = await model_task
+                else:
+                    try:
+                        response, state = await self._get_model_response(
+                            state, model_kwargs, run=rc
+                        )
+                    except Exception:
+                        for retry in rc.drain_retries():
+                            yield retry
+                        raise
+                    for retry in rc.drain_retries():
+                        yield retry
+                for custom in rc.drain():
+                    yield custom
+                prompt_toks = response.usage.get("prompt_tokens", 0)
+                completion_toks = response.usage.get("completion_tokens", 0)
+                _total_tokens += prompt_toks + completion_toks
+                state = state.with_response_usage(
+                    response.usage, getattr(response, "cost_usd", None)
+                )
+                _last_assistant_content = response.message.content
+                # Track for the user-supplied termination condition. Updated again
+                # below if a text tool call is parsed out of the body.
+                _last_no_tool_calls = not response.message.tool_calls
+
+                # Store plan from first iteration if planning enabled
+                if self.config.planning and state.iteration == 1 and response.message.content:
+                    state = state.with_metadata("plan", response.message.content)
+
+                # Emit think event. Reasoning models surface their CoT in
+                # ``response.reasoning`` (separate channel) — prefer it over
+                # the answer text in ``message.content``.
+                yield ThinkEvent(
+                    iteration=state.iteration,
+                    reasoning=self._reasoning_for(response),
+                    tool_calls=list(response.message.tool_calls),
+                )
+
+                # No structured tool calls: the model may have written its call
+                # in the body — its own markup leaked as text, or, for a model
+                # without native tool calling, a plain text call.
+                recovered = self._recover_text_tool_calls(response, state)
+                if recovered is not None:
+                    response, state = recovered
+                    _last_assistant_content = response.message.content
+                    _last_no_tool_calls = False
+
+                # A call block cut off before its end — the output-token limit
+                # in the middle of a large write — is neither a call nor an
+                # answer: the model is asked for the call again.
+                if response.message.tool_calls:
+                    _unfinished_sent_back = 0
+                elif _unfinished_sent_back < _MAX_UNFINISHED_SENDS:
+                    unfinished = self._unfinished_text_tool_call(response.message.content)
+                    if unfinished is not None:
+                        _unfinished_sent_back += 1
+                        state = self._send_back_unfinished_call(state, unfinished, replace=True)
+                        _last_assistant_content = unfinished.prose
+                        _last_no_tool_calls = False
+                        _held_chunks = []  # the broken call is never shown
+                        continue
+
+                # Empty-content safety net (fixes #280).
+                #
+                # The model can return zero tool_calls AND zero
+                # ``content`` for several reasons that all look the
+                # same to the runtime:
+                #
+                #   - Reasoning-only iteration (gpt-5.x / o-series /
+                #     Gemini 2.5 thinking mode generate
+                #     ``completion_tokens`` that land in a separate
+                #     reasoning channel — ``message.content`` is
+                #     None even though tokens were consumed).
+                #   - The model decided "I'm done" without writing
+                #     anything after a long context (observed on
+                #     Gemini with > 50K-token system prompts).
+                #   - The model returned an empty assistant message
+                #     between tool calls and the runtime collapses
+                #     to this branch on the trailing iteration.
+                #
+                # Without the safety net, ``TerminateEvent.final_message``
+                # becomes None → ``AgentResult.message`` becomes ""
+                # → callers see empty output despite real work done.
+                # Mirror the MaxIterations summary-injection path:
+                # force one no-tools completion to extract the
+                # model's actual answer based on the conversation
+                # so far. Costs ~one extra call only when the bug
+                # shape would otherwise produce empty output.
+                #
+                # Not on the first empty reply of a turn that is calling
+                # tools, though: there an empty reply is far more often a
+                # call the provider failed to deliver (a reasoning-only
+                # turn, a call left in the reasoning channel) than an
+                # answer. Asking for a final answer with the tools taken
+                # away then ends a run mid-task — "the system requested my
+                # final answer before I could make the edits" — and
+                # reports it as complete. The model is sent back once,
+                # with its tools, to carry on or to answer.
+                #
+                # A model that answers the no-tools request with a call is not
+                # done either, so the call is made (``_summary_as_tool_step``).
+                summary_answer: str | None = None
+                if (
+                    not response.message.tool_calls
+                    and self.config.completion_mode != "explicit"
+                    and not response.message.content
+                ):
+                    if state.tool_executions and not _empty_sent_back:
+                        _empty_sent_back = True
+                        state = state.with_message(Message.system(_EMPTY_REPLY_NOTE))
+                        _last_no_tool_calls = False
+                        continue
+                    before_note = state
+                    state = state.with_message(Message.system(_FINAL_ANSWER_REQUEST))
+                    messages = list(state.messages)
+                    if self._conversation_manager:
+                        if hasattr(self._conversation_manager, "async_apply"):
+                            messages = await self._conversation_manager.async_apply(messages)
+                        else:
+                            messages = self._conversation_manager.apply(messages)
+                    messages = self._validate_messages(messages)
+
+                    summary_model = self._auxiliary_model or self._model
+                    summary_resp: ModelResponse | None = None
+                    try:
+                        summary_resp = await summary_model.complete(
+                            messages=messages,
+                            tools=None,  # No tools — force text
+                            temperature=self.config.temperature,
+                            max_tokens=self.config.max_tokens,
+                        )
+                        s_prompt_toks = summary_resp.usage.get("prompt_tokens", 0)
+                        s_completion_toks = summary_resp.usage.get("completion_tokens", 0)
+                        _total_tokens += s_prompt_toks + s_completion_toks
+                        state = state.with_response_usage(
+                            summary_resp.usage, getattr(summary_resp, "cost_usd", None)
+                        )
+                    except Exception:  # noqa: BLE001
+                        # Summary call failed — fall back to the last
+                        # assistant content we saw or a deterministic stub.
+                        # Better than empty.
+                        summary_resp = None
+                    # The state without the note asking for an answer, which
+                    # the model is not shown again if it is sent back on.
+                    without_note = state.model_copy(update={"messages": before_note.messages})
+                    as_call = (
+                        self._summary_as_tool_step(summary_resp, without_note)
+                        if summary_resp is not None
+                        else None
+                    )
+                    if isinstance(as_call, tuple):
+                        # The model's own markup, written because the request
+                        # had no tools to call: DeepSeek answers "give your
+                        # final answer" with its next read.
+                        response, state = as_call
+                        _last_assistant_content = response.message.content
+                        _last_no_tool_calls = False
+                        _unfinished_sent_back = 0
+                    elif as_call is not None and _unfinished_sent_back < _MAX_UNFINISHED_SENDS:
+                        _unfinished_sent_back += 1
+                        state = self._send_back_unfinished_call(
+                            without_note, as_call, replace=False
+                        )
+                        _last_no_tool_calls = False
+                        continue
+                    else:
+                        summary_answer = (
+                            (summary_resp.message.content if summary_resp is not None else None)
+                            or _last_assistant_content
+                            or self._build_fallback_summary(state)
+                        )
+
+                # A held call that turned out to be a tool step is not a final
+                # answer: release its chunks now, in order.
+                is_final = (
+                    not response.message.tool_calls and self.config.completion_mode != "explicit"
+                )
+                if _held_chunks and not is_final:
+                    for held in _held_chunks:
+                        out = held
+                        if self.config.hold_tool_step_text and held.content:
+                            # Words the verifier never saw stay off the
+                            # stream; tool-call and usage parts still go out.
+                            if not held.tool_calls and not getattr(held, "usage", None):
+                                continue
+                            out = held.model_copy(update={"content": None})
+                        yield out
+                    _held_chunks = []
+
+                # If still no tool calls — in auto mode we're done, in explicit mode we continue
+                if is_final:
+                    # Apply grounding before final response if enabled
+                    if (
+                        self.config.grounding
+                        and self.config.grounding.enabled
+                        and self.config.grounding.check_before_final
+                        and self._grounding_evaluator
+                        and response.message.content
+                        and len(state.tool_executions) > 0
+                    ):
+                        grounding_event, state = await self._apply_grounding(
+                            state, response.message.content
+                        )
+                        _grounding_evals += 1
+                        yield grounding_event
+
+                        # If grounding fails, inject guidance and continue loop
+                        if grounding_event.requires_replan and _grounding_evals <= (
+                            self.config.grounding.max_replans
+                        ):
+                            from locus.reasoning.grounding import GroundingResult
+
+                            replan_guidance = self._grounding_evaluator.get_replan_guidance(
+                                GroundingResult(
+                                    score=grounding_event.score,
+                                    ungrounded_claims=grounding_event.ungrounded_claims,
+                                    requires_replan=True,
+                                )
+                            )
+                            state = state.with_message(
+                                Message.system(f"[Grounding Check Failed]\n{replan_guidance}")
+                            )
+                            continue  # Re-enter loop for replanning
+
+                    # An empty reply was answered by the no-tools request
+                    # above; its answer is the run's.
+                    final_content = (
+                        summary_answer if summary_answer is not None else response.message.content
+                    )
+
+                    # Pluggable final-answer verification: runs on every final
+                    # answer, tool call or not.
+                    if self.config.final_answer_verifier is not None and final_content:
+                        verdict = await self._verify_final_answer(
+                            final_content, state, rc, _verifier_attempts
+                        )
+                        if verdict.replanning:
+                            yield verdict
+                            _verifier_attempts += 1
+                            _held_chunks = []  # the rejected draft is never shown
+                            state = self._queue_verifier_replan(
+                                state, final_content, verdict.feedback or "", verdict
+                            )
+                            # The model is sent back: a termination condition
+                            # on "no tool calls" must not end the run on the
+                            # reply it is being sent back from.
+                            _last_no_tool_calls = False
+                            continue
+                        replacement = await self._final_answer_fallback(
+                            verdict, final_content, state, rc
+                        )
+                        if replacement is not None:
+                            verdict = verdict.model_copy(update={"replaced": True})
+                        yield verdict
+                        if replacement is not None:
+                            state = self._replace_final_answer(state, final_content, replacement)
+                            final_content = replacement
+                            _held_chunks = []  # the failed draft is never shown
+                            if stream_tokens and _hold_tokens:
+                                yield ModelChunkEvent(content=replacement)
+                    for held in _held_chunks:
+                        yield held
+                    _held_chunks = []
+
+                    yield TerminateEvent(
+                        reason="complete",
+                        iterations_used=state.iteration,
+                        final_confidence=state.confidence,
+                        usage=_usage_of(state),
+                        cost_usd=_cost_of(state),
+                        reported_cost_usd=_reported_cost_of(state),
+                        total_tool_calls=len(state.tool_executions),
+                        final_message=final_content,
+                    )
+                    break
+
+                # Execute tool calls.
+                #
+                # Three phases so ``tool_execution="concurrent"`` is real
+                # (#210): per-call serial hook/cache work is hoisted out
+                # of the executor call so the survivors can run in a
+                # single ``asyncio.gather``. Without this split, the
+                # earlier per-call loop fed the executor singletons and
+                # ``ConcurrentExecutor`` collapsed to ``SequentialExecutor``.
+                #
+                #   Phase 1 — per call, serial: emit ToolStartEvent, run
+                #     before-hooks, resolve cancel/idempotent-cache short-
+                #     circuits (recorded on state immediately so a later
+                #     same-args call in this batch still cache-hits).
+                #   Phase 2 — one batched ``executor.execute(...)`` over
+                #     the surviving calls.
+                #   Phase 3 — per result, in tool_call order: interrupt
+                #     detection, result truncation/offload, state update,
+                #     ToolCompleteEvent, after-hook (with retry), write/
+                #     verification tracking.
+                tool_results: list[ToolResult] = []
+                reasoning_step_tools: list[ToolExecution] = []
+
+                # Phase 1 — pre-execute.
+                slots: list[dict[str, Any]] = []
+                to_execute_indices: list[int] = []
+                to_execute_calls: list[ToolCall] = []
+                # Within-batch idempotent dedup: when an ``@tool(idempotent=True)``
+                # appears twice in the same batch with the same arguments, the
+                # second slot becomes a ``batch_cache_ref`` pointing at the first
+                # slot. Phase 3 copies the first slot's result back. Without
+                # this, the README contract ("idempotent body fires once per
+                # run") is silently violated whenever a model fans out
+                # duplicates in one response — see #210 follow-up.
+                batch_idempotent_seen: dict[tuple[str, str], int] = {}
+
+                for tool_call in response.message.tool_calls:
+                    _tool_calls_count += 1
+
+                    yield ToolStartEvent(
+                        tool_name=tool_call.name,
+                        tool_call_id=tool_call.id,
+                        arguments=tool_call.arguments,
+                    )
+
+                    tool_event = await self._run_before_tool_hooks(
+                        tool_call.name, tool_call.id, tool_call.arguments, run=rc
+                    )
+                    for custom in rc.drain():
+                        yield custom
+
+                    if tool_event.cancel:
+                        cancel_msg = (
+                            tool_event.cancel
+                            if isinstance(tool_event.cancel, str)
+                            else "Cancelled by hook"
+                        )
+                        cancel_result = ToolResult(
+                            tool_call_id=tool_call.id,
+                            name=tool_call.name,
+                            content=cancel_msg,
+                            error=None,
+                            duration_ms=0.0,
+                        )
+                        cancel_execution = ToolExecution(
+                            tool_name=cancel_result.name,
+                            tool_call_id=cancel_result.tool_call_id,
+                            arguments=tool_call.arguments,
+                            result=cancel_result.content,
+                        )
+                        # NOTE: state is updated in Phase 3 (tool_call order),
+                        # not here, so concurrent batches keep deterministic
+                        # ordering on ``state.tool_executions``.
+                        slots.append(
+                            {
+                                "tool_call": tool_call,
+                                "arguments": tool_call.arguments,
+                                "kind": "cancel",
+                                "result": cancel_result,
+                                "execution": cancel_execution,
+                            }
+                        )
+                        continue
+
+                    modified_args = tool_event.arguments
+                    # What the tool is called with. ``modified_args`` is what
+                    # is recorded (state, checkpoint, after-hooks); hook
+                    # ``secret_arguments`` ride only on the invocation.
+                    invoke_args = _invocation_arguments(tool_event)
+
+                    # Idempotent dedup: if the tool declared idempotent=True
+                    # and a prior call in this run used the same arguments,
+                    # reuse the prior result instead of invoking the body.
+                    # Without this, ``@tool(idempotent=True)`` is silently a
+                    # no-op for the main Agent.run() path (despite being
+                    # advertised on the README hero example).
+                    cached = self._maybe_cached_idempotent_result(
+                        state, tool_call.name, modified_args, tool_call.id
+                    )
+                    if cached is not None:
+                        cache_execution = ToolExecution(
+                            tool_name=cached.name,
+                            tool_call_id=cached.tool_call_id,
+                            arguments=modified_args,
+                            result=cached.content if cached.success else None,
+                            error=cached.error,
+                            duration_ms=cached.duration_ms,
+                            idempotent_cache_hit=True,
+                        )
+                        slots.append(
+                            {
+                                "tool_call": tool_call,
+                                "arguments": modified_args,
+                                "kind": "cache",
+                                "result": cached,
+                                "execution": cache_execution,
+                            }
+                        )
+                        continue
+
+                    # Within-batch dedup for idempotent tools whose duplicate
+                    # appears alongside the original in this same response.
+                    # Without this, a model emitting ``[submit(X), submit(X)]``
+                    # in one assistant message would fire the body twice — a
+                    # regression vs the pre-batching per-call loop, which
+                    # sneaked the dedup in via serial state updates.
+                    idempotent_key = self._idempotent_batch_key(tool_call.name, modified_args)
+                    if idempotent_key is not None:
+                        prior_slot = batch_idempotent_seen.get(idempotent_key)
+                        if prior_slot is not None:
+                            slots.append(
+                                {
+                                    "tool_call": tool_call,
+                                    "arguments": modified_args,
+                                    "kind": "batch_cache_ref",
+                                    "ref_slot": prior_slot,
+                                    "result": None,
+                                    "execution": None,
+                                }
+                            )
+                            continue
+                        batch_idempotent_seen[idempotent_key] = len(slots)
+
+                    slots.append(
+                        {
+                            "tool_call": tool_call,
+                            "arguments": modified_args,
+                            "invoke_arguments": invoke_args,
+                            "kind": "execute",
+                            "result": None,
+                            "execution": None,
+                        }
+                    )
+                    to_execute_indices.append(len(slots) - 1)
+                    to_execute_calls.append(tool_call.model_copy(update={"arguments": invoke_args}))
+
+                # Phase 2 — stream the survivors through the executor.
+                # Constructed after Phase 1 so ``state`` already reflects
+                # cancel / cache short-circuits, matching the pre-extraction
+                # per-call-loop semantics.
+                #
+                # Using ``execute_streaming`` (yields ``(input_idx, result)``
+                # in completion order for ConcurrentExecutor, input order for
+                # SequentialExecutor) gives us two things in one pass:
+                #   * Opt-in completion-order ``ToolCompleteEvent`` for UI
+                #     streaming (``AgentConfig.tool_event_order='completion'``).
+                #   * Active sibling cancellation on interrupt: a ``break``
+                #     out of the ``async for`` triggers the executor's
+                #     ``finally`` clause, which cancels in-flight sibling
+                #     tasks. The pre-streaming ``gather`` impl had no such
+                #     hook — every sibling completed and only the fold was
+                #     halted.
+                if to_execute_calls:
+                    ctx_factory = ToolContextFactory(
+                        run_id=state.run_id,
+                        agent_id=state.agent_id,
+                        iteration=state.iteration,
+                        state=state,
+                        invocation_metadata=metadata or {},
+                        ephemeral_metadata=rc.ephemeral,
+                    )
+                    batch_start = time.perf_counter()
+                    interrupted_slot_idx: int | None = None
+                    results_stream = self._executor.execute_streaming(
+                        to_execute_calls,
+                        self._tool_registry,
+                        ctx_factory,
+                    )
+                    # Tools that report progress (every MCP tool) need the
+                    # stream merged with their progress, or it would arrive
+                    # only once they had finished.
+                    merged: AsyncIterator[tuple[int, ToolResult] | LocusEvent] = (
+                        _interleave_progress(results_stream, asyncio.Queue())
+                        if self._emits_progress(to_execute_calls)
+                        else results_stream
+                    )
+                    try:
+                        async for item in merged:
+                            # Progress, or a subagent's event forwarded live.
+                            if isinstance(item, LocusEvent):
+                                yield item
+                                continue
+                            input_idx, batched_result = item
+                            slot_idx = to_execute_indices[input_idx]
+                            slots[slot_idx]["result"] = batched_result
+
+                            if self.config.tool_event_order == "completion":
+                                # Stream the complete event the moment the
+                                # tool finishes. Phase 3 will skip its own
+                                # ToolCompleteEvent emission for execute-kind
+                                # slots when in completion mode.
+                                yield _complete_event(batched_result)
+
+                            # Interrupt detection — break to trigger the
+                            # executor's cancellation of in-flight siblings.
+                            # Phase 3 will run the InterruptEvent emission
+                            # path on the interrupting slot exactly like the
+                            # pre-streaming code did.
+                            if (
+                                batched_result.content
+                                and '"__interrupt__": true' in batched_result.content
+                            ):
+                                interrupted_slot_idx = slot_idx
+                                break
+                    except Exception as e:  # noqa: BLE001 — ``_execute_one`` already traps user-tool exceptions; this catches a failure of the executor itself (registry blow-up, ctx_factory error) so a single bad call doesn't abort the whole turn.
+                        batch_duration = (time.perf_counter() - batch_start) * 1000
+                        for slot_idx, tc in zip(to_execute_indices, to_execute_calls, strict=True):
+                            if slots[slot_idx]["result"] is None:
+                                slots[slot_idx]["result"] = ToolResult(
+                                    tool_call_id=tc.id,
+                                    name=tc.name,
+                                    content="",
+                                    error=str(e),
+                                    duration_ms=batch_duration,
+                                )
+                    finally:
+                        if merged is not results_stream:
+                            # Cancels a pull still in flight after an
+                            # interrupt ``break`` — the in-flight siblings
+                            # with it — and closes the executor stream.
+                            with contextlib.suppress(Exception):
+                                await merged.aclose()  # type: ignore[attr-defined]
+
+                    # Synthesize "cancelled by sibling interrupt" results
+                    # for slots whose tasks were cancelled (the interrupt
+                    # break happened before they completed). Folded as
+                    # ``kind="cancel"`` so Phase 3 treats them identically
+                    # to hook-cancelled calls — Start/Complete pair emits,
+                    # state records the cancellation, no after-hook fires.
+                    if interrupted_slot_idx is not None:
+                        for slot_idx in to_execute_indices:
+                            slot = slots[slot_idx]
+                            if slot["result"] is not None:
+                                continue
+                            tc = slot["tool_call"]
+                            cancelled_result = ToolResult(
+                                tool_call_id=tc.id,
+                                name=tc.name,
+                                content="Cancelled: sibling tool requested interrupt",
+                                error=None,
+                                duration_ms=0.0,
+                            )
+                            cancelled_execution = ToolExecution(
+                                tool_name=tc.name,
+                                tool_call_id=tc.id,
+                                arguments=slot["arguments"],
+                                result=cancelled_result.content,
+                            )
+                            slot["result"] = cancelled_result
+                            slot["execution"] = cancelled_execution
+                            slot["kind"] = "cancel"
+
+                # Phase 3 — per-result fold, in tool_call order.
+                for slot in slots:
+                    tool_call = slot["tool_call"]
+                    modified_args = slot["arguments"]
+                    kind = slot["kind"]
+                    result = slot["result"]
+
+                    if kind == "cancel":
+                        tool_results.append(result)
+                        state = state.with_tool_execution(slot["execution"])
+                        reasoning_step_tools.append(slot["execution"])
+                        yield _complete_event(result, result=result.content, duration_ms=0.0)
+                        continue
+                    if kind == "cache":
+                        tool_results.append(result)
+                        state = state.with_tool_execution(slot["execution"])
+                        reasoning_step_tools.append(slot["execution"])
+                        yield _complete_event(result, result=result.content)
+                        continue
+                    if kind == "batch_cache_ref":
+                        # Same-args duplicate of an earlier slot in this same
+                        # batch. The referenced slot's result is now resolved
+                        # (Phase 2 ran ``asyncio.gather`` to completion before
+                        # this loop). Reuse it and rebrand the result/execution
+                        # for this call's id.
+                        ref_slot = slots[slot["ref_slot"]]
+                        ref_result: ToolResult = ref_slot["result"]
+                        result = ref_result.model_copy(
+                            update={
+                                "tool_call_id": tool_call.id,
+                                "name": tool_call.name,
+                                "duration_ms": 0.0,
+                            }
+                        )
+                        batch_cache_execution = ToolExecution(
+                            tool_name=result.name,
+                            tool_call_id=result.tool_call_id,
+                            arguments=modified_args,
+                            result=result.content if result.success else None,
+                            error=result.error,
+                            duration_ms=0.0,
+                            idempotent_cache_hit=True,
+                        )
+                        tool_results.append(result)
+                        state = state.with_tool_execution(batch_cache_execution)
+                        reasoning_step_tools.append(batch_cache_execution)
+                        yield _complete_event(result, result=result.content, duration_ms=0.0)
+                        continue
+
+                    # Interrupt marker from ``ask_user``. Sibling calls in
+                    # this batch have already executed in parallel — we
+                    # still pause here, leaving them un-folded into state.
+                    # An interrupt is rare and ``ask_user`` is the only
+                    # tool that emits it; we trust users not to fan it
+                    # out alongside high-cost siblings.
+                    if result.content and '"__interrupt__": true' in result.content:
+                        import json as _json
+
+                        try:
+                            interrupt_data = _json.loads(result.content)
+                            if interrupt_data.get("__interrupt__"):
+                                self._park_interrupt(rc, state)
+                                # Checkpoint BEFORE yielding: a consumer that
+                                # stops iterating on the interrupt (an HTTP
+                                # layer parking the run) never resumes this
+                                # generator, so the finally-side save would
+                                # only run at GC — too late if the process
+                                # dies while paused.
+                                if self.config.checkpointer and thread_id:
+                                    await self.config.checkpointer.save(_durable(state), thread_id)
+                                yield InterruptEvent(
+                                    question=interrupt_data.get("question", ""),
+                                    options=interrupt_data.get("options"),
+                                    fields=interrupt_data.get("fields"),
+                                    interrupt_id=result.tool_call_id,
+                                    metadata=interrupt_data.get("metadata") or {},
+                                )
+                                return  # Pause the generator
+                        except (ValueError, KeyError):
+                            pass
+
+                    # Cap oversized tool results so they don't blow the
+                    # model's context window. When ``tool_result_store`` is
+                    # configured the full payload is offloaded through it and
+                    # a recoverable reference key inlined; otherwise the
+                    # middle is cut and both ends kept.
+                    # With ObservationPack on, nothing is lost to the cap: an
+                    # output up to the pack's inline limit goes whole (the pack
+                    # sends it as a placeholder once it is old), and a larger
+                    # one is archived whole and cut around a pointer to it.
+                    if (
+                        self.config.max_tool_result_length > 0
+                        and result.content
+                        and text_length(result.content) > self.config.max_tool_result_length
+                    ):
+                        packed = (
+                            self._intake_large_output(result, state, rc)
+                            if self.config.tool_result_store is None
+                            else None
+                        )
+                        if packed is not None:
+                            result = packed
+                        elif self.config.tool_result_store is not None:
+                            result = self.config.tool_result_store.maybe_offload(
+                                result,
+                                run_id=state.run_id,
+                                iteration=state.iteration,
+                            )
+                        else:
+                            # Cutting through an embedded image would leave
+                            # corrupt base64, so images go before the cut.
+                            result = result.model_copy(
+                                update={
+                                    "content": truncate_tool_output(
+                                        strip_images(result.content),
+                                        self.config.max_tool_result_length,
+                                        self.config.tool_result_head_fraction,
+                                    )
+                                }
+                            )
+
+                    # After-hooks run BEFORE the result is folded into state
+                    # or emitted, so ``event.result`` replacement actually
+                    # lands where the docs promise it does: in the message
+                    # the model reads, in ``state.tool_executions``, and in
+                    # the ToolCompleteEvent a consumer sees. (Previously the
+                    # hook ran last: only ``retry`` had any effect, a
+                    # replaced result was silently discarded, and a retried
+                    # result never reached the model because ``tool_results``
+                    # already held the original.) In completion mode Phase 2
+                    # has already streamed the event, so there the event
+                    # carries the pre-hook result; state and messages still
+                    # get the hook's version.
+                    after_tool_event = await self._run_after_tool_hooks(
+                        result.name,
+                        result.content if result.success else None,
+                        result.error,
+                        tool_call_id=result.tool_call_id,
+                        arguments=modified_args,
+                        run=rc,
+                    )
+                    hook_events = rc.drain()
+
+                    if after_tool_event.retry:
+                        try:
+                            retry_ctx_factory = ToolContextFactory(
+                                run_id=state.run_id,
+                                agent_id=state.agent_id,
+                                iteration=state.iteration,
+                                state=state,
+                                invocation_metadata=metadata or {},
+                                ephemeral_metadata=rc.ephemeral,
+                            )
+                            [result] = await self._executor.execute(
+                                [
+                                    tool_call.model_copy(
+                                        update={
+                                            "arguments": slot.get("invoke_arguments", modified_args)
+                                        }
+                                    )
+                                ],
+                                self._tool_registry,
+                                retry_ctx_factory,
+                            )
+                        except Exception as e:  # noqa: BLE001 — user tool bodies can raise anything; surface as ToolResult.error
+                            result = ToolResult(
+                                tool_call_id=tool_call.id,
+                                name=tool_call.name,
+                                content="",
+                                error=str(e),
+                                duration_ms=0.0,
+                            )
+                    else:
+                        result = _apply_hook_result(result, after_tool_event)
+
+                    tool_results.append(result)
+
+                    execution = ToolExecution(
+                        tool_name=result.name,
+                        tool_call_id=result.tool_call_id,
+                        arguments=modified_args,
+                        result=result.content if result.success else None,
+                        error=result.error,
+                        duration_ms=result.duration_ms,
+                    )
+                    state = state.with_tool_execution(execution)
+                    reasoning_step_tools.append(execution)
+
+                    if result.error:
+                        _tool_errors_count += 1
+
+                    # Skip the per-slot ToolCompleteEvent yield in
+                    # completion mode — Phase 2 already streamed it the
+                    # moment this tool finished. Sequential mode (default)
+                    # still emits here so consumers see events in
+                    # tool_call order, carrying the post-hook result.
+                    if self.config.tool_event_order == "sequential":
+                        yield _complete_event(result)
+                    # UI-only events the after-hook emitted, right behind the
+                    # call they describe. Never folded into state/messages.
+                    for custom in hook_events:
+                        yield custom
+
+                    if result.name in self.config.verify_tools:
+                        rc.has_unverified_writes = True
+                    if result.name in self.config.verification_tools:
+                        rc.has_unverified_writes = False
+
+                # Add tool results to messages
+                for result in tool_results:
+                    state = state.with_message(Message.tool(result))
+
+                # Inject verification reminder if write-like tools were used
+                if self.config.verify_tools:
+                    tools_used = {e.tool_name for e in reasoning_step_tools}
+                    wrote = tools_used & self.config.verify_tools
+                    if wrote:
+                        state = state.with_message(
+                            Message.system(
+                                "[Verification Reminder] You modified files/data. "
+                                "Before completing, verify your changes:\n"
+                                "- Run tests or checks if available\n"
+                                "- Read back modified files to confirm correctness\n"
+                                "- Fix any issues found\n"
+                                "Do NOT call task_complete until verified."
+                            )
+                        )
+
+                # Apply Reflexion if enabled
+                if (
+                    self.config.reflexion
+                    and self.config.reflexion.enabled
+                    and self._reflector
+                    and state.iteration % self.config.reflexion.evaluate_every_n_iterations == 0
+                ):
+                    reflect_event, state = await self._apply_reflexion(state, reasoning_step_tools)
+                    _reflexion_evals += 1
+                    yield reflect_event
+
+                    # Inject guidance when agent is stuck or looping
+                    if self.config.reflexion.include_guidance and reflect_event.guidance:
+                        guidance = f"[Agent Self-Reflection]\n{reflect_event.guidance}"
+                        # Add replan suggestion if planning is enabled and agent is stuck
+                        if self.config.planning and reflect_event.assessment in (
+                            "stuck",
+                            "loop_detected",
+                        ):
+                            guidance += (
+                                "\n\n[Replan] Your current approach isn't working. "
+                                "Create a NEW plan with a different strategy, then execute it."
+                            )
+                        state = state.with_message(Message.system(guidance))
+
+                # Record reasoning step
+                reasoning_step = ReasoningStep(
+                    iteration=state.iteration,
+                    thought=response.message.content,
+                    tool_calls=list(response.message.tool_calls),
+                    tool_results=reasoning_step_tools,
+                    reflection=None,  # Will be updated if reflexion was applied
+                    confidence_delta=0.0,
+                )
+                state = state.with_reasoning_step(reasoning_step)
+
+                # The iteration's tool results are folded in, so this is a
+                # boundary ``continue_turn`` can pick the turn up from.
+                state = await self._checkpoint_iteration(state, thread_id)
+
+            # The loop is done; close whichever iteration it left open.
+            if _open_iteration is not None:
+                await self._run_iteration_end_hooks(_open_iteration, state)
+
+        except Exception as e:
+            # Emit error termination
+            state = state.with_error(str(e))
+            yield TerminateEvent(
+                reason="error",
+                iterations_used=state.iteration,
+                final_confidence=state.confidence,
+                usage=_usage_of(state),
+                cost_usd=_cost_of(state),
+                reported_cost_usd=_reported_cost_of(state),
+                total_tool_calls=len(state.tool_executions),
+                error=_error_text(e),
+            )
+            raise
+
+        finally:
+            # Fold what the last tool batch's children reported (the loop may
+            # have exited before its next top-of-iteration fold), THEN stop
+            # being anyone's parent, so the state handed to ``_end_run``
+            # below counts delegated spend on every exit path.
+            state = fold_subagent_usage(state)
+            exit_parent_run(_subagent_ctx)
+
+            # Consume a pending cancel-all so it does not leak into the next run
+            if self._cancel_signal is not None:
+                self._cancel_signal.clear()
+
+            # Save output to state if output_key configured
+            if self.config.output_key:
+                final_msg = ""
+                for msg in reversed(state.messages):
+                    if msg.role.value == "assistant" and msg.content:
+                        final_msg = msg.content
+                        break
+                if final_msg:
+                    state = state.with_metadata(self.config.output_key, final_msg)
+
+            # Hand the final state to THIS run's arun (never read back off
+            # the shared agent), then release the run's bookkeeping. The
+            # list of iteration saves is bookkeeping too, not a result.
+            superseded, state = _take_iteration_checkpoints(state)
+            self._end_run(rc, state)
+
+            # Run hooks: after_invocation
+            _duration_ms = (datetime.now(UTC) - started_at).total_seconds() * 1000  # noqa: F841
+            await self._run_after_invocation_hooks(state, len(state.errors) == 0)
+
+            # Extract and persist long-term memories from this session.
+            if self._memory_manager is not None:
+                # Without turn-only messages: a rejected draft and the
+                # verifier's note are not facts about the user.
+                await self._memory_manager.on_session_end(_without_ephemeral_messages(state))
+
+            # Final checkpoint
+            await self._checkpoint_final(state, thread_id, superseded)
+
+    @_bus_bridge
+    async def _run_from_state(
+        self,
+        state: AgentState,
+        prompt: str,
+        thread_id: str | None,
+        metadata: dict[str, Any] | None,
+        model_kwargs: dict[str, Any] | None = None,
+        _run: RunContext | None = None,
+    ) -> AsyncGenerator[LocusEvent, None]:
+        """Continue execution from a given state (used for resume).
+
+        A resumed segment continues the SAME turn: iteration, budgets and the
+        tool-loop window carry on from the paused state. ``_run`` is the run
+        context ``resume()`` already registered; without one (direct callers)
+        a fresh one is created for this segment.
+        """
+        self._initialize()
+        rc = _run if _run is not None else self._begin_run(state, prompt, thread_id, metadata)
+        # Tools get the persisted half; ephemeral keys ride on ``rc``.
+        metadata, _ = self._split_run_metadata(metadata)
+
+        started_at = datetime.now(UTC)
+        # Whether the run has had its one note to converge (``budget_nudge_at``).
+        _budget_nudged = False
+        _total_tokens = 0
+        _tool_calls_count = 0
+        _tool_errors_count = 0
+        _reflexion_evals = 0
+        _grounding_evals = 0
+        _last_assistant_content: str | None = None
+        _last_no_tool_calls = False
+        _verifier_attempts = 0
+        _empty_sent_back = False
+        _unfinished_sent_back = 0
+
+        # Extract last assistant content from state
+        for msg in reversed(state.messages):
+            if msg.role == Role.ASSISTANT and msg.content:
+                _last_assistant_content = msg.content
+                break
+
+        # The run's own copy of the termination condition, reset at
+        # ``_begin_run``: resume = fresh clock, for this run only.
+        termination = rc.termination
+
+        # Same parent-context contract as run(): a resumed run can spawn
+        # subagents too, and their usage and cancellation must behave
+        # identically to the first pass.
+        _subagent_ctx = enter_parent_run(
+            rc.cancel,
+            time_budget_seconds=self.config.time_budget_seconds,
+            hooks=self.config.hooks,
+            observation_pack=self._child_observation_pack(state, rc),
+        )
+
+        try:
+            _open_iteration: int | None = None
+            while True:
+                # Fold pending child-agent usage first — same contract as
+                # run(): budgets and TerminateEvents count delegated spend.
+                state = fold_subagent_usage(state)
+
+                # Same loop as run() — check termination, get response, execute tools
+                # Iteration boundary. The previous iteration is closed here
+                # rather than at each exit: this loop has four ways out, and a
+                # hook contract that depends on remembering all of them is one
+                # that breaks the next time an eighth is added.
+                if _open_iteration is not None:
+                    await self._run_iteration_end_hooks(_open_iteration, state)
+                await self._run_iteration_start_hooks(state.iteration, state)
+                _open_iteration = state.iteration
+
+                if self.config.time_budget_seconds is not None:
+                    elapsed = (datetime.now(UTC) - started_at).total_seconds()
+                    if elapsed >= self.config.time_budget_seconds:
+                        yield TerminateEvent(
+                            reason="time_budget",
+                            iterations_used=state.iteration,
+                            final_confidence=state.confidence,
+                            usage=_usage_of(state),
+                            cost_usd=_cost_of(state),
+                            reported_cost_usd=_reported_cost_of(state),
+                            total_tool_calls=len(state.tool_executions),
+                            final_message=_last_assistant_content,
+                        )
+                        break
+
+                if self._run_cancelled(rc):
+                    yield TerminateEvent(
+                        reason="cancelled",
+                        iterations_used=state.iteration,
+                        final_confidence=state.confidence,
+                        usage=_usage_of(state),
+                        cost_usd=_cost_of(state),
+                        reported_cost_usd=_reported_cost_of(state),
+                        total_tool_calls=len(state.tool_executions),
+                        final_message="Agent cancelled by external signal.",
+                    )
+                    break
+
+                if termination is not None:
+                    user_stop, user_reason = termination.check(
+                        state,
+                        last_message=_last_assistant_content or "",
+                        no_tool_calls=_last_no_tool_calls,
+                    )
+                    if user_stop:
+                        yield TerminateEvent(
+                            reason=user_reason or "complete",
+                            iterations_used=state.iteration,
+                            final_confidence=state.confidence,
+                            usage=_usage_of(state),
+                            cost_usd=_cost_of(state),
+                            reported_cost_usd=_reported_cost_of(state),
+                            total_tool_calls=len(state.tool_executions),
+                            final_message=_last_assistant_content,
+                        )
+                        break
+
+                state, loop_warning = self._warn_tool_loop(state)
+                if loop_warning is not None:
+                    yield loop_warning
+
+                should_stop, stop_reason = state.should_terminate
+                if should_stop and stop_reason:
+                    yield TerminateEvent(
+                        reason=stop_reason,
+                        iterations_used=state.iteration,
+                        final_confidence=state.confidence,
+                        usage=_usage_of(state),
+                        cost_usd=_cost_of(state),
+                        reported_cost_usd=_reported_cost_of(state),
+                        total_tool_calls=len(state.tool_executions),
+                        final_message=_last_assistant_content,
+                    )
+                    break
+
+                state = state.next_iteration()
+                if not _budget_nudged:
+                    state, nudge = self._budget_nudge(state, started_at)
+                    if nudge is not None:
+                        _budget_nudged = True
+                        yield nudge
+                if state.would_exceed_cost_budget(self.config.max_tokens or 4096):
+                    yield TerminateEvent(
+                        reason="cost_budget",
+                        iterations_used=state.iteration,
+                        final_confidence=state.confidence,
+                        usage=_usage_of(state),
+                        cost_usd=_cost_of(state),
+                        reported_cost_usd=_reported_cost_of(state),
+                        total_tool_calls=len(state.tool_executions),
+                        final_message=_last_assistant_content,
+                    )
+                    break
+
+                state, compaction = await self._compact_context(state, rc)
+                if compaction is not None:
+                    yield compaction
+                    if compaction.exhausted:
+                        yield TerminateEvent(
+                            reason="context_exhausted",
+                            iterations_used=state.iteration,
+                            final_confidence=state.confidence,
+                            usage=_usage_of(state),
+                            cost_usd=_cost_of(state),
+                            reported_cost_usd=_reported_cost_of(state),
+                            total_tool_calls=len(state.tool_executions),
+                            final_message=f"[context exhausted] {compaction.detail}",
+                        )
+                        break
+
+                try:
+                    response, state = await self._get_model_response(state, model_kwargs, run=rc)
+                except Exception:
+                    for retry in rc.drain_retries():
+                        yield retry
+                    raise
+                for retry in rc.drain_retries():
+                    yield retry
+                for custom in rc.drain():
+                    yield custom
+                prompt_toks = response.usage.get("prompt_tokens", 0)
+                completion_toks = response.usage.get("completion_tokens", 0)
+                _total_tokens += prompt_toks + completion_toks
+                state = state.with_response_usage(
+                    response.usage, getattr(response, "cost_usd", None)
+                )
+                _last_assistant_content = response.message.content
+                _last_no_tool_calls = not response.message.tool_calls
+
+                yield ThinkEvent(
+                    iteration=state.iteration,
+                    reasoning=self._reasoning_for(response),
+                    tool_calls=list(response.message.tool_calls),
+                )
+
+                # The same recovery as the first pass: a resumed turn on the
+                # same model leaks the same markup.
+                recovered = self._recover_text_tool_calls(response, state)
+                if recovered is not None:
+                    response, state = recovered
+                    _last_assistant_content = response.message.content
+                    _last_no_tool_calls = False
+
+                # And a call cut off before its end is asked for again.
+                if response.message.tool_calls:
+                    _unfinished_sent_back = 0
+                elif _unfinished_sent_back < _MAX_UNFINISHED_SENDS:
+                    unfinished = self._unfinished_text_tool_call(response.message.content)
+                    if unfinished is not None:
+                        _unfinished_sent_back += 1
+                        state = self._send_back_unfinished_call(state, unfinished, replace=True)
+                        _last_assistant_content = unfinished.prose
+                        _last_no_tool_calls = False
+                        continue
+
+                if not response.message.tool_calls and self.config.completion_mode != "explicit":
+                    answer = response.message.content
+                    if not answer and state.tool_executions and not _empty_sent_back:
+                        # As in ``run``: an empty reply mid-task is sent back
+                        # once, with the tools, rather than taken as the answer.
+                        _empty_sent_back = True
+                        state = state.with_message(Message.system(_EMPTY_REPLY_NOTE))
+                        _last_no_tool_calls = False
+                        continue
+                    if self.config.final_answer_verifier is not None and answer:
+                        verdict = await self._verify_final_answer(
+                            answer, state, rc, _verifier_attempts
+                        )
+                        if verdict.replanning:
+                            yield verdict
+                            _verifier_attempts += 1
+                            state = self._queue_verifier_replan(
+                                state, answer, verdict.feedback or "", verdict
+                            )
+                            # The model is sent back: a termination condition
+                            # on "no tool calls" must not end the run on the
+                            # reply it is being sent back from.
+                            _last_no_tool_calls = False
+                            continue
+                        replacement = await self._final_answer_fallback(verdict, answer, state, rc)
+                        if replacement is not None:
+                            verdict = verdict.model_copy(update={"replaced": True})
+                            state = self._replace_final_answer(state, answer, replacement)
+                            answer = replacement
+                        yield verdict
+                    yield TerminateEvent(
+                        reason="complete",
+                        iterations_used=state.iteration,
+                        final_confidence=state.confidence,
+                        usage=_usage_of(state),
+                        cost_usd=_cost_of(state),
+                        reported_cost_usd=_reported_cost_of(state),
+                        total_tool_calls=len(state.tool_executions),
+                        final_message=answer,
+                    )
+                    break
+
+                if not response.message.tool_calls:
+                    continue
+
+                # Execute tools (simplified — reuse main logic)
+                for tc in response.message.tool_calls:
+                    yield ToolStartEvent(
+                        tool_name=tc.name, tool_call_id=tc.id, arguments=tc.arguments
+                    )
+
+                    # The SAME hook seam the first-pass loop runs (playbook
+                    # trackers, sandbox enforcers, admit()-style gates riding
+                    # ``BeforeToolCallEvent.cancel``). Without it a RESUMED run
+                    # executed tools hook-blind: governance hooks silently
+                    # stopped firing the moment a run was answered — observed
+                    # as a playbook tracker reporting a step "skipped" while
+                    # the step's tool visibly ran in the same trace.
+                    tool_event = await self._run_before_tool_hooks(
+                        tc.name, tc.id, tc.arguments, run=rc
+                    )
+                    for custom in rc.drain():
+                        yield custom
+                    if tool_event.cancel:
+                        cancel_msg = (
+                            tool_event.cancel
+                            if isinstance(tool_event.cancel, str)
+                            else "Cancelled by hook"
+                        )
+                        result = ToolResult(
+                            tool_call_id=tc.id,
+                            name=tc.name,
+                            content=cancel_msg,
+                            error=None,
+                            duration_ms=0.0,
+                        )
+                        state = state.with_tool_execution(
+                            ToolExecution(
+                                tool_name=result.name,
+                                tool_call_id=result.tool_call_id,
+                                arguments=tc.arguments,
+                                result=result.content,
+                            )
+                        )
+                        state = state.with_message(Message.tool(result))
+                        yield _complete_event(
+                            result, result=result.content, error=None, duration_ms=0.0
+                        )
+                        continue
+                    modified_args = tool_event.arguments
+                    invoke_args = _invocation_arguments(tool_event)
+
+                    start_time = time.perf_counter()
+                    try:
+                        ctx_factory = ToolContextFactory(
+                            run_id=state.run_id,
+                            agent_id=state.agent_id,
+                            iteration=state.iteration,
+                            state=state,
+                            invocation_metadata=metadata or {},
+                            ephemeral_metadata=rc.ephemeral,
+                        )
+                        call = tc.model_copy(update={"arguments": invoke_args})
+                        if self._emits_progress([call]):
+                            # Same as the main loop: merge the tool's progress
+                            # into the stream so a resumed turn reports it live.
+                            streamed: ToolResult | None = None
+                            async for item in _interleave_progress(
+                                self._executor.execute_streaming(
+                                    [call], self._tool_registry, ctx_factory
+                                ),
+                                asyncio.Queue(),
+                            ):
+                                if isinstance(item, LocusEvent):
+                                    yield item
+                                else:
+                                    streamed = item[1]
+                            if streamed is None:  # pragma: no cover - executor contract
+                                raise RuntimeError(f"executor returned no result for {call.name}")
+                            result = streamed
+                        else:
+                            [result] = await self._executor.execute(
+                                [call], self._tool_registry, ctx_factory
+                            )
+                    except Exception as e:  # noqa: BLE001 — catches tool errors and InterruptException; branched below
+                        from locus.core.interrupt import InterruptException
+
+                        if isinstance(e, InterruptException):
+                            self._park_interrupt(rc, state)
+                            # Checkpoint BEFORE yielding — same rationale as
+                            # the run loop's interrupt site: a consumer that
+                            # parks on the interrupt never drives this
+                            # generator to its finally.
+                            if self.config.checkpointer and thread_id:
+                                await self.config.checkpointer.save(_durable(state), thread_id)
+                            payload = e.value.payload if hasattr(e, "value") else {}
+                            question = (
+                                payload.get("question", str(payload))
+                                if isinstance(payload, dict)
+                                else str(payload)
+                            )
+                            options = payload.get("options") if isinstance(payload, dict) else None
+                            fields = payload.get("fields") if isinstance(payload, dict) else None
+                            yield InterruptEvent(
+                                question=question,
+                                options=options,
+                                fields=fields,
+                                interrupt_id=e.value.interrupt_id
+                                if hasattr(e, "value")
+                                else "unknown",
+                            )
+                            return
+                        result = ToolResult(
+                            tool_call_id=tc.id,
+                            name=tc.name,
+                            content="",
+                            error=str(e),
+                            duration_ms=(time.perf_counter() - start_time) * 1000,
+                        )
+
+                    # Interrupt marker from a marker-returning tool (``ask_user``)
+                    # on the RESUME path. The first-pass loop catches this at the
+                    # ``'"__interrupt__": true'`` site above; this resume loop
+                    # otherwise only pauses on ``InterruptException`` — so a
+                    # SECOND clarification would fold in as an ordinary tool
+                    # result and the run would carry on instead of pausing.
+                    # Mirror the first-pass handling (pause BEFORE folding, same
+                    # dangling-call semantics) so ask → answer → ask-again works
+                    # for N turns, not just one.
+                    if result.content and '"__interrupt__": true' in result.content:
+                        import json as _json
+
+                        try:
+                            interrupt_data = _json.loads(result.content)
+                        except (ValueError, KeyError):
+                            interrupt_data = None
+                        if interrupt_data and interrupt_data.get("__interrupt__"):
+                            self._park_interrupt(rc, state)
+                            if self.config.checkpointer and thread_id:
+                                await self.config.checkpointer.save(_durable(state), thread_id)
+                            yield InterruptEvent(
+                                question=interrupt_data.get("question", ""),
+                                options=interrupt_data.get("options"),
+                                fields=interrupt_data.get("fields"),
+                                interrupt_id=result.tool_call_id,
+                                metadata=interrupt_data.get("metadata") or {},
+                            )
+                            return
+
+                    after_tool_event = await self._run_after_tool_hooks(
+                        result.name,
+                        result.content if result.success else None,
+                        result.error,
+                        tool_call_id=result.tool_call_id,
+                        arguments=modified_args,
+                        run=rc,
+                    )
+                    hook_events = rc.drain()
+                    if after_tool_event.retry:
+                        try:
+                            retry_ctx_factory = ToolContextFactory(
+                                run_id=state.run_id,
+                                agent_id=state.agent_id,
+                                iteration=state.iteration,
+                                state=state,
+                                invocation_metadata=metadata or {},
+                                ephemeral_metadata=rc.ephemeral,
+                            )
+                            [result] = await self._executor.execute(
+                                [tc.model_copy(update={"arguments": invoke_args})],
+                                self._tool_registry,
+                                retry_ctx_factory,
+                            )
+                        except Exception as e:  # noqa: BLE001 — user tool bodies can raise anything; surface as ToolResult.error
+                            result = ToolResult(
+                                tool_call_id=tc.id,
+                                name=tc.name,
+                                content="",
+                                error=str(e),
+                                duration_ms=0.0,
+                            )
+                    else:
+                        result = _apply_hook_result(result, after_tool_event)
+
+                    state = state.with_tool_execution(
+                        ToolExecution(
+                            tool_name=result.name,
+                            tool_call_id=result.tool_call_id,
+                            arguments=modified_args,
+                            result=result.content if result.success else None,
+                            error=result.error,
+                            duration_ms=result.duration_ms,
+                        )
+                    )
+                    state = state.with_message(Message.tool(result))
+
+                    yield _complete_event(result)
+                    for custom in hook_events:
+                        yield custom
+
+                # Same boundary as run(): a resumed or continued turn is as
+                # durable per iteration as the first pass.
+                state = await self._checkpoint_iteration(state, thread_id)
+
+            # The loop is done; close whichever iteration it left open.
+            if _open_iteration is not None:
+                await self._run_iteration_end_hooks(_open_iteration, state)
+
+        except Exception as e:
+            # Mirror run(): a resumed or continued segment that fails says so
+            # with an error termination before the exception propagates, so a
+            # streaming consumer sees how the turn ended and why.
+            state = state.with_error(str(e))
+            yield TerminateEvent(
+                reason="error",
+                iterations_used=state.iteration,
+                final_confidence=state.confidence,
+                usage=_usage_of(state),
+                cost_usd=_cost_of(state),
+                reported_cost_usd=_reported_cost_of(state),
+                total_tool_calls=len(state.tool_executions),
+                error=_error_text(e),
+            )
+            raise
+
+        finally:
+            # Mirror run(): fold the final batch's child usage before the
+            # context goes away, so the state stored below stays truthful.
+            state = fold_subagent_usage(state)
+            exit_parent_run(_subagent_ctx)
+
+            if self._cancel_signal is not None:
+                self._cancel_signal.clear()
+            superseded, state = _take_iteration_checkpoints(state)
+            self._end_run(rc, state)
+
+            # Final checkpoint — mirrors run(): a resumed run must stay as
+            # durable as the original one (a second pause, or completion,
+            # is persisted too — resume never downgrades durability).
+            await self._checkpoint_final(state, thread_id, superseded)
+
+    async def _checkpoint_final(
+        self, state: AgentState, thread_id: str | None, superseded: list[str]
+    ) -> None:
+        """Save the segment's final state, then delete the iteration saves it supersedes.
+
+        ``superseded`` comes off the state (see :data:`ITERATION_CHECKPOINTS_KEY`)
+        so saves from a process that died before this point are deleted too.
+        They are deleted only after the final save succeeded — until then
+        they are the thread's only record of the turn — and a failed delete
+        is logged, never raised: losing the clean-up must not lose the turn.
+        """
+        checkpointer = self.config.checkpointer
+        if not checkpointer or not thread_id:
+            return
+        await checkpointer.save(_durable(state), thread_id)
+        from locus.observability.emit import (  # noqa: PLC0415
+            EV_CHECKPOINT_SAVED,
+            emit,
+        )
+
+        await emit(
+            EV_CHECKPOINT_SAVED,
+            thread_id=thread_id,
+            iteration=state.iteration,
+            backend=type(checkpointer).__name__,
+            trigger="final",
+        )
+        if self.config.keep_iteration_checkpoints:
+            return
+        for checkpoint_id in superseded:
+            try:
+                await checkpointer.delete(thread_id, checkpoint_id)
+            except Exception:  # noqa: BLE001 — clean-up only; the turn is saved
+                logger.warning(
+                    "could not delete superseded iteration checkpoint %s of thread %s",
+                    checkpoint_id,
+                    thread_id,
+                    exc_info=True,
+                )
+
+    def _iteration_checkpoint_interval(self, thread_id: str | None) -> int:
+        """How many iterations apart to checkpoint; 0 for none.
+
+        An explicit ``checkpoint_every_n_iterations`` is obeyed as given. The
+        default (``None``) is 1 where the saves leave nothing behind — a
+        thread to finish the turn on, and a checkpointer that can delete the
+        saves the final one supersedes — and 0 elsewhere.
+        """
+        every = self.config.checkpoint_every_n_iterations
+        if every is not None:
+            return every
+        checkpointer = self.config.checkpointer
+        if thread_id and getattr(checkpointer, "deletes_single_checkpoints", False) is True:
+            return 1
+        return 0
+
+    async def _checkpoint_iteration(self, state: AgentState, thread_id: str | None) -> AgentState:
+        """Save ``state`` when this iteration is due a checkpoint; return the state to go on with.
+
+        Called once the iteration's tool results are in the state, so the
+        checkpoint never holds a call without its result: a process killed
+        before the turn's final save leaves a state ``continue_turn`` resumes
+        from without re-running any finished call. A thread-less run saves
+        under its ``run_id``.
+
+        On a thread, the save's id is added to the state's list of the turn's
+        iteration checkpoints before saving, so the saved state names itself
+        and every earlier one; the returned state carries the list to the
+        turn's final save, which deletes them.
+        """
+        checkpointer = self.config.checkpointer
+        every = self._iteration_checkpoint_interval(thread_id)
+        if not checkpointer or every <= 0 or state.iteration % every:
+            return state
+        cp_thread = thread_id or state.run_id
+        checkpoint_id: str | None = None
+        # A checkpointer that cannot delete one checkpoint keeps every save,
+        # as it always did; tracking ids it can never delete would only log.
+        if (
+            thread_id
+            and not self.config.keep_iteration_checkpoints
+            and getattr(checkpointer, "deletes_single_checkpoints", False) is True
+        ):
+            from uuid import uuid4  # noqa: PLC0415
+
+            checkpoint_id = uuid4().hex
+            pending = list(state.metadata.get(ITERATION_CHECKPOINTS_KEY) or [])
+            state = state.with_metadata(ITERATION_CHECKPOINTS_KEY, [*pending, checkpoint_id])
+        await checkpointer.save(_durable(state), cp_thread, checkpoint_id)
+        from locus.observability.emit import (  # noqa: PLC0415
+            EV_CHECKPOINT_SAVED,
+            emit,
+        )
+
+        await emit(
+            EV_CHECKPOINT_SAVED,
+            thread_id=cp_thread,
+            iteration=state.iteration,
+            backend=type(checkpointer).__name__,
+            trigger="every_n_iterations",
+        )
+        return state
+
+    @staticmethod
+    def _warn_tool_loop(state: AgentState) -> tuple[AgentState, CustomEvent | None]:
+        """Warn the model about a loop it has not been warned about yet.
+
+        Returns the state with the note added and the warning recorded, and
+        a ``tool_loop_warning`` event for the stream; or the state unchanged
+        and ``None`` when there is no new loop. A loop the model was already
+        warned about is left to ``should_terminate``, which stops the run
+        once the loop repeats after its warning.
+        """
+        loop = state.tool_loop
+        if loop is None or state.tool_loop_warned(loop):
+            return state, None
+        state = state.with_tool_loop_warning(loop).with_message(Message.system(warning_text(loop)))
+        return state, CustomEvent(name="tool_loop_warning", data=loop.as_dict())
+
+    def _budget_nudge(
+        self, state: AgentState, started_at: datetime
+    ) -> tuple[AgentState, CustomEvent | None]:
+        """One note to converge, once the run has used ``budget_nudge_at`` of a budget.
+
+        Checked before each model call against every budget the run has —
+        tokens, cost, wall-clock time, iterations — and given for the one
+        furthest along. The note asks the model to finish the work in hand,
+        not to stop: a run that is told to wrap up and stops with the task
+        undone has wasted everything it spent, and the completion check
+        still sends such a stop back.
+        """
+        at = self.config.budget_nudge_at
+        if at is None:
+            return state, None
+        used: list[tuple[float, str, str]] = []
+        if state.token_budget:
+            used.append(
+                (
+                    state.total_tokens_used / state.token_budget,
+                    "token",
+                    f"{state.total_tokens_used:,} of {state.token_budget:,} tokens",
+                )
+            )
+        if state.cost_budget_usd:
+            used.append(
+                (
+                    state.cost_usd_used / state.cost_budget_usd,
+                    "cost",
+                    f"${state.cost_usd_used:.2f} of ${state.cost_budget_usd:.2f}",
+                )
+            )
+        if self.config.time_budget_seconds:
+            elapsed = (datetime.now(UTC) - started_at).total_seconds()
+            used.append(
+                (
+                    elapsed / self.config.time_budget_seconds,
+                    "time",
+                    f"{elapsed:.0f}s of {self.config.time_budget_seconds:.0f}s",
+                )
+            )
+        # A cap of a few turns is a deliberately short leash, not a budget to
+        # pace against: a note there would be most of the conversation.
+        if state.max_iterations >= _MIN_NUDGED_ITERATIONS:
+            used.append(
+                (
+                    state.iteration / state.max_iterations,
+                    "iteration",
+                    f"{state.iteration} of {state.max_iterations} turns",
+                )
+            )
+        fraction, budget, detail = max(used, default=(0.0, "", ""))
+        if fraction < at:
+            return state, None
+        note = Message(
+            role=Role.USER,
+            content=(
+                "[Budget note — automated, not from the user] This run has used "
+                f"{fraction:.0%} of its {budget} budget ({detail}). Converge: finish "
+                "the change in progress, run the check that proves it, and report. Do "
+                "not start new exploration or re-read files you have already read. "
+                "The task still has to be done — do not stop with it unfinished."
+            ),
+            metadata={AUTOMATED_NOTE_KEY: True, BUDGET_NOTE_KEY: budget},
+        )
+        return state.with_message(note), CustomEvent(
+            name="budget_nudge",
+            data={"budget": budget, "fraction": round(fraction, 3), "detail": detail},
+        )
+
+    def _spend_fields(self) -> dict[str, Any]:
+        """The state fields that price a run and cap its spend."""
+        prices = self._model_prices
+        return {
+            "cost_budget_usd": self.config.max_cost_usd,
+            "input_price_per_mtok": prices[0] if prices else None,
+            "output_price_per_mtok": prices[1] if prices else None,
+        }
+
+    async def _create_initial_state(
+        self,
+        prompt: str,
+        thread_id: str | None,
+        metadata: dict[str, Any] | None,
+    ) -> AgentState:
+        """Create the state a new run (a new user turn) starts from.
+
+        With a checkpointed thread this is a NEW TURN on an existing
+        conversation, which is not the same thing as resuming a paused one
+        (``resume()`` → ``_run_from_state`` continues the paused turn as-is).
+        A new turn keeps the conversation — messages and provider continuation
+        state — and starts everything that is per-turn afresh: the iteration
+        counter and budgets, the tool-loop window, confidence, the turn's tool
+        executions (which also scope ``@tool(idempotent=True)`` reuse), and a
+        new ``run_id``. The new run's ``metadata`` is applied (merged over the
+        thread's, new keys winning) and a callable ``system_prompt`` is
+        re-evaluated against it.
+
+        Before 2.17 the loaded state was continued verbatim: the iteration
+        counter kept climbing across turns (``max_iterations=3`` ended every
+        turn from the third on with ``max_iterations``), tool-loop detection
+        counted earlier turns, and the first turn's metadata and system prompt
+        were frozen for the life of the thread.
+        """
+        # Defense in depth: whoever calls this, ephemeral keys never land on
+        # the state (``run()`` has already split them off).
+        metadata, _ = self._split_run_metadata(metadata)
+
+        # Try to load from checkpoint
+        if self.config.checkpointer and thread_id:
+            existing = await self.config.checkpointer.load(thread_id)
+            if existing:
+                from locus.observability.emit import (  # noqa: PLC0415
+                    EV_CHECKPOINT_LOADED,
+                    emit,
+                )
+
+                await emit(
+                    EV_CHECKPOINT_LOADED,
+                    thread_id=thread_id,
+                    iteration=existing.iteration,
+                    backend=type(self.config.checkpointer).__name__,
+                )
+                return self._new_turn_state(existing, prompt, metadata)
+
+        # Create fresh state
+        state = self._fresh_turn_state(metadata or {})
+        state = state.with_message(Message.system(self._resolve_system_prompt(prompt, metadata)))
+        state = state.with_message(Message.user(prompt))
+
+        return state
+
+    def _fresh_turn_state(self, metadata: dict[str, Any]) -> AgentState:
+        """An empty state carrying this agent's per-turn limits."""
+        return AgentState(
+            agent_id=self.config.agent_id,
+            max_iterations=self.config.max_iterations,
+            confidence_threshold=(
+                self.config.reflexion.confidence_threshold if self.config.reflexion else 0.85
+            ),
+            tool_loop_threshold=self.config.tool_loop_threshold,
+            tool_loop_read_only_threshold=self.config.tool_loop_read_only_threshold,
+            tool_loop_read_only_tools=frozenset(self.config.tool_loop_read_only_tools),
+            terminal_tools=frozenset(self.config.terminal_tools),
+            token_budget=self.config.token_budget,
+            **self._spend_fields(),
+            completion_mode=self.config.completion_mode,
+            metadata=metadata,
+        )
+
+    def _new_turn_state(
+        self,
+        existing: AgentState,
+        prompt: str,
+        metadata: dict[str, Any] | None,
+    ) -> AgentState:
+        """Start a new turn on a loaded thread (see ``_create_initial_state``)."""
+        # Scrubbed again: a checkpoint written before ephemeral metadata was
+        # split off may still carry a token; this turn does not re-persist it.
+        merged_metadata = scrub_ephemeral_metadata(
+            {**existing.metadata, **(metadata or {})}, self._ephemeral_metadata_keys()
+        )
+        state = self._fresh_turn_state(merged_metadata).model_copy(
+            update={"provider_state": existing.provider_state}
+        )
+        # A thread whose last turn was killed mid-call ends on calls with no
+        # result, which a provider rejects; the new turn answers them as
+        # "outcome unknown" rather than failing on the first model call.
+        messages = list(close_unfinished_calls(existing).messages)
+        # Re-evaluate the system prompt for this turn: a callable prompt sees
+        # the new metadata, and a changed static prompt takes effect. Only the
+        # leading system message is the agent's prompt; anything else (memory
+        # blocks, runtime notes) is conversation and is kept as-is.
+        system_prompt = self._resolve_system_prompt(prompt, merged_metadata)
+        if messages and messages[0].role == Role.SYSTEM:
+            messages[0] = Message.system(system_prompt)
+        messages.append(Message.user(prompt))
+        new_turn: AgentState = state.model_copy(update={"messages": tuple(messages)})
+        return new_turn
+
+    def _resolve_system_prompt(self, prompt: str, metadata: dict[str, Any] | None) -> str:
+        """The system prompt text for a turn (callable prompts evaluated)."""
+        prompt_value = self.config.system_prompt
+        if callable(prompt_value):
+            prompt_value = prompt_value({"prompt": prompt, "metadata": metadata or {}})
+        prompt_str = str(prompt_value)
+
+        # When output_schema is set, append a schema instruction so even
+        # providers without ``response_format`` support produce valid JSON.
+        if self.config.output_schema is not None:
+            from locus.core.structured import create_schema_prompt
+
+            prompt_str = (
+                f"{prompt_str}\n\n"
+                f"=== Final-answer schema ===\n"
+                f"{create_schema_prompt(self.config.output_schema)}"
+            )
+
+        # Deferred tools exist only if the model knows to look: a tool it was
+        # never told about is indistinguishable from one that does not exist,
+        # so the catalog note rides the system prompt (#177).
+        from locus.tools.tool_search import deferred_catalog_note
+
+        prompt_str += deferred_catalog_note(self._tool_registry)
+        return prompt_str
+
+    async def _get_final_state(
+        self,
+        prompt: str,
+        thread_id: str | None,
+        metadata: dict[str, Any] | None,
+    ) -> AgentState:
+        """Get the final state after run (for run_sync)."""
+        # This is a fallback - in normal operation, state is tracked in run()
+        # For run_sync, we need to reconstruct the final state
+        state = await self._create_initial_state(prompt, thread_id, metadata)
+        return state
+
+    @staticmethod
+    def _reasoning_for(response: Any) -> str | None:
+        """Pick the reasoning text to surface for a model response.
+
+        Reasoning models expose their chain of thought via
+        ``response.reasoning`` (a channel separate from the answer text).
+        Fall back to ``message.content`` for models that don't — and
+        guard with ``isinstance`` so MagicMock-heavy test stubs can't
+        leak a Mock into the Pydantic ``reasoning`` field.
+        """
+        candidate = response.reasoning
+        if isinstance(candidate, str) and candidate:
+            return candidate
+        content = response.message.content
+        return content if isinstance(content, str) else None
+
+    @staticmethod
+    def _validate_messages(messages: list[Message]) -> list[Message]:
+        """Validate message sequence and remove orphaned tool calls/results.
+
+        Many LLM providers (Anthropic and others) reject requests where
+        assistant messages with tool_calls don't have matching tool result
+        messages. This method ensures message pairs are consistent.
+        """
+        # Collect all tool_call IDs that have matching tool results
+        tool_result_ids: set[str] = set()
+        for msg in messages:
+            if msg.role == Role.TOOL and msg.tool_call_id:
+                tool_result_ids.add(msg.tool_call_id)
+
+        # Collect all tool_call IDs from assistant messages
+        tool_call_ids: set[str] = set()
+        for msg in messages:
+            if msg.role == Role.ASSISTANT:
+                for tc in msg.tool_calls:
+                    tool_call_ids.add(tc.id)
+
+        validated: list[Message] = []
+        for msg in messages:
+            if msg.role == Role.ASSISTANT and msg.tool_calls:
+                # Keep only tool calls that have matching results
+                valid_calls = [tc for tc in msg.tool_calls if tc.id in tool_result_ids]
+                if valid_calls:
+                    validated.append(
+                        Message(
+                            role=msg.role,
+                            content=msg.content,
+                            tool_calls=valid_calls,
+                            tool_call_id=msg.tool_call_id,
+                            name=msg.name,
+                        )
+                    )
+                elif msg.content:
+                    # Has content but orphaned tool calls — keep as text-only message
+                    validated.append(
+                        Message(
+                            role=msg.role,
+                            content=msg.content,
+                            tool_calls=[],
+                            tool_call_id=msg.tool_call_id,
+                            name=msg.name,
+                        )
+                    )
+                # else: no content and no valid tool calls — drop entirely
+            elif msg.role == Role.TOOL and msg.tool_call_id:
+                # Keep only tool results whose tool_call exists
+                if msg.tool_call_id in tool_call_ids:
+                    validated.append(msg)
+                # else: orphaned tool result — drop
+            else:
+                validated.append(msg)
+
+        return validated
+
+    def _text_tool_calls_enabled(self) -> bool:
+        """Whether this run parses tool calls out of the message body.
+
+        ``'auto'`` reads ``supports_native_tool_calls`` off the model and
+        parses only on an explicit ``False``: a model with native tool
+        calling that writes ``name(args)`` in its answer is describing a
+        call, not making one.
+        """
+        mode = self.config.text_tool_calls
+        if mode == "auto":
+            return getattr(self._model, "supports_native_tool_calls", True) is False
+        return mode == "on"
+
+    def _leaked_tool_call_formats(self) -> tuple[str, ...]:
+        """The tool-call markup this agent's model may leak into its message body.
+
+        ``config.leaked_tool_call_formats`` when set, else the model's
+        capability profile, resolved once per agent. A profile that cannot be
+        resolved (an unreadable override file, a model with no id) means no
+        formats: recognising leaked calls is a recovery, and it must never be
+        the thing that breaks a run.
+        """
+        configured = self.config.leaked_tool_call_formats
+        if configured is not None:
+            return tuple(configured)
+        if self._leaked_formats is None:
+            formats: tuple[str, ...] = ()
+            try:
+                from locus.models.metadata import model_id_of
+                from locus.models.profiles import profile_for
+
+                model = self.config.model
+                model_id = model_id_of(model if isinstance(model, str) else self._model)
+                if model_id is not None:
+                    formats = tuple(profile_for(model_id).leaked_tool_call_formats)
+            except Exception:  # noqa: BLE001 — a recovery must not fail the run
+                logger.warning("model profile unavailable; leaked tool calls off", exc_info=True)
+            self._leaked_formats = formats
+        return self._leaked_formats
+
+    def _recover_text_tool_calls(
+        self, response: ModelResponse, state: AgentState
+    ) -> tuple[ModelResponse, AgentState] | None:
+        """``response`` and ``state`` with the calls written in the body made structured.
+
+        ``None`` when the reply already carries structured calls, or neither
+        its body nor its reasoning ends in a call. Three sources, in order:
+
+        - the model's leaked markup (:mod:`locus.agent.leaked_tool_calls`),
+          recognised even with native tool calling, since nobody writes
+          ``<｜DSML｜invoke name="…">`` to describe a call. The markup is
+          dropped from the assistant message, leaving any prose before it, so
+          the model is not shown its own leak as the way it calls tools;
+        - the same markup ending the reasoning of a reply with no body: a
+          reasoning model that leaks its call leaks it into the channel it was
+          writing in, and the reply then looks empty. The reasoning stays
+          reasoning; only the call is lifted;
+        - a plain text call, only when ``text_tool_calls`` enables it
+          (:meth:`_text_tool_calls_enabled`); the body stays as written.
+        """
+        message = response.message
+        if message.tool_calls or self.config.text_tool_calls == "off":
+            return None
+        from locus.agent.leaked_tool_calls import match_leaked_tool_calls
+
+        content: str | None = message.content
+        calls: list[ToolCall] = []
+        formats = self._leaked_tool_call_formats()
+        if content:
+            leaked = match_leaked_tool_calls(content, self._tool_registry, formats)
+            source = "message body"
+        else:
+            reasoning = response.reasoning if isinstance(response.reasoning, str) else None
+            leaked = match_leaked_tool_calls(reasoning, self._tool_registry, formats)
+            source = "reasoning"
+        if leaked is not None:
+            logger.info(
+                "recovered %d tool call(s) written as %s markup in the %s",
+                len(leaked.calls),
+                leaked.format,
+                source,
+            )
+            calls = leaked.calls
+            if content:
+                content = leaked.prose
+            record_mechanism(
+                LEAKED_TOOL_CALLS,
+                outcome=leaked.format,
+                detail={"calls": len(leaked.calls), "source": source},
+            )
+        elif content and self._text_tool_calls_enabled():
+            calls = self._parse_text_tool_calls(content)
+        if not calls:
+            return None
+        response = response.model_copy(
+            update={
+                "message": Message(
+                    role=message.role,
+                    content=content,
+                    tool_calls=calls,
+                    tool_call_id=message.tool_call_id,
+                    name=message.name,
+                )
+            }
+        )
+        # The assistant message already in state is the one with the calls as
+        # text; it becomes the one with them structured.
+        messages = list(state.messages)
+        messages[-1] = response.message
+        return response, state.model_copy(update={"messages": tuple(messages)})
+
+    def _unfinished_text_tool_call(self, text: str | None) -> UnfinishedToolCall | None:
+        """The leaked call block ``text`` opens and never closes, if any.
+
+        Only the model's own formats, and never with ``text_tool_calls='off'``:
+        the same switches as :meth:`_recover_text_tool_calls`, which has
+        already declined to read ``text`` as a call.
+        """
+        if not text or self.config.text_tool_calls == "off":
+            return None
+        from locus.agent.leaked_tool_calls import unfinished_leaked_tool_call
+
+        return unfinished_leaked_tool_call(text, self._leaked_tool_call_formats())
+
+    @staticmethod
+    def _send_back_unfinished_call(
+        state: AgentState, unfinished: UnfinishedToolCall, *, replace: bool
+    ) -> AgentState:
+        """``state`` with the model asked to make its cut-off call again.
+
+        With ``replace`` the last message is the reply that broke off, and it
+        keeps only the prose before the block — or goes, when there is none —
+        so the model is not shown half a call in its own markup as an example.
+        """
+        logger.info("sent back a tool call written as %s markup and cut off", unfinished.format)
+        if replace and state.messages:
+            messages = list(state.messages[:-1])
+            if unfinished.prose:
+                messages.append(Message.assistant(content=unfinished.prose))
+            state = state.model_copy(update={"messages": tuple(messages)})
+        # User-role and marked automated, like a continuation: a mid-run
+        # system message is hoisted or taken for the system prompt by several
+        # adapters, which would leave the model's own reply as the last turn.
+        return state.with_message(
+            Message(
+                role=Role.USER,
+                content=_UNFINISHED_CALL_NOTE,
+                metadata={AUTOMATED_NOTE_KEY: True},
+            )
+        )
+
+    def _is_text_tool_call(self, text: str) -> bool:
+        """Whether ``text`` is a call in the model's own markup, finished or cut off."""
+        from locus.agent.leaked_tool_calls import match_leaked_tool_calls
+
+        if self.config.text_tool_calls == "off":
+            return False
+        formats = self._leaked_tool_call_formats()
+        found = match_leaked_tool_calls(text, self._tool_registry, formats)
+        return found is not None or self._unfinished_text_tool_call(text) is not None
+
+    def _summary_as_tool_step(
+        self, summary: ModelResponse, state: AgentState
+    ) -> tuple[ModelResponse, AgentState] | UnfinishedToolCall | None:
+        """What a reply to the no-tools final-answer request is, when it is not an answer.
+
+        Asked for an answer with its tools taken away, a model that is not
+        done writes its next call in its own markup — the only way left to
+        it. That reply, added to ``state``, is the turn's tool step; a block
+        it never closes is an unfinished call; anything else (``None``) is the
+        answer.
+        """
+        recovered = self._recover_text_tool_calls(summary, state.with_message(summary.message))
+        if recovered is not None:
+            return recovered
+        return self._unfinished_text_tool_call(summary.message.content)
+
+    def _parse_text_tool_calls(self, text: str | None) -> list[ToolCall]:
+        """Tool calls the model wrote as text; see :mod:`locus.agent.text_tool_calls`.
+
+        Parsing matters for governance as much as for function: an attempted
+        action that is never parsed is never dispatched, so it is never
+        weighed by the admission gate and never reaches the audit trail.
+        Only unambiguous shapes count, so a final answer that mentions a
+        tool is never executed.
+        """
+        from locus.agent.text_tool_calls import parse_text_tool_calls
+
+        return parse_text_tool_calls(text, self._tool_registry)
+
+    async def _complete_streaming(
+        self,
+        complete_kwargs: dict[str, Any],
+        chunk_queue: asyncio.Queue[Any],
+        progress: _StreamProgress | None = None,
+    ) -> ModelResponse:
+        """Drive the model's streaming API, forwarding chunks to the caller.
+
+        Assembles exactly the :class:`ModelResponse` the non-streaming path
+        returns, so everything downstream — after-model hooks, retries,
+        termination, grounding — behaves identically whether or not the caller
+        asked for tokens.
+        """
+        content_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        tool_calls: list[ToolCall] = []
+        usage: dict[str, int] = {}
+        stop_reason: str | None = None
+        cost_usd: float | None = None
+
+        async for chunk in self._model.stream(**complete_kwargs):
+            await chunk_queue.put(chunk)
+            if progress is not None:
+                progress.forwarded = True
+            if chunk.content:
+                content_parts.append(chunk.content)
+            if getattr(chunk, "reasoning", None):
+                reasoning_parts.append(chunk.reasoning)
+            if chunk.tool_calls:
+                # The provider emits accumulated calls once, at the end.
+                tool_calls = list(chunk.tool_calls)
+            if getattr(chunk, "usage", None):
+                usage = chunk.usage or {}
+            if getattr(chunk, "stop_reason", None):
+                stop_reason = chunk.stop_reason
+            chunk_cost = getattr(chunk, "cost_usd", None)
+            if isinstance(chunk_cost, int | float) and not isinstance(chunk_cost, bool):
+                cost_usd = float(chunk_cost)
+
+        return ModelResponse(
+            message=Message.assistant(
+                content="".join(content_parts) or None,
+                tool_calls=tool_calls,
+            ),
+            usage=usage,
+            stop_reason=stop_reason,
+            reasoning="".join(reasoning_parts) or None,
+            cost_usd=cost_usd,
+        )
+
+    async def _call_model(
+        self,
+        complete_kwargs: dict[str, Any],
+        chunk_queue: asyncio.Queue[Any] | None,
+        *,
+        streaming: bool,
+        run: RunContext | None,
+    ) -> ModelResponse:
+        """One model call, retried on transient failure per ``config.model_retry``.
+
+        Retry notices go wherever the loop can show them soonest: onto the
+        chunk queue when the caller is consuming one (it yields them live,
+        mid-backoff), else onto the run context, which the loop drains once
+        the call returns or fails.
+
+        A streamed attempt that has already forwarded a chunk is not retried:
+        the caller has shown that text and a second attempt would stream a
+        different answer after it. Nor is a cancelled run.
+        """
+        progress = _StreamProgress()
+
+        async def attempt() -> ModelResponse:
+            progress.forwarded = False
+            if streaming and chunk_queue is not None:
+                return await self._complete_streaming(complete_kwargs, chunk_queue, progress)
+            response: ModelResponse = await self._model.complete(**complete_kwargs)
+            return response
+
+        async def notify(event: ModelRetryEvent) -> None:
+            if chunk_queue is not None:
+                await chunk_queue.put(event)
+            elif run is not None:
+                run.retry_events.append(event)
+
+        def may_retry() -> bool:
+            if progress.forwarded:
+                return False
+            return not (run is not None and run.cancel.is_set())
+
+        return await call_with_retry(
+            attempt, self.config.model_retry, notify=notify, may_retry=may_retry
+        )
+
+    async def _get_model_response(
+        self,
+        state: AgentState,
+        model_kwargs: dict[str, Any] | None = None,
+        chunk_queue: asyncio.Queue[Any] | None = None,
+        run: RunContext | None = None,
+    ) -> tuple[ModelResponse, AgentState]:
+        """Get a response from the model.
+
+        ``model_kwargs`` carries per-run request parameters from the caller
+        (see :meth:`run`) — they are the most specific statement of intent, so
+        they win over agent-level configuration.
+        """
+        # Server-stateful transports (e.g. OCIResponsesModel) own the
+        # conversation history server-side — we send only the input
+        # added since the last call (the initial system+user on turn
+        # one, tool results / next user message on subsequent turns)
+        # and pass the continuation token via ``provider_state``.
+        # ConversationManager strategies (window/summarize on the
+        # full history) have nothing to operate on and are skipped.
+        #
+        # Check the instance attribute with ``is True`` — that's both
+        # MagicMock-safe (Mock() is True → False) and honours per-
+        # instance overrides such as OCIResponsesModel's ``store=False``
+        # ZDR mode, where the same class advertises False on certain
+        # instances. Class-level check would miss those.
+        server_stateful = getattr(self._model, "server_stateful", False) is True
+
+        if server_stateful:
+            messages = self._messages_since_last_assistant(state)
+        else:
+            # Apply conversation manager if present
+            messages = list(state.messages)
+            if self._conversation_manager:
+                if hasattr(self._conversation_manager, "async_apply"):
+                    messages = await self._conversation_manager.async_apply(messages)
+                else:
+                    messages = self._conversation_manager.apply(messages)
+
+            # Validate message pairs (remove orphaned tool calls/results)
+            messages = self._validate_messages(messages)
+
+            # Large old tool outputs go as recallable placeholders. Only this
+            # request's list changes: the state and its checkpoints keep them.
+            pack = self._observation_pack
+            if pack is not None:
+                session = self._observation_session(state, run)
+
+                def _announce(data: dict[str, Any]) -> None:
+                    if run is not None:
+                        run.emit(CustomEvent(name="observation_pack", data=data))
+
+                messages = pack.project(
+                    messages,
+                    session=session,
+                    on_event=_announce,
+                    context_limit=self._compaction_limit(),
+                )
+
+        # Get tool schemas
+        tool_schemas = self._tool_registry.to_openai_schemas()
+
+        # Pre-model hooks: allow hooks to modify messages before model call
+        messages = await self._run_before_model_hooks(messages, tool_schemas or None, run=run)
+
+        # When ``output_schema`` is set AND the provider ships native
+        # structured output (OpenAI's ``response_format`` shape), pass
+        # the JSON schema through directly. The provider parses + returns
+        # a typed response without the prompted-JSON fallback. Otherwise
+        # the schema only lives in the system prompt (see
+        # ``_create_initial_state``) and is parsed post-hoc.
+        native_response_format: dict[str, Any] | None = None
+        if (
+            self.config.output_schema is not None
+            # Constrained decoding fights tool calling: with a response_format
+            # attached, OpenAI-compatible providers (Together among them) emit
+            # schema JSON instead of tool_calls, so a tool-loop agent never
+            # calls a single tool. Only constrain completions that offer NO
+            # tools — the post-hoc coercion (_structure_output) re-prompts
+            # without tools and applies the strict format there.
+            and not tool_schemas
+            and getattr(self._model, "supports_structured_output", False)
+        ):
+            from locus.core.structured import build_response_format
+
+            native_response_format = build_response_format(
+                self.config.output_schema,
+                strict=self.config.output_schema_strict,
+            )
+
+        # Call model with hook-driven retry support
+        # Hooks can request retries via event.retry = True
+        max_model_retries = 5
+        for _model_attempt in range(max_model_retries):
+            complete_kwargs: dict[str, Any] = {
+                "messages": messages,
+                "tools": tool_schemas or None,
+            }
+            # Forward agent-level sampling only when it was actually set.
+            # These land as per-call overrides, which beat the model's own
+            # config — so sending a default here would silently discard
+            # whatever get_model(...) was configured with.
+            if self.config.temperature is not None:
+                complete_kwargs["temperature"] = self.config.temperature
+            if self.config.max_tokens is not None:
+                complete_kwargs["max_tokens"] = self.config.max_tokens
+            # Caller-supplied per-run parameters win over agent config: they
+            # are the most specific statement of intent available.
+            if model_kwargs:
+                complete_kwargs.update(model_kwargs)
+            if native_response_format is not None:
+                complete_kwargs["response_format"] = native_response_format
+
+            if server_stateful:
+                complete_kwargs["provider_state"] = state.provider_state
+
+            # Streaming is used only when the caller asked for tokens and the
+            # transport can supply them. Server-stateful transports are excluded:
+            # they return a continuation token from complete() that the stream
+            # API has no equivalent for.
+            streaming = (
+                chunk_queue is not None and not server_stateful and hasattr(self._model, "stream")
+            )
+            response = await self._call_model(
+                complete_kwargs, chunk_queue, streaming=streaming, run=run
+            )
+
+            # Post-model hooks: event.retry = True to re-call
+            after_event = await self._run_after_model_hooks(response, messages, run=run)
+
+            if after_event.retry:
+                if chunk_queue is not None:
+                    # Tell the loop this call's streamed chunks were discarded,
+                    # so held chunks are dropped rather than released.
+                    await chunk_queue.put(_DISCARDED_CALL)
+                feedback = getattr(after_event, "retry_feedback", None)
+                if isinstance(feedback, str) and feedback:
+                    # For the re-call only: ``messages`` is this call's local
+                    # list, never written back to state.
+                    messages = [
+                        *messages,
+                        Message.user(
+                            "[Retry feedback — automated, not from the user] "
+                            f"Your previous reply was discarded: {feedback}"
+                        ),
+                    ]
+                continue  # Retry model call
+            response = after_event.response
+            break
+
+        # Add assistant message to state
+        state = state.with_message(response.message)
+
+        # The provider's count of this request and reply is the best measure of
+        # the context the next request starts from (see ``_compact_context``).
+        if run is not None and run.compaction is not None and not server_stateful:
+            run.compaction.observe(response.usage or {}, len(state.messages))
+
+        # Server-stateful transports return a continuation token in
+        # ``response.provider_state``; thread it into AgentState so
+        # the next turn references the server-held thread.
+        if server_stateful and response.provider_state is not None:
+            state = state.with_provider_state(response.provider_state)
+
+        return response, state
+
+    async def _compact_context(
+        self, state: AgentState, rc: RunContext
+    ) -> tuple[AgentState, CompactionEvent | None]:
+        """Compact the run's context when the next request would reach the threshold.
+
+        Returns the state to continue with and the event to yield, or ``None``
+        when nothing was done. Only a :class:`ContextCompactor` compacts here;
+        other conversation managers shape each request in
+        ``_get_model_response`` instead. Server-stateful transports hold the
+        history on the server, so there is nothing local to compact.
+        """
+        from locus.memory.compaction import (  # noqa: PLC0415
+            CompactionTracker,
+            ContextCompactor,
+        )
+
+        compactor = self._conversation_manager
+        if not isinstance(compactor, ContextCompactor):
+            return state, None
+        if getattr(self._model, "server_stateful", False) is True:
+            return state, None
+        if rc.compaction is None:
+            rc.compaction = CompactionTracker()
+        tracker = rc.compaction
+
+        messages = list(state.messages)
+        tool_tokens = compactor.tool_tokens(self._tool_registry.to_openai_schemas())
+        # With ObservationPack the request carries placeholders for the outputs
+        # it already swapped, so the context is measured as it will be sent:
+        # those outputs no longer push the run towards a lossy compaction.
+        pack = self._observation_pack
+        session = self._observation_session(state, rc) if pack is not None else ""
+        measured = pack.view(messages, session=session) if pack is not None else messages
+        tokens = compactor.measure(measured, tool_tokens=tool_tokens, tracker=tracker)
+        if tokens < compactor.threshold:
+            return state, None
+
+        hook = await self._orch().run_before_compaction(
+            list(messages),
+            tokens=tokens,
+            threshold=compactor.threshold,
+            context_window=compactor.context_length,
+            iteration=state.iteration,
+            run=rc,
+        )
+        if hook.cancel:
+            logger.info("A before-compaction hook skipped compaction at %d tokens", tokens)
+            return state, None
+
+        outcome = await compactor.compact(
+            messages,
+            iteration=state.iteration,
+            tracker=tracker,
+            tool_tokens=tool_tokens,
+            tokens_before=tokens,
+            instructions=hook.instructions,
+            archive=pack.archive_for(session) if pack is not None else None,
+        )
+        if outcome is None:
+            return state, None
+        if outcome.usage:
+            # Summary calls are spend like any other: they count against the
+            # run's token and cost budgets.
+            state = state.with_response_usage(outcome.usage)
+        state = state.model_copy(update={"messages": tuple(outcome.messages)})
+        if outcome.exhausted:
+            logger.warning("Context exhausted at iteration %d: %s", state.iteration, outcome.detail)
+        else:
+            logger.info(
+                "Compacted context (%s): %d -> %d tokens",
+                outcome.stage,
+                tokens,
+                outcome.tokens_after,
+            )
+        return state, CompactionEvent(
+            iteration=state.iteration,
+            stage=outcome.stage,
+            tokens_before=outcome.tokens_before,
+            tokens_after=outcome.tokens_after,
+            threshold=outcome.threshold,
+            context_window=compactor.context_length,
+            messages_before=len(messages),
+            messages_after=len(outcome.messages),
+            summary=outcome.summary,
+            exhausted=outcome.exhausted,
+            detail=outcome.detail,
+        )
+
+    def _child_observation_pack(self, state: AgentState, run: RunContext) -> Any:
+        """The ObservationPack config a subagent of this run gets, or ``None``.
+
+        The parent's settings, with the archive under the parent's session
+        (``<session>/subagents/<task>/observation-pack/``), so a subagent's
+        outputs are recallable to it and kept with the session that paid for
+        them.
+        """
+        pack = self._observation_pack
+        if pack is None:
+            return None
+        from locus.memory.observation_pack import session_directory_name  # noqa: PLC0415
+
+        session = session_directory_name(self._observation_session(state, run))
+        return self.config.observation_pack.model_copy(
+            update={"directory": pack.directory / session / "subagents"}
+        )
+
+    def _inline_limit(self) -> int:
+        """Characters of one tool output sent whole while ObservationPack is on."""
+        from locus.memory.compaction import ContextCompactor  # noqa: PLC0415
+
+        limit = self.config.observation_pack.max_inline_chars or 2**62
+        compactor = self._conversation_manager
+        if isinstance(compactor, ContextCompactor):
+            # One output never takes more than an eighth of the window.
+            limit = min(limit, compactor.context_length * 4 // 8)
+        return max(limit, self.config.max_tool_result_length)
+
+    def _intake_large_output(
+        self, result: ToolResult, state: AgentState, run: RunContext
+    ) -> ToolResult | None:
+        """``result`` as ObservationPack sends it when it is over the plain cap.
+
+        ``None`` means the pack is off or could not archive it, and the caller
+        cuts it at ``max_tool_result_length`` as before.
+        """
+        pack = self._observation_pack
+        content = result.content
+        if pack is None or not isinstance(content, str) or has_images(content):
+            return None
+        limit = self._inline_limit()
+        if text_length(content) <= limit:
+            return result
+        cut = pack.intake(
+            content,
+            tool_name=result.name,
+            tool_call_id=result.tool_call_id,
+            session=self._observation_session(state, run),
+            limit=limit,
+            head_fraction=self.config.tool_result_head_fraction,
+        )
+        return result.model_copy(update={"content": cut}) if cut is not None else None
+
+    def _compaction_limit(self) -> int | None:
+        """Estimated message tokens at which the next compaction starts, if any."""
+        from locus.memory.compaction import ContextCompactor  # noqa: PLC0415
+
+        compactor = self._conversation_manager
+        if not isinstance(compactor, ContextCompactor):
+            return None
+        tool_tokens = compactor.tool_tokens(self._tool_registry.to_openai_schemas())
+        return compactor.threshold - tool_tokens
+
+    @staticmethod
+    def _observation_session(state: AgentState, run: RunContext | None) -> str:
+        """The ObservationPack session of a run: its thread, else the run itself."""
+        from locus.memory.observation_pack import ObservationPack  # noqa: PLC0415
+
+        if run is not None:
+            return ObservationPack.session_key(run.thread_id, run.run_id)
+        return ObservationPack.session_key(None, state.run_id)
+
+    def _messages_since_last_assistant(self, state: AgentState) -> list[Message]:
+        """Return the slice of state.messages that the model hasn't seen yet.
+
+        Used on the server-stateful path (OCIResponsesModel et al.).
+        Walks state.messages backwards: everything after the most
+        recent assistant message is the new input to send. If no
+        assistant message exists yet (turn one), returns the full
+        list — the model class is responsible for splitting system
+        vs user appropriately for its wire protocol.
+        """
+        msgs = list(state.messages)
+        for i in range(len(msgs) - 1, -1, -1):
+            if msgs[i].role == "assistant":
+                return msgs[i + 1 :]
+        return msgs
+
+    def _idempotent_batch_key(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+    ) -> tuple[str, str] | None:
+        """Return a hashable (name, args) key for within-batch idempotent
+        dedup, or ``None`` if the tool is unknown / not idempotent.
+
+        Used by the Phase 1 pre-execute pass in :meth:`run` to detect when
+        the same idempotent call appears twice in one assistant response;
+        the duplicate is collapsed to a ``batch_cache_ref`` slot so the
+        body still fires only once per (name, args) per run.
+        """
+        tool = self._tool_registry.get(tool_name) if self._tool_registry else None
+        if tool is None or not getattr(tool, "idempotent", False):
+            return None
+        # ``default=str`` keeps the key well-defined for argument types
+        # ``json.dumps`` cannot serialise natively (e.g. datetimes); we
+        # only need stable equality, not round-trip fidelity.
+        import json as _json  # local import — only used here
+
+        return (tool_name, _json.dumps(arguments, sort_keys=True, default=str))
+
+    def _maybe_cached_idempotent_result(
+        self,
+        state: AgentState,
+        tool_name: str,
+        arguments: dict[str, Any],
+        tool_call_id: str,
+    ) -> ToolResult | None:
+        """Return a cached ``ToolResult`` for an idempotent re-call, or None.
+
+        A tool decorated with ``@tool(idempotent=True)`` should fire its body
+        at most once per (name, arguments) pair within a run. If we find a
+        prior execution on ``state.tool_executions`` with the same name and
+        structurally-equal arguments, reuse its output and skip the executor.
+
+        Returns None when:
+          * the tool is unknown to the registry,
+          * the tool didn't declare ``idempotent=True``, or
+          * no prior execution matches.
+        """
+        tool = self._tool_registry.get(tool_name) if self._tool_registry else None
+        if tool is None or not getattr(tool, "idempotent", False):
+            return None
+
+        # Late import to avoid circularity (loop.nodes -> agent.agent).
+        from locus.tools.executor import find_matching_execution
+
+        prior = find_matching_execution(state, tool_name, dict(arguments))
+        if prior is None:
+            return None
+        return ToolResult(
+            tool_call_id=tool_call_id,
+            name=tool_name,
+            content=prior.result if prior.result is not None else "",
+            error=prior.error,
+            duration_ms=0.0,
+        )
+
+    async def _verify_final_answer(
+        self,
+        draft: str,
+        state: AgentState,
+        rc: RunContext,
+        attempt: int,
+    ) -> FinalAnswerVerificationEvent:
+        """Run ``config.final_answer_verifier`` on ``draft``; never raises."""
+        verifier = self.config.final_answer_verifier
+        max_replans = self.config.final_answer_verifier_max_replans
+        if verifier is None:
+            return FinalAnswerVerificationEvent(passed=True, attempt=attempt)
+        ctx = FinalAnswerContext(
+            run=rc.info,
+            prompt=rc.prompt,
+            messages=tuple(state.messages),
+            tool_executions=tuple(state.tool_executions),
+            attempt=attempt,
+            max_replans=max_replans,
+        )
+        try:
+            feedback = await verifier(draft, ctx)
+        except Exception as exc:  # noqa: BLE001 — a broken verifier must not kill the turn
+            logger.warning("final_answer_verifier raised; accepting the draft", exc_info=True)
+            return FinalAnswerVerificationEvent(
+                passed=False, attempt=attempt, error=f"{type(exc).__name__}: {exc}"
+            )
+        if not feedback:
+            return FinalAnswerVerificationEvent(passed=True, attempt=attempt)
+        return FinalAnswerVerificationEvent(
+            passed=False,
+            attempt=attempt,
+            feedback=str(feedback),
+            replanning=attempt < max_replans,
+            continuation=isinstance(feedback, Continuation),
+            reason=getattr(feedback, "reason", None),
+        )
+
+    async def _final_answer_fallback(
+        self,
+        verdict: FinalAnswerVerificationEvent,
+        draft: str,
+        state: AgentState,
+        rc: RunContext,
+    ) -> str | None:
+        """Text replacing a draft that failed with no replan left, or None.
+
+        Only for a real rejection (a verifier that raised fails open and is
+        not replaced). Never raises: a broken fallback keeps the draft.
+        """
+        fallback = self.config.final_answer_fallback
+        if fallback is None or verdict.passed or verdict.error is not None:
+            return None
+        ctx = FinalAnswerContext(
+            run=rc.info,
+            prompt=rc.prompt,
+            messages=tuple(state.messages),
+            tool_executions=tuple(state.tool_executions),
+            attempt=verdict.attempt,
+            max_replans=self.config.final_answer_verifier_max_replans,
+        )
+        try:
+            replacement = await fallback(draft, ctx, verdict.feedback or "")
+        except Exception:  # noqa: BLE001 — a broken fallback must not kill the turn
+            logger.warning("final_answer_fallback raised; keeping the draft", exc_info=True)
+            return None
+        return replacement or None
+
+    @staticmethod
+    def _replace_final_answer(state: AgentState, draft: str, replacement: str) -> AgentState:
+        """``state`` with ``replacement`` as the turn's final assistant message.
+
+        The failed draft is dropped: what is saved is what the user was shown.
+        """
+        messages = list(state.messages)
+        last = messages[-1] if messages else None
+        if (
+            last is not None
+            and last.role == Role.ASSISTANT
+            and not last.tool_calls
+            and (last.content or "") == draft
+        ):
+            messages[-1] = last.model_copy(update={"content": replacement})
+        else:
+            messages.append(Message.assistant(replacement))
+        return state.model_copy(update={"messages": tuple(messages)})
+
+    @staticmethod
+    def _queue_continuation(
+        state: AgentState, draft: str, note: str, reason: str | None
+    ) -> AgentState:
+        """Keep the reply as history and append the continuation note.
+
+        Neither is turn-only, unlike a rejected answer: the reply is part of
+        the work ("Let me check the conftest:"), the model must see it to carry
+        out what it announced, and a checkpoint, a resumed turn and a
+        compaction summary must all read the same conversation the model did.
+        The note is user-role (a mid-run system message would be hoisted or
+        taken for the system prompt by several adapters) and marked automated,
+        so it is never mistaken for the user's request.
+        """
+        messages = list(state.messages)
+        last = messages[-1] if messages else None
+        if not (
+            last is not None
+            and last.role == Role.ASSISTANT
+            and not last.tool_calls
+            and (last.content or "") == draft
+        ):
+            # The reply came from the empty-content summary call and is not in
+            # state yet.
+            messages.append(Message.assistant(draft))
+        messages.append(
+            Message(
+                role=Role.USER,
+                content=note,
+                metadata={
+                    AUTOMATED_NOTE_KEY: True,
+                    CONTINUATION_NOTE_KEY: reason or "continuation",
+                },
+            )
+        )
+        return state.model_copy(update={"messages": tuple(messages)})
+
+    @classmethod
+    def _queue_verifier_replan(
+        cls,
+        state: AgentState,
+        draft: str,
+        feedback: str,
+        verdict: FinalAnswerVerificationEvent | None = None,
+    ) -> AgentState:
+        """Mark the rejected draft turn-only and append the feedback (turn-only too).
+
+        A continuation (``verdict.continuation``) is not a rejected answer and
+        goes to :meth:`_queue_continuation` instead.
+        """
+        if verdict is not None and verdict.continuation:
+            return cls._queue_continuation(state, draft, feedback, verdict.reason)
+        messages = list(state.messages)
+        last = messages[-1] if messages else None
+        if (
+            last is not None
+            and last.role == Role.ASSISTANT
+            and not last.tool_calls
+            and (last.content or "") == draft
+        ):
+            messages[-1] = mark_ephemeral(last, "rejected_draft")
+        else:
+            # The draft came from the empty-content summary call and is not in
+            # state yet: add it so the model sees what it is revising.
+            messages.append(mark_ephemeral(Message.assistant(draft), "rejected_draft"))
+        # A user-role note, not a system message: conversation managers hoist
+        # system messages to the front and several adapters treat a mid-run
+        # system message as the system prompt, either of which would leave the
+        # draft as the last (prefill) turn. It is ephemeral, so it never reads
+        # as something the user said once the turn is over.
+        messages.append(
+            mark_ephemeral(
+                Message.user(
+                    "[Answer check — automated, not from the user] Your previous "
+                    "reply was not sent. Problem:\n"
+                    f"{feedback}\n\n"
+                    "Write a corrected reply to the user's last message. You may call "
+                    "tools if you need more information."
+                ),
+                "verifier_feedback",
+            )
+        )
+        return state.model_copy(update={"messages": tuple(messages)})
+
+    async def _structure_output(
+        self,
+        state: AgentState,
+        final_message: str,
+    ) -> tuple[BaseModel | None, str | None, AgentState]:
+        """Coerce the agent's final answer into ``config.output_schema``.
+
+        Tries to parse ``final_message`` directly; on validation failure,
+        re-prompts the model up to ``output_schema_retries`` times with the
+        Pydantic error details inlined so it can repair the JSON. Supporting
+        providers receive a strict ``response_format`` for constrained
+        decoding.
+
+        Returns a triple ``(parsed, parse_error, state)`` — exactly one of
+        ``parsed`` / ``parse_error`` is non-None.
+        """
+        from locus.core.structured import (
+            build_response_format,
+            format_validation_errors,
+            parse_structured,
+        )
+
+        schema = self.config.output_schema
+        if schema is None:
+            return None, None, state
+
+        # First attempt: parse what the agent already produced.
+        attempt = parse_structured(final_message, schema, strict=False)
+        if attempt.success:
+            return attempt.parsed, None, state
+
+        last_error = attempt.error or "structured-output parse failed"
+        last_validation_errors = attempt.validation_errors
+
+        response_format = build_response_format(schema, strict=self.config.output_schema_strict)
+
+        # The repair exchange is sent to the model but never written to the
+        # returned state: the "[Schema Repair]" prompts and the invalid
+        # attempts are not part of the conversation, and the result state
+        # (what a caller persists or continues from) must not carry them.
+        # Only the calls' token usage is recorded, so the run is metered.
+        repair_messages: list[Message] = list(state.messages)
+
+        for _retry in range(self.config.output_schema_retries):
+            error_detail = format_validation_errors(last_validation_errors)
+            repair_prompt = (
+                "[Schema Repair] Your previous response did not match the "
+                "required JSON schema.\n"
+                f"Validation errors:\n{error_detail}\n\n"
+                "Return ONLY a valid JSON object that matches the schema. "
+                "Do not wrap it in markdown fences. Do not add commentary."
+            )
+            repair_messages.append(Message.system(repair_prompt))
+            messages = self._validate_messages(list(repair_messages))
+
+            try:
+                response = await self._model.complete(
+                    messages=messages,
+                    tools=None,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    response_format=response_format,
+                )
+            except TypeError:
+                # Provider doesn't accept response_format kwarg — retry without.
+                response = await self._model.complete(
+                    messages=messages,
+                    tools=None,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                )
+
+            new_message = response.message.content or ""
+            repair_messages.append(response.message)
+            state = state.with_response_usage(response.usage, getattr(response, "cost_usd", None))
+
+            attempt = parse_structured(new_message, schema, strict=False)
+            if attempt.success:
+                return attempt.parsed, None, state
+
+            last_error = attempt.error or last_error
+            last_validation_errors = attempt.validation_errors
+
+        return None, last_error, state
+
+    async def _apply_reflexion(
+        self,
+        state: AgentState,
+        iteration_executions: list[ToolExecution] | None = None,
+    ) -> tuple[ReflectEvent, AgentState]:
+        """Apply Reflexion using the real Reflector.
+
+        Delegates to reasoning.reflexion.Reflector for loop detection,
+        execution analysis, confidence calculation, and guidance generation.
+        """
+        from locus.reasoning.reflexion import ReflectionResult
+
+        if self._reflector is None:
+            # Fallback: no-op reflection
+            return (
+                ReflectEvent(
+                    iteration=state.iteration,
+                    assessment="on_track",
+                    confidence_delta=0.0,
+                    new_confidence=state.confidence,
+                    guidance=None,
+                ),
+                state,
+            )
+
+        # Delegate to the real Reflector
+        reflection: ReflectionResult = self._reflector.reflect(
+            state, iteration_executions=iteration_executions
+        )
+
+        # Update state confidence
+        state = self._reflector.adjust_state_confidence(state, reflection)
+
+        # Create guidance message text
+        guidance_text = self._reflector.create_guidance_message(reflection)
+
+        return (
+            ReflectEvent(
+                iteration=state.iteration,
+                assessment=reflection.assessment.value,
+                confidence_delta=reflection.confidence_delta,
+                new_confidence=state.confidence,
+                guidance=guidance_text,
+            ),
+            state,
+        )
+
+    async def _apply_grounding(
+        self,
+        state: AgentState,
+        final_response: str,
+    ) -> tuple[GroundingEvent, AgentState]:
+        """Apply grounding evaluation using LLM-as-judge.
+
+        Extracts claims from the final response, gathers evidence from
+        tool results, and uses the GroundingEvaluator to validate.
+        """
+        if self._grounding_evaluator is None or self._grounding_model is None:
+            return (
+                GroundingEvent(
+                    score=1.0,
+                    claims_evaluated=0,
+                    ungrounded_claims=[],
+                    requires_replan=False,
+                ),
+                state,
+            )
+
+        # Extract claims and evidence
+        claims = self._extract_claims(final_response)
+        evidence = self._gather_evidence(state)
+
+        if not claims or not evidence:
+            return (
+                GroundingEvent(
+                    score=1.0,
+                    claims_evaluated=0,
+                    ungrounded_claims=[],
+                    requires_replan=False,
+                ),
+                state,
+            )
+
+        # Use LLM-as-judge
+        from locus.reasoning.grounding import GroundingResult
+
+        grounding_result: GroundingResult = await self._grounding_evaluator.evaluate_with_llm(
+            claims=claims,
+            evidence=evidence,
+            model=self._grounding_model,
+        )
+
+        return (
+            GroundingEvent(
+                score=grounding_result.score,
+                claims_evaluated=len(grounding_result.claims),
+                ungrounded_claims=grounding_result.ungrounded_claims,
+                requires_replan=grounding_result.requires_replan,
+            ),
+            state,
+        )
+
+    @staticmethod
+    def _extract_claims(response: str) -> list[str]:
+        """Extract evaluable claims from the agent's response."""
+        import re
+
+        sentences = re.split(r"(?<=[.!])\s+", response.strip())
+        claims = []
+        for sentence in sentences:
+            sentence = sentence.strip()  # noqa: PLW2901
+            if (
+                len(sentence) > 20
+                and not sentence.endswith("?")
+                and not sentence.lower().startswith(("i ", "i'm ", "i'll ", "let me"))
+            ):
+                claims.append(sentence)
+        return claims
+
+    @staticmethod
+    def _gather_evidence(state: AgentState) -> list[str]:
+        """Gather evidence from tool execution results."""
+        evidence = []
+        for execution in state.tool_executions:
+            if execution.success and execution.result:
+                result_text = execution.result
+                if len(result_text) > 500:
+                    result_text = result_text[:500] + "..."
+                evidence.append(f"[{execution.tool_name}]: {result_text}")
+        return evidence
+
+    @staticmethod
+    def _build_fallback_summary(state: AgentState) -> str:
+        """Build a summary from state when model returns no content on grace iteration."""
+        parts = [
+            f"Completed {state.iteration} iterations with {len(state.tool_executions)} tool calls."
+        ]
+        # Include last few tool results
+        for execution in state.tool_executions[-3:]:
+            if execution.success and execution.result:
+                preview = (
+                    execution.result[:150] + "..."
+                    if len(execution.result) > 150
+                    else execution.result
+                )
+                parts.append(f"- {execution.tool_name}: {preview}")
+        return "\n".join(parts)
+
+    async def _run_gsar_judgment(
+        self,
+        state: AgentState,
+        final_message: str,
+    ) -> tuple[Any, float | None, str | None]:
+        """Run the GSAR judge over the agent's final answer + tool history.
+
+        Returns ``(judgment, score, decision_value)`` where:
+
+        - ``judgment`` is a ``JudgeOutput`` (or ``None`` if the
+          judge raised and the safe-default fallback was used).
+        - ``score`` is the recomputed scalar ``S`` from the judgment's
+          partition under the configured weight map and contradiction
+          penalty.
+        - ``decision_value`` is the string form of
+          :class:`~locus.reasoning.gsar.Decision` (``"proceed"``, etc.),
+          or ``"abstain"`` when the judge abstained.
+
+        Returns ``(None, None, None)`` when ``self.config.gsar`` is unset.
+        """
+        if self.config.gsar is None:
+            return None, None, None
+
+        from locus.reasoning.gsar import (
+            EvidenceType,
+            GSARThresholds,
+            decide,
+            gsar_score,
+        )
+        from locus.reasoning.gsar_judge import StructuredOutputGSARJudge
+
+        cfg = self.config.gsar
+
+        # Default judge: a StructuredOutputGSARJudge over the agent's
+        # primary model. Documented as "almost never what you want for
+        # production" — the paper recommends a different judge model
+        # from the generator.
+        judge = cfg.judge
+        if judge is None:
+            judge = StructuredOutputGSARJudge(model=self._model)
+
+        # Build the evidence corpus from tool executions on the final
+        # state. Format mirrors the shape the default judge prompt
+        # expects: one ``[tool=NAME args=…] result``-flavoured line per
+        # execution, skipping idempotent cache hits and errored calls.
+        evidence_lines: list[str] = []
+        for ex in state.tool_executions:
+            if ex.error:
+                continue
+            line = f"[tool={ex.tool_name} args={ex.arguments}] {ex.result or ''}"
+            evidence_lines.append(line)
+        evidence_corpus = "\n".join(evidence_lines) or "(no tool executions)"
+
+        # Translate optional weight_map (str-keyed) into the typed map.
+        weight_map: dict[EvidenceType, float] | None = None
+        if cfg.weight_map is not None:
+            weight_map = {EvidenceType(k): v for k, v in cfg.weight_map.items()}
+
+        try:
+            judgment = await judge.judge(
+                report_synthesis=final_message,
+                evidence_corpus=evidence_corpus,
+            )
+        except Exception:  # noqa: BLE001 — paper §6 "Robustness": never
+            # let a judge failure crash the agent. Surface ``None`` so
+            # the caller can decide whether to ship or replan.
+            return None, None, None
+
+        partition = judgment.to_partition()
+        score = gsar_score(
+            partition,
+            weight_map=weight_map,
+            contradiction_penalty=cfg.contradiction_penalty,
+        )
+
+        if judgment.abstained:
+            decision_value = "abstain"
+        else:
+            thresholds = GSARThresholds(proceed=cfg.tau_proceed, regenerate=cfg.tau_regenerate)
+            decision_value = decide(score, thresholds=thresholds).value
+
+        return judgment, score, decision_value
+
+    # Hook lifecycle dispatch is delegated to HookOrchestrator; these
+    # thin wrappers preserve the original method names so internal
+    # callers don't need to change. They all run after ``_initialize`` so
+    # ``_hook_orchestrator`` is non-None — assert once via a helper.
+
+    def _orch(self) -> HookOrchestrator:
+        """Return the hook orchestrator, asserting it has been initialised."""
+        assert self._hook_orchestrator is not None, (
+            "Agent._hook_orchestrator accessed before initialize_agent() ran"
+        )
+        return self._hook_orchestrator
+
+    async def _run_iteration_start_hooks(self, iteration: int, state: AgentState) -> None:
+        await self._orch().run_iteration_start(iteration, state)
+
+    async def _run_iteration_end_hooks(self, iteration: int, state: AgentState) -> None:
+        await self._orch().run_iteration_end(iteration, state)
+
+    async def _run_before_invocation_hooks(
+        self,
+        prompt: str,
+        state: AgentState,
+    ) -> AgentState:
+        return await self._orch().run_before_invocation(prompt, state)
+
+    async def _run_after_invocation_hooks(
+        self,
+        state: AgentState,
+        success: bool,
+    ) -> None:
+        await self._orch().run_after_invocation(state, success)
+
+    async def _run_before_model_hooks(
+        self,
+        messages: list[Any],
+        tools: list[dict[str, Any]] | None,
+        *,
+        run: RunContext | None = None,
+    ) -> list[Any]:
+        return await self._orch().run_before_model(messages, tools, run=run)
+
+    async def _run_after_model_hooks(
+        self,
+        response: Any,
+        messages: list[Any],
+        *,
+        run: RunContext | None = None,
+    ) -> Any:
+        return await self._orch().run_after_model(response, messages, run=run)
+
+    async def _run_before_tool_hooks(
+        self,
+        tool_name: str,
+        tool_call_id: str,
+        arguments: dict[str, Any],
+        *,
+        run: RunContext | None = None,
+    ) -> Any:
+        return await self._orch().run_before_tool(
+            tool_name,
+            tool_call_id,
+            arguments,
+            run=run,
+        )
+
+    async def _run_after_tool_hooks(
+        self,
+        tool_name: str,
+        result: Any,
+        error: str | None,
+        *,
+        tool_call_id: str = "",
+        arguments: dict[str, Any] | None = None,
+        run: RunContext | None = None,
+    ) -> Any:
+        return await self._orch().run_after_tool(
+            tool_name,
+            result,
+            error,
+            tool_call_id=tool_call_id,
+            arguments=arguments,
+            run=run,
+        )
+
+    # Properties for easy access

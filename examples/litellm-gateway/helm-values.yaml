@@ -23,7 +23,7 @@
 #   helm -n litellm upgrade --install gateway litellm/litellm \
 #     --values examples/litellm-gateway/helm-values.yaml
 #
-# Tulip services in the same cluster then point at:
+# Locus services in the same cluster then point at:
 #   http://gateway-litellm.litellm.svc.cluster.local:4000
 
 # ---------------------------------------------------------------------------

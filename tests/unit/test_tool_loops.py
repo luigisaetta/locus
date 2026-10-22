@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tool-loop detection that stops loops and leaves working runs alone.
 
@@ -15,14 +16,14 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.events import CustomEvent, TerminateEvent
-from tulip.core.loops import DEFAULT_READ_ONLY_TOOLS, detect_tool_loop, warning_text
-from tulip.core.messages import Message, Role, ToolCall
-from tulip.core.state import AgentState, ReasoningStep, ToolExecution
-from tulip.models.base import ModelResponse
-from tulip.testing import FunctionModel, ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.core.events import CustomEvent, TerminateEvent
+from locus.core.loops import DEFAULT_READ_ONLY_TOOLS, detect_tool_loop, warning_text
+from locus.core.messages import Message, Role, ToolCall
+from locus.core.state import AgentState, ReasoningStep, ToolExecution
+from locus.models.base import ModelResponse
+from locus.testing import FunctionModel, ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 # --------------------------------------------------------------- helpers --

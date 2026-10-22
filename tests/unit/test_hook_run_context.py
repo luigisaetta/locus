@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Hook events carry their run's identity and can emit UI-only events.
 
@@ -17,19 +18,19 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.events import (
+from locus.agent import Agent
+from locus.core.events import (
     CustomEvent,
+    LocusEvent,
     RunInfo,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
-    TulipEvent,
 )
-from tulip.hooks.provider import AfterToolCallEvent, BeforeToolCallEvent, HookProvider
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.testing import _RecordingModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.hooks.provider import AfterToolCallEvent, BeforeToolCallEvent, HookProvider
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.testing import _RecordingModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 @tool
@@ -78,7 +79,7 @@ async def test_hooks_see_their_own_run_under_concurrency() -> None:
     hook = _WidgetHook()
     agent = Agent(model=_SearchThenAnswer(), tools=[search], hooks=[hook], reflexion=False)
 
-    async def go(user: str) -> list[TulipEvent]:
+    async def go(user: str) -> list[LocusEvent]:
         return [e async for e in agent.run("x", thread_id=user, metadata={"user": user})]
 
     alice, bob = await asyncio.gather(go("alice"), go("bob"))
@@ -138,7 +139,7 @@ def test_emit_requires_a_run_and_a_custom_event() -> None:
     with pytest.raises(RuntimeError, match="running agent"):
         event.emit(CustomEvent(name="x"))
 
-    from tulip.agent.run_context import RunContext
+    from locus.agent.run_context import RunContext
 
     rc = RunContext.create(
         run_id="r1",
@@ -170,8 +171,8 @@ def test_run_info_is_read_only() -> None:
 
 async def test_resume_path_hooks_get_the_run_context() -> None:
     """The approved call performed by resume() fires hooks with its run."""
-    from tulip.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
-    from tulip.testing import ScriptedModel
+    from locus.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
+    from locus.testing import ScriptedModel
 
     @tool
     def book(hotel_id: str) -> str:

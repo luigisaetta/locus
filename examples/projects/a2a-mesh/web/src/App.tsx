@@ -99,11 +99,11 @@ export default function App() {
     <div className="app">
       <header className="app__header">
         <div className="app__brand">
-          <span className="app__brand-mark">tulip</span>
+          <span className="app__brand-mark">locus</span>
           <span className="app__brand-tag">a2a mesh console</span>
         </div>
         <div className="app__header-spacer" />
-        <span className="app__header-meta">tulip — the cybersecurity agent SDK</span>
+        <span className="app__header-meta">locus — the cybersecurity agent SDK</span>
       </header>
 
       <aside className="app__side">
@@ -151,7 +151,7 @@ export default function App() {
         <div className="page__crumbs">Workflows · Multi-agent · A2A Console</div>
         <h1 className="page__title">A2A mesh console</h1>
         <p className="page__lede">
-          Discover Tulip agents over HTTP+SSE, route a query by capability tag, and
+          Discover Locus agents over HTTP+SSE, route a query by capability tag, and
           watch the remote agent's typed event stream — the same shape your
           back-end emits for a single in-process agent.
         </p>
@@ -334,7 +334,7 @@ export default function App() {
       </main>
 
       <footer className="app__footer">
-        Built with tulip
+        Built with locus
       </footer>
     </div>
   );

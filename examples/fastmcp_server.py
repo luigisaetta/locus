@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Mock security-tools FastMCP server for integration testing.
 
 Deterministic, offline stand-ins for the tool surface a SOC agent
@@ -14,7 +15,7 @@ from datetime import datetime
 from fastmcp import FastMCP
 
 
-mcp = FastMCP("tulip-security-tools")
+mcp = FastMCP("locus-security-tools")
 
 # The standard EICAR test file's well-known SHA-256 — safe by design.
 _EICAR_SHA256 = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"

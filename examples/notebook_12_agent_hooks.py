@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 12: audit hooks — every agent action on the record.
 
@@ -16,7 +17,7 @@ Key ideas:
   BUSINESS).
 - ``on_before_tool_call(event)`` can mutate ``event.arguments`` — handy
   for clamping or sanitising values before the tool actually runs.
-- Multiple hooks compose. Tulip iterates them in priority order.
+- Multiple hooks compose. Locus iterates them in priority order.
 
 The Part 5 guardrail watches untrusted manifest text for secrets before
 they flow onward — the control behind OWASP LLM02 (Sensitive Information
@@ -26,9 +27,9 @@ risk-scores each change before it lands.
 Run it:
     .venv/bin/python examples/notebook_12_agent_hooks.py
 
-The default provider is the mock model; set TULIP_MODEL_PROVIDER for a live one (e.g.
+The default provider is the mock model; set LOCUS_MODEL_PROVIDER for a live one (e.g.
 ``openai`` or ``anthropic``). Set
-``TULIP_MODEL_PROVIDER=mock`` for offline runs; OpenAI and Anthropic
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs; OpenAI and Anthropic
 also work.
 
 Prerequisite: notebook 11.
@@ -40,9 +41,9 @@ from datetime import datetime
 # Import shared config
 from config import get_model, print_config
 
-from tulip.agent import Agent
-from tulip.hooks import HookPriority, HookProvider
-from tulip.tools import tool
+from locus.agent import Agent
+from locus.hooks import HookPriority, HookProvider
+from locus.tools import tool
 
 
 # =============================================================================

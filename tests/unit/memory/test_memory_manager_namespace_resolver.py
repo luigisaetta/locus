@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """ONE ``LLMMemoryManager`` serves every user: the namespace is resolved per run.
 
@@ -17,12 +18,12 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.events import RunInfo
-from tulip.core.messages import Message, Role
-from tulip.memory.manager import LLMMemoryManager, Memory, MemoryType
-from tulip.memory.store import InMemoryStore
-from tulip.models.base import ModelResponse
+from locus.agent import Agent
+from locus.core.events import RunInfo
+from locus.core.messages import Message, Role
+from locus.memory.manager import LLMMemoryManager, Memory, MemoryType
+from locus.memory.store import InMemoryStore
+from locus.models.base import ModelResponse
 
 
 class _Model:
@@ -86,7 +87,7 @@ async def test_one_shared_manager_scopes_bounds_and_drains_every_user() -> None:
         assert item is not None
         assert item["content"] == f"User said hello from {u}"
     # Nothing leaked into the constructor's default namespace.
-    assert await store.list_keys(("tulip_memory", "user")) == []
+    assert await store.list_keys(("locus_memory", "user")) == []
 
     # Retrieval is scoped the same way: each user sees only their own memory.
     model = _Model()
@@ -152,12 +153,12 @@ async def test_a_resolver_returning_none_means_no_memory_for_that_run() -> None:
     """``None`` must never pool different users into the shared default prefix.
 
     Two anonymous visitors (distinct run metadata, resolver returns ``None``)
-    used to both write to and recall from ``("tulip_memory", ...)``.
+    used to both write to and recall from ``("locus_memory", ...)``.
     """
     store = _RecordingStore()
     # A memory already sitting in the default namespace must not be recalled.
     await InMemoryStore.put(
-        store, ("tulip_memory", "user"), "shared", {"content": "someone else's", "metadata": {}}
+        store, ("locus_memory", "user"), "shared", {"content": "someone else's", "metadata": {}}
     )
     extracted: list[int] = []
 
@@ -190,7 +191,7 @@ async def test_a_resolver_returning_a_tuple_scopes_the_run() -> None:
     agent = Agent(model=_Model(), memory_manager=manager, reflexion=False, grounding=False)
     await agent.arun("hi", metadata={"visitor": "a"})
     assert await store.get(("visitors", "a", "user"), "x") is not None
-    assert await store.list_keys(("tulip_memory", "user")) == []
+    assert await store.list_keys(("locus_memory", "user")) == []
 
 
 async def test_a_resolver_can_opt_into_the_shared_prefix_explicitly() -> None:
@@ -198,11 +199,11 @@ async def test_a_resolver_can_opt_into_the_shared_prefix_explicitly() -> None:
     manager = LLMMemoryManager(
         store=store,
         extract_fn=lambda _m: _one("x"),
-        namespace_resolver=lambda run: ("tulip_memory",),
+        namespace_resolver=lambda run: ("locus_memory",),
     )
     agent = Agent(model=_Model(), memory_manager=manager, reflexion=False, grounding=False)
     await agent.arun("hi")
-    assert await store.get(("tulip_memory", "user"), "x") is not None
+    assert await store.get(("locus_memory", "user"), "x") is not None
 
 
 async def test_a_failing_resolver_never_falls_back_to_a_shared_namespace(
@@ -210,7 +211,7 @@ async def test_a_failing_resolver_never_falls_back_to_a_shared_namespace(
 ) -> None:
     store = InMemoryStore()
     await store.put(
-        ("tulip_memory", "user"), "shared", {"content": "someone else's", "metadata": {}}
+        ("locus_memory", "user"), "shared", {"content": "someone else's", "metadata": {}}
     )
     extracted: list[int] = []
 
@@ -224,7 +225,7 @@ async def test_a_failing_resolver_never_falls_back_to_a_shared_namespace(
     await agent.arun("no user_id in metadata")
     assert _memory_block(model.calls[0]) == ""
     assert extracted == []
-    assert await store.get(("tulip_memory", "user"), "leak") is None
+    assert await store.get(("locus_memory", "user"), "leak") is None
     assert "namespace_resolver failed" in caplog.text
 
 

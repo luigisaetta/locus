@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for StorageBackendAdapter."""
 
@@ -8,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tulip.memory.backends.adapters import StorageBackendAdapter
+from locus.memory.backends.adapters import StorageBackendAdapter
 
 
 class TestStorageBackendAdapter:
@@ -154,7 +155,7 @@ class TestStorageBackendAdapter:
             "_checkpoint_timestamp": datetime.now(UTC).isoformat(),
         }
 
-        with patch("tulip.core.state.AgentState") as mock_agent_state:
+        with patch("locus.core.state.AgentState") as mock_agent_state:
             mock_agent_state.from_checkpoint.return_value = MagicMock()
             state = await adapter.load("thread1")
 
@@ -170,7 +171,7 @@ class TestStorageBackendAdapter:
             "iteration": 0,
         }
 
-        with patch("tulip.core.state.AgentState") as mock_agent_state:
+        with patch("locus.core.state.AgentState") as mock_agent_state:
             mock_agent_state.from_checkpoint.return_value = MagicMock()
             await adapter.load("thread1", "cp123")
 

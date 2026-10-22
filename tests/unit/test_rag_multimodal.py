@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for RAG multimodal processing."""
 
@@ -7,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tulip.rag.multimodal import (
+from locus.rag.multimodal import (
     ContentType,
     MultimodalProcessor,
     ProcessedContent,
@@ -241,7 +242,7 @@ class TestImageProcessor:
     @pytest.fixture
     def processor(self):
         """Create image processor."""
-        from tulip.rag.multimodal import ImageProcessor
+        from locus.rag.multimodal import ImageProcessor
 
         return ImageProcessor(use_ocr=False, use_vision_llm=False)
 
@@ -300,7 +301,7 @@ class TestAudioProcessor:
     @pytest.fixture
     def processor(self):
         """Create audio processor."""
-        from tulip.rag.multimodal import AudioProcessor
+        from locus.rag.multimodal import AudioProcessor
 
         return AudioProcessor(use_whisper=False)
 
@@ -482,7 +483,7 @@ class TestImageProcessorFormats:
     @pytest.fixture
     def processor(self):
         """Create image processor."""
-        from tulip.rag.multimodal import ImageProcessor
+        from locus.rag.multimodal import ImageProcessor
 
         return ImageProcessor(use_ocr=False, use_vision_llm=False)
 
@@ -536,7 +537,7 @@ class TestImageProcessorInputTypes:
     @pytest.fixture
     def processor(self):
         """Create image processor without OCR."""
-        from tulip.rag.multimodal import ImageProcessor
+        from locus.rag.multimodal import ImageProcessor
 
         return ImageProcessor(use_ocr=False, use_vision_llm=False)
 
@@ -583,7 +584,7 @@ class TestPDFProcessor:
     @pytest.fixture
     def processor(self):
         """Create PDF processor."""
-        from tulip.rag.multimodal import PDFProcessor
+        from locus.rag.multimodal import PDFProcessor
 
         return PDFProcessor(use_ocr_fallback=False)
 
@@ -620,7 +621,7 @@ class TestAudioProcessorDetectFormat:
     @pytest.fixture
     def processor(self):
         """Create audio processor."""
-        from tulip.rag.multimodal import AudioProcessor
+        from locus.rag.multimodal import AudioProcessor
 
         return AudioProcessor(use_whisper=False)
 
@@ -671,7 +672,7 @@ class TestAudioProcessorProcess:
     @pytest.fixture
     def processor(self):
         """Create audio processor without whisper."""
-        from tulip.rag.multimodal import AudioProcessor
+        from locus.rag.multimodal import AudioProcessor
 
         return AudioProcessor(use_whisper=False)
 

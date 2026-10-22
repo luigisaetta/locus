@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 59: Support timeline — every step a ticket bot takes, on the record.
 
 When a support agent handles a customer ticket, you want to see — later,
 on a QA review or when a customer disputes an outcome — exactly what it
-did. Tulip ships an in-process pub/sub EventBus that publishes typed
+did. Locus ships an in-process pub/sub EventBus that publishes typed
 StreamEvents for every meaningful step of execution: agent thinking, tool
 calls, model completions, token usage, multi-agent fan-outs, checkpoints
 — all under one canonical event_type per component. That stream is the
@@ -29,11 +30,11 @@ allocations.
   late subscribers — i.e. reconstruct the ticket timeline after the run).
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_59_observability_basics.py
 
     # Offline / no credentials:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_59_observability_basics.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_59_observability_basics.py
 """
 
 from __future__ import annotations
@@ -42,8 +43,8 @@ import asyncio
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.observability import get_event_bus, run_context
+from locus.agent import Agent
+from locus.observability import get_event_bus, run_context
 
 
 # Part 1: no telemetry. The bus singleton never gets built.
@@ -60,7 +61,7 @@ async def part1_no_telemetry() -> None:
     print("agent reply:", result.message[:120])
 
     # Probe the module-level singleton to prove it was never built.
-    from tulip.observability import event_bus as _bus_mod
+    from locus.observability import event_bus as _bus_mod
 
     assert _bus_mod._event_bus is None, (
         "running an Agent without run_context must not construct the bus"
@@ -92,7 +93,7 @@ async def part2_subscribe() -> None:
         await asyncio.sleep(0)  # let the subscriber register
 
         # The contextvar set by run_context() means the @_bus_bridge
-        # decorator on Agent.run forwards every yielded TulipEvent to
+        # decorator on Agent.run forwards every yielded LocusEvent to
         # the bus automatically — nothing the agent does goes unrecorded.
         result = await agent.arun("Reply with the single word: resolved")
         print("agent reply:", result.message[:120])

@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for the rest of ``tulip.core.termination``.
+"""Coverage tests for the rest of ``locus.core.termination``.
 
 The existing ``test_agent_termination.py`` covers the most commonly used
 conditions. This file fills the remaining gaps:
@@ -17,9 +18,9 @@ from __future__ import annotations
 
 import time
 
-from tulip.core.messages import Message
-from tulip.core.state import AgentState, ToolExecution
-from tulip.core.termination import (
+from locus.core.messages import Message
+from locus.core.state import AgentState, ToolExecution
+from locus.core.termination import (
     ConfidenceMet,
     MaxIterations,
     NoToolCalls,

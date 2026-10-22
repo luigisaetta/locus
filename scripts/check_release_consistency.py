@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Fail when the version is claimed differently in different places.
 
 The version is asserted in four documents that no tool keeps in agreement:
-``pyproject.toml`` (what PyPI ships), ``src/tulip/__init__.py`` (what
-``tulip.__version__`` reports at runtime), ``CHANGELOG.md`` (what shipped in
+``pyproject.toml`` (what PyPI ships), ``src/locus/__init__.py`` (what
+``locus.__version__`` reports at runtime), ``CHANGELOG.md`` (what shipped in
 it), and ``SECURITY.md`` (which releases get fixes). The release checklist in
 CONTRIBUTING.md asks a human to update them together.
 
@@ -35,7 +36,7 @@ import tomllib
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SECURITY_PYPROJECT = "packages/tulip-agents-security/pyproject.toml"
+SECURITY_PYPROJECT = "packages/locus-sdk-security/pyproject.toml"
 
 
 class ConsistencyError(Exception):
@@ -59,7 +60,7 @@ def pyproject_version() -> str:
 
 
 def dunder_version() -> str:
-    """The version ``tulip.__version__`` reports at runtime.
+    """The version ``locus.__version__`` reports at runtime.
 
     Parsed rather than imported: importing the package to read one string
     costs ~256 ms and drags in pydantic, and a syntax error anywhere in the
@@ -67,11 +68,11 @@ def dunder_version() -> str:
     """
     match = re.search(
         r'^__version__\s*=\s*["\']([^"\']+)["\']',
-        _read("src/tulip/__init__.py"),
+        _read("src/locus/__init__.py"),
         re.MULTILINE,
     )
     if not match:
-        raise ConsistencyError("src/tulip/__init__.py declares no __version__")
+        raise ConsistencyError("src/locus/__init__.py declares no __version__")
     return match.group(1)
 
 
@@ -82,7 +83,7 @@ def check_versions_agree(verbose: bool) -> str:
         raise ConsistencyError(
             "the package cannot agree with itself on its own version.\n"
             f"  pyproject.toml        : {pyproject}\n"
-            f"  src/tulip/__init__.py : {dunder}\n"
+            f"  src/locus/__init__.py : {dunder}\n"
             "  Both must be bumped together — see the release checklist in "
             "CONTRIBUTING.md."
         )
@@ -134,15 +135,15 @@ def check_security_major(version: str, verbose: bool) -> None:
 
 
 def check_security_lockstep(version: str, verbose: bool) -> None:
-    """tulip-agents-security ships in lockstep: same version, floor on this one.
+    """locus-sdk-security ships in lockstep: same version, floor on this one.
 
-    The release workflow installs ``tulip_agents_security-<version>`` built
+    The release workflow installs ``locus_agents_security-<version>`` built
     from the same tag; a package left at the previous version fails that
-    install after tulip-agents is already on PyPI (v2.19.0 did).
+    install after locus-sdk is already on PyPI (v2.19.0 did).
     """
     data = tomllib.loads(_read(SECURITY_PYPROJECT))
     own = data["project"]["version"]
-    floor = f"tulip-agents>={version}"
+    floor = f"locus-sdk>={version}"
     deps = data["project"].get("dependencies", [])
     problems = []
     if own != version:
@@ -156,7 +157,7 @@ def check_security_lockstep(version: str, verbose: bool) -> None:
             + "\n  Bump both with the core version (see the comment above its version)."
         )
     if verbose:
-        print(f"  security package  {own}  (lockstep, floor tulip-agents>={version})")
+        print(f"  security package  {own}  (lockstep, floor locus-sdk>={version})")
 
 
 def main() -> int:

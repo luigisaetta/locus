@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 55: Evaluation — regression-test a privacy-review agent on known requests.
 
 Treat the privacy-review agent (WARDEN, the tier-1 data-access reviewer)
@@ -8,7 +9,7 @@ known-disallowed and known-allowed data-handling requests as cases, run
 them on every change, read the report. A prompt or model swap that
 quietly starts approving exports of raw customer PII — or inventing a
 specific regulation citation that no facts support (OWASP LLM09,
-Misinformation) — fails the suite before it reaches production. Tulip
+Misinformation) — fails the suite before it reaches production. Locus
 ships a small, dependency-free harness so you don't need an external
 eval framework for the common cases.
 
@@ -18,17 +19,17 @@ eval framework for the common cases.
 - EvalReport summarises pass/fail counts and an average score.
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_55_evaluation.py
 
     # Offline / no credentials:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_55_evaluation.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_55_evaluation.py
 """
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
-from tulip.evaluation import EvalCase, EvalRunner
+from locus.agent import Agent, AgentConfig
+from locus.evaluation import EvalCase, EvalRunner
 
 
 def example_evaluation():

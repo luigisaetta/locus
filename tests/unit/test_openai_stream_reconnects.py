@@ -15,10 +15,10 @@ import httpx
 import openai
 import pytest
 
+from locus.core.messages import Message
+from locus.models.native import openai as openai_module
+from locus.models.native.openai import OpenAIModel, _is_disconnect
 from tests.unit.test_models_native_openai import _Chunk, _ChunkChoice, _Delta, _model_with
-from tulip.core.messages import Message
-from tulip.models.native import openai as openai_module
-from tulip.models.native.openai import OpenAIModel, _is_disconnect
 
 
 def _request() -> httpx.Request:

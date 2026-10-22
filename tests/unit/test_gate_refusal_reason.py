@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """``refusal_reason`` — what the *user* hears when the gate refuses.
 
@@ -17,10 +18,10 @@ import json
 
 import pytest
 
-from tulip.control import Action, AuditTrail, ControlPolicy
-from tulip.control.gate import gate_tool
-from tulip.control.verification import VerificationResult
-from tulip.tools.decorator import tool
+from locus.control import Action, AuditTrail, ControlPolicy
+from locus.control.gate import gate_tool
+from locus.control.verification import VerificationResult
+from locus.tools.decorator import tool
 
 
 RAN: list[float] = []
@@ -108,7 +109,7 @@ async def test_an_allowed_call_is_untouched() -> None:
 
 async def test_refusal_keys_are_still_the_shared_shape() -> None:
     """The refusal payload is a public contract; none of its keys go missing."""
-    from tulip.control.gate import _REFUSAL_KEYS
+    from locus.control.gate import _REFUSAL_KEYS
 
     payload = json.loads(await _gate(refusal_reason="nope").fn(order_id="ord-1", amount_usd=900))
     assert set(_REFUSAL_KEYS) <= set(payload)

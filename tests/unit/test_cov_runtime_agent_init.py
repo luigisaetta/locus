@@ -1,8 +1,9 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Coverage tests for ``Agent`` public-facade branches in
-``tulip.agent.agent`` and the wiring in ``tulip.agent.initializer``.
+``locus.agent.agent`` and the wiring in ``locus.agent.initializer``.
 
 Targets the ``run_sync`` teardown/edge branches (callback, missing final
 state, checkpointer-close failure, background-task drain) and the plugin /
@@ -17,14 +18,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.agent.agent import Agent as AgentClass
-from tulip.core.events import TerminateEvent
-from tulip.core.messages import Message
-from tulip.hooks.plugin import Plugin
-from tulip.models.base import ModelResponse
-from tulip.skills.models import Skill
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.agent.agent import Agent as AgentClass
+from locus.core.events import TerminateEvent
+from locus.core.messages import Message
+from locus.hooks.plugin import Plugin
+from locus.models.base import ModelResponse
+from locus.skills.models import Skill
+from locus.tools.decorator import tool
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +227,7 @@ def test_string_auxiliary_model_resolved(monkeypatch: pytest.MonkeyPatch) -> Non
         requested.append(spec)
         return _OneShotModel("x")
 
-    monkeypatch.setattr("tulip.agent.agent.get_model", _fake_get_model)
+    monkeypatch.setattr("locus.agent.agent.get_model", _fake_get_model)
     agent = Agent(
         model="openai:gpt-4o",
         auxiliary_model="openai:gpt-4o-mini",

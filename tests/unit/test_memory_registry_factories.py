@@ -1,8 +1,9 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Coverage tests that exercise the *real* factory closures in
-``tulip.memory.registry``.
+``locus.memory.registry``.
 
 The existing ``test_memory_registry.py`` swaps each closure for a stub
 inside ``_CHECKPOINTERS``. That measures the public API but bypasses the
@@ -18,18 +19,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tulip.memory.registry import get_checkpointer, list_checkpointers
+from locus.memory.registry import get_checkpointer, list_checkpointers
 
 
 def _patch_adapter(monkeypatch: pytest.MonkeyPatch, name: str) -> dict[str, Any]:
-    """Replace ``tulip.memory.backends.adapters.<name>`` with a captor."""
+    """Replace ``locus.memory.backends.adapters.<name>`` with a captor."""
     captured: dict[str, Any] = {}
 
     def _captor(**kwargs: Any) -> MagicMock:
         captured["kwargs"] = kwargs
         return MagicMock()
 
-    from tulip.memory.backends import adapters
+    from locus.memory.backends import adapters
 
     monkeypatch.setattr(adapters, name, _captor, raising=True)
     return captured

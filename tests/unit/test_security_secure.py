@@ -1,19 +1,20 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for secure-by-default agents (GovernanceProfile / governed_agent / AuditHook)."""
 
 from __future__ import annotations
 
-from tulip.agent.config import GroundingConfig
-from tulip.control import (
+from locus.agent.config import GroundingConfig
+from locus.control import (
     AuditHook,
     AuditTrail,
     GovernanceProfile,
     GovernedAgent,
     governed_agent,
 )
-from tulip.hooks.builtin.guardrails import GuardrailsHook
+from locus.hooks.builtin.guardrails import GuardrailsHook
 
 
 def test_security_profile_defaults_all_on() -> None:

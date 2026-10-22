@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The mechanism ledger: records, the JSONL file, counters, and the stream."""
 
@@ -11,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from tulip.core.events import CompactionEvent, CustomEvent, FinalAnswerVerificationEvent
-from tulip.observability.mechanisms import (
+from locus.core.events import CompactionEvent, CustomEvent, FinalAnswerVerificationEvent
+from locus.observability.mechanisms import (
     COMPACTION,
     COMPLETION_CHECK,
     LOOP_WARNING,

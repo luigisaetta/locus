@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 81: Incident response with a tamper-evident audit chain.
 
@@ -38,7 +39,7 @@ Run:
     python examples/notebook_81_ir_audit_trail.py
 
     # With a live provider (OpenAI):
-    TULIP_MODEL_PROVIDER=openai OPENAI_API_KEY=sk-... \\
+    LOCUS_MODEL_PROVIDER=openai OPENAI_API_KEY=sk-... \\
         python examples/notebook_81_ir_audit_trail.py
 """
 
@@ -54,14 +55,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from config import get_model  # noqa: E402
 
-from tulip.control import (
+from locus.control import (
     AuditHook,
     AuditTrail,
     GovernanceProfile,
     Severity,
     governed_agent,
 )
-from tulip.tools import tool
+from locus.tools import tool
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +196,7 @@ def ops_toolset(*, allow_mitigation: bool = False) -> list[object]:
 
 # ---------------------------------------------------------------------------
 # Model — uses get_model() from config.py (MockModel by default, or live
-# provider via TULIP_MODEL_PROVIDER env var)
+# provider via LOCUS_MODEL_PROVIDER env var)
 # ---------------------------------------------------------------------------
 
 

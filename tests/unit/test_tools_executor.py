@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for tools executor module."""
 
@@ -8,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tulip.core.messages import ToolCall
-from tulip.tools.executor import (
+from locus.core.messages import ToolCall
+from locus.tools.executor import (
     CircuitBreakerExecutor,
     ConcurrentExecutor,
     SequentialExecutor,
@@ -428,8 +429,8 @@ class TestToolExecutorAbstractStreaming:
 
     @pytest.mark.asyncio
     async def test_default_streaming_falls_back_to_execute(self) -> None:
-        from tulip.core.messages import ToolResult
-        from tulip.tools.executor import ToolExecutor
+        from locus.core.messages import ToolResult
+        from locus.tools.executor import ToolExecutor
 
         class _Stub(ToolExecutor):
             async def execute(

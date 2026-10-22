@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Tests for ``AgentConfig.tool_execution="concurrent"`` in ``Agent.run()``.
 
@@ -19,17 +20,17 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.messages import Message, ToolCall
-from tulip.core.termination import MaxIterations
-from tulip.hooks.provider import (
+from locus.agent import Agent
+from locus.core.messages import Message, ToolCall
+from locus.core.termination import MaxIterations
+from locus.hooks.provider import (
     AfterToolCallEvent,
     BeforeToolCallEvent,
     HookPriority,
     HookProvider,
 )
-from tulip.models.base import ModelResponse
-from tulip.tools.decorator import tool
+from locus.models.base import ModelResponse
+from locus.tools.decorator import tool
 
 
 class _ScriptedModel:
@@ -498,7 +499,7 @@ async def test_completion_mode_streams_events_in_finish_order() -> None:
 
     Regression guard for the streaming follow-up to #210.
     """
-    from tulip.core.events import ToolCompleteEvent
+    from locus.core.events import ToolCompleteEvent
 
     calls = [
         _chain_call("c-slow", "slow", after="med"),
@@ -532,7 +533,7 @@ async def test_completion_mode_streams_events_in_finish_order() -> None:
 async def test_sequential_mode_events_in_tool_call_order() -> None:
     """Default ``tool_event_order='sequential'`` keeps the original behaviour:
     events arrive in tool_call order after the whole batch completes."""
-    from tulip.core.events import ToolCompleteEvent
+    from locus.core.events import ToolCompleteEvent
 
     calls = [
         _chain_call("c-slow", "slow", after="fast"),

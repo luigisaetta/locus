@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.memory.delta.DeltaCheckpointer``.
+"""Coverage tests for ``locus.memory.delta.DeltaCheckpointer``.
 
 Targets the fall-back-to-full-checkpoint arms (parent checkpoint absent
 or unreconstructable), the cache-miss load path, the empty
@@ -15,8 +16,8 @@ import json
 import zlib
 from typing import Any
 
-from tulip.core.state import AgentState
-from tulip.memory.delta import (
+from locus.core.state import AgentState
+from locus.memory.delta import (
     CheckpointMetadata,
     DeltaCheckpoint,
     DeltaCheckpointer,

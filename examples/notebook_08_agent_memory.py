@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 08: conversation memory — remembering what you told it.
 
@@ -27,8 +28,8 @@ Run it:
     .venv/bin/python examples/notebook_08_agent_memory.py
 
 The agent itself goes through whichever provider you configure via
-``TULIP_MODEL_PROVIDER`` (``openai`` / ``anthropic``).
-Set ``TULIP_MODEL_PROVIDER=mock`` to bypass the model for offline runs.
+``LOCUS_MODEL_PROVIDER`` (``openai`` / ``anthropic``).
+Set ``LOCUS_MODEL_PROVIDER=mock`` to bypass the model for offline runs.
 """
 
 import asyncio
@@ -36,9 +37,9 @@ import sys
 
 from config import get_model, print_config
 
-from tulip.agent import Agent
-from tulip.memory.backends import MemoryCheckpointer
-from tulip.tools import tool
+from locus.agent import Agent
+from locus.memory.backends import MemoryCheckpointer
+from locus.tools import tool
 
 
 # One in-memory store per "suffix", cached so that two agents asking for

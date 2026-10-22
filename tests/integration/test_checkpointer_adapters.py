@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for checkpointer adapters with Agent."""
 
@@ -11,9 +12,9 @@ from uuid import uuid4
 
 import pytest
 
-from tulip.core.messages import Message, Role
-from tulip.core.state import AgentState
-from tulip.memory.backends import (
+from locus.core.messages import Message, Role
+from locus.core.state import AgentState
+from locus.memory.backends import (
     MemoryCheckpointer,
     StorageBackendAdapter,
 )
@@ -184,8 +185,8 @@ class TestAgentWithCheckpointer:
         """Agent with MemoryCheckpointer."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from tulip import Agent
-        from tulip.models.base import ModelResponse
+        from locus import Agent
+        from locus.models.base import ModelResponse
 
         # Create mock model
         mock_model = MagicMock()
@@ -227,8 +228,8 @@ class TestAgentWithCheckpointer:
         """Agent resumes conversation from checkpoint."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from tulip import Agent
-        from tulip.models.base import ModelResponse
+        from locus import Agent
+        from locus.models.base import ModelResponse
 
         checkpointer = MemoryCheckpointer()
 
@@ -270,9 +271,9 @@ class TestAgentWithCheckpointer:
         """Agent with auto-checkpoint every N iterations."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from tulip import Agent
-        from tulip.core.messages import ToolCall
-        from tulip.tools import tool
+        from locus import Agent
+        from locus.core.messages import ToolCall
+        from locus.tools import tool
 
         checkpointer = MemoryCheckpointer()
 
@@ -339,11 +340,11 @@ class TestRedisAdapter:
 
     @pytest.fixture
     async def adapter(self):
-        from tulip.memory.backends import redis_checkpointer
+        from locus.memory.backends import redis_checkpointer
 
         adapter = redis_checkpointer(
             url=os.getenv("REDIS_URL", "redis://localhost:6379"),
-            prefix="tulip:test:adapter:",
+            prefix="locus:test:adapter:",
         )
         yield adapter
         # Cleanup
@@ -372,12 +373,12 @@ class TestPostgreSQLAdapter:
 
     @pytest.fixture
     async def adapter(self):
-        from tulip.memory.backends import postgresql_checkpointer
+        from locus.memory.backends import postgresql_checkpointer
 
         adapter = postgresql_checkpointer(
             host=os.getenv("POSTGRES_HOST", "localhost"),
             port=int(os.getenv("POSTGRES_PORT", "5432")),
-            database=os.getenv("POSTGRES_DB", "tulip_test"),
+            database=os.getenv("POSTGRES_DB", "locus_test"),
             user=os.getenv("POSTGRES_USER", "postgres"),
             password=os.getenv("POSTGRES_PASSWORD", ""),
         )
@@ -406,14 +407,14 @@ class TestMySQLAdapter:
     """Test MySQL checkpointer adapter."""
 
     def _mysql_adapter(self, table_name: str):
-        from tulip.memory.backends import mysql_checkpointer
+        from locus.memory.backends import mysql_checkpointer
 
         return mysql_checkpointer(
             host=os.getenv("MYSQL_HOST", "localhost"),
             port=int(os.getenv("MYSQL_PORT", "3306")),
-            database=os.getenv("MYSQL_DB", "tulip_test"),
-            user=os.getenv("MYSQL_USER", "tulip"),
-            password=os.getenv("MYSQL_PASSWORD", "tulip"),
+            database=os.getenv("MYSQL_DB", "locus_test"),
+            user=os.getenv("MYSQL_USER", "locus"),
+            password=os.getenv("MYSQL_PASSWORD", "locus"),
             table_name=table_name,
         )
 
@@ -473,13 +474,13 @@ class TestOpenSearchAdapter:
 
     @pytest.fixture
     async def adapter(self):
-        from tulip.memory.backends import opensearch_checkpointer
+        from locus.memory.backends import opensearch_checkpointer
 
         hosts_env = os.getenv("OPENSEARCH_HOSTS") or os.getenv("OPENSEARCH_HOST", "localhost:9200")
         hosts = [h.strip() for h in hosts_env.split(",")]
         adapter = opensearch_checkpointer(
             hosts=hosts,
-            index_name="tulip-test-adapter",
+            index_name="locus-test-adapter",
             username=os.getenv("OPENSEARCH_USER"),
             password=os.getenv("OPENSEARCH_PASSWORD"),
             use_ssl=os.getenv("OPENSEARCH_USE_SSL", "false").lower() == "true",

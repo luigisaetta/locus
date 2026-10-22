@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for ``Orchestrator`` parallel specialist execution.
 
@@ -19,8 +20,8 @@ from typing import Any
 
 import pytest
 
-from tulip.multiagent.orchestrator import Orchestrator, RoutingDecision
-from tulip.multiagent.specialist import Specialist, SpecialistResult
+from locus.multiagent.orchestrator import Orchestrator, RoutingDecision
+from locus.multiagent.specialist import Specialist, SpecialistResult
 
 
 class _Overlap:

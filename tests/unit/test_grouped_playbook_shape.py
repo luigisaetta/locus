@@ -7,8 +7,8 @@ fixtures, so a failure names the rule that broke.
 
 from __future__ import annotations
 
-from tulip.playbooks.loader import _flatten_step_groups, load_playbook
-from tulip.skills.models import Skill
+from locus.playbooks.loader import _flatten_step_groups, load_playbook
+from locus.skills.models import Skill
 
 
 GROUPED = {

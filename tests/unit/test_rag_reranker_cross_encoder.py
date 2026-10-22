@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for the local cross-encoder reranker.
 
@@ -7,8 +8,8 @@ Uses an injected fake model (``_model=``) so the tests run fully offline
 with no ``sentence-transformers`` / torch dependency.
 """
 
-from tulip.rag.reranker.cross_encoder import CrossEncoderReranker
-from tulip.rag.stores.base import Document, SearchResult
+from locus.rag.reranker.cross_encoder import CrossEncoderReranker
+from locus.rag.stores.base import Document, SearchResult
 
 
 class _FakeCrossEncoder:

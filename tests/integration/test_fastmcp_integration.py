@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for FastMCP."""
 
@@ -7,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
+from locus.integrations.fastmcp import mcp_tool_to_locus
+from locus.tools import tool
 from tests._safe_math import safe_math_eval
-from tulip.integrations.fastmcp import mcp_tool_to_tulip
-from tulip.tools import tool
 
 
 pytestmark = pytest.mark.integration
@@ -60,54 +61,54 @@ class TestMCPToolConversion:
     """Test MCP tool conversion utilities."""
 
     @pytest.mark.asyncio
-    async def test_mcp_tool_to_tulip(self):
-        """Convert MCP tool to Tulip tool."""
+    async def test_mcp_tool_to_locus(self):
+        """Convert MCP tool to Locus tool."""
 
         async def search(query: str) -> dict:
             return {"results": [f"Result for {query}"]}
 
-        tulip_tool = mcp_tool_to_tulip(
+        locus_tool = mcp_tool_to_locus(
             name="search",
             description="Search for things",
             func=search,
         )
 
-        assert tulip_tool.name == "search"
-        assert tulip_tool.description == "Search for things"
+        assert locus_tool.name == "search"
+        assert locus_tool.description == "Search for things"
 
         # Test execution
-        result = await tulip_tool.execute(query="test")
+        result = await locus_tool.execute(query="test")
         assert "test" in result
 
     @pytest.mark.asyncio
-    async def test_tulip_tool_to_mcp(self):
-        """Convert Tulip tool to MCP schema."""
-        from tulip.integrations.fastmcp import tulip_tool_to_mcp
+    async def test_locus_tool_to_mcp(self):
+        """Convert Locus tool to MCP schema."""
+        from locus.integrations.fastmcp import locus_tool_to_mcp
 
         @tool
         async def calculate(expression: str) -> str:
             """Calculate a math expression."""
             return str(safe_math_eval(expression))
 
-        mcp_schema = tulip_tool_to_mcp(calculate)
+        mcp_schema = locus_tool_to_mcp(calculate)
 
         assert mcp_schema["name"] == "calculate"
         assert mcp_schema["description"] == "Calculate a math expression."
         assert "inputSchema" in mcp_schema
 
 
-class TestTulipMCPServer:
-    """Test TulipMCPServer functionality."""
+class TestLocusMCPServer:
+    """Test LocusMCPServer functionality."""
 
     @pytest.mark.asyncio
     async def test_handle_tools_list(self, mock_agent):
         """Handle tools/list request (without FastMCP registration)."""
         # Test the protocol directly without creating MCP instance
-        from tulip.integrations.fastmcp import tulip_tool_to_mcp
+        from locus.integrations.fastmcp import locus_tool_to_mcp
 
         tools = []
         for tool_obj in mock_agent._tool_registry._tools.values():
-            tools.append(tulip_tool_to_mcp(tool_obj))
+            tools.append(locus_tool_to_mcp(tool_obj))
 
         assert len(tools) == 2
         tool_names = [t["name"] for t in tools]
@@ -131,12 +132,12 @@ class TestTulipMCPServer:
         assert result == "8"
 
     @pytest.mark.asyncio
-    async def test_tulip_tool_schema(self, sample_tools):
-        """Test Tulip tool to MCP schema conversion."""
-        from tulip.integrations.fastmcp import tulip_tool_to_mcp
+    async def test_locus_tool_schema(self, sample_tools):
+        """Test Locus tool to MCP schema conversion."""
+        from locus.integrations.fastmcp import locus_tool_to_mcp
 
         add_tool = next(t for t in sample_tools if t.name == "add_numbers")
-        schema = tulip_tool_to_mcp(add_tool)
+        schema = locus_tool_to_mcp(add_tool)
 
         assert schema["name"] == "add_numbers"
         assert "description" in schema

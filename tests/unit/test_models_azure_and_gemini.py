@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Azure OpenAI and Gemini — the last two of the Bedrock/Gemini/Azure gap.
 
@@ -16,17 +17,17 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.models.providers import COMPATIBLE_PROVIDERS
-from tulip.models.registry import get_model, list_providers
+from locus.models.providers import COMPATIBLE_PROVIDERS
+from locus.models.registry import get_model, list_providers
 
 
 pytest.importorskip("openai", reason="openai extra not installed")
 
-from tulip.models.native.azure import (  # noqa: E402 — after importorskip
+from locus.models.native.azure import (  # noqa: E402 — after importorskip
     DEFAULT_API_VERSION,
     AzureOpenAIModel,
 )
-from tulip.models.native.openai import OpenAIModel  # noqa: E402
+from locus.models.native.openai import OpenAIModel  # noqa: E402
 
 
 ENDPOINT = "https://my-resource.openai.azure.com"
@@ -62,7 +63,7 @@ def test_gemini_without_a_key_names_the_variable(monkeypatch) -> None:
 
 def test_gemini_base_url_is_overridable(monkeypatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setenv("TULIP_GEMINI_BASE_URL", "https://proxy.internal/v1")
+    monkeypatch.setenv("LOCUS_GEMINI_BASE_URL", "https://proxy.internal/v1")
     assert get_model("gemini:gemini-2.0-flash").config.base_url == "https://proxy.internal/v1"
 
 

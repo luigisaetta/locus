@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Integration tests for :class:`PgMemory` against a real Postgres + pgvector.
 
@@ -18,7 +19,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from tulip.memory.store_backends.postgresql import PgMemory
+from locus.memory.store_backends.postgresql import PgMemory
 
 
 try:
@@ -29,8 +30,8 @@ except ImportError:  # pragma: no cover - conftest is always importable under py
 
 pytestmark = [pytest.mark.integration, skip_without_postgres]
 
-_TABLE = "tulip_memories_it"
-_RLS_ROLE = "tulip_mem_rls_test"
+_TABLE = "locus_memories_it"
+_RLS_ROLE = "locus_mem_rls_test"
 _RLS_PW = "rls_test_pw"  # noqa: S105 - ephemeral local test role, dropped on teardown
 
 
@@ -111,9 +112,9 @@ async def test_true_semantic_recall_with_real_embedder() -> None:
     shared tokens land on the right fact (what HRR alone cannot do)."""
     import asyncpg
 
-    from tulip.rag.embeddings.openai import OpenAIEmbeddings
+    from locus.rag.embeddings.openai import OpenAIEmbeddings
 
-    table = "tulip_memories_sem_it"
+    table = "locus_memories_sem_it"
     admin = await asyncpg.connect(_admin_dsn())
     await admin.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
     await admin.close()
@@ -173,7 +174,7 @@ async def test_default_dim_store_creates_schema_and_recalls() -> None:
     """
     import asyncpg
 
-    table = "tulip_memories_default_it"
+    table = "locus_memories_default_it"
     admin = await asyncpg.connect(_admin_dsn())
     await admin.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
     await admin.close()
@@ -223,7 +224,7 @@ async def test_schema_failure_raises_on_every_call_not_just_the_first() -> None:
     """
     import asyncpg
 
-    table = "tulip_memories_mismatch_it"
+    table = "locus_memories_mismatch_it"
     admin = await asyncpg.connect(_admin_dsn())
     await admin.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
     await admin.close()
@@ -266,7 +267,7 @@ async def test_rls_blocks_cross_tenant_access_for_app_role(store: PgMemory) -> N
     """The hard guarantee: even a raw table scan by an app role is RLS-confined.
 
     A superuser bypasses RLS, so this creates an unprivileged role, grants it
-    only DML, and proves that with ``tulip.tenant`` pinned to one tenant it can
+    only DML, and proves that with ``locus.tenant`` pinned to one tenant it can
     neither *read* nor *write* another tenant's rows — no ``WHERE`` needed.
     """
     import asyncpg
@@ -289,14 +290,14 @@ async def test_rls_blocks_cross_tenant_access_for_app_role(store: PgMemory) -> N
     role_conn = await asyncpg.connect(_role_dsn())
     try:
         async with role_conn.transaction():
-            await role_conn.execute("SELECT set_config('tulip.tenant', 'acme', true)")
+            await role_conn.execute("SELECT set_config('locus.tenant', 'acme', true)")
             # A raw scan with NO tenant predicate — RLS must confine it to acme.
             rows = await role_conn.fetch(f"SELECT tenant, key FROM {_TABLE}")
             assert rows, "app role should see its own tenant's rows"
             assert {r["tenant"] for r in rows} == {"acme"}
 
         async with role_conn.transaction():
-            await role_conn.execute("SELECT set_config('tulip.tenant', 'globex', true)")
+            await role_conn.execute("SELECT set_config('locus.tenant', 'globex', true)")
             rows = await role_conn.fetch(f"SELECT tenant, key FROM {_TABLE}")
             assert {r["tenant"] for r in rows} == {"globex"}
 
@@ -304,7 +305,7 @@ async def test_rls_blocks_cross_tenant_access_for_app_role(store: PgMemory) -> N
         # SET LOCAL + INSERT run in one implicit transaction (a single execute).
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
             await role_conn.execute(
-                "SET LOCAL tulip.tenant = 'acme'; "
+                "SET LOCAL locus.tenant = 'acme'; "
                 f"INSERT INTO {_TABLE} (tenant, ns, key, value) "
                 "VALUES ('globex', 'globex', 'evil', '{}'::jsonb)"
             )
@@ -365,7 +366,7 @@ async def test_search_many_is_confined_by_rls_for_app_role(store: PgMemory) -> N
         assert [i.value["content"] for i in found[0]] == ["acme kid likes castles"]
 
         async def pin_globex(conn: object, tenant: str) -> None:
-            await conn.execute("SELECT set_config('tulip.tenant', 'globex', true)")  # type: ignore[attr-defined]
+            await conn.execute("SELECT set_config('locus.tenant', 'globex', true)")  # type: ignore[attr-defined]
 
         as_role._scoped = pin_globex  # type: ignore[method-assign]
         assert await as_role.search_many([acme], "castles", limit=5) == [[]]
@@ -382,7 +383,7 @@ async def test_search_many_is_confined_by_rls_for_app_role(store: PgMemory) -> N
 async def test_manager_recalls_own_and_family_in_two_statements(store: PgMemory) -> None:
     """LLMMemoryManager over real PgMemory: a MemoryScope recall of the run's own
     namespace and a family one, every memory type, in one ranked + one recency call."""
-    from tulip.memory.manager import LLMMemoryManager, Memory, MemoryType
+    from locus.memory.manager import LLMMemoryManager, Memory, MemoryType
 
     manager = LLMMemoryManager(store=store)
     with manager.scoped(("acme", "kid", "sofia")):

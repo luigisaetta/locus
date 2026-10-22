@@ -1,6 +1,6 @@
 THIRD-PARTY LICENSES
 
-This file contains the licenses for third-party components used by Tulip.
+This file contains the licenses for third-party components used by Locus.
 
 ================================================================================
 MANDATORY DEPENDENCIES (Core)
@@ -315,7 +315,7 @@ SoL-Pi ObservationPack
 ----------------------
 License: MIT
 Home: https://github.com/NVlabs/SoL-Pi
-Used in: src/tulip/memory/observation_pack.py (the observation id scheme, the
+Used in: src/locus/memory/observation_pack.py (the observation id scheme, the
 head/tail placeholder and the paged recall are adapted from
 src/sol-pi/extensions/observation-pack/)
 Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.

@@ -1,11 +1,12 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """The control core stands on its own.
 
 The admission gate, policy, audit trail and grounding layer live in
-``tulip.control`` and must never pull in the security-domain tooling, which is
-a separate, opt-in distribution (``tulip_security``). Each check runs in a
+``locus.control`` and must never pull in the security-domain tooling, which is
+a separate, opt-in distribution (``locus_security``). Each check runs in a
 fresh interpreter so ``sys.modules`` shows exactly what the import chain
 loaded, both with that distribution importable and with it blocked outright.
 """
@@ -26,8 +27,8 @@ _EXERCISE_THE_CORE = textwrap.dedent(
 
     {preamble}
 
-    import tulip
-    from tulip.control import (
+    import locus
+    from locus.control import (
         Action,
         AdmissionError,
         AuditTrail,
@@ -39,12 +40,12 @@ _EXERCISE_THE_CORE = textwrap.dedent(
         ground_finding,
         is_finding,
     )
-    from tulip.reasoning.gsar import Claim, EvidenceType, Partition
-    from tulip.tools.decorator import tool
+    from locus.reasoning.gsar import Claim, EvidenceType, Partition
+    from locus.tools.decorator import tool
 
-    # Lazy top-level names resolve through tulip.control, not tulip.security.
-    assert tulip.Evidence is tulip.control.Evidence
-    assert tulip.ground_finding is ground_finding
+    # Lazy top-level names resolve through locus.control, not locus.security.
+    assert locus.Evidence is locus.control.Evidence
+    assert locus.ground_finding is ground_finding
 
     trail = AuditTrail()
     strong = VerificationResult(survives=True, confidence=0.95, evidence_quality=0.95)
@@ -99,7 +100,7 @@ _EXERCISE_THE_CORE = textwrap.dedent(
     leaked = sorted(
         name for name, module in sys.modules.items()
         if module is not None
-        and (name == "tulip_security" or name.startswith(("tulip_security.", "tulip.security")))
+        and (name == "locus_security" or name.startswith(("locus_security.", "locus.security")))
     )
     assert not leaked, leaked
     print("ok")
@@ -111,7 +112,7 @@ _EXERCISE_THE_CORE = textwrap.dedent(
     "preamble",
     [
         pytest.param("", id="security-package-importable"),
-        pytest.param("sys.modules['tulip_security'] = None", id="security-package-blocked"),
+        pytest.param("sys.modules['locus_security'] = None", id="security-package-blocked"),
     ],
 )
 def test_control_core_runs_without_loading_security_tooling(preamble: str) -> None:

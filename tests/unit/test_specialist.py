@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for specialist agents."""
 
@@ -7,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tulip.core.state import AgentState
-from tulip.multiagent.specialist import (
+from locus.core.state import AgentState
+from locus.multiagent.specialist import (
     Playbook,
     PlaybookStep,
     Specialist,
@@ -18,7 +19,7 @@ from tulip.multiagent.specialist import (
     create_metrics_analyst,
     create_trace_analyst,
 )
-from tulip.tools.decorator import tool
+from locus.tools.decorator import tool
 
 
 class TestSpecialistResult:
@@ -431,7 +432,7 @@ class TestSpecialistExecution:
     @pytest.mark.asyncio
     async def test_execute_success(self, mock_model):
         """Test successful execution."""
-        from tulip.core.messages import Message
+        from locus.core.messages import Message
 
         mock_response = MagicMock()
         mock_response.message = Message.assistant("Analysis complete. Issue confirmed.")
@@ -455,7 +456,7 @@ class TestSpecialistExecution:
     @pytest.mark.asyncio
     async def test_execute_with_context(self, mock_model):
         """Test execution with context."""
-        from tulip.core.messages import Message
+        from locus.core.messages import Message
 
         mock_response = MagicMock()
         mock_response.message = Message.assistant("Done")
@@ -480,7 +481,7 @@ class TestSpecialistExecution:
     @pytest.mark.asyncio
     async def test_execute_with_tools(self, mock_model):
         """Test execution with tools."""
-        from tulip.core.messages import Message
+        from locus.core.messages import Message
 
         mock_response = MagicMock()
         mock_response.message = Message.assistant("Done")
@@ -528,7 +529,7 @@ class TestSpecialistExecution:
     @pytest.mark.asyncio
     async def test_execute_selects_playbook(self, mock_model):
         """Test execution selects appropriate playbook."""
-        from tulip.core.messages import Message
+        from locus.core.messages import Message
 
         mock_response = MagicMock()
         mock_response.message = Message.assistant("Done")

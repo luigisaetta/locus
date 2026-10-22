@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit: typed process data -- validated outputs, inputs in conditions, sensitive fields.
 
@@ -19,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from tulip.playbooks.v2 import (
+from locus.playbooks.v2 import (
     ROUTING_UNKNOWN,
     UNAVAILABLE,
     UNKNOWN,
@@ -29,7 +30,7 @@ from tulip.playbooks.v2 import (
     validate_value,
     when_verdict,
 )
-from tulip.playbooks.v2.engine import (
+from locus.playbooks.v2.engine import (
     ACTIVE,
     DONE,
     WAIVED,
@@ -38,7 +39,7 @@ from tulip.playbooks.v2.engine import (
     playbook_prose,
     step_brief,
 )
-from tulip.playbooks.v2.fields import (
+from locus.playbooks.v2.fields import (
     describe,
     is_iso_date,
     label_from_name,
@@ -47,7 +48,7 @@ from tulip.playbooks.v2.fields import (
     text_field,
     typed_value,
 )
-from tulip.playbooks.v2.when import Day, Money
+from locus.playbooks.v2.when import Day, Money
 
 
 def _invoice(branches: list[dict[str, Any]] | None = None) -> dict[str, Any]:

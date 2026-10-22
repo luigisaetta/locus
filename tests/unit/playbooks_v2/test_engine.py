@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit: a v2 playbook as the engine runs it -- graph, branches, allowlists, decision.
 
@@ -19,7 +20,7 @@ from typing import Any
 import pytest
 import yaml
 
-from tulip.playbooks.v2.engine import (
+from locus.playbooks.v2.engine import (
     ACTIVE,
     BLOCKED,
     DECISION_EVENT,
@@ -42,7 +43,7 @@ from tulip.playbooks.v2.engine import (
     step_brief,
     with_forbidden,
 )
-from tulip.playbooks.v2.results import not_executed_result
+from locus.playbooks.v2.results import not_executed_result
 
 
 EXAMPLE = Path(__file__).parent / "fixtures" / "refund-dispute.v2.yaml"
@@ -192,7 +193,7 @@ def test_loose_shapes_still_read() -> None:
 def test_the_digest_is_the_registry_s_and_ignores_the_publish_stamp() -> None:
     body = example()
     stamped = copy.deepcopy(body)
-    stamped["metadata"] = {"tulip.publish": {"x": 1}}
+    stamped["metadata"] = {"locus.publish": {"x": 1}}
     unstamped = copy.deepcopy(body)
     unstamped["metadata"] = {}
     assert definition_digest(stamped) == definition_digest(unstamped)
@@ -261,7 +262,7 @@ def test_enforcement_is_the_playbook_s_say_then_the_deployment_s(
     assert enforcement_mode(parse_playbook_v2(body), "block") == "block"
     assert enforcement_mode(parse_playbook_v2(body), "BLOCK") == "block"
     # The engine reads no environment: the deployment's default is passed in.
-    monkeypatch.setenv("TULIP_GATEWAY_PLAYBOOK_ENFORCEMENT", "block")
+    monkeypatch.setenv("LOCUS_GATEWAY_PLAYBOOK_ENFORCEMENT", "block")
     assert enforcement_mode(parse_playbook_v2(body)) == "record"
     body["metadata"] = {"enforcement": "record"}
     assert enforcement_mode(parse_playbook_v2(body), "block") == "record"
@@ -774,6 +775,6 @@ async def test_the_control_tools_drive_the_runtime() -> None:
         await submit.execute(outcome_id="NO_REFUND", rationale="matches", evidence_refs=[])
     )
     assert decided["ok"]
-    assert run.rt.name == "TulipPlaybookRuntime"
+    assert run.rt.name == "LocusPlaybookRuntime"
     assert run.rt.priority > 0
     run.rt.bind(None)  # a v2 run adopts no SDK enforcer

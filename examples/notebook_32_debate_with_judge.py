@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 32: incident adjudication debate — real incident vs noise.
 
@@ -15,7 +16,7 @@ single-pass triage agent tends to skip.
 
 - Each turn is a ``Turn(side, round, text)`` Pydantic model. The
   transcript is a ``list[Turn]`` accumulated in graph state.
-- The Judge uses Tulip's ``output_schema=Verdict``, so the result is a
+- The Judge uses Locus's ``output_schema=Verdict``, so the result is a
   populated Pydantic object — no JSON parsing in the caller.
 - If the configured model can't honor the schema, the judge node raises
   rather than fabricating a verdict from raw text.
@@ -25,10 +26,10 @@ single-pass triage agent tends to skip.
 Run it:
     .venv/bin/python examples/notebook_32_debate_with_judge.py
 
-The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
 (or anthropic) and the matching credentials to use a live model that
 supports constrained decoding (e.g. ``openai:gpt-4o``). Set
-``TULIP_MODEL_PROVIDER=mock`` and the notebook exits cleanly with
+``LOCUS_MODEL_PROVIDER=mock`` and the notebook exits cleanly with
 setup instructions.
 
 Prerequisites:
@@ -44,9 +45,9 @@ from typing import Any
 from config import get_model
 from pydantic import BaseModel, Field
 
-from tulip.agent import Agent, AgentConfig
-from tulip.core.events import TerminateEvent
-from tulip.multiagent.graph import END, START, StateGraph
+from locus.agent import Agent, AgentConfig
+from locus.core.events import TerminateEvent
+from locus.multiagent.graph import END, START, StateGraph
 
 
 # ---------------------------------------------------------------------------

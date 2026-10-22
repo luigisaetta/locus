@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for LLM-as-judge scoring and trajectory assertions.
 
-``tulip/evaluation`` advertised "LLM-as-judge scoring" in its module
+``locus/evaluation`` advertised "LLM-as-judge scoring" in its module
 docstring and contained no judge, no model call, and no rubric — a 250-line
 harness of boolean checks. These cover the judge that now backs the claim,
 and the ordering assertion that ``expected_tools`` could never express.
@@ -16,9 +17,9 @@ from typing import Any
 
 import pytest
 
-from tulip.agent import Agent
-from tulip.core.messages import Message
-from tulip.evaluation import (
+from locus.agent import Agent
+from locus.core.messages import Message
+from locus.evaluation import (
     EvalCase,
     EvalRunner,
     JudgeUnavailableError,
@@ -26,9 +27,9 @@ from tulip.evaluation import (
     Verdict,
     check_trajectory,
 )
-from tulip.models.base import ModelResponse
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.models.base import ModelResponse
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 @tool

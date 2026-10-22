@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.rag.multimodal``.
+"""Coverage tests for ``locus.rag.multimodal``.
 
 Existing tests in ``test_rag_retriever.py`` mock the processor classes
 wholesale. These tests exercise the actual processor logic by stubbing
@@ -34,7 +35,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tulip.rag.multimodal import (
+from locus.rag.multimodal import (
     AudioProcessor,
     ContentProcessor,
     ContentType,

@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """Notebook 51: Trace hygiene — redact PII and secrets before they persist.
 
 Everything a SOC agent emits is written somewhere durable: the
@@ -19,19 +20,19 @@ what characters appear in the prompt.
 - ContentPolicy: harmful-content categories (violence, illegal activity).
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_51_guardrails_advanced.py
 
     # Offline / no credentials:
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_51_guardrails_advanced.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_51_guardrails_advanced.py
 """
 
 import asyncio
 
 from config import get_model
 
-from tulip.agent import Agent, AgentConfig
-from tulip.hooks.builtin.guardrails import (
+from locus.agent import Agent, AgentConfig
+from locus.hooks.builtin.guardrails import (
     ContentPolicy,
     OutputFilterHook,
     TopicPolicy,

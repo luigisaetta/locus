@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""End-to-end smoke test of tulip.deepagent.create_deepagent(datastores=...).
+"""End-to-end smoke test of locus.deepagent.create_deepagent(datastores=...).
 
-Stays entirely on tulip primitives:
+Stays entirely on locus primitives:
 
     OpenAIEmbeddings + QdrantVectorStore + RAGRetriever
         |
@@ -31,9 +32,9 @@ import asyncio
 import os
 import sys
 
-from tulip.deepagent import create_deepagent
-from tulip.rag import OpenAIEmbeddings, RAGRetriever
-from tulip.rag.stores.qdrant import QdrantVectorStore
+from locus.deepagent import create_deepagent
+from locus.rag import OpenAIEmbeddings, RAGRetriever
+from locus.rag.stores.qdrant import QdrantVectorStore
 
 
 SAMPLE_DOCS = [
@@ -85,7 +86,7 @@ async def main() -> None:
     print(f"      stored {len(SAMPLE_DOCS)} docs at dim={len(probe.embedding)}")
 
     print("[3/4] create_deepagent(datastores={...}, max_output_tokens=2048)")
-    from tulip.models import get_model
+    from locus.models import get_model
 
     chat_model = get_model(
         "anthropic:claude-sonnet-4-6",  # reliable tool caller for smoke
@@ -121,7 +122,7 @@ async def main() -> None:
         "Write a short memo on the Log4Shell vulnerability. Search the intel "
         "datastore first; cite at least three documents."
     )
-    # Tulip AgentResult: print the final answer
+    # Locus AgentResult: print the final answer
     print(getattr(result, "answer", None) or getattr(result, "output", None) or result)
     print("-" * 70)
     print("DONE.")

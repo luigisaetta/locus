@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Unit tests for ``tulip.skills.models`` (Skill + frontmatter parsing)."""
+"""Unit tests for ``locus.skills.models`` (Skill + frontmatter parsing)."""
 
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from tulip.skills.models import Skill, validate_skill_name
+from locus.skills.models import Skill, validate_skill_name
 
 
 # ---------------------------------------------------------------------------
@@ -88,14 +89,14 @@ class TestSkillFromContent:
             "---\n"
             "name: s\n"
             "description: d.\n"
-            "license: Apache-2.0\n"
-            "compatibility: tulip>=1\n"
+            "license: UPL-1.0\n"
+            "compatibility: locus>=1\n"
             "metadata:\n  author: acme\n"
             "---\nBody"
         )
         skill = Skill.from_content(content)
-        assert skill.license == "Apache-2.0"
-        assert skill.compatibility == "tulip>=1"
+        assert skill.license == "UPL-1.0"
+        assert skill.compatibility == "locus>=1"
         assert skill.metadata == {"author": "acme"}
 
     def test_missing_name_raises(self) -> None:

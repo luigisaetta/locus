@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 """
 Notebook 24: Outage war room — mitigation, diagnostics, and comms agents in a swarm.
 
@@ -29,9 +30,9 @@ across services. Keep capability tags tight and the blackboard auditable.
 Run it:
     .venv/bin/python examples/notebook_24_swarm_multiagent.py
 
-The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
 (or anthropic) and the matching credentials so the swarm talks to a live
-model. Set ``TULIP_MODEL_PROVIDER=mock`` for offline runs.
+model. Set ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
 - Notebook 06 (Agent basics).
@@ -43,8 +44,8 @@ import time
 
 from config import get_model, print_config
 
-from tulip.agent import Agent
-from tulip.multiagent.swarm import (
+from locus.agent import Agent
+from locus.multiagent.swarm import (
     SharedContext,
     Swarm,
     SwarmTask,

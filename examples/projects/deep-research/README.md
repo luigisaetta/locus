@@ -1,4 +1,4 @@
-# deep-research — Tulip SDK deep-research examples
+# deep-research — Locus SDK deep-research examples
 
 A runnable suite of `create_deepagent(datastores=...)` examples covering
 the retrieval backends the SDK supports: **in-memory** and **OpenSearch**.
@@ -51,7 +51,7 @@ export OPENSEARCH_USERNAME=<your-username>
 export OPENSEARCH_PASSWORD='...'
 export OPENAI_API_KEY=sk-...
 export ANTHROPIC_API_KEY=sk-ant-...
-export TULIP_RESEARCH_MODEL=anthropic:claude-sonnet-4-6
+export LOCUS_RESEARCH_MODEL=anthropic:claude-sonnet-4-6
 
 python examples/projects/deep-research/demo_opensearch_multi_index.py
 ```
@@ -61,7 +61,7 @@ indices, then routes each search at the right index.
 
 ## Gotchas surfaced during these examples
 
-1. **`tulip.memory.InMemoryStore` is async.** Its `put`/`search`/`get`
+1. **`locus.memory.InMemoryStore` is async.** Its `put`/`search`/`get`
    are coroutines. Use `await store.put(...)`.
 2. **`OpenSearchVectorStore._client` is `AsyncOpenSearch`.** When you
    need to drive the underlying client directly (refresh, exists,

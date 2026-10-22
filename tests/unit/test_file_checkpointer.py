@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for file checkpointer."""
 
@@ -9,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from tulip.core.state import AgentState
-from tulip.memory.backends.file import FileCheckpointer
+from locus.core.state import AgentState
+from locus.memory.backends.file import FileCheckpointer
 
 
 class TestFileCheckpointerInit:
@@ -19,7 +20,7 @@ class TestFileCheckpointerInit:
     def test_default_init(self):
         """Test creating checkpointer with defaults."""
         checkpointer = FileCheckpointer()
-        assert checkpointer.base_dir == Path(".tulip_checkpoints")
+        assert checkpointer.base_dir == Path(".locus_checkpoints")
         assert checkpointer.pretty is True
 
     def test_custom_base_dir_string(self):

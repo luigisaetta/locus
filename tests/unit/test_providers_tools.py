@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Coverage tests for ``tulip.providers.tools`` — the auto-tool factories.
+"""Coverage tests for ``locus.providers.tools`` — the auto-tool factories.
 
-These factories build :class:`tulip.tools.decorator.Tool` wrappers around
+These factories build :class:`locus.tools.decorator.Tool` wrappers around
 the multi-modal provider protocols. We use minimal stub providers so the
 tests don't pull any SDKs.
 """
@@ -16,15 +17,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tulip.providers.image import ImageResult
-from tulip.providers.tools import (
+from locus.providers.image import ImageResult
+from locus.providers.tools import (
     auto_register,
     make_image_generation_tool,
     make_speech_tools,
     make_web_fetch_tool,
     make_web_search_tool,
 )
-from tulip.providers.types import SearchResult, WebPage
+from locus.providers.types import SearchResult, WebPage
 
 
 # ---------------------------------------------------------------------------
@@ -62,12 +63,12 @@ class _StubSpeech:
         self.capabilities = caps
 
     async def speak(self, text: str, *, voice: str | None = None) -> Any:
-        from tulip.providers.speech import SynthesizedAudio
+        from locus.providers.speech import SynthesizedAudio
 
         return SynthesizedAudio(text=text, audio_bytes=b"\x00" * 64, content_type="audio/mpeg")
 
     async def transcribe(self, audio_bytes: bytes, *, content_type: str = "audio/mpeg") -> Any:
-        from tulip.providers.speech import SpeechTranscript
+        from locus.providers.speech import SpeechTranscript
 
         return SpeechTranscript(text=f"len={len(audio_bytes)}")
 

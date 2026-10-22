@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """bash and its handles — bash_output, write_stdin, kill_shell — on every shell.
 
-Ported from tulip-code's shell tests. The interesting cases are the ones a
+Ported from locus-code's shell tests. The interesting cases are the ones a
 model hits at night with nobody watching: a command that waits for input, a
 command that never ends, output too long to read, a server it started and
 forgot.
@@ -18,11 +19,11 @@ from pathlib import Path
 
 import pytest
 
+from locus.harness import ExecRecord, HarnessConfig, WorkspaceBackend, build_harness
+from locus.harness.toolset import Harness
+from locus.tools.context import ToolContext
+from locus.tools.result_storage import ToolResultStore
 from tests.unit.harness.conftest import FILE_BACKENDS, make_backend
-from tulip.harness import ExecRecord, HarnessConfig, WorkspaceBackend, build_harness
-from tulip.harness.toolset import Harness
-from tulip.tools.context import ToolContext
-from tulip.tools.result_storage import ToolResultStore
 
 
 def harness(backend: WorkspaceBackend, **config: object) -> Harness:
@@ -85,7 +86,7 @@ async def test_the_whole_output_is_stored_when_it_was_cut(shell: WorkspaceBacken
     assert saved[key].endswith("500")
     ctx = ToolContext(tool_call_id="c1", tool_name="bash", run_id="r9", iteration=4)
     await h.tool("bash").execute(ctx=ctx, command="seq 1 500")
-    assert any(k.startswith("tulip:result:r9:4") for k in saved)
+    assert any(k.startswith("locus:result:r9:4") for k in saved)
 
 
 async def test_a_store_that_declines_leaves_the_capped_output(shell: WorkspaceBackend) -> None:
@@ -245,9 +246,9 @@ async def test_every_command_leaves_an_exec_record(shell: WorkspaceBackend) -> N
 
 @pytest.mark.parametrize("kind", [p for p in FILE_BACKENDS if p == "memory"])
 async def test_shell_tools_on_a_backend_without_a_shell_say_so(kind: str, root: Path) -> None:
-    from tulip.harness.ledger import ReadLedger
-    from tulip.harness.tools import FACTORIES
-    from tulip.harness.tools.common import HarnessContext
+    from locus.harness.ledger import ReadLedger
+    from locus.harness.tools import FACTORIES
+    from locus.harness.tools.common import HarnessContext
 
     backend = make_backend(kind, root)
     context = HarnessContext(backend=backend, config=HarnessConfig(), ledger=ReadLedger())

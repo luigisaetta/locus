@@ -1,7 +1,8 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
-"""Contract tests for :class:`tulip.agent.hook_orchestrator.HookOrchestrator`.
+"""Contract tests for :class:`locus.agent.hook_orchestrator.HookOrchestrator`.
 
 The orchestrator was extracted from ``Agent`` — these tests lock in
 the invariants that ``Agent`` used to enforce inline:
@@ -22,8 +23,8 @@ from typing import Any
 
 import pytest
 
-from tulip.agent.hook_orchestrator import HookOrchestrator
-from tulip.core.state import AgentState
+from locus.agent.hook_orchestrator import HookOrchestrator
+from locus.core.state import AgentState
 
 
 class _Recorder:

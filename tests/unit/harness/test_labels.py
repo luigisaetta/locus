@@ -1,9 +1,10 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Labels: what each harness call is, for a policy to match.
 
-The floor and read-only cases are tulip-code's gate-rule tests, moved with
+The floor and read-only cases are locus-code's gate-rule tests, moved with
 the data they pin.
 """
 
@@ -11,10 +12,10 @@ from __future__ import annotations
 
 import pytest
 
-from tulip.control.action import resolve_action
-from tulip.harness import KIND_EXEC, KIND_READ, KIND_WRITE, action_spec, classify_command
-from tulip.harness.labels import TOOL_KINDS, never, read_only
-from tulip.harness.tools import FACTORIES
+from locus.control.action import resolve_action
+from locus.harness import KIND_EXEC, KIND_READ, KIND_WRITE, action_spec, classify_command
+from locus.harness.labels import TOOL_KINDS, never, read_only
+from locus.harness.tools import FACTORIES
 
 
 @pytest.mark.parametrize(
@@ -259,7 +260,7 @@ def test_a_redirect_into_a_file_or_a_background_job_is_not_a_read(command: str) 
     ],
 )
 def test_sed_that_edits_writes_or_runs_is_not_a_read(command: str) -> None:
-    # Found by a Tulip harness agent asked to review this module: `sed -n -i` and
+    # Found by a Locus harness agent asked to review this module: `sed -n -i` and
     # `sed -n '1e ...'` passed as reads, so an in-place edit or a shell command cleared
     # the gate as a read.
     assert not read_only(command)

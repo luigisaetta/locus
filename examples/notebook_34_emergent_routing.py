@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 34: emergent incident routing — the model picks the specialist protocol.
 
@@ -32,9 +33,9 @@ agents that touch production infrastructure.
 Run it:
     .venv/bin/python examples/notebook_34_emergent_routing.py
 
-The default provider is the bundled mock model. Set TULIP_MODEL_PROVIDER=openai
+The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
 (or anthropic) and the matching credentials to use a live model. Set
-``TULIP_MODEL_PROVIDER=mock`` for offline runs — the picker will
+``LOCUS_MODEL_PROVIDER=mock`` for offline runs — the picker will
 emerge with its mock rationale.
 
 Prerequisites:
@@ -49,8 +50,8 @@ from typing import Any
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.router import (
+from locus.agent import Agent
+from locus.router import (
     CapabilityIndex,
     CognitiveCompiler,
     GoalFrame,
@@ -60,8 +61,8 @@ from tulip.router import (
     Router,
     builtin_protocols,
 )
-from tulip.tools import tool
-from tulip.tools.registry import create_registry
+from locus.tools import tool
+from locus.tools.registry import create_registry
 
 
 # ---------------------------------------------------------------------------

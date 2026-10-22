@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 #
 # Hatch-managed example project — no requirements.txt; everything lives here.
 #
@@ -32,8 +33,8 @@ PYTHONPATH = "src"
 [tool.hatch.envs.default.scripts]
 # The A2A layer's fastapi / uvicorn / httpx come from this env's
 # dependencies, so the bare SDK is enough.
-sdk = "python -m pip install \"tulip-agents @ git+https://github.com/tuliplabs-ai/tulip-agents.git\""
-sdk-local = "python -m pip install -e {env:TULIP_SDK_DIR:../../..}"
+sdk = "python -m pip install \"locus-sdk @ git+https://github.com/oracle/locus.git\""
+sdk-local = "python -m pip install -e {env:LOCUS_SDK_DIR:../../..}"
 intel = "python -m a2a_mesh.threat_intel --port {env:PORT_INTEL:8001}"
 triage = "python -m a2a_mesh.soc_triage --port {env:PORT_TRIAGE:8002}"
 demo = "python -m a2a_mesh.orchestrator {args:\"Is alert A-101 a true positive?\"}"

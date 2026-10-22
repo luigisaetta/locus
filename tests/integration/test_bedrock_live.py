@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Live integration tests for the Bedrock provider.
 
@@ -22,10 +23,10 @@ import os
 
 import pytest
 
-from tulip.core.messages import Message
+from locus.core.messages import Message
 
 
-REGION = os.environ.get("TULIP_BEDROCK_REGION", "us-east-1")
+REGION = os.environ.get("LOCUS_BEDROCK_REGION", "us-east-1")
 MICRO = "us.amazon.nova-micro-v1:0"
 LITE = "us.amazon.nova-lite-v1:0"
 
@@ -36,8 +37,8 @@ def _bedrock_available() -> bool:
         import boto3
 
         session = (
-            boto3.Session(profile_name=os.environ["TULIP_AWS_PROFILE"])
-            if os.environ.get("TULIP_AWS_PROFILE")
+            boto3.Session(profile_name=os.environ["LOCUS_AWS_PROFILE"])
+            if os.environ.get("LOCUS_AWS_PROFILE")
             else boto3.Session()
         )
         if session.get_credentials() is None:
@@ -64,7 +65,7 @@ pytestmark = [pytest.mark.integration, skip_without_bedrock]
 
 @pytest.fixture
 def model():
-    from tulip.models.registry import get_model
+    from locus.models.registry import get_model
 
     return get_model(f"bedrock:{MICRO}", region=REGION)
 
@@ -133,7 +134,7 @@ async def test_tool_call_round_trip(model) -> None:
     assert call.name == "lookup_order"
     assert call.arguments["order_id"] == "ord-4821"
 
-    from tulip.core.messages import ToolResult
+    from locus.core.messages import ToolResult
 
     second = await model.complete(
         [
@@ -161,7 +162,7 @@ async def test_one_code_path_serves_several_vendors(model_id: str) -> None:
     outright — the failure only appears when the same conversation is replayed
     against a different family.
     """
-    from tulip.models.registry import get_model
+    from locus.models.registry import get_model
 
     model = get_model(f"bedrock:{model_id}", region=REGION)
     try:
@@ -183,11 +184,11 @@ async def test_agent_end_to_end_with_a_gated_tool() -> None:
     that a governed tool behaves the same here as everywhere else: the model
     asks for the refund, the policy denies it, and the tool body never runs.
     """
-    from tulip import Agent, AgentConfig
-    from tulip.control import Action, ControlPolicy
-    from tulip.control.gate import gate_tool
-    from tulip.control.verification import VerificationResult
-    from tulip.tools.decorator import tool
+    from locus import Agent, AgentConfig
+    from locus.control import Action, ControlPolicy
+    from locus.control.gate import gate_tool
+    from locus.control.verification import VerificationResult
+    from locus.tools.decorator import tool
 
     ran: list[float] = []
 
@@ -215,7 +216,7 @@ async def test_agent_end_to_end_with_a_gated_tool() -> None:
         refusal_reason="A manager must approve refunds this size.",
     )
 
-    from tulip.models.registry import get_model
+    from locus.models.registry import get_model
 
     agent = Agent(
         config=AgentConfig(model=get_model(f"bedrock:{LITE}", region=REGION), tools=[gated])

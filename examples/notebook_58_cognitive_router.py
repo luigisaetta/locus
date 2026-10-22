@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Notebook 58: Cognitive router — risk-gated routing for infra/devops requests.
 
-tulip.router compiles a natural-language operations request onto existing
-Tulip primitives. The LLM never picks topology — it fills a typed
+locus.router compiles a natural-language operations request onto existing
+Locus primitives. The LLM never picks topology — it fills a typed
 GoalFrame; the router selects a protocol deterministically, and the
 compiler emits a real Agent / SequentialPipeline / ParallelPipeline /
 LoopAgent from a curated registry. PolicyGate is the star, and it is the
@@ -28,11 +29,11 @@ until a human says so.
   it for approval instead of executing.
 
 Run it
-    # Default: the bundled mock model (set TULIP_MODEL_PROVIDER for a live provider)
+    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
     python examples/notebook_58_cognitive_router.py
 
     # Offline / no credentials (uses fallback frames):
-    TULIP_MODEL_PROVIDER=mock python examples/notebook_58_cognitive_router.py
+    LOCUS_MODEL_PROVIDER=mock python examples/notebook_58_cognitive_router.py
 """
 
 from __future__ import annotations
@@ -43,8 +44,8 @@ from typing import Any
 
 from config import get_model
 
-from tulip.agent import Agent
-from tulip.router import (
+from locus.agent import Agent
+from locus.router import (
     CapabilityIndex,
     CognitiveCompiler,
     Complexity,
@@ -58,10 +59,10 @@ from tulip.router import (
     TaskType,
     builtin_protocols,
 )
-from tulip.router.runtime import FrameExtractionError
-from tulip.skills import Skill
-from tulip.tools import tool
-from tulip.tools.registry import create_registry
+from locus.router.runtime import FrameExtractionError
+from locus.skills import Skill
+from locus.tools import tool
+from locus.tools.registry import create_registry
 
 
 # Per-protocol-id description of the runtime shape the builder emits.

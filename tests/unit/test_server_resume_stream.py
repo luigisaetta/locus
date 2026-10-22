@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """AgentServer: token streaming, JSON events, /resume by thread, trusted metadata."""
 
@@ -15,13 +16,13 @@ pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient
 
-from tulip.agent import Agent
-from tulip.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
-from tulip.hooks.provider import HookProvider
-from tulip.memory.backends.memory import MemoryCheckpointer
-from tulip.server import AgentServer
-from tulip.testing import ScriptedModel, text, tool_call
-from tulip.tools.decorator import tool
+from locus.agent import Agent
+from locus.control import Action, ControlPolicy, InMemoryApprovals, gate_tool
+from locus.hooks.provider import HookProvider
+from locus.memory.backends.memory import MemoryCheckpointer
+from locus.server import AgentServer
+from locus.testing import ScriptedModel, text, tool_call
+from locus.tools.decorator import tool
 
 
 calls: list[dict[str, Any]] = []
@@ -223,7 +224,7 @@ def test_invoke_applies_the_resolver_too() -> None:
 
 
 def test_custom_events_are_serialised_with_the_client_thread_id() -> None:
-    from tulip.core.events import CustomEvent
+    from locus.core.events import CustomEvent
 
     class _Stub:
         config = None
@@ -240,7 +241,7 @@ def test_custom_events_are_serialised_with_the_client_thread_id() -> None:
 
 
 def test_accepts_kwarg_handles_uninspectable_callables() -> None:
-    from tulip.server.app import _accepts_kwarg
+    from locus.server.app import _accepts_kwarg
 
     assert _accepts_kwarg(1, "stream_tokens") is False
     assert _accepts_kwarg(lambda *, stream_tokens=False: None, "stream_tokens") is True
@@ -308,7 +309,7 @@ def test_resume_edge_cases() -> None:
 
 
 def test_non_pydantic_events_fall_back_to_their_string_form() -> None:
-    from tulip.server.app import _event_payload
+    from locus.server.app import _event_payload
 
     class _Odd:
         event_type = "odd"

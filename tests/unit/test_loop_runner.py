@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for loop runner module."""
 
@@ -7,14 +8,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tulip.core.events import (
+from locus.core.events import (
     ReflectEvent,
     TerminateEvent,
     ThinkEvent,
     ToolCompleteEvent,
     ToolStartEvent,
 )
-from tulip.loop.runner import (
+from locus.loop.runner import (
     StreamingCollector,
     create_runner,
 )
@@ -187,7 +188,7 @@ class TestCreateRunner:
             registry=mock_registry,
         )
 
-        from tulip.loop.runner import LoopRunner
+        from locus.loop.runner import LoopRunner
 
         assert isinstance(runner, LoopRunner)
         assert runner.timeout is None
@@ -210,7 +211,7 @@ class TestCreateRunner:
             on_event=on_event,
         )
 
-        from tulip.loop.runner import LoopRunner
+        from locus.loop.runner import LoopRunner
 
         assert isinstance(runner, LoopRunner)
         assert runner.timeout == 60.0

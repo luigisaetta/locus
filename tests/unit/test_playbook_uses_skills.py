@@ -15,9 +15,9 @@ skill still constrains nothing, which is honest rather than convenient.
 
 from __future__ import annotations
 
-from tulip.playbooks.enforcer import PlaybookEnforcer
-from tulip.playbooks.models import Playbook, PlaybookStep, RequiredProbe
-from tulip.skills.models import Skill
+from locus.playbooks.enforcer import PlaybookEnforcer
+from locus.playbooks.models import Playbook, PlaybookStep, RequiredProbe
+from locus.skills.models import Skill
 
 
 TRIAGE = Skill(

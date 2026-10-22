@@ -1,5 +1,6 @@
-# Copyright 2026 The Tulip Authors
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
 
 """Unit tests for ``AgentConfig.termination`` wired into the agent loop.
 
@@ -13,9 +14,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from tulip.agent import Agent
-from tulip.core.messages import Message, ToolCall
-from tulip.core.termination import (
+from locus.agent import Agent
+from locus.core.messages import Message, ToolCall
+from locus.core.termination import (
     ConfidenceMet,
     CustomCondition,
     MaxIterations,
@@ -24,8 +25,8 @@ from tulip.core.termination import (
     TokenLimit,
     ToolCalled,
 )
-from tulip.models.base import ModelResponse
-from tulip.tools.decorator import tool
+from locus.models.base import ModelResponse
+from locus.tools.decorator import tool
 
 
 class _ScriptedModel:
