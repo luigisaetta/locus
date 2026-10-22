@@ -137,7 +137,7 @@ def check_security_major(version: str, verbose: bool) -> None:
 def check_security_lockstep(version: str, verbose: bool) -> None:
     """locus-sdk-security ships in lockstep: same version, floor on this one.
 
-    The release workflow installs ``locus_agents_security-<version>`` built
+    The release workflow installs ``locus_sdk_security-<version>`` built
     from the same tag; a package left at the previous version fails that
     install after locus-sdk is already on PyPI (v2.19.0 did).
     """

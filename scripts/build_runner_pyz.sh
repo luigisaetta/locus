@@ -6,7 +6,7 @@
 # Build locus-runner.pyz: the box runner (`python -m locus.runner`) as one file
 # that runs on any CPython of the same version and platform it was built with.
 #
-#   scripts/build_runner_pyz.sh <locus_agents wheel> <output .pyz>
+#   scripts/build_runner_pyz.sh <locus_sdk wheel> <output .pyz>
 #
 # The wheel is installed with the `openai` extra into a fresh virtualenv, and
 # what that resolved to is frozen: the .pyz carries exactly those versions,

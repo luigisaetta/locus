@@ -222,7 +222,7 @@ jobs:
       - name: Build locus-runner.pyz
         run: |
           set -eu
-          scripts/build_runner_pyz.sh "dist/locus_agents-${VERSION}-py3-none-any.whl" \
+          scripts/build_runner_pyz.sh "dist/locus_sdk-${VERSION}-py3-none-any.whl" \
             dist-runner/locus-runner.pyz
           # It must start, and say it was not started by a gateway.
           if env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" python3 dist-runner/locus-runner.pyz; then
