@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import socket
 from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
@@ -110,6 +111,19 @@ def openai_available() -> bool:
 
 
 @lru_cache(maxsize=1)
+def oci_config_available() -> bool:
+    """Check if OCI config exists and required env vars are set."""
+    config_path = Path.home() / ".oci" / "config"
+    if not config_path.exists():
+        return False
+
+    # Profile is required; endpoint is optional (can be derived from region)
+    profile = os.getenv("OCI_PROFILE")
+
+    return bool(profile)
+
+
+@lru_cache(maxsize=1)
 def anthropic_available() -> bool:
     """Check if Anthropic API key is set."""
     return bool(os.getenv("ANTHROPIC_API_KEY"))
@@ -146,6 +160,11 @@ skip_without_mysql = pytest.mark.skipif(
 skip_without_opensearch = pytest.mark.skipif(
     not opensearch_available(),
     reason="OpenSearch not available (set OPENSEARCH_HOSTS and credentials)",
+)
+
+skip_without_oci = pytest.mark.skipif(
+    not oci_config_available(),
+    reason="OCI not configured (need ~/.oci/config + OCI_PROFILE)",
 )
 
 skip_without_openai = pytest.mark.skipif(
@@ -232,6 +251,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "requires_postgres: test requires PostgreSQL")
     config.addinivalue_line("markers", "requires_mysql: test requires MySQL")
     config.addinivalue_line("markers", "requires_opensearch: test requires OpenSearch")
+    config.addinivalue_line("markers", "requires_oci: test requires OCI config")
     config.addinivalue_line("markers", "requires_openai: test requires OpenAI API key")
     config.addinivalue_line(
         "markers", "requires_model: test requires any model (OpenAI or Anthropic)"
@@ -245,6 +265,7 @@ def pytest_collection_modifyitems(config, items):
         "requires_postgres": skip_without_postgres,
         "requires_mysql": skip_without_mysql,
         "requires_opensearch": skip_without_opensearch,
+        "requires_oci": skip_without_oci,
         "requires_openai": skip_without_openai,
         "requires_model": skip_without_model,
     }
@@ -263,6 +284,7 @@ def pytest_report_header(config):
         ("PostgreSQL", postgres_available()),
         ("MySQL", mysql_available()),
         ("OpenSearch", opensearch_available()),
+        ("OCI GenAI", oci_config_available()),
         ("OpenAI", openai_available()),
         ("Any Model", any_model_available()),
     ]

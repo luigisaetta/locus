@@ -110,7 +110,9 @@ def test_message_time_ignores_garbage() -> None:
 
 async def test_retained_checkpointer_trims_the_local_default() -> None:
     inner = MemoryCheckpointer()
-    cp = RetainedCheckpointer(inner, max_age=timedelta(days=30))
+    # The fixture is pinned to NOW, so the checkpointer must be too — on the
+    # wall clock this test would start failing a few weeks after it was written.
+    cp = RetainedCheckpointer(inner, max_age=timedelta(days=30), clock=lambda: NOW)
     await cp.save(_thread(), "t1")
     loaded = await cp.load("t1")
     assert loaded is not None

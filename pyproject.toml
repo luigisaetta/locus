@@ -71,18 +71,21 @@ dependencies = [
 [project.optional-dependencies]
 # Model providers — every provider class under src/locus/models/native/
 # has a matching extra here. Keep this list in sync when adding a provider.
-openai = ["openai>=1.50"]
+# openai 3.x moved to the httpx2 client; the OCI V1 transport signs requests
+# through an httpx.Auth hook, so the SDK stays on the httpx-based 2.x line
+# until that transport is ported. The lock resolves to 2.41.
+openai = ["openai>=1.50,<3"]
 anthropic = ["anthropic>=0.40"]
 # OCI Generative AI speaks the OpenAI Chat Completions wire protocol;
 # locus.models.providers.oci.openai_compat lazy-imports the `openai`
 # client at request time (`client` property). Without it in the extra,
 # `pip install "locus-sdk[oci]"` boots fine but every .complete() call
 # raises ModuleNotFoundError. Pin alongside the [openai] extra.
-oci = ["oci>=2.173.0", "openai>=1.50"]
+oci = ["oci>=2.173.0", "openai>=1.50,<3"]
 
 # All LLM / model providers — short alias for pip discoverability.
 llm = [
-    "openai>=1.50",
+    "openai>=1.50,<3",
     "anthropic>=0.40",
     "oci>=2.173.0",
 ]
@@ -201,14 +204,14 @@ rag = [
     "oci>=2.173.0",
     "qdrant-client>=1.9",
     "chromadb>=0.5",
-    "openai>=1.50",
+    "openai>=1.50,<3",
     "cohere>=5.0",
     "sentence-transformers>=3.0",
 ]
 
 # Full SDK — all providers and backends.
 sdk = [
-    "openai>=1.50",
+    "openai>=1.50,<3",
     "anthropic>=0.40",
     "cohere>=5.0",
     "sentence-transformers>=3.0",

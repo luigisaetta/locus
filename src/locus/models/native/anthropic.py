@@ -346,19 +346,29 @@ class AnthropicModel(BaseModel):
             import anthropic  # noqa: PLC0415
 
             token = self._auth_token()
-            client = anthropic.AsyncAnthropic(
-                api_key=self.config.api_key,
-                auth_token=token,
-                base_url=self.base_url,
-                max_retries=self.config.max_retries,
-                timeout=self.config.request_timeout,
-                default_headers=self.config.default_headers,
-            )
-            if token is not None and self.config.api_key is None:
-                # Some SDK versions read ANTHROPIC_API_KEY whatever else is
-                # passed; with a bearer token for another endpoint that key
-                # must not ride along.
-                client.api_key = None
+            common: dict[str, Any] = {
+                "base_url": self.base_url,
+                "max_retries": self.config.max_retries,
+                "timeout": self.config.request_timeout,
+            }
+            if token is None:
+                return anthropic.AsyncAnthropic(
+                    api_key=self.config.api_key,
+                    default_headers=self.config.default_headers,
+                    **common,
+                )
+            # A bearer token is for a gateway in front of Anthropic. The SDK
+            # (2.x refuses two credentials in the constructor, and sends the
+            # key as a bearer too) only carries one Authorization header, so
+            # the token takes it and an explicit Anthropic key travels as
+            # X-Api-Key for the upstream. The key the SDK would otherwise
+            # read from ANTHROPIC_API_KEY is discarded — it must not leave
+            # the process for another endpoint.
+            headers = dict(self.config.default_headers or {})
+            if self.config.api_key is not None:
+                headers["X-Api-Key"] = self.config.api_key
+            client = anthropic.AsyncAnthropic(auth_token=token, default_headers=headers, **common)
+            client.api_key = None
             return client
 
         # Bound to the loop that built it — see locus.core.loop_bound.

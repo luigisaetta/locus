@@ -24,6 +24,10 @@ paths = [
 # the same files are still flagged).
 regexes = [
   '''sk-proj-abc123def456''',
+  # The placeholder key in the 2026 locus guardrails tutorial
+  # (examples/tutorial_19_guardrails_security.py, long since removed). The
+  # scan walks the whole history, so the value must stay allowlisted.
+  '''sk-abc123xyz''',
   # ObservationPack ids: ``obs_`` + a millisecond timestamp + a hex suffix.
   # The shape has enough entropy to trip generic-api-key, and the ids are
   # synthetic fixtures (tests/unit/test_observation_pack.py). The scan reads

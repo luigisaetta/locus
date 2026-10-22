@@ -50,7 +50,7 @@ from locus.memory.checkpointer import BaseCheckpointer
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from locus.core.protocols import CheckpointerCapabilities
     from locus.core.state import AgentState
@@ -151,13 +151,22 @@ class RetainedCheckpointer(BaseCheckpointer):
         inner: The checkpointer that stores the state.
         max_age: How long an exchange is kept. ``None`` only stamps, so a later
             ``max_age`` (or ``trim_messages``) has the times to go by.
+        clock: Where "now" comes from when a save does not say. Defaults to
+            the wall clock; tests and replays pass their own.
     """
 
-    def __init__(self, inner: BaseCheckpointer, max_age: timedelta | None = None) -> None:
+    def __init__(
+        self,
+        inner: BaseCheckpointer,
+        max_age: timedelta | None = None,
+        *,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
         if max_age is not None and max_age <= timedelta(0):
             raise ValueError("max_age must be positive")
         self.inner = inner
         self.max_age = max_age
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     @property
     def capabilities(self) -> CheckpointerCapabilities:
@@ -169,7 +178,7 @@ class RetainedCheckpointer(BaseCheckpointer):
 
     def retain(self, state: AgentState, now: datetime | None = None) -> AgentState:
         """``state`` as it would be saved now: stamped, and trimmed to ``max_age``."""
-        now = now or datetime.now(UTC)
+        now = now or self._clock()
         state = stamp_messages(state, now)
         if self.max_age is not None:
             state, _ = trim_messages(state, now - self.max_age)
