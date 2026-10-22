@@ -8,6 +8,18 @@ policy.
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-10-22
+
+### Fixed
+
+- **`pip install "locus-sdk[oci]"` in a clean environment.** The OCI request
+  signer builds on `requests.auth.AuthBase`, but `requests` was never declared:
+  the OCI SDK vendors its own copy, and development environments had it through
+  other extras, so importing `locus.models.providers.oci` raised
+  `ModuleNotFoundError: No module named 'requests'` only on a fresh install.
+  The `oci` extra, and the `llm`, `rag`, `checkpoints` and `sdk` bundles that
+  include it, now list `requests>=2.31`.
+
 ## [3.0.0] - 2026-10-22
 
 Locus is back at Oracle. The project continued from 2026-06-08 to

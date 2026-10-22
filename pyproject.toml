@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "locus-sdk"
-version = "3.0.0"
+version = "3.0.1"
 description = "The agent framework where the model never holds the trigger — every consequential action clears your policy first, waits for a human when it matters, and lands on a record you can verify. Build on it, or put it around the agent you already have."
 readme = "README.md"
 license = "UPL-1.0"
@@ -81,13 +81,16 @@ anthropic = ["anthropic>=0.40"]
 # client at request time (`client` property). Without it in the extra,
 # `pip install "locus-sdk[oci]"` boots fine but every .complete() call
 # raises ModuleNotFoundError. Pin alongside the [openai] extra.
-oci = ["oci>=2.173.0", "openai>=1.50,<3"]
+# ``requests``: the request signer (locus.models.providers.oci._signing) builds on
+# requests.auth.AuthBase; the OCI SDK vendors its own copy, so it must be listed.
+oci = ["oci>=2.173.0", "openai>=1.50,<3", "requests>=2.31"]
 
 # All LLM / model providers — short alias for pip discoverability.
 llm = [
     "openai>=1.50,<3",
     "anthropic>=0.40",
     "oci>=2.173.0",
+    "requests>=2.31",
 ]
 
 # Observability
@@ -178,6 +181,7 @@ checkpoints = [
     "boto3>=1.34",
     "oracledb>=2.2.0",
     "oci>=2.173.0",
+    "requests>=2.31",
     "oracleagentmemory>=26.4.0,<27",
 ]
 
@@ -202,6 +206,7 @@ rag = [
     "opensearch-py>=2.4",
     "oracledb>=2.2.0",
     "oci>=2.173.0",
+    "requests>=2.31",
     "qdrant-client>=1.9",
     "chromadb>=0.5",
     "openai>=1.50,<3",
@@ -230,6 +235,7 @@ sdk = [
     "chromadb>=0.5",
     "mem0ai>=0.1",
     "oci>=2.173.0",
+    "requests>=2.31",
     "oracledb>=2.2.0",
     "oracleagentmemory>=26.4.0,<27",
 ]

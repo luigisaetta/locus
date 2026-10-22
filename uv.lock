@@ -2532,7 +2532,7 @@ wheels = [
 
 [[package]]
 name = "locus-sdk"
-version = "3.0.0"
+version = "3.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -2569,6 +2569,7 @@ checkpoints = [
     { name = "oracleagentmemory" },
     { name = "oracledb" },
     { name = "redis" },
+    { name = "requests" },
 ]
 chroma = [
     { name = "chromadb" },
@@ -2612,6 +2613,7 @@ llm = [
     { name = "anthropic" },
     { name = "oci" },
     { name = "openai" },
+    { name = "requests" },
 ]
 mcp = [
     { name = "mcp" },
@@ -2625,6 +2627,7 @@ mysql = [
 oci = [
     { name = "oci" },
     { name = "openai" },
+    { name = "requests" },
 ]
 openai = [
     { name = "openai" },
@@ -2657,6 +2660,7 @@ rag = [
     { name = "opensearch-py" },
     { name = "oracledb" },
     { name = "qdrant-client" },
+    { name = "requests" },
     { name = "sentence-transformers" },
 ]
 redis = [
@@ -2692,6 +2696,7 @@ sdk = [
     { name = "oracledb" },
     { name = "qdrant-client" },
     { name = "redis" },
+    { name = "requests" },
     { name = "sentence-transformers" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -2759,11 +2764,11 @@ requires-dist = [
     { name = "oci", marker = "extra == 'oci'", specifier = ">=2.173.0" },
     { name = "oci", marker = "extra == 'rag'", specifier = ">=2.173.0" },
     { name = "oci", marker = "extra == 'sdk'", specifier = ">=2.173.0" },
-    { name = "openai", marker = "extra == 'llm'", specifier = ">=1.50" },
-    { name = "openai", marker = "extra == 'oci'", specifier = ">=1.50" },
-    { name = "openai", marker = "extra == 'openai'", specifier = ">=1.50" },
-    { name = "openai", marker = "extra == 'rag'", specifier = ">=1.50" },
-    { name = "openai", marker = "extra == 'sdk'", specifier = ">=1.50" },
+    { name = "openai", marker = "extra == 'llm'", specifier = ">=1.50,<3" },
+    { name = "openai", marker = "extra == 'oci'", specifier = ">=1.50,<3" },
+    { name = "openai", marker = "extra == 'openai'", specifier = ">=1.50,<3" },
+    { name = "openai", marker = "extra == 'rag'", specifier = ">=1.50,<3" },
+    { name = "openai", marker = "extra == 'sdk'", specifier = ">=1.50,<3" },
     { name = "opensearch-py", marker = "extra == 'checkpoints'", specifier = ">=2.4" },
     { name = "opensearch-py", marker = "extra == 'opensearch'", specifier = ">=2.4" },
     { name = "opensearch-py", marker = "extra == 'rag'", specifier = ">=2.4" },
@@ -2798,6 +2803,11 @@ requires-dist = [
     { name = "redis", marker = "extra == 'dev'", specifier = ">=7.1.0" },
     { name = "redis", marker = "extra == 'redis'", specifier = ">=5.0" },
     { name = "redis", marker = "extra == 'sdk'", specifier = ">=5.0" },
+    { name = "requests", marker = "extra == 'checkpoints'", specifier = ">=2.31" },
+    { name = "requests", marker = "extra == 'llm'", specifier = ">=2.31" },
+    { name = "requests", marker = "extra == 'oci'", specifier = ">=2.31" },
+    { name = "requests", marker = "extra == 'rag'", specifier = ">=2.31" },
+    { name = "requests", marker = "extra == 'sdk'", specifier = ">=2.31" },
     { name = "respx", marker = "extra == 'dev'", specifier = ">=0.21" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15,<0.16" },
     { name = "sentence-transformers", marker = "extra == 'rag'", specifier = ">=3.0" },
@@ -2816,7 +2826,7 @@ provides-extras = ["openai", "anthropic", "oci", "llm", "telemetry", "mcp", "ser
 
 [[package]]
 name = "locus-sdk-security"
-version = "3.0.0"
+version = "3.0.1"
 source = { editable = "packages/locus-sdk-security" }
 dependencies = [
     { name = "locus-sdk" },
