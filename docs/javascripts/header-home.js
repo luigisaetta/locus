@@ -1,26 +1,15 @@
-// Make the header title ("locus SDK") behave like the logo:
-// click → docs home. Uses event delegation on `document` so it keeps
-// working across mkdocs-material `navigation.instant` page swaps.
-//
-// `site_url` is the production apex (locusagents.oracle.com), so the rendered logo
-// anchor is absolute to that origin. We honour it when we're actually
-// served from that origin, but fall back to the current origin's root
-// for local dev / previews — otherwise "home" would jump off to the
-// production domain.
-document.addEventListener("click", (e) => {
-  const target = e.target;
-  if (!(target instanceof Element)) return;
-  // Only the title slot — never hijack the logo, repo links, or icons.
-  if (!target.closest(".md-header__title") || target.closest("a")) return;
-  e.preventDefault();
+// Make the header title text behave like the logo: click → docs home.
+// Inherit the URL from the mkdocs-material-rendered `.md-logo` anchor
+// rather than hard-coding "/" — the deployed site lives at
+// `https://locusagents.ai/`, so "/" would resolve to the wrong
+// place if we ever moved off the apex. `.md-logo` carries the correct
+// site-relative href on every page.
+document.addEventListener("DOMContentLoaded", () => {
+  const title = document.querySelector(".md-header__ellipsis");
   const logo = document.querySelector(".md-header__button.md-logo");
-  let dest = logo && logo.href ? logo.href : window.location.origin + "/";
-  try {
-    if (new URL(dest).origin !== window.location.origin) {
-      dest = window.location.origin + "/";
-    }
-  } catch {
-    dest = window.location.origin + "/";
-  }
-  window.location.href = dest;
+  if (!title || !logo) return;
+  title.style.cursor = "pointer";
+  title.addEventListener("click", () => {
+    window.location.href = logo.href;
+  });
 });

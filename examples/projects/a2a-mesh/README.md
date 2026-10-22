@@ -132,4 +132,4 @@ above.
 
 [t34]: https://github.com/oracle/locus/blob/main/examples/notebook_28_a2a_protocol.py
 [a2a]: https://github.com/oracle/locus/blob/main/src/locus/a2a/protocol.py
-[orch]: https://locusagents.oracle.com/concepts/multi-agent/orchestrator/
+[orch]: https://locusagents.ai/concepts/multi-agent/orchestrator/

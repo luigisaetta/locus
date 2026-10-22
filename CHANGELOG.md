@@ -31,7 +31,7 @@ on the way out. `tulip-agents` is retired.
   [`PROVENANCE.md`](PROVENANCE.md).
 - **Docs site moved in-repo.** `docs/`, `mkdocs.yml`, the theme overrides and
   build hooks live here again and publish to
-  <https://locusagents.oracle.com/>; the API reference imports this checkout.
+  <https://locusagents.ai/>; the API reference imports this checkout.
 - `CohereReranker` is Cohere's direct rerank API; the OCI-served reranker is
   now `OCICohereReranker` (`locus.rag.reranker.cohere_oci`).
 
@@ -3097,7 +3097,7 @@ until this went out.
   to the core via three points — the **cognitive router** (PRISM) picks the runtime shape,
   **GSAR** grounds every claim (or abstains), and the **admission gate** (`admit()`) gates
   every risky action — packaged as safety. AI security is repositioned from the SDK's
-  identity to its **flagship proof domain**. README, the `locusagents.oracle.com` landing, package
+  identity to its **flagship proof domain**. README, the `locusagents.ai` landing, package
   description / keywords / classifiers, and `CONTRIBUTING` reflect the framework-first,
   safety-led identity. No API changes.
 
@@ -3153,7 +3153,7 @@ deprecation path described in [`DEPRECATION.md`](DEPRECATION.md).
   see `NOTICE`.
 - **Versioning:** the `0.2.0bN` beta line is retired; Locus goes GA at
   `1.0.0` with no further pre-releases.
-- **Docs:** documentation moves to <https://locusagents.oracle.com/> with a new
+- **Docs:** documentation moves to <https://locusagents.ai/> with a new
   information architecture (Learn / Cookbook / Workbench / Reference)
   and a redesigned home page.
 - **Repo split:** the documentation site and the browser workbench move

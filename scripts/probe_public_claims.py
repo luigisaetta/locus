@@ -2,7 +2,7 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Probe the public claims on locusagents.oracle.com against the code.
+"""Probe the public claims on locusagents.ai against the code.
 
 Every check maps to a concrete, verbatim claim made on the marketing or docs
 pages. Offline-only: uses the bundled MockModel, no credentials, no cost. Run:
@@ -233,7 +233,7 @@ def main() -> None:
 
     # ── report ───────────────────────────────────────────────────────────────
     print("\n" + "=" * 80)
-    print("PUBLIC-CLAIM PROBE  —  locusagents.oracle.com  vs  the code")
+    print("PUBLIC-CLAIM PROBE  —  locusagents.ai  vs  the code")
     print("=" * 80)
     width = max(len(c) for c, _, _ in results)
     for claim, status, detail in results:

@@ -288,7 +288,7 @@ locus-runner = "locus.runner.main:main"
 
 [project.urls]
 Homepage = "https://github.com/oracle/locus"
-Documentation = "https://locusagents.oracle.com/"
+Documentation = "https://locusagents.ai/"
 Repository = "https://github.com/oracle/locus"
 Issues = "https://github.com/oracle/locus/issues"
 
