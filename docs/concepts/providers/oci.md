@@ -1,7 +1,7 @@
 # OCI Generative AI
 
-OCI Generative AI is Oracle Generative AI – Multi-Agent Locus SDK's
-**day-1 target** and the most capable provider in the box. It exposes
+OCI Generative AI is Locus's **day-1 target** and the most capable provider
+in the Oracle Generative AI Agentic Harness. It exposes
 90+ models — OpenAI commercial families, Meta Llama, Anthropic Claude,
 Google Gemini, xAI Grok, Mistral, and Cohere — through Oracle's hosted
 inference service. **When OCI ships a new model id, the SDK already

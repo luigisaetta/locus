@@ -5,7 +5,7 @@ description: Who maintains Locus, where it came from, and how releases, security
 
 # About Locus
 
-Locus is the Oracle Generative AI – Multi-Agent Reasoning Orchestrator SDK:
+Locus is the Oracle Generative AI Agentic Harness, a multi-agent reasoning orchestrator SDK:
 a policy gate, approvals and an audit trail in front of the actions a Python
 agent takes, on a full agent runtime built first-class for **OCI Generative
 AI** and **Oracle Database 26ai** — and open to every other provider. It is
