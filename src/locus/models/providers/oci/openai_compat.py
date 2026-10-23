@@ -120,6 +120,35 @@ def _load_profile_config(profile: str, config_file: str) -> dict[str, Any]:
     return cfg
 
 
+def fold_leading_system_into_first_user(messages: list[Message]) -> list[Message]:
+    """Return ``messages`` with leading system messages merged into the first user turn.
+
+    The system text is prepended to the first user message's content,
+    separated by a blank line; the system messages are dropped. Lists
+    that don't start with a system message, or that have no user
+    message at all, are returned unchanged (same object). The input is
+    never mutated.
+    """
+    from locus.core.messages import Role
+
+    if not messages or messages[0].role != Role.SYSTEM:
+        return messages
+    i = 0
+    system_parts: list[str] = []
+    while i < len(messages) and messages[i].role == Role.SYSTEM:
+        if messages[i].content:
+            system_parts.append(messages[i].content or "")
+        i += 1
+    rest = messages[i:]
+    first_user = next((k for k, m in enumerate(rest) if m.role == Role.USER), None)
+    if first_user is None:
+        return messages
+    user = rest[first_user]
+    merged = "\n\n".join([*system_parts, user.content or ""]).strip()
+    folded = user.model_copy(update={"content": merged})
+    return [*rest[:first_user], folded, *rest[first_user + 1 :]]
+
+
 def _build_signer_from_profile(profile: str, config_file: str) -> AbstractBaseSigner:
     """Build an OCI signer from a config profile.
 
@@ -450,6 +479,23 @@ class OCIChatCompletionsModel(OpenAIModel):
             )
         return out
 
+    def _prepare_messages_for_oci(
+        self, messages: list[Message], tools: list[dict[str, Any]] | None
+    ) -> list[Message]:
+        """Apply vendor quirks of OCI's V1 endpoint to the message list.
+
+        Meta Llama with tools: OCI rejects the request with ``400 Tool
+        calling for this Llama model requires the first message to be a
+        user message`` whenever a system message leads the conversation —
+        which is every Locus agent with a ``system_prompt``. Fold the
+        leading system text into the first user message instead. Other
+        vendors accept a leading system message, and Llama without tools
+        does too, so the rewrite is scoped to exactly that case.
+        """
+        if tools and (self.config.model or "").lower().startswith("meta.llama"):
+            return fold_leading_system_into_first_user(messages)
+        return messages
+
     async def complete(
         self,
         messages: list[Message],
@@ -458,6 +504,7 @@ class OCIChatCompletionsModel(OpenAIModel):
     ) -> ModelResponse:
         kwargs = self._munge_response_format_for_gemini(kwargs)
         tools = self._sanitize_tools_for_oci(tools)
+        messages = self._prepare_messages_for_oci(messages, tools)
         return await super().complete(messages, tools=tools, **kwargs)
 
     async def stream(
@@ -468,6 +515,7 @@ class OCIChatCompletionsModel(OpenAIModel):
     ) -> AsyncIterator[ModelChunkEvent]:
         kwargs = self._munge_response_format_for_gemini(kwargs)
         tools = self._sanitize_tools_for_oci(tools)
+        messages = self._prepare_messages_for_oci(messages, tools)
         async for event in super().stream(messages, tools=tools, **kwargs):
             yield event
 

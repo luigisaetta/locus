@@ -91,7 +91,12 @@ class OracleAgentMemoryManager(BaseMemoryManager):
         from locus.memory.managers import OracleAgentMemoryManager
 
         manager = OracleAgentMemoryManager(
-            connection=oracledb.connect(
+            # A pool, not a single connection: oracleagentmemory extracts
+            # memories on a background thread, and a shared
+            # oracledb.Connection is not thread-safe.
+            connection=oracledb.create_pool(
+                min=1,
+                max=4,
                 user="locus_app",
                 password=...,
                 dsn="mydb_low",
@@ -119,9 +124,12 @@ class OracleAgentMemoryManager(BaseMemoryManager):
         )
 
     Args:
-        connection: A pre-built ``oracledb.Connection`` (sync; the
-            ``oracleagentmemory`` runtime drives it through its own
-            sync/async helpers). Pass ``store=`` instead if you want
+        connection: A pre-built sync ``oracledb.ConnectionPool`` (preferred)
+            or ``oracledb.Connection``. The ``oracleagentmemory`` runtime
+            drives it through its own sync/async helpers and runs memory
+            extraction on a background thread, so a single connection
+            shared with the agent's own queries is not thread-safe — pass
+            a pool whenever ``extract_memories`` is on. Pass ``store=`` instead if you want
             full control over schema/pool wiring.
         store: An already-constructed
             ``oracleagentmemory.core.OracleMemoryStore``. Mutually
@@ -224,6 +232,7 @@ class OracleAgentMemoryManager(BaseMemoryManager):
             ctor_kwargs["schema_policy"] = schema_policy
 
         self._client = OracleAgentMemory(**ctor_kwargs)
+        self._closed = False
         self._thread_id_resolver = thread_id_resolver
         self._user_id_resolver = user_id_resolver
         self._agent_id_resolver = agent_id_resolver
@@ -263,6 +272,38 @@ class OracleAgentMemoryManager(BaseMemoryManager):
         """
         results = await self._client.search_async(query="*", max_results=limit)
         return [_search_result_to_memory(r) for r in results]
+
+    async def drain(self) -> None:
+        """Wait for Locus-side *and* ``oracleagentmemory``-side background work.
+
+        The library extracts memories on its own background thread after
+        each turn; a caller that closes the pool right after ``run_sync``
+        returns races that thread (``DPY-1005: connection pool cannot be
+        closed because connections are busy``, and in the thin driver a
+        crash). ``drain`` returns once both queues are empty.
+        """
+        await super().drain()
+        if not self._closed:
+            await self._client.wait_for_memory_extraction_async()
+
+    async def aclose(self, timeout: float | None = 300.0) -> None:  # noqa: ASYNC109 - forwarded to the library's own close_async
+        """Wait for background extraction and close the ``oracleagentmemory`` client.
+
+        Call this before closing the pool or connection you passed in.
+        Idempotent. ``timeout`` bounds the wait for in-flight extraction
+        jobs (seconds; ``None`` waits forever).
+        """
+        if self._closed:
+            return
+        self._closed = True
+        await self._client.close_async(timeout=timeout)
+
+    def close(self, timeout: float | None = 300.0) -> None:
+        """Synchronous :meth:`aclose` for code that is not inside an event loop."""
+        if self._closed:
+            return
+        self._closed = True
+        self._client.close(timeout=timeout)
 
     async def save(self, memories: list[Memory]) -> None:
         """Persist memories explicitly. Called by direct users; the

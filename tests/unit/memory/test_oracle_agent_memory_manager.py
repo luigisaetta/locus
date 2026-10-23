@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -52,6 +52,10 @@ class _StubOracleAgentMemory:
         self._card_text = card_text
         self.search_async = AsyncMock(return_value=[])
         self.add_memory_async = AsyncMock(return_value="mem-id-1")
+        # Lifecycle surface used by drain() / aclose() / close().
+        self.wait_for_memory_extraction_async = AsyncMock(return_value=None)
+        self.close_async = AsyncMock(return_value=None)
+        self.close = MagicMock(return_value=None)
 
     # Mimic OracleAgentMemory's sync methods. The adapter calls these
     # synchronously (they live outside the async hook bodies).
@@ -310,3 +314,40 @@ async def test_save_calls_add_memory_async_per_memory(stub_client_factory):
     first_call = stub.add_memory_async.await_args_list[0]
     assert first_call.kwargs["user_id"] == "alice"
     assert "content" in first_call.kwargs
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle — drain / aclose / close
+# ---------------------------------------------------------------------------
+
+
+async def test_drain_waits_for_the_librarys_background_extraction(stub_client_factory):
+    stub = stub_client_factory()
+    from locus.memory.managers import OracleAgentMemoryManager
+
+    manager = OracleAgentMemoryManager(connection="fake-conn")
+    await manager.drain()
+    stub.wait_for_memory_extraction_async.assert_awaited_once()
+
+
+async def test_aclose_closes_the_client_once_and_is_idempotent(stub_client_factory):
+    stub = stub_client_factory()
+    from locus.memory.managers import OracleAgentMemoryManager
+
+    manager = OracleAgentMemoryManager(connection="fake-conn")
+    await manager.aclose(timeout=12.5)
+    await manager.aclose()
+    stub.close_async.assert_awaited_once_with(timeout=12.5)
+    # Draining a closed manager must not touch the client again.
+    await manager.drain()
+    stub.wait_for_memory_extraction_async.assert_not_awaited()
+
+
+def test_close_is_the_sync_twin(stub_client_factory):
+    stub = stub_client_factory()
+    from locus.memory.managers import OracleAgentMemoryManager
+
+    manager = OracleAgentMemoryManager(connection="fake-conn")
+    manager.close()
+    manager.close()
+    stub.close.assert_called_once_with(timeout=300.0)
