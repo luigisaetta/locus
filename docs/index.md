@@ -2,13 +2,13 @@
 hide:
   - navigation
   - toc
-description: Oracle Generative AI – Multi-Agent Locus SDK. Multi-agent workflows for Python with an admission gate in front of every consequential action, built first-class for OCI Generative AI and Oracle Database 26ai.
+description: Oracle Generative AI Agentic Harness. Locus is a fully assembled agent harness for Python with an admission gate in front of every consequential action, built first-class for OCI Generative AI and Oracle Database 26ai.
 ---
 
 <div class="locus-hero" markdown>
 <div class="locus-hero__copy" markdown>
 
-<p class="locus-product-name">Oracle Generative AI Multi-Agent Reasoning Orchestrator SDK</p>
+<p class="locus-product-name">Oracle Generative AI Agentic Harness</p>
 
 # Multi-agent workflows built for <span class="accent">production.</span>
 
@@ -90,6 +90,55 @@ asyncio.run(main())
 
 </div>
 </div>
+
+## The Oracle Generative AI Agentic Harness
+
+Locus is the **Oracle Generative AI Agentic Harness**: a fully assembled agent harness you
+build on, or wrap around the agent you already have, and control end-to-end. The
+harness is the layer *around* the model — the parts a model cannot be trusted to
+supply for itself.
+
+<div class="grid cards locus-feature-cards" markdown>
+
+- :material-shield-lock:{ .lg .middle } **Admission gate**
+
+    ---
+    Every consequential action clears `admit()` first: real code, outside the
+    model, before the side effect, held for a human when the policy says so,
+    recorded on a signed audit trail.
+
+- :material-check-decagram:{ .lg .middle } **Grounding and guardrails**
+
+    ---
+    Every claim is checked against the tool result that produced it or the
+    agent abstains (GSAR). Input, output and tool-call guardrails catch the rest.
+
+- :material-graph:{ .lg .middle } **Cognitive routing**
+
+    ---
+    Describe the task; the router picks one of eight production-tested
+    protocols and coordinates the agents.
+
+- :material-cloud:{ .lg .middle } **Oracle Cloud, first-class**
+
+    ---
+    Day-0 on OCI Generative AI with three transports and automatic routing, and
+    Oracle Database 26ai for RAG, durable threads and long-term memory.
+
+</div>
+
+One call assembles the whole harness:
+
+```python
+from locus.control import governed_agent
+
+agent = governed_agent(model="oci:openai.gpt-5", tools=[...])
+print(agent.run_sync("Refund order 8812 if the return was received.").text)
+assert agent.audit_trail.verify()   # the chain is intact — no record was altered
+```
+
+Or put the same gate around a LangChain chain, a plain OpenAI loop or a CrewAI
+crew — see [the admission gate](concepts/security.md).
 
 ## Your first agent in five lines
 
