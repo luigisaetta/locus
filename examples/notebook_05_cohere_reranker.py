@@ -118,7 +118,7 @@ async def main() -> None:
     auth_type = os.environ.get("LOCUS_OCI_AUTH_TYPE") or os.environ.get("OCI_AUTH_TYPE", "api_key")
 
     embedder = OCIEmbeddings(
-        model_id="cohere.embed-english-v3.0",
+        model_id="cohere.embed-v4.0",
         profile_name=profile,
         auth_type=auth_type,
         compartment_id=compartment,
@@ -132,7 +132,7 @@ async def main() -> None:
         wallet_location=os.path.expanduser(os.environ["ORACLE_WALLET"]),
         wallet_password=os.environ.get("ORACLE_WALLET_PASSWORD", ""),
         table_name="locus_notebook_05",
-        dimension=1024,
+        dimension=1536,
         distance_metric="COSINE",
     )
     print(f"Embedding {len(CORPUS)} passages and seeding OracleVectorStore…")

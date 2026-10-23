@@ -45,9 +45,9 @@ class TestOCIEmbeddingsIntegration:
         result = await embedder.embed("Hello world, this is a test.")
 
         assert result.embedding is not None
-        assert len(result.embedding) == 1024  # Cohere embed-v3 dimension
+        assert len(result.embedding) == embedder.dimension
         assert result.text == "Hello world, this is a test."
-        assert result.model == "cohere.embed-english-v3.0"
+        assert result.model == embedder.config.model_id
 
     @pytest.mark.asyncio
     async def test_embed_batch(self, embedder):
@@ -61,7 +61,7 @@ class TestOCIEmbeddingsIntegration:
         results = await embedder.embed_batch(texts)
 
         assert len(results) == 3
-        assert all(len(r.embedding) == 1024 for r in results)
+        assert all(len(r.embedding) == embedder.dimension for r in results)
         assert [r.text for r in results] == texts
 
     @pytest.mark.asyncio
@@ -69,7 +69,7 @@ class TestOCIEmbeddingsIntegration:
         """Test query embedding (uses SEARCH_QUERY input type)."""
         result = await embedder.embed_query("What is machine learning?")
 
-        assert len(result.embedding) == 1024
+        assert len(result.embedding) == embedder.dimension
         assert result.text == "What is machine learning?"
 
     @pytest.mark.asyncio
@@ -83,7 +83,7 @@ class TestOCIEmbeddingsIntegration:
         results = await embedder.embed_documents(docs)
 
         assert len(results) == 2
-        assert all(len(r.embedding) == 1024 for r in results)
+        assert all(len(r.embedding) == embedder.dimension for r in results)
 
     @pytest.mark.asyncio
     async def test_embedding_similarity(self, embedder):
@@ -114,7 +114,7 @@ class TestOCIEmbeddingsIntegration:
         """Test embedder configuration."""
         config = embedder.config
 
-        assert config.dimension == 1024
+        assert config.dimension == embedder.dimension
         assert config.batch_size == 96
 
 
@@ -127,7 +127,7 @@ class TestOCIEmbeddingsMultilingual:
         from locus.rag.embeddings.oci import OCIEmbeddings
 
         return OCIEmbeddings(
-            model_id="cohere.embed-multilingual-v3.0",
+            model_id=os.getenv("OCI_EMBED_MULTILINGUAL_MODEL", "cohere.embed-multilingual-v3.0"),
             profile_name=oci_config["profile_name"],
             auth_type=oci_config["auth_type"],
             compartment_id=oci_config["compartment_id"],
@@ -146,7 +146,7 @@ class TestOCIEmbeddingsMultilingual:
         results = await embedder.embed_batch(texts)
 
         assert len(results) == 3
-        assert all(len(r.embedding) == 1024 for r in results)
+        assert all(len(r.embedding) == embedder.dimension for r in results)
 
 
 class TestOCIEmbeddingsLight:

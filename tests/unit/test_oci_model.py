@@ -109,9 +109,11 @@ class TestProviderSelection:
         m = OCIModel(model_id="COHERE.COMMAND-R-PLUS")
         assert isinstance(m.provider, CohereProvider)
 
-    def test_cohere_a_picks_generic_provider(self) -> None:
+    def test_cohere_a_picks_cohere_provider(self) -> None:
+        # Command A is served through the Cohere chat API on OCI; the generic
+        # request shape is rejected with 400 "Chat request type does not match".
         m = OCIModel(model_id="cohere.command-a-03-2025")
-        assert isinstance(m.provider, GenericProvider)
+        assert isinstance(m.provider, CohereProvider)
 
     def test_meta_picks_generic(self) -> None:
         m = OCIModel(model_id="meta.llama-3.3-70b-instruct")

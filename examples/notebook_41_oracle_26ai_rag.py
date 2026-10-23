@@ -127,8 +127,8 @@ def _print_skip_banner(missing: list[str]) -> None:
     )
 
     retriever = RAGRetriever(
-        embedder=OCIEmbeddings(model_id="cohere.embed-english-v3.0", ...),
-        store=OracleVectorStore(dsn=..., user=..., dimension=1024, ...),
+        embedder=OCIEmbeddings(model_id="cohere.embed-v4.0", ...),
+        store=OracleVectorStore(dsn=..., user=..., dimension=1536, ...),
     )
     await retriever.add_documents(corpus)
 
@@ -198,7 +198,7 @@ async def main() -> None:
 
     embedder = OCIEmbeddings(
         # 1024-dim Cohere V3 on OCI GenAI — matches the VECTOR(1024, FLOAT32) column.
-        model_id="cohere.embed-english-v3.0",
+        model_id="cohere.embed-v4.0",
         profile_name=profile,
         auth_type=auth_type,
         compartment_id=compartment,
@@ -215,7 +215,7 @@ async def main() -> None:
         # Demo defaults. For production, pre-create the table and pass
         # auto_create_table=False so the runtime user only needs DML.
         table_name="locus_notebook_06",
-        dimension=1024,
+        dimension=1536,
         distance_metric="COSINE",
     )
 

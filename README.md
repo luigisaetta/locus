@@ -347,10 +347,10 @@ Agent(model="azure:gpt4o-prod")                     # AZURE_OPENAI_ENDPOINT, a d
 Agent(model="gemini:gemini-2.0-flash")              # GEMINI_API_KEY
 ```
 
-`oci:` picks the transport from the model id. OpenAI, Meta Llama, xAI Grok, Mistral,
-Google Gemini and non-R Cohere models go through **V1** (`OCIChatCompletionsModel`, the
-OpenAI-compatible `/openai/v1` endpoint — SSE streaming, day-0 model support); Cohere
-R-series and Dedicated AI Cluster endpoint OCIDs go through the **SDK** transport
+`oci:` picks the transport from the model id. OpenAI, Meta Llama, xAI Grok, Mistral and
+Google Gemini go through **V1** (`OCIChatCompletionsModel`, the OpenAI-compatible
+`/openai/v1` endpoint — SSE streaming, day-0 model support); Cohere (Command R and
+Command A) and Dedicated AI Cluster endpoint OCIDs go through the **SDK** transport
 (`OCIModel`); the server-stateful **Responses** API is opt-in (`OCIResponsesModel`). Auth is
 the OCI config profile, a session token, or instance / resource principals on OKE and
 Compute. Install with `pip install "locus-sdk[oci]"`.
@@ -358,7 +358,7 @@ Compute. Install with `pip install "locus-sdk[oci]"`.
 | Provider | Transport | Models |
 |---|---|---|
 | **OCI Generative AI** | **V1** (`OCIChatCompletionsModel`) — default | OpenAI commercial · Meta Llama · xAI Grok · Mistral · Google Gemini · Cohere on-demand |
-| **OCI Generative AI** | **SDK** (`OCIModel`) — auto for `cohere.command-r*` and DAC OCIDs | Cohere R-series native API · Dedicated AI Clusters |
+| **OCI Generative AI** | **SDK** (`OCIModel`) — auto for `cohere.*` and DAC OCIDs | Cohere native chat API (Command R and Command A) · Dedicated AI Clusters |
 | **OCI Generative AI** | **Responses** (`OCIResponsesModel`) — opt-in | Server-stateful endpoint for OpenAI / xAI / Gemini Responses-only models |
 
 `bedrock:` goes through the Converse API, so one code path covers every model on the
@@ -406,13 +406,13 @@ import asyncio
 from locus.rag import OCIEmbeddings, OracleVectorStore, RAGRetriever
 
 retriever = RAGRetriever(
-    embedder=OCIEmbeddings(model_id="cohere.embed-english-v3.0"),
+    embedder=OCIEmbeddings(model_id="cohere.embed-v4.0"),
     store=OracleVectorStore(
         dsn="mydb_low",
         user="locus_app",
         password="…",
         wallet_location="~/.oci/wallets/mydb",
-        dimension=1024,        # HNSW index by default
+        dimension=1536,        # HNSW index by default
     ),
 )
 
