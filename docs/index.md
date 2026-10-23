@@ -39,46 +39,50 @@ Built inside Oracle · Used in production · Open source (UPL-1.0)
 import asyncio
 
 from locus.agent import Agent
-from locus.observability import get_event_bus, run_context
+from locus.observability import get_event_bus
+from locus.observability import run_context
 from locus.tools import tool
 
 
 @tool
 def get_metric(name: str) -> float:
-    """Current value of a named SRE metric."""
+    """Current value of an SRE metric."""
     return monitoring.read(name)
 
 
 @tool
 def fetch_runbook(topic: str) -> str:
-    """Pull the runbook section for a topic."""
+    """Runbook section for a topic."""
     return wiki.fetch(topic)
 
 
 @tool(idempotent=True)
 def page_oncall(reason: str) -> str:
-    """Page the on-call engineer. Fires exactly once per reason."""
+    """Page on-call. Fires once per reason."""
     return pager.send(reason)
 
 
 agent = Agent(
-    model="oci:openai.gpt-5",            # OCI Generative AI, V1 transport
+    model="oci:openai.gpt-5",   # OCI GenAI
     tools=[get_metric, fetch_runbook, page_oncall],
-    reflexion=True,                      # self-evaluates every turn
-    grounding=True,                      # claims verified against tool output
+    reflexion=True,   # self-evaluates every turn
+    grounding=True,   # claims checked vs tool output
 )
 
 
 async def main() -> None:
     async with run_context() as rid:
-        result = await agent.run(
-            "p99 on checkout-api spiked to 4.2s — investigate and page if critical."
-        )
-        async for ev in get_event_bus().subscribe(rid):
+        task = "p99 on checkout-api hit 4.2s. Investigate."
+        result = await agent.run(task)
+        bus = get_event_bus()
+        async for ev in bus.subscribe(rid):
             match ev.event_type:
-                case "agent.tool.started":   print("🔧", ev.data["tool_name"])
-                case "agent.tool.completed": print("✓ ", ev.data["tool_name"])
-                case "agent.terminate":      print("■ ", result.text[:80])
+                case "agent.tool.started":
+                    print("🔧", ev.data["tool_name"])
+                case "agent.tool.completed":
+                    print("✓ ", ev.data["tool_name"])
+                case "agent.terminate":
+                    print("■ ", result.text[:60])
 
 
 asyncio.run(main())
