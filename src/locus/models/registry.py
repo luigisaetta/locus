@@ -146,10 +146,11 @@ def _register_defaults() -> None:
     #      (SDK transport). The DAC endpoint OCID is passed verbatim to
     #      ``DedicatedServingMode(endpoint_id=...)``; the V1 transport
     #      doesn't speak that mode.
-    #   2. Cohere R-series (``cohere.command-r-*``) needs the OCI SDK's
-    #      proprietary chat shape — also ``OCIModel``.
-    #   3. Everything else (OpenAI / Meta / xAI / Mistral / Gemini and
-    #      non-R Cohere on-demand) goes through ``OCIChatCompletionsModel``
+    #   2. Cohere chat models (``cohere.command-r-*`` and ``cohere.command-a-*``)
+    #      need the OCI SDK's proprietary chat shape — also ``OCIModel``.
+    #      OCI does not expose Cohere on ``/openai/v1``.
+    #   3. Everything else (OpenAI / Meta / xAI / Mistral / Gemini)
+    #      goes through ``OCIChatCompletionsModel``
     #      against ``/openai/v1/chat/completions`` — real SSE streaming,
     #      day-0 model support, no Project OCID required.
     #
@@ -162,8 +163,10 @@ def _register_defaults() -> None:
             # Rule 1: DAC endpoint OCID → SDK transport.
             if lowered.startswith("ocid1.generativeaiendpoint."):
                 return cast("ModelProtocol", OCIModel(model_id=m, **kw))
-            # Rule 2: Cohere R-series → SDK transport.
-            if lowered.startswith("cohere.command-r"):
+            # Rule 2: Cohere chat models (command-r*, command-a*) → SDK transport.
+            # OCI serves Cohere only through its native chat API; /openai/v1
+            # answers 400 "Unsupported OpenAI operation" for every cohere.* id.
+            if lowered.startswith("cohere."):
                 # SDK transport: defaults to profile_name="DEFAULT" + API_KEY,
                 # so no env-var fallback needed for one-line ergonomics.
                 return cast("ModelProtocol", OCIModel(model_id=m, **kw))

@@ -23,8 +23,7 @@ Responses transport is opt-in.
 | xAI Grok (`xai.grok-*`) | V1 | `OCIChatCompletionsModel` | `/openai/v1/chat/completions` |
 | Mistral (`mistral.*`) | V1 | `OCIChatCompletionsModel` | `/openai/v1/chat/completions` |
 | Google Gemini (`google.gemini-*`) | V1 | `OCIChatCompletionsModel` | `/openai/v1/chat/completions` |
-| Cohere non-R (`cohere.command-a*`, etc.) | V1 | `OCIChatCompletionsModel` | `/openai/v1/chat/completions` |
-| **Cohere R-series** (`cohere.command-r*`) | SDK | `OCIModel` | `/20231130/actions/v1/chat` |
+| **Cohere** (`cohere.command-r*`, `cohere.command-a*`) | SDK | `OCIModel` | `/20231130/actions/chat` |
 | **Responses (opt-in)** — gpt-5.5-pro et al. | Responses | `OCIResponsesModel` | `/openai/v1/responses` |
 
 V1 is the default. It uses the standard `openai` SDK against
@@ -32,8 +31,8 @@ OCI's OpenAI-compatible endpoint, gives you **real SSE streaming**
 (token-by-token), picks up new OCI models on day-0 with no SDK update,
 and uses the same OpenAI request shape for tool calls and system
 prompts. The OCI SDK transport remains the only option for Cohere
-R-series, which OCI does not yet expose on `/openai/v1` (it returns
-`400 Unsupported OpenAI operation`). The Responses transport is the
+models (Command R and Command A), which OCI does not expose on
+`/openai/v1` (it returns `400 Unsupported OpenAI operation`). The Responses transport is the
 only path that reaches Responses-only OCI models (`openai.gpt-5.5-pro`
 today) and the only one that lets OCI hold conversation state between
 turns via `previous_response_id` — both modes covered below.
@@ -137,7 +136,7 @@ streaming, and termination conditions all work identically. See the
 [OCI Responses concept page](../concepts/oci-responses.md) and
 [notebook 58](../notebooks/notebook_03_oci_responses.md).
 
-## Cohere R-series — `OCIModel`
+## Cohere (Command R and Command A) — `OCIModel`
 
 ```python
 from locus.models import OCIModel
@@ -150,7 +149,10 @@ model = OCIModel(
 ```
 
 `OCIModel` uses the OCI Python SDK (`oci.generative_ai_inference`) and
-sends OCI's proprietary `CohereChatRequest` payload. It supports the
+sends OCI's proprietary `CohereChatRequest` payload for every
+`cohere.command*` model — Command A included; OCI rejects the generic
+request shape for it with `400 Chat request type does not match serving
+model`. It supports the
 same five auth modes (`api_key`, `security_token`, `session_token`,
 `instance_principal`, `resource_principal`) but its argument names are
 different from `OCIChatCompletionsModel` — `model_id=`, `profile_name=`,
@@ -166,12 +168,12 @@ from locus.models import get_model
 # Uses OCIChatCompletionsModel
 m1 = get_model("oci:openai.gpt-5.5", profile="DEFAULT")
 
-# Uses OCIModel (Cohere R-series)
+# Uses OCIModel (Cohere)
 m2 = get_model("oci:cohere.command-r-plus", profile_name="DEFAULT", auth_type="api_key")
 ```
 
 The string-form factory in `locus.models.registry` picks `OCIModel` for
-any id starting with `cohere.command-r` and `OCIChatCompletionsModel` otherwise.
+any id starting with `cohere.` and `OCIChatCompletionsModel` otherwise.
 You pass kwargs in the shape the picked class expects.
 
 ## Notebooks and `examples/config.py`
@@ -197,8 +199,9 @@ side-by-side.
   layers. Practical consequence: `openai.gpt-5-pro` (Responses-only on
   OCI per the day-0 announcement) is not reachable from the SDK today.
   Regular `openai.gpt-5.5` works fine on V1.
-- **Cohere R-series on V1.** OCI's `/openai/v1` returns `400 Unsupported
-  OpenAI operation` for these. Use `OCIModel`.
+- **Cohere on V1.** OCI's `/openai/v1` returns `400 Unsupported OpenAI
+  operation` for every `cohere.*` id, Command R and Command A alike. Use
+  `OCIModel`.
 - **GenAI API key auth (Bearer token).** A "create an API key in the
   Console, hand it as `api_key=` and you're done" path is not yet
   reliable on OCI without a Project OCID. When it is, the SDK will add
@@ -208,13 +211,13 @@ side-by-side.
 ## Testing
 
 ```bash
-# V1 path (any non-Cohere-R model)
+# V1 path (any non-Cohere model)
 OCI_PROFILE=DEFAULT \
 OCI_REGION=us-chicago-1 \
 OCI_MODEL_ID=openai.gpt-5.5 \
 pytest tests/integration/test_oci_openai_compat_integration.py
 
-# SDK path (Cohere R-series)
+# SDK path (Cohere)
 OCI_PROFILE=DEFAULT \
 OCI_ENDPOINT=https://inference.generativeai.us-chicago-1.oci.oraclecloud.com \
 OCI_COMPARTMENT=ocid1.compartment.oc1... \
@@ -223,7 +226,7 @@ pytest tests/integration/test_oci_integration.py
 ```
 
 `test_oci_openai_compat_integration.py` skips cleanly when
-`OCI_MODEL_ID` is a Cohere R model — V1 doesn't run there.
+`OCI_MODEL_ID` is a Cohere model — V1 doesn't run there.
 
 ## Reference
 
@@ -238,7 +241,7 @@ pytest tests/integration/test_oci_integration.py
 - [OCI Generative AI — documentation hub](https://docs.oracle.com/iaas/Content/generative-ai/home.htm)
   — service overview, supported models, regional availability.
 - [OCI Generative AI — Chat](https://docs.oracle.com/iaas/Content/generative-ai/use-playground-chat.htm)
-  — the SDK transport's underlying API for Cohere R-series.
+  — the SDK transport's underlying API for Cohere models.
 - [OCI OpenAI-compatible endpoints](https://docs.oracle.com/iaas/Content/generative-ai/openai-compatible-api.htm)
   — endpoint shape, auth modes, and the migration path from raw OpenAI.
 - [OCI Responses API](https://docs.oracle.com/iaas/Content/generative-ai/responses-api.htm)

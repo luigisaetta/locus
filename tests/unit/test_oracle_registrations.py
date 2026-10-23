@@ -60,6 +60,7 @@ def test_oci_routes_cohere_r_series_and_dac_endpoints_to_the_sdk_transport() -> 
 
     assert isinstance(get_model("oci:cohere.command-r-plus"), OCIModel)
     assert isinstance(get_model("oci:Cohere.Command-R-08-2024"), OCIModel)
+    assert isinstance(get_model("oci:cohere.command-a-03-2025"), OCIModel)
     assert isinstance(get_model("oci:ocid1.generativeaiendpoint.oc1.phx.abc"), OCIModel)
 
 

@@ -34,6 +34,10 @@ class OCIEmbeddingModel(str, Enum):
     COHERE_EMBED_MULTILINGUAL_V3 = "cohere.embed-multilingual-v3.0"
     COHERE_EMBED_ENGLISH_LIGHT_V3 = "cohere.embed-english-light-v3.0"
     COHERE_EMBED_MULTILINGUAL_LIGHT_V3 = "cohere.embed-multilingual-light-v3.0"
+    # Current generation. OCI has deprecated the v3.0 family; tenancies
+    # onboarded recently only serve v4 (1536-dim).
+    COHERE_EMBED_V4 = "cohere.embed-v4.0"
+    COHERE_EMBED_MULTILINGUAL_V4 = "cohere.embed-multilingual-v4.0"
 
 
 # Fast-path dimension hints for known models. Not exhaustive — any model_id
@@ -48,8 +52,8 @@ MODEL_DIMENSION_HINTS = {
     # Cohere V4 returns 1536-dim vectors on OCI on-demand. The library
     # previously fell through to DEFAULT_DIMENSION=1024 and crashed any
     # downstream table-create against Oracle 26ai with ORA-51803.
-    "cohere.embed-v4.0": 1536,
-    "cohere.embed-multilingual-v4.0": 1536,
+    OCIEmbeddingModel.COHERE_EMBED_V4.value: 1536,
+    OCIEmbeddingModel.COHERE_EMBED_MULTILINGUAL_V4.value: 1536,
 }
 
 

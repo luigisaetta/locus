@@ -55,7 +55,7 @@ oci:                                 (one prefix · three transports)
 │                            or need ZDR-safe stateless mode (store=False)
 │
 ├── SDK transport      · OCIModel              OCI Generative AI Python SDK
-│   └─ cohere.command-r*   — Cohere R-series only (native API only)
+│   └─ cohere.command-*    — Cohere Command R and Command A (native API only)
 │
 └── DAC endpoints      · OCIModel              DedicatedServingMode
     └─ ocid1.generativeaiendpoint....          — provisioned capacity
@@ -111,9 +111,9 @@ trade-off matrix.
 ### SDK transport — OCI native API
 
 `OCIModel` calls the OCI Generative AI Python SDK directly. It's
-used **only for Cohere R-series** (`cohere.command-r-*`), which OCI
-exposes through the native API rather than the OpenAI-compatible
-gateway. Cohere R has its own request shape (separate `message` +
+used **only for Cohere** (`cohere.command-r-*` and `cohere.command-a-*`),
+which OCI exposes through the native API rather than the OpenAI-compatible
+gateway. Cohere has its own request shape (separate `message` +
 `chat_history` instead of a flat `messages` array).
 
 ```python

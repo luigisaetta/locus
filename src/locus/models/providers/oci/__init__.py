@@ -69,8 +69,7 @@ class OCIModel(BaseModel):
     """OCI GenAI model provider.
 
     Automatically selects the appropriate provider based on model_id:
-    - cohere.command-r-* → CohereProvider
-    - cohere.command-a-* → GenericProvider (A series uses generic format)
+    - cohere.command-* (R and A series) → CohereProvider
     - meta.*, openai.*, google.*, xai.*, mistral.* → GenericProvider
 
     Example:
@@ -90,7 +89,7 @@ class OCIModel(BaseModel):
 
     @property
     def supports_structured_output(self) -> bool:
-        """OCI's native SDK transport (Cohere R-series) doesn't expose
+        """OCI's native SDK transport (Cohere, DAC endpoints) doesn't expose
         OpenAI-style ``response_format``. Use the V1 transport
         (``OCIChatCompletionsModel``) for that."""
         return False
@@ -207,12 +206,14 @@ class OCIModel(BaseModel):
         """Determine and instantiate the correct provider based on model_id."""
         model_id = self.config.model_id.lower()
 
-        # Cohere R series uses CohereProvider
-        if model_id.startswith("cohere.command-r"):
+        # Every Cohere chat model (command-r*, command-a*) is served through
+        # the Cohere chat API. Sending GenericChatRequest to command-a yields
+        # 400 "Chat request type does not match serving model".
+        if model_id.startswith("cohere.command"):
             return CohereProvider()
 
         # Everything else uses GenericProvider
-        # This includes: cohere.command-a-*, meta.*, openai.*, google.*, xai.*, mistral.*
+        # This includes: meta.*, openai.*, google.*, xai.*, mistral.*
         return GenericProvider()
 
     async def complete(

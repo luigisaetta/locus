@@ -338,13 +338,13 @@ import asyncio
 from locus.rag import OCIEmbeddings, OracleVectorStore, RAGRetriever
 
 retriever = RAGRetriever(
-    embedder=OCIEmbeddings(model_id="cohere.embed-english-v3.0"),
+    embedder=OCIEmbeddings(model_id="cohere.embed-v4.0"),
     store=OracleVectorStore(
         dsn="mydb_low",
         user="locus_app",
         password="…",
         wallet_location="~/.oci/wallets/mydb",
-        dimension=1024,        # HNSW index by default
+        dimension=1536,        # HNSW index by default
     ),
 )
 

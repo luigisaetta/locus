@@ -8,7 +8,27 @@ policy.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`oci:cohere.command-a-*` reached the wrong transport.** The string
+  factory only sent `cohere.command-r*` to the SDK transport, so Command A
+  went to `/openai/v1` and failed with `400 Unsupported OpenAI operation`.
+  Every `cohere.*` id now routes to `OCIModel`.
+- **`OCIModel` sent the generic chat request to Command A.** OCI serves
+  Command A through the Cohere chat API; the generic shape was rejected
+  with `400 Chat request type does not match serving model`. All
+  `cohere.command*` models now use `CohereProvider`.
+
 ### Changed
+
+- **Embeddings examples use `cohere.embed-v4.0` (1536-dim).** OCI has
+  deprecated the Cohere v3.0 embedding family and recently onboarded
+  tenancies answer `404 Entity not found` for it. The `OCIEmbeddingModel`
+  enum gains `COHERE_EMBED_V4` and `COHERE_EMBED_MULTILINGUAL_V4`; the
+  `OCIEmbeddings` default is unchanged so existing 1024-dim tables keep
+  working. The OCI embeddings integration tests assert against the
+  model's dimension instead of a hard-coded 1024 and accept
+  `OCI_EMBED_MULTILINGUAL_MODEL`.
 
 - **Positioning.** Locus is presented as the **Oracle Generative AI Agentic Harness**
   across the README, the documentation site (home page, site description, page
