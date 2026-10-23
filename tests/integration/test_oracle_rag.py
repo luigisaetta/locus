@@ -377,12 +377,14 @@ class TestOracleWithBothEmbedders:
 
                 result = await retriever.retrieve("embedding dimensions", limit=1)
                 assert len(result.documents) == 1
-                assert "1024" in result.documents[0].document.content
+                assert str(embedder.dimension) in result.documents[0].document.content
 
             finally:
                 await store.clear()
                 await store.close()
 
+        except AssertionError:
+            raise
         except Exception as e:
             pytest.skip(f"OCI Cohere not available: {e}")
 
