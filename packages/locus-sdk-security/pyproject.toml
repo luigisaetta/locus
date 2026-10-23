@@ -60,7 +60,7 @@ aws = ["boto3>=1.34"]
 
 [project.urls]
 Homepage = "https://github.com/oracle/locus"
-Documentation = "https://locusagents.oracle.com/"
+Documentation = "https://locusagents.ai/"
 Repository = "https://github.com/oracle/locus"
 Issues = "https://github.com/oracle/locus/issues"
 

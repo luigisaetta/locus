@@ -19,7 +19,7 @@ break every one of them to fix an appearance.
 
 Nor do the numbers carry difficulty or order: 83 is one of the easiest files
 here, and the gate notebooks (83-87) need no credentials at all. Read in
-whatever order the [documentation](https://locusagents.oracle.com/notebooks/) puts in
+whatever order the [documentation](https://locusagents.ai/notebooks/) puts in
 front of you — it is ordered by what builds on what.
 
 ## Start here
@@ -79,7 +79,7 @@ print(result.text)  # a one-paragraph answer with the evidence that backs it
 
 A model is just a string: the prefix before the colon (`openai:`,
 `anthropic:`) selects the provider; the rest is the model id.
-See [the models guide](https://locusagents.oracle.com/concepts/models/) for the full
+See [the models guide](https://locusagents.ai/concepts/models/) for the full
 provider story, including any OpenAI-compatible endpoint via `base_url`.
 
 ## With Tools

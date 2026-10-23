@@ -30,12 +30,12 @@
 </p>
 
 <p align="center">
-  <a href="https://locusagents.oracle.com/">Documentation</a> ·
-  <a href="https://locusagents.oracle.com/concepts/security/">The admission gate</a> ·
-  <a href="https://locusagents.oracle.com/how-to/quickstart/">Quickstart</a> ·
-  <a href="https://locusagents.oracle.com/how-to/oci-models/">OCI GenAI models</a> ·
-  <a href="https://locusagents.oracle.com/concepts/multi-agent/">Multi-agent</a> ·
-  <a href="https://locusagents.oracle.com/notebooks/">Notebooks</a>
+  <a href="https://locusagents.ai/">Documentation</a> ·
+  <a href="https://locusagents.ai/concepts/security/">The admission gate</a> ·
+  <a href="https://locusagents.ai/how-to/quickstart/">Quickstart</a> ·
+  <a href="https://locusagents.ai/how-to/oci-models/">OCI GenAI models</a> ·
+  <a href="https://locusagents.ai/concepts/multi-agent/">Multi-agent</a> ·
+  <a href="https://locusagents.ai/notebooks/">Notebooks</a>
 </p>
 
 <p align="center">
@@ -143,8 +143,8 @@ For tools where a duplicate call would hurt — moving money, paging an on-call 
 `@tool(idempotent=True)`: the loop keys every invocation on `(name, args)` and refuses to fire
 the same one twice, even across retries.
 
-→ [The admission gate](https://locusagents.oracle.com/concepts/security/) ·
-[Idempotency](https://locusagents.oracle.com/concepts/idempotency/)
+→ [The admission gate](https://locusagents.ai/concepts/security/) ·
+[Idempotency](https://locusagents.ai/concepts/idempotency/)
 
 ---
 
@@ -196,32 +196,32 @@ profile in `~/.oci/config` the notebooks pick OCI Generative AI automatically.
 
 | | |
 |---|---|
-| **[⚖️ Admission gate](https://locusagents.oracle.com/concepts/security/)** | `admit()` / `approve()` run a consequential action only if your `ControlPolicy` allows — else hold for a human or deny, recorded either way. |
-| **[🧠 GSAR grounding](https://locusagents.oracle.com/concepts/gsar/)** | Claims partitioned grounded / ungrounded / contradicted / complementary; below threshold the agent regenerates, replans, or abstains. `arXiv:2604.23366`. |
+| **[⚖️ Admission gate](https://locusagents.ai/concepts/security/)** | `admit()` / `approve()` run a consequential action only if your `ControlPolicy` allows — else hold for a human or deny, recorded either way. |
+| **[🧠 GSAR grounding](https://locusagents.ai/concepts/gsar/)** | Claims partitioned grounded / ungrounded / contradicted / complementary; below threshold the agent regenerates, replans, or abstains. `arXiv:2604.23366`. |
 | **[🎯 Decisions](docs/decision.md)** | `locus.decision` — `Choice` / `YesNo` / `Score` answered with a probability per answer from one forward pass, on any OpenAI-compatible server. An admit head plugs into `approve(advisor=)`; safety heads feed verification. Escalate-only. |
-| **[🔁 Idempotent tools](https://locusagents.oracle.com/concepts/idempotency/)** | `@tool(idempotent=True)` — dedupes on `(name, args)`. The model can't double-charge, double-book, or double-page. |
-| **[🪝 Hooks](https://locusagents.oracle.com/concepts/hooks/)** | Logging · OpenTelemetry · ModelRetry · Guardrails · Steering (LLM-as-judge). |
+| **[🔁 Idempotent tools](https://locusagents.ai/concepts/idempotency/)** | `@tool(idempotent=True)` — dedupes on `(name, args)`. The model can't double-charge, double-book, or double-page. |
+| **[🪝 Hooks](https://locusagents.ai/concepts/hooks/)** | Logging · OpenTelemetry · ModelRetry · Guardrails · Steering (LLM-as-judge). |
 
 **Build** — the agent framework surface:
 
 | | |
 |---|---|
-| **[🧭 Cognitive router](https://locusagents.oracle.com/concepts/multi-agent/#the-eight-shapes)** | Describe a task → eight named protocols → the right primitive compiled automatically. The LLM fills a typed schema; routing is deterministic. |
-| **[🤝 Multi-agent](https://locusagents.oracle.com/concepts/multi-agent/)** | Seven native patterns + cross-process A2A. One `Agent` class. One event stream. |
-| **[🔬 DeepAgent](https://locusagents.oracle.com/concepts/deepagent/)** | `create_deepagent` (per-turn grounding) and `create_research_workflow` (StateGraph with post-hoc grounding eval). |
-| **[🪙 MCP](https://locusagents.oracle.com/concepts/mcp/)** | `MCPClient` consumes MCP servers. `LocusMCPServer` exposes the SDK's tools as MCP. |
-| **[🌐 Multi-modal](https://locusagents.oracle.com/concepts/multi-modal-providers/)** | `Agent(web_search=…, web_fetch=…, image_generator=…, speech_provider=…)` auto-registers tools. |
+| **[🧭 Cognitive router](https://locusagents.ai/concepts/multi-agent/#the-eight-shapes)** | Describe a task → eight named protocols → the right primitive compiled automatically. The LLM fills a typed schema; routing is deterministic. |
+| **[🤝 Multi-agent](https://locusagents.ai/concepts/multi-agent/)** | Seven native patterns + cross-process A2A. One `Agent` class. One event stream. |
+| **[🔬 DeepAgent](https://locusagents.ai/concepts/deepagent/)** | `create_deepagent` (per-turn grounding) and `create_research_workflow` (StateGraph with post-hoc grounding eval). |
+| **[🪙 MCP](https://locusagents.ai/concepts/mcp/)** | `MCPClient` consumes MCP servers. `LocusMCPServer` exposes the SDK's tools as MCP. |
+| **[🌐 Multi-modal](https://locusagents.ai/concepts/multi-modal-providers/)** | `Agent(web_search=…, web_fetch=…, image_generator=…, speech_provider=…)` auto-registers tools. |
 
 **Run** — operate it in production:
 
 | | |
 |---|---|
-| **[📡 Observability](https://locusagents.oracle.com/concepts/observability/)** | Opt-in `EventBus` — one `run_context()` streams 40+ canonical events from every layer, no external broker. |
-| **[💾 Durable memory](https://locusagents.oracle.com/concepts/checkpointers/)** | 10 checkpoint backends — Oracle Database 26ai (plus a versioned saver) · OCI Object Storage · PostgreSQL · MySQL · Redis · OpenSearch · S3 / MinIO / R2 · in-memory · file · HTTP. |
-| **[🧠 Long-term memory](https://locusagents.oracle.com/concepts/memory-manager/)** | `OracleStore` on 26ai, `OracleAgentMemoryManager` over Oracle's official `oracleagentmemory` client, plus the portable `LLMMemoryManager`, holographic and Postgres stores. |
-| **[🔎 RAG](https://locusagents.oracle.com/concepts/rag/)** | 6 vector stores — Oracle 26ai · pgvector · Qdrant · Chroma · OpenSearch · in-memory. OCI, in-database, OpenAI and Cohere embeddings; OCI Cohere, local and Cohere rerankers. |
-| **[📡 Streaming + Server](https://locusagents.oracle.com/concepts/server/)** | Typed events · SSE · `AgentServer` (FastAPI, bearer auth, thread persistence). |
-| **[📊 Evaluation](https://locusagents.oracle.com/concepts/evaluation/)** | `EvalCase` / `EvalRunner` / `EvalReport` regression suites. |
+| **[📡 Observability](https://locusagents.ai/concepts/observability/)** | Opt-in `EventBus` — one `run_context()` streams 40+ canonical events from every layer, no external broker. |
+| **[💾 Durable memory](https://locusagents.ai/concepts/checkpointers/)** | 10 checkpoint backends — Oracle Database 26ai (plus a versioned saver) · OCI Object Storage · PostgreSQL · MySQL · Redis · OpenSearch · S3 / MinIO / R2 · in-memory · file · HTTP. |
+| **[🧠 Long-term memory](https://locusagents.ai/concepts/memory-manager/)** | `OracleStore` on 26ai, `OracleAgentMemoryManager` over Oracle's official `oracleagentmemory` client, plus the portable `LLMMemoryManager`, holographic and Postgres stores. |
+| **[🔎 RAG](https://locusagents.ai/concepts/rag/)** | 6 vector stores — Oracle 26ai · pgvector · Qdrant · Chroma · OpenSearch · in-memory. OCI, in-database, OpenAI and Cohere embeddings; OCI Cohere, local and Cohere rerankers. |
+| **[📡 Streaming + Server](https://locusagents.ai/concepts/server/)** | Typed events · SSE · `AgentServer` (FastAPI, bearer auth, thread persistence). |
+| **[📊 Evaluation](https://locusagents.ai/concepts/evaluation/)** | `EvalCase` / `EvalRunner` / `EvalReport` regression suites. |
 
 Every backend is an optional extra — install only what you use
 (`pip install "locus-sdk[oci,oracledb]"` for the Oracle stack, `[qdrant,s3,rerank-local]` for others).
@@ -247,13 +247,13 @@ result = ground_finding(..., partition=partition)
 print(result.title if is_finding(result) else f"withheld: {result.reason}")
 ```
 
-→ [GSAR grounding](https://locusagents.oracle.com/concepts/gsar/)
+→ [GSAR grounding](https://locusagents.ai/concepts/gsar/)
 
 ---
 
 ## The cognitive router and multi-agent shapes
 
-Describe a task in plain language; the **[cognitive router](https://locusagents.oracle.com/concepts/multi-agent/#the-eight-shapes)**
+Describe a task in plain language; the **[cognitive router](https://locusagents.ai/concepts/multi-agent/#the-eight-shapes)**
 (PRISM) runs an LLM classifier that fills a typed `GoalFrame`, matches it to one of eight
 coordination protocols, and compiles the matching runtime primitive. **The model classifies;
 routing is deterministic — it never authors the topology.**
@@ -288,8 +288,8 @@ async def main():
 asyncio.run(main())
 ```
 
-→ [Cognitive router](https://locusagents.oracle.com/concepts/multi-agent/#the-eight-shapes) ·
-[All patterns](https://locusagents.oracle.com/concepts/multi-agent/)
+→ [Cognitive router](https://locusagents.ai/concepts/multi-agent/#the-eight-shapes) ·
+[All patterns](https://locusagents.ai/concepts/multi-agent/)
 
 ---
 
@@ -352,10 +352,10 @@ Agent(
 Anything else implements `ModelProtocol` — `complete` · `stream`, ~50 lines — and registers
 with `register_provider("myco", MyModel)`.
 
-→ [Model providers](https://locusagents.oracle.com/concepts/models/) ·
-[OCI GenAI models](https://locusagents.oracle.com/how-to/oci-models/) ·
-[OCI Dedicated AI Cluster](https://locusagents.oracle.com/how-to/oci-dac/) ·
-[OpenAI-compatible endpoints](https://locusagents.oracle.com/concepts/providers/openai-compatible/)
+→ [Model providers](https://locusagents.ai/concepts/models/) ·
+[OCI GenAI models](https://locusagents.ai/how-to/oci-models/) ·
+[OCI Dedicated AI Cluster](https://locusagents.ai/how-to/oci-dac/) ·
+[OpenAI-compatible endpoints](https://locusagents.ai/concepts/providers/openai-compatible/)
 
 ---
 
@@ -409,7 +409,7 @@ The eight primitives:
 The contracts live in the SDK, the SQL is generated locally, and the
 only runtime requirement is `python-oracledb` thin mode.
 
-→ [Notebook 41 — Oracle 26ai RAG](https://locusagents.oracle.com/notebooks/notebook_41_oracle_26ai_rag/) · [Notebook 53 — Oracle 26ai checkpointer](https://locusagents.oracle.com/notebooks/notebook_53_oracle_26ai_checkpointer/) · [Notebooks 42-44, 54, 10, 88 — loader, chunker, embeddings, versioned saver, store, agent memory](https://locusagents.oracle.com/notebooks/#oracle-cloud-database-26ai)
+→ [Notebook 41 — Oracle 26ai RAG](https://locusagents.ai/notebooks/notebook_41_oracle_26ai_rag/) · [Notebook 53 — Oracle 26ai checkpointer](https://locusagents.ai/notebooks/notebook_53_oracle_26ai_checkpointer/) · [Notebooks 42-44, 54, 10, 88 — loader, chunker, embeddings, versioned saver, store, agent memory](https://locusagents.ai/notebooks/#oracle-cloud-database-26ai)
 
 ---
 
@@ -438,8 +438,8 @@ from locus.server import AgentServer
 AgentServer(agent=my_agent, api_key=os.environ["API_KEY"]).run(host="0.0.0.0", port=8080)
 ```
 
-→ [Notebooks](https://locusagents.oracle.com/notebooks/) ·
-[Deploy](https://locusagents.oracle.com/how-to/deploy/)
+→ [Notebooks](https://locusagents.ai/notebooks/) ·
+[Deploy](https://locusagents.ai/how-to/deploy/)
 
 ---
 
@@ -482,7 +482,7 @@ src/locus/
 ```
 
 The docs site lives in [`docs/`](docs/) (`mkdocs.yml`, theme in `overrides/`, build hooks in
-`hooks/`) and publishes to [locusagents.oracle.com](https://locusagents.oracle.com/).
+`hooks/`) and publishes to [locusagents.ai](https://locusagents.ai/).
 
 ---
 

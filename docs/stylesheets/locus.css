@@ -11,153 +11,76 @@ html {
 }
 
 /* ============================================================================
-   locus docs — brand palette + brand rules.
+   locus docs — Oracle FY26 palette + locus brand rules.
 
    Brand (from docs/img/logo.svg):
      - Wordmark is always lowercase "locus", never capitalized.
-     - Body type is sans (Inter), and so are headings, hero, tabs and the
-       footer brand. The Fraunces variable serif (--locus-display below,
-       single source of truth) is used for the header wordmark only.
+     - Type is sans-serif throughout (no serif headings).
      - Wordmark colour:  #312D2A   (warm near-black)
-     - Mark accent:      #C74634   (locus red, also accent3)
+     - Mark accent:      #C74634   (Oracle red, also FY26 accent3)
      - Tagline:          uppercase, weight 500, letter-spacing 0.16em,
                          colour #78716C.
      - Wordmark display: weight 700, letter-spacing -0.04em.
 
-   Palette: locus palette.
+   Palette: Oracle FY26 (Oracle_PPT-template_FY26 theme1.xml — Oracle-FY26-8.6).
    ========================================================================== */
 
 :root {
   /* locus brand greys (logo-derived) */
-  --locus-ink:      #18181B;
-  --locus-mute:     #52525B;
-  --locus-paper:    #FAFAFC;
+  --locus-ink:      #312D2A;   /* wordmark colour */
+  --locus-mute:     #78716C;   /* tagline grey */
+  --locus-paper:    #FAFAF9;   /* logo white-out — paper */
   --locus-surface:  #FFFFFF;   /* elevated surface (header, cards, focused inputs) */
   --locus-table-stripe: rgba(244, 239, 236, 0.45);
-  --locus-code-inline: #4A434C;
+  --locus-code-inline: var(--or-red-deep);
 
-  /* locus palette */
-  --tl-text:        #18181B;
-  --tl-bg:          #FAFAFC;
-  --tl-bg-soft:     #F4F4F5;
-  --tl-rule:        #E4E4E7;
+  /* Oracle FY26 palette */
+  --or-text:        #2A2F2F;   /* dk1 */
+  --or-bg:          #FBF9F8;   /* lt2 — off-white */
+  --or-bg-soft:     #F4EFEC;   /* derived: tint of lt2 */
+  --or-rule:        #E5DED9;   /* derived */
 
-  /* Legacy names, kept so the ~45 existing call sites keep working. They are
-     aliases now, not values — the design-system token is the single source. */
-  --tl-red:         var(--tl-accent);
-  --tl-red-deep:    var(--tl-accent-hover);
-  --tl-red-light:   #E2715F;
+  --or-red:         #C74634;   /* accent3 — Oracle red, also locus mark accent */
+  --or-red-deep:    #A03828;   /* derived */
+  --or-red-light:   #E2715F;   /* derived */
 
-  --tl-link:        #A03828;
-  --tl-rose-tint:   #F2C4BD;   /* light rose tint */
-  --tl-green:       #16A34A;   /* the one true green (success accents) */
+  --or-teal:        #04536F;   /* accent1 */
+  --or-link:        #00688C;   /* hlink */
+  --or-mauve:       #6C3F49;   /* accent2 */
+  --or-sand:        #F0CC71;   /* accent4 */
+  --or-sage-teal:   #89B2B0;   /* accent5 */
+  --or-sage-green:  #86B596;   /* accent6 */
 
-  /* locus type stack — sans for body and headings; the header title
-     (wordmark) alone uses --locus-display */
+  /* locus type stack — same as logo SVG, sans throughout */
   --locus-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-                Helvetica, system-ui, sans-serif;
+                "Oracle Sans Tab", Helvetica, system-ui, sans-serif;
   --locus-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo,
                 Consolas, monospace;
-  /* display face — Fraunces variable serif (loaded via extra_css in
-     mkdocs.yml); used for the header wordmark only. Headings, hero, tabs
-     and footer brand stay on --locus-sans. */
-  --locus-display: "Fraunces", Georgia, "Times New Roman", serif;
-
-  /* pink -> deep-rose brand gradient (hero accent word, footer wordmark,
-     header hairline) */
-  --locus-grad: linear-gradient(135deg, #E2715F 0%, #A03828 100%);
-
-  /* -------------------------------------------------------------------------
-     Design-system tokens. Source of truth: the "Locus Agents Design System"
-     Figma file, where every variable carries this exact `var(--…)` name as its
-     code syntax. Change a value there and here together, or they drift.
-
-     The rule these tokens exist to enforce: BRAND COLOUR AND STATUS COLOUR ARE
-     SEPARATE. Pink means Locus or an interactive element. Green, amber, red and
-     grey mean allow, hold, deny and abstain. A decision must never be pink, and
-     a button must never be green — otherwise the page teaches the reader a
-     colour code it then contradicts.
-     ------------------------------------------------------------------------- */
-
-  /* Brand. `--tl-brand-mark` is the logo pink; it measures 4.43:1 on the light
-     canvas, which is under the 4.5:1 body-text floor, so it is for the mark and
-     large display only. `--tl-accent` is the darker interactive pink (5.79:1)
-     and is what links, buttons and active states use. */
-  --tl-brand-mark:    #C74634;
-  --tl-accent:        #C74634;
-  --tl-accent-hover:  #A03828;
-  --tl-accent-subtle: #FBEDEA;
-
-  /* Surface and text, beyond the four already declared above. */
-  --tl-surface:        #FFFFFF;
-  --tl-surface-raised: #FFFFFF;
-  --tl-text-soft:      #52525B;
-  --tl-text-mute:      #71717A;
-  --tl-text-inverse:   #FFFFFF;
-  --tl-on-accent:      #FFFFFF;
-  --tl-rule-subtle:    #F4F4F7;
-  --tl-rule-strong:    #D3D3DB;
-  --tl-focus:          #C74634;
-
-  /* Status quad. Every one of these is paired with a word in the markup —
-     colour is reinforcement, never the only signal, so the page still works in
-     greyscale and for colour-blind readers. */
-  --tl-allow-fg:      #15803D;
-  --tl-allow-bg:      #ECFDF3;
-  --tl-allow-border:  #6EE7A8;
-  --tl-hold-fg:       #B45309;
-  --tl-hold-bg:       #FFFBEB;
-  --tl-hold-border:   #FCD34D;
-  --tl-deny-fg:       #B91C1C;
-  --tl-deny-bg:       #FEF2F2;
-  --tl-deny-border:   #FCA5A5;
-  --tl-abstain-fg:    #52525B;
-  --tl-abstain-bg:    #F4F4F7;
-  --tl-abstain-border:#D3D3DB;
-
-  /* 4px spacing scale and radius scale. */
-  --tl-space-3xs: 2px;
-  --tl-space-2xs: 4px;
-  --tl-space-xs:  8px;
-  --tl-space-sm:  12px;
-  --tl-space-md:  16px;
-  --tl-space-lg:  24px;
-  --tl-space-xl:  32px;
-  --tl-space-2xl: 48px;
-  --tl-space-3xl: 64px;
-
-  --tl-radius-xs:   4px;
-  --tl-radius-sm:   6px;
-  --tl-radius-md:   10px;
-  --tl-radius-lg:   14px;
-  --tl-radius-xl:   20px;
-  --tl-radius-pill: 999px;
 }
 
 /* ---------------------------------------------------------------------------
    Light scheme (default).
    --------------------------------------------------------------------------- */
 [data-md-color-scheme="default"] {
-  /* White header slab; ink text/icons on it (dev-brand look). */
-  --md-primary-fg-color:        #FFFFFF;
-  --md-primary-fg-color--light:  var(--tl-red-light);
-  --md-primary-fg-color--dark:   var(--tl-red-deep);
-  --md-primary-bg-color:        #241F2B;
+  --md-primary-fg-color:        var(--or-red);
+  --md-primary-fg-color--light:  var(--or-red-light);
+  --md-primary-fg-color--dark:   var(--or-red-deep);
+  --md-primary-bg-color:        #FFFFFF;
   --md-primary-bg-color--light: #FFFFFFcc;
 
-  --md-accent-fg-color:         var(--tl-link);
-  --md-accent-fg-color--transparent: rgba(214, 51, 108, 0.10);
+  --md-accent-fg-color:         var(--or-link);
+  --md-accent-fg-color--transparent: rgba(0, 104, 140, 0.10);
   --md-accent-bg-color:         #FFFFFF;
 
-  --md-default-bg-color:        var(--tl-bg);
-  --md-default-fg-color:        var(--tl-text);
+  --md-default-bg-color:        var(--or-bg);
+  --md-default-fg-color:        var(--or-text);
   --md-default-fg-color--light: #4a4f4f;
   --md-default-fg-color--lighter: #7a7e7e;
   --md-default-fg-color--lightest: #c5c8c8;
 
-  --md-typeset-color:           var(--tl-text);
-  --md-typeset-a-color:          var(--tl-link);
-  --md-typeset-mark-color:       rgba(247, 162, 30, 0.45);  /* sand */
+  --md-typeset-color:           var(--or-text);
+  --md-typeset-a-color:          var(--or-link);
+  --md-typeset-mark-color:       rgba(240, 204, 113, 0.45);  /* Oracle sand */
 
   --md-footer-bg-color:         #1F2424;
   --md-footer-bg-color--dark:    #161A1A;
@@ -165,109 +88,80 @@ html {
   --md-footer-fg-color--light:   #C9CCCC;
 
   --md-code-bg-color:           #F4EFEC;
-  --md-code-fg-color:           #312D2A;
+  --md-code-fg-color:           #2A2F2F;
 }
 
 /* ---------------------------------------------------------------------------
-   Dark scheme — keep locus red but tone the canvas.
+   Dark scheme — keep Oracle red but tone the canvas.
    --------------------------------------------------------------------------- */
 [data-md-color-scheme="slate"] {
   --md-hue: 200;
 
-  /* locus warm-dark palette (the same tokens the site uses in dark mode).
+  /* Oracle FY26 warm-dark palette — identical to the workbench dark theme
+     (workbench/web/src/styles/redwood.css [data-theme="dark"]).
      Same canvas, same red, same sage links. */
-  --locus-ink:        #F4F4F5;
-  --locus-mute:       #B4B4BC;
-  --locus-paper:      #111318;
-  --locus-surface:    #1B1E26;
-  --locus-table-stripe: rgba(244, 244, 245, 0.04);
-  --locus-code-inline: #D4D4D8;
+  --locus-ink:        #F0EBE6;
+  --locus-mute:       #95908a;
+  --locus-paper:      #1B1A18;
+  --locus-surface:    #1F1D1A;
+  --locus-table-stripe: rgba(240, 235, 230, 0.04);
+  --locus-code-inline: #E2715F;
 
-  --tl-text:          #F4F4F5;
-  --tl-text-soft:     #D4D4D8;
-  --tl-text-mute:     #A1A1AA;
-  --tl-bg:            #111318;
-  --tl-bg-soft:       #1B1E26;
-  --tl-surface:       #1B1E26;
-  --tl-rule:          #343843;
+  --or-text:          #F0EBE6;
+  --or-text-soft:     #c9c4be;
+  --or-text-mute:     #95908a;
+  --or-bg:            #1B1A18;
+  --or-bg-soft:       #25231F;
+  --or-surface:       #1F1D1A;
+  --or-rule:          #36332E;
 
-  /* Warm rose-coral primary; lighter in dark for contrast */
-  --tl-red:           var(--tl-accent);
-  --tl-red-deep:      var(--tl-accent-hover);
-  --tl-red-light:     #F9A8D4;
-  /* Warm rose becomes the link colour in dark */
-  --tl-link:          #F9A8D4;
-  --tl-rose-tint:     #F2C4BD;
-  --tl-green:         #16A34A;
+  /* Red stays Oracle red; deep variant lightens in dark (matches workbench) */
+  --or-red:           #C74634;
+  --or-red-deep:      #E2715F;
+  --or-red-light:     #F09080;
+  /* Sage teal becomes the link colour in dark (matches workbench) */
+  --or-teal:          #89B2B0;
+  --or-link:          #89B2B0;
+  --or-mauve:         #B07A85;
+  --or-sand:          #F0CC71;
+  --or-sage-teal:     #89B2B0;
+  --or-sage-green:    #86B596;
 
-  /* Material overrides — deep header slab, white text/icons on it. */
-  --md-primary-fg-color:        #111318;
-  --md-primary-fg-color--light: #F472B6;
-  --md-primary-fg-color--dark:  #E2715F;
-  --md-primary-bg-color:        #FFFFFF;
-  --md-primary-bg-color--light: #111318cc;
+  /* Material overrides */
+  --md-primary-fg-color:        #C74634;
+  --md-primary-fg-color--light: #E2715F;
+  --md-primary-fg-color--dark:  #A03828;
+  --md-primary-bg-color:        #1B1A18;
+  --md-primary-bg-color--light: #1B1A18cc;
 
-  --md-accent-fg-color:         #F472B6;
-  --md-accent-fg-color--transparent: rgba(244, 166, 194, 0.15);
-  --md-accent-bg-color:         #1B1E26;
+  --md-accent-fg-color:         #89B2B0;
+  --md-accent-fg-color--transparent: rgba(137, 178, 176, 0.15);
+  --md-accent-bg-color:         #25231F;
 
-  --md-default-bg-color:        #111318;
-  --md-default-fg-color:        #F4F4F5;
-  --md-default-fg-color--light: #D4D4D8;
-  --md-default-fg-color--lighter: #A1A1AA;
-  --md-default-fg-color--lightest: #52525B;
+  --md-default-bg-color:        #1B1A18;
+  --md-default-fg-color:        #F0EBE6;
+  --md-default-fg-color--light: #c9c4be;
+  --md-default-fg-color--lighter: #95908a;
+  --md-default-fg-color--lightest: #4a4844;
 
-  --md-typeset-color:           #F4F4F5;
-  --md-typeset-a-color:         #F9A8D4;
-  --md-typeset-mark-color:      rgba(247, 162, 30, 0.28);
+  --md-typeset-color:           #F0EBE6;
+  --md-typeset-a-color:         #89B2B0;   /* sage teal, matches workbench links */
+  --md-typeset-mark-color:      rgba(240, 204, 113, 0.28);
 
-  --md-footer-bg-color:         #0D0F13;
-  --md-footer-bg-color--dark:   #090A0D;
-  --md-footer-fg-color:         #F4F4F5;
-  --md-footer-fg-color--light:  #B4B4BC;
+  --md-footer-bg-color:         #131211;
+  --md-footer-bg-color--dark:   #0c0b0a;
+  --md-footer-fg-color:         #F0EBE6;
+  --md-footer-fg-color--light:  #b8b3ad;
 
-  --md-code-bg-color:           #15181E;
-  --md-code-fg-color:           #F4F4F5;
+  --md-code-bg-color:           #25231F;
+  --md-code-fg-color:           #E8E2DA;
 
   --md-shadow-z1: 0 0 0.2rem rgba(0,0,0,.4), 0 0.2rem 0.4rem rgba(0,0,0,.3);
   --md-shadow-z2: 0 0 0.2rem rgba(0,0,0,.5), 0 0.2rem 0.8rem rgba(0,0,0,.4);
-
-  /* Design-system tokens — dark mode. Mirrors the Figma Color collection's
-     Dark mode; the status foregrounds lighten and the fills deepen so each
-     pair keeps its contrast instead of inverting into mud. */
-  --tl-accent:        #F472B6;
-  --tl-accent-hover:  #EC4899;
-  --tl-accent-subtle: #4A0A26;
-
-  --tl-surface:        #1B1E26;
-  --tl-surface-raised: #252932;
-  --tl-text-soft:      #D3D3DB;
-  --tl-text-mute:      #A1A1AA;
-  --tl-text-inverse:   #18181B;
-  /* Dark-mode accent is a light pink, so text on it must be dark, not white. */
-  --tl-on-accent:      #111318;
-  --tl-rule-subtle:    #252932;
-  --tl-rule-strong:    #434A56;
-  --tl-focus:          #F472B6;
-
-  --tl-allow-fg:      #6EE7A8;
-  --tl-allow-bg:      #0B2E1B;
-  --tl-allow-border:  #15803D;
-  --tl-hold-fg:       #FCD34D;
-  --tl-hold-bg:       #3A2708;
-  --tl-hold-border:   #B45309;
-  --tl-deny-fg:       #FCA5A5;
-  --tl-deny-bg:       #3B1113;
-  --tl-deny-border:   #B91C1C;
-  --tl-abstain-fg:    #D3D3DB;
-  --tl-abstain-bg:    #252932;
-  --tl-abstain-border:#434A56;
 }
 
 /* ---------------------------------------------------------------------------
-   Typography — sans (Inter) for body and headings; only the header
-   wordmark uses the Fraunces display face (--locus-display). The page-title
-   topic that Material would swap in on scroll is hidden site-wide below.
+   Typography — sans throughout, matching the locus wordmark.
    Display headings carry the wordmark's tight tracking (-0.04em on h1, -0.02em
    below). Subheadings can opt into the tagline pattern (uppercase + 0.16em)
    via the `.tagline` utility class.
@@ -276,13 +170,6 @@ html {
   font-family: var(--locus-sans);
   font-feature-settings: "ss01", "cv11";
   color: var(--locus-ink);
-}
-/* The snackbar (.md-dialog, "Copied to clipboard") is inverted — a light
-   panel on the dark canvas. Its inner div also carries .md-typeset, so the
-   ink override above painted its text the same cream as the panel and the
-   toast showed as an empty box; restore the inversion. */
-.md-typeset.md-dialog__inner {
-  color: var(--md-default-bg-color);
 }
 .md-typeset code,
 .md-typeset pre {
@@ -297,14 +184,6 @@ html {
 .md-header__topic > .md-ellipsis,
 .md-nav__title {
   font-family: var(--locus-sans);
-}
-
-/* Brand title — the "locus" header wordmark renders in the Fraunces
-   display face, not the body sans. It is the only display-face element. */
-.md-header__topic:first-child > .md-ellipsis {
-  font-family: var(--locus-display);
-  font-weight: 600;
-  letter-spacing: -0.02em;
 }
 
 .md-typeset h1 {
@@ -329,12 +208,12 @@ html {
   color: var(--locus-ink);
   font-weight: 700;
   letter-spacing: -0.02em;
-  border-bottom: 1px solid var(--tl-rule);
+  border-bottom: 1px solid var(--or-rule);
   padding-bottom: 0.4rem;
   margin-top: 1.6rem;
 }
 .md-typeset h3 {
-  color: var(--tl-red-deep);
+  color: var(--or-red-deep);
   font-weight: 700;
   letter-spacing: -0.015em;
 }
@@ -348,8 +227,8 @@ html {
   line-height: 1.65;
 }
 
-/* Homepage hero — split layout (copy left, code right) with
-   soft-glow background blobs for visual warmth without
+/* Homepage hero — Strands-format split (copy left, code right) with
+   Oracle-FY26 soft-glow background blobs for visual warmth without
    enterprise stiffness. */
 .md-typeset .locus-hero {
   position: relative;
@@ -369,29 +248,29 @@ html {
   padding-top: 0.2rem;
   margin-top: 0;
 }
-/* locus-red soft glow behind the H1 — the warm spotlight */
+/* Oracle-red soft glow behind the H1 — the warm spotlight */
 .md-typeset .locus-hero::before {
   content: "";
   position: absolute;
   top: -180px; left: -220px;
   width: 760px; height: 760px;
   background: radial-gradient(circle,
-              rgba(237, 47, 126, 0.12) 0%,
-              rgba(247, 101, 30, 0.07) 35%,   /* sand */
+              rgba(199, 70, 52, 0.10) 0%,
+              rgba(240, 204, 113, 0.06) 35%,   /* FY26 sand */
               transparent 70%);
   z-index: -1;
   border-radius: 50%;
   pointer-events: none;
 }
-/* Sage glow on the right side — accent6, behind the code editor */
+/* Sage glow on the right side — FY26 accent6, behind the code editor */
 .md-typeset .locus-hero::after {
   content: "";
   position: absolute;
   top: 60px; right: -160px;
   width: 560px; height: 560px;
   background: radial-gradient(circle,
-              rgba(22, 163, 74, 0.10) 0%,    /* sage green */
-              rgba(244, 166, 194, 0.05) 40%,   /* sage teal */
+              rgba(134, 181, 150, 0.10) 0%,    /* FY26 sage green */
+              rgba(137, 178, 176, 0.05) 40%,   /* FY26 sage teal */
               transparent 70%);
   z-index: -1;
   border-radius: 50%;
@@ -400,7 +279,7 @@ html {
 /* Compound `.locus-hero p.locus-product-name` (specificity 0,3,1) beats
    `.md-typeset .locus-hero p` (0,2,1), so the eyebrow size actually wins
    inside the hero. Second selector covers usages outside the hero (e.g.
-   a page without a hero) where `.locus-hero p` isn't competing. */
+   the workbench page) where `.locus-hero p` isn't competing. */
 .md-typeset .locus-hero p.locus-product-name,
 .md-typeset p.locus-product-name {
   font-size: 0.78rem !important;
@@ -413,11 +292,10 @@ html {
   margin: 0 0 1.2rem;
 }
 .md-typeset .locus-hero h1:first-of-type {
-  font-family: var(--locus-sans);
   font-size: 2.9rem;
   line-height: 1.05;
-  letter-spacing: -0.035em;
-  font-weight: 700;
+  letter-spacing: -0.045em;
+  font-weight: 800;
   text-transform: lowercase;
   color: var(--locus-ink);
   margin: 0 0 0.6rem;
@@ -437,7 +315,7 @@ html {
   padding-left: 1.75rem;
 }
 .md-typeset .locus-hero h1 .accent {
-  color: var(--tl-red);
+  color: var(--or-red);
 }
 .md-typeset .locus-hero p {
   font-size: 1.05rem;
@@ -485,16 +363,42 @@ html {
   max-width: 100%;
 }
 .md-typeset .locus-hero__copy pre {
-  background: var(--tl-bg-soft);
+  background: var(--or-bg-soft);
   border: 0;
   border-radius: 6px;
-  /* extra right padding clears the floating copy button so the closing
-     quote of `pip install "locus-sdk[anthropic]"` stays visible */
-  padding: 0.45rem 2.2rem 0.45rem 0.9rem;
+  padding: 0.45rem 0.9rem;
   margin: 0.6rem 0;
   font-size: 0.78rem;
 }
 
+/* Stat strip — compact metric bar. */
+.md-typeset .locus-stat-strip {
+  display: block;
+  border-top: 1px solid var(--or-rule);
+  border-bottom: 1px solid var(--or-rule);
+  padding: 0.35rem 0;
+  margin: 0.7rem 0 1rem;
+}
+/* Target the <p> MkDocs injects so font-size and centering apply correctly. */
+.md-typeset .locus-stat-strip p {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--locus-mute);
+  margin: 0;
+  line-height: 1.5;
+  text-align: center;
+}
+.md-typeset .locus-stat-strip a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.md-typeset .locus-stat-strip a:hover {
+  color: var(--or-red);
+  border-bottom-color: var(--or-red);
+}
 /* Hide the ¶ permalink on the hero h1. */
 .md-typeset .locus-hero h1 a.headerlink {
   display: none;
@@ -506,7 +410,7 @@ html {
 }
 .md-typeset .grid.cards.locus-feature-cards > ul > li,
 .md-typeset .grid.cards.locus-feature-cards > ol > li {
-  border-left: 3px solid var(--tl-red);
+  border-left: 3px solid var(--or-red);
   border-radius: 0 6px 6px 0;
   padding: 0.9rem 1rem;
   /* Anchor the absolutely-positioned overlay link to the card. */
@@ -515,12 +419,12 @@ html {
 }
 .md-typeset .grid.cards.locus-feature-cards > ul > li:hover,
 .md-typeset .grid.cards.locus-feature-cards > ol > li:hover {
-  background-color: var(--tl-surface-hover, rgba(229, 72, 103, 0.05));
+  background-color: var(--or-surface-hover, rgba(199, 70, 52, 0.05));
   transform: translateY(-1px);
 }
 .md-typeset .grid.cards.locus-feature-cards p {
   font-size: 0.82rem;
-  color: var(--tl-text);
+  color: var(--or-text);
   margin: 0;
   line-height: 1.5;
 }
@@ -528,7 +432,7 @@ html {
   font-size: 1rem;
   display: block;
   margin-bottom: 0.25rem;
-  color: var(--tl-accent, #C74634);
+  color: var(--or-accent, #C74634);
 }
 /* Make the whole card clickable: stretch the title's <a> over the card
    surface so anywhere inside the <li> opens the linked concept page. */
@@ -544,7 +448,7 @@ html {
 }
 .md-typeset .grid.cards.locus-feature-cards > ul > li:focus-within,
 .md-typeset .grid.cards.locus-feature-cards > ol > li:focus-within {
-  outline: 2px solid var(--tl-accent, #C74634);
+  outline: 2px solid var(--or-accent, #C74634);
   outline-offset: 2px;
 }
 @media (max-width: 76em) {
@@ -599,7 +503,7 @@ html {
 .md-typeset .grid.cards > ul > li,
 .md-typeset .grid.cards > ol > li {
   background: var(--locus-surface);
-  border: 1px solid var(--tl-rule);
+  border: 1px solid var(--or-rule);
   border-radius: 6px;
   padding: 1rem 1.1rem;
   transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
@@ -608,25 +512,30 @@ html {
 .md-typeset .grid.cards > ol > li:hover {
   box-shadow: 0 8px 28px -16px rgba(49, 45, 42, 0.22);
   transform: translateY(-2px);
-  border-color: var(--tl-red-light);
+  border-color: var(--or-red-light);
 }
 .md-typeset .grid.cards .twemoji,
 .md-typeset .grid.cards svg {
-  color: var(--tl-red);
+  color: var(--or-red);
 }
 
 /* ---------------------------------------------------------------------------
-   Header — white slab, hairline locus-red rule below.
+   Header — white slab, hairline Oracle-red rule below.
    Layout: locus mark (icon) left · "locus" + tagline middle · GitHub right.
    --------------------------------------------------------------------------- */
 .md-header {
   background-color: var(--locus-surface);
   color: var(--locus-ink);
-  border-bottom: 1px solid var(--tl-rule);
+  border-bottom: 1px solid var(--or-rule);
   box-shadow: 0 6px 16px -12px rgba(49, 45, 42, 0.18);
 }
-/* (The brand hairline under the header is the 2px gradient border-image in
-   the dev-brand section near the end of this file — one line, not two.) */
+.md-header::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: var(--or-red);
+}
 .md-header__inner {
   min-height: 4rem;
   padding: 0.45rem 1rem 0.7rem;
@@ -636,7 +545,7 @@ html {
    Material hides it by default. */
 .md-header__button.md-logo {
   display: inline-flex;
-  margin: 0 0.15rem 0 0;
+  margin: 0 0.4rem 0 0;
   padding: 0;
 }
 .md-header__button.md-logo img,
@@ -657,6 +566,19 @@ html {
   opacity: 0.85;
 }
 
+/* Dark-mode swap. ``mkdocs.yml`` declares a single ``theme.logo``
+   pointing at ``img/mark.svg`` (outer-diamond stroke ``#312D2A`` —
+   warm near-black, sized for the light surface). On the slate scheme
+   the surface goes dark ``#1F1D1A`` and that stroke is practically
+   invisible, especially on mobile where the mark is the only brand
+   anchor. Swap the image content to the white-stroke variant
+   (``img/mark-dark.svg``) when the slate scheme is active. ``content:``
+   on ``<img>`` is supported across Chrome/Safari/Firefox 119+ — fine
+   for our browser baseline. */
+[data-md-color-scheme="slate"] .md-header__button.md-logo img[src*="img/mark.svg"] {
+  content: url("../img/mark-dark.svg");
+}
+
 /* Title block in the middle — "locus" wordmark only.
    The slogan lives in the SVG logo and on the homepage; trying to
    stack a tagline beneath the title fights Material's absolute-
@@ -664,13 +586,10 @@ html {
    `flex: 0 0 auto` keeps the title from taking the full available row;
    that leaves room for the palette toggle, search, and source slot to
    cluster together on the right (see `form.md-header__option { margin-left: auto }` below). */
-.md-header .md-header__title {
+.md-header__title {
   display: flex;
   align-items: center;
-  /* tight lockup: the mark and the wordmark read as one logo.
-     Extra class in the selector: Material sets this margin via
-     [dir=ltr] rules that outrank a lone class. */
-  margin-left: 0.15rem;
+  margin-left: 0.6rem;
   align-self: center;
   flex: 0 0 auto;
 }
@@ -679,34 +598,55 @@ html {
 form.md-header__option {
   margin-left: auto;
 }
-/* Stack the first topic vertically: "locus" wordmark + the full
-   product name beneath ('Multi-Agent SDK',
-   split across two lines), matching the wordmark+tagline lockup the
-   SVG logo carries. The two-line break keeps each line short enough to
-   fit alongside the dark-mode toggle and the search slot at common
-   viewport widths. */
+/* Stack the first topic vertically: "locus" wordmark + the approved full
+   product name beneath ('Oracle Generative AI Multi-Agent Reasoning
+   Orchestrator SDK', split across two lines), matching the
+   wordmark+tagline lockup the SVG logo carries. The two-line break keeps
+   each line short enough to fit alongside the dark-mode toggle and the
+   search slot at common viewport widths. */
 .md-header__ellipsis > .md-header__topic:first-of-type {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
+  gap: 0.25rem;
 }
 .md-header__ellipsis > .md-header__topic:first-of-type > .md-ellipsis {
-  font-family: var(--locus-display);
+  font-family: var(--locus-sans);
   font-weight: 700;
-  font-size: 1.5rem;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
+  font-size: 1.55rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
   text-transform: lowercase;
   color: var(--locus-ink);
 }
 .md-header__ellipsis > .md-header__topic:first-of-type::after {
-  content: none;
+  /* `\A` is a CSS newline; `white-space: pre` keeps it as a hard break,
+     so the approved full product name renders on two lines under the
+     wordmark — family brand on top, product descriptor below. */
+  content: "Oracle Generative AI Multi-Agent\AReasoning Orchestrator SDK";
+  font-family: var(--locus-sans);
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--or-red);
+  line-height: 1.25;
+  white-space: pre;
+  /* Push the line away from the dark-mode toggle that sits immediately
+     to the right of the title slot, so they don't visually touch. */
+  padding-right: 1rem;
 }
 @media (max-width: 56em) {
   /* Mobile: same full name, slightly tighter tracking to fit. */
   .md-header__ellipsis > .md-header__topic:first-of-type::after {
-    content: none;
+    content: "Oracle Generative AI Multi-Agent\AReasoning Orchestrator SDK";
+    font-size: 0.5rem;
+    letter-spacing: 0.06em;
+    line-height: 1.25;
+    font-weight: 600;
+    color: var(--or-red);
+    display: block;
+    white-space: pre;
   }
   /* Always show "locus" (site title) in the mobile header — suppress
      Material's page-title swap so users always see the brand name. */
@@ -720,41 +660,13 @@ form.md-header__option {
   }
 }
 
-/* Mobile/tablet (whenever the drawer hamburger is visible): Material's DOM
-   order is logo · hamburger · title, which splits the brand lockup in half —
-   the mark sits alone in the corner and "locus" lands on the far side
-   of the menu button. Reorder so the hamburger comes first and the mark +
-   wordmark read as one logo, same as desktop. */
-@media (max-width: 76.1875em) {
-  .md-header__inner > label[for="__drawer"] {
-    order: -1;
-    margin-right: 0.2rem;
-  }
-}
-
-/* The wordmark anchors to the top of the title box (Material sizes
-   .md-header__ellipsis to the full row for its scroll-swap animation, which
-   we disable). Center it so the wordmark sits on the mark's midline. */
-.md-header__ellipsis {
-  display: flex;
-  align-items: center;
-  height: 100%;
-}
-
 /* Site-wide: never let Material swap the header topic on scroll. The default
    behaviour translates topic #1 (site name + our tagline) up and fades in
    topic #2 (page title), which strips the approved product-name line and
    replaces it with the current page's name. Pin topic #1 and hide #2 on every
    page so the brand banner (diamond mark + "locus" + product name) stays put
-   as the user scrolls.
-   `position: static` matters: Material absolutely-positions the topic for
-   its swap animation, which collapses .md-header__title to 0 width — the
-   wordmark only rendered on desktop because it spilled out of that empty
-   box, and on mobile (where the title gets overflow:hidden) it vanished
-   entirely. With the swap disabled the absolute positioning serves nothing;
-   static lets the wordmark size its box and actually show on phones. */
+   as the user scrolls. */
 .md-header__ellipsis > .md-header__topic:first-of-type {
-  position: static !important;
   transform: translateY(0) !important;
   opacity: 1 !important;
   pointer-events: auto !important;
@@ -763,17 +675,51 @@ form.md-header__option {
   display: none !important;
 }
 
-/* Header right slot — keep the PyPI badge and GitHub icon on one row.
-   Material wraps source.html in `<div class="md-header__source">`, and our
+/* Header right slot — keep OCI/Oracle button and GitHub icon on one row.
+   Material wraps source.html in `<div class="md-header__source">`, and our two
    anchors inside it are also `md-header__source` (block, width:100%). Force the
    parent slot to flex-row and let the children size to content. */
-.md-header__source:has(> .md-header__pypi) {
+.md-header__source:has(> .md-header__oci) {
   display: flex !important;
   align-items: center;
   flex-direction: row;
   gap: 0.25rem;
   width: auto;
   max-width: none;
+}
+
+/* Right side — OCI rounded-O mark + black Oracle wordmark, linked
+   to oracle.com/.../generative-ai. */
+.md-header__source.md-header__oci {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.55rem;
+  margin-right: 0;
+  margin-left: 0.3rem;
+  border-radius: 7px;
+  transition: background-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.md-header__source.md-header__oci:hover {
+  background-color: rgba(199, 70, 52, 0.08);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px -2px rgba(199, 70, 52, 0.25);
+}
+/* Header OCI rounded-O mark — 32×32 square (Oracle social-avatar scale). */
+.md-header__oci-mark {
+  width: 32px;
+  height: 32px;
+  display: block;
+  flex: 0 0 auto;
+}
+/* Header Oracle wordmark — 22px tall × auto width (preserves the official
+   4.763:1 aspect ratio from FY26 image50.svg viewBox 109.36 × 22.96). */
+.md-header__oracle-wordmark {
+  height: 22px;
+  width: auto;
+  aspect-ratio: 109.36 / 22.96;
+  display: block;
+  flex: 0 0 auto;
 }
 
 @media (max-width: 60em) {
@@ -788,12 +734,16 @@ form.md-header__option {
     height: 1.6rem;
     max-height: 28px;
   }
+  /* Show Oracle mark at reduced size; hide wordmark. */
+  .md-header__oracle-wordmark { display: none; }
+  .md-header__oci-mark { width: 20px; height: 20px; }
+  .md-header__source.md-header__oci { padding: 0.2rem 0.3rem; }
 }
 
-/* GitHub icon in the mobile drawer uses ink on the drawer surface. */
+/* GitHub icon white when inside the mobile drawer (red primary background). */
 .md-nav--primary .md-header__source.md-header__github,
 .md-drawer .md-header__source.md-header__github {
-  color: var(--locus-ink);
+  color: #FFFFFF;
 }
 
 /* Header right slot — PyPI version badge sits to the right of the GitHub
@@ -809,59 +759,24 @@ form.md-header__option {
 .md-header__source.md-header__pypi:hover {
   transform: translateY(-1px);
 }
-.md-header__sdk-badge {
+.md-header__pypi-badge {
+  height: 20px;
+  width: auto;
   display: block;
-  padding: 0.18rem 0.42rem;
-  border: 1px solid color-mix(in srgb, var(--tl-red-light) 60%, transparent);
-  border-radius: 4px;
-  color: var(--md-primary-bg-color);
-  font: 600 0.56rem/1 var(--locus-mono);
-  white-space: nowrap;
 }
 @media (max-width: 60em) {
-  /* Honor "always show PyPI": Material hides .md-header__source below 60em,
-     so force the PyPI badge to stay in the header on mobile too. */
-  .md-header__source.md-header__pypi {
-    display: inline-flex !important;
-    margin-left: 0.25rem;
-  }
-  .md-header__sdk-badge { font-size: 0.5rem; }
-  /* Drop the dark/light palette toggle on mobile (dark is the default now)
-     to free the width the brand title needs. */
-  .md-header__option { display: none !important; }
-  /* The palette form used to carry margin-left:auto (it right-aligned the
-     controls); now that it's hidden, move that onto the search button so
-     search + PyPI + GitHub hug the right edge, leaving the left for the
-     brand title. */
-  .md-header__button.md-icon[for="__search"] { margin-left: auto !important; }
-  /* Show the brand title (site_name "locusagents") on mobile — small and
-     hard-clamped so it stays clear of the right-aligned controls. Target
-     the REAL title span (.md-header__title .md-ellipsis) directly. */
-  .md-header__title {
-    display: flex !important;
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 120px;
-    overflow: hidden;
-    margin-left: 0.4rem;
-  }
-  .md-header__title .md-ellipsis {
-    font-size: 0.85rem !important;
-    line-height: 1.2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+  .md-header__source.md-header__pypi { margin-left: 0.25rem; }
+  .md-header__pypi-badge { height: 16px; }
 }
 .md-nav--primary .md-header__source.md-header__github:hover {
-  color: var(--tl-red);
+  color: #FFFFFF;
   opacity: 0.8;
 }
 
 .md-tabs {
-  background-color: var(--tl-bg);
+  background-color: var(--or-bg);
   color: var(--locus-ink);
-  border-bottom: 1px solid var(--tl-rule);
+  border-bottom: 1px solid var(--or-rule);
 }
 /* Tighter tab strip — Material defaults to a 2.4rem item height with a
    0.8rem top-margin on each link, leaving a tall empty band above the
@@ -877,7 +792,7 @@ form.md-header__option {
   margin-top: 0.35rem;
 }
 .md-tabs__link:hover {
-  color: var(--tl-red);
+  color: var(--or-red);
 }
 .md-tabs__link--active {
   color: var(--locus-ink);
@@ -888,14 +803,14 @@ form.md-header__option {
   position: absolute;
   left: 0; right: 0; bottom: -1px;
   height: 2px;
-  background: var(--tl-red);
+  background: var(--or-red);
 }
 
 /* ---------------------------------------------------------------------------
-   Side-nav — calmer, off-white feel.
+   Side-nav — calmer, Oracle off-white feel.
    --------------------------------------------------------------------------- */
 .md-nav__title {
-  color: var(--tl-text);
+  color: var(--or-text);
   font-weight: 700;
 }
 
@@ -904,21 +819,23 @@ form.md-header__option {
 .md-nav--primary .md-nav__title[for="__drawer"] {
   background-color: var(--locus-surface);
   color: var(--locus-ink);
-  border-bottom: 2px solid var(--tl-red);
+  border-bottom: 2px solid var(--or-red);
   box-shadow: none;
 }
 .md-nav--primary .md-nav__title[for="__drawer"] .md-nav__button {
   color: var(--locus-ink);
 }
-/* Source slot inside the drawer — target the actual container. Same surface
-   as the drawer header above it in each scheme. */
+/* Source slot inside the drawer — target the actual container. */
 .md-nav__source {
-  background-color: var(--tl-surface);
-  border-bottom: 1px solid var(--tl-rule);
+  background-color: #2A2826 !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
 }
 [data-md-color-scheme="slate"] .md-nav--primary .md-nav__title[for="__drawer"] {
-  background-color: var(--tl-surface);
-  color: var(--tl-text);
+  background-color: var(--or-surface);
+  color: var(--or-text);
+}
+[data-md-color-scheme="slate"] .md-nav__source {
+  background-color: #2A2826 !important;
 }
 
 /* Mobile: float the palette toggle into the right rail. At cramped
@@ -935,19 +852,25 @@ form.md-header__option {
     flex: 0 0 auto;
   }
 }
+/* Icons in the dark drawer source strip — white for contrast. */
+.md-drawer .md-header__source .md-header__oci-mark,
+.md-drawer .md-header__source .md-header__oracle-wordmark {
+  opacity: 0.85;
+  filter: brightness(0) invert(1);
+}
 
 /* Section headers (Multi-agent, Agents, Tools …) — teal accent, uppercase,
    small caps so they read as category labels not nav items. */
 .md-nav--primary .md-nav__item--section > .md-nav__link,
 .md-nav--primary .md-nav__item--section > .md-nav__link:not(.md-nav__link--active) {
-  color: var(--locus-mute) !important;
+  color: var(--or-teal) !important;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   margin-top: 0.5rem;
   padding-top: 0.5rem;
-  border-top: 1px solid var(--tl-rule);
+  border-top: 1px solid var(--or-rule);
   opacity: 1;
 }
 .md-nav--primary .md-nav__item--section:first-child > .md-nav__link {
@@ -957,148 +880,123 @@ form.md-header__option {
 }
 [data-md-color-scheme="slate"] .md-nav--primary .md-nav__item--section > .md-nav__link,
 [data-md-color-scheme="slate"] .md-nav--primary .md-nav__item--section > .md-nav__link:not(.md-nav__link--active) {
-  color: var(--tl-rose-tint) !important;
-  border-top-color: var(--tl-rule);
+  color: var(--or-sage-teal) !important;
+  border-top-color: var(--or-rule);
 }
 
 .md-nav__link--active,
 .md-nav__link[aria-current="true"] {
-  color: var(--tl-red-deep) !important;
+  color: var(--or-red-deep) !important;
   font-weight: 600;
 }
 .md-nav__item .md-nav__link:hover {
-  color: var(--tl-link);
+  color: var(--or-link);
 }
 
 /* ---------------------------------------------------------------------------
-   Code blocks — soft sand background, locus red filename tab.
+   Code blocks — soft sand background, Oracle red filename tab.
    --------------------------------------------------------------------------- */
 .md-typeset code {
-  background-color: rgba(128, 128, 128, 0.14);
+  background-color: rgba(199, 70, 52, 0.10);
   color: var(--locus-code-inline);
   border-radius: 3px;
   font-size: 0.85em;
 }
 .md-typeset pre > code {
-  background-color: var(--tl-bg-soft);
-  color: var(--tl-text);
+  background-color: var(--or-bg-soft);
+  color: var(--or-text);
 }
 .md-typeset .highlight {
-  border-left: 3px solid var(--tl-red);
+  border-left: 3px solid var(--or-red);
   border-radius: 0 4px 4px 0;
 }
 
-/* The hero example is the showcase — a notch larger than body code. */
-.md-typeset .locus-hero__code pre > code,
-.md-typeset .locus-hero__code .highlight code {
-  font-size: 0.92rem;
-  line-height: 1.6;
-}
-/* On mobile the hero example must fit a ~390px column — at 0.92rem (≈18px)
-   it overflowed and looked cramped, so drop it to a compact size. */
-@media (max-width: 60em) {
-  .md-typeset .locus-hero__code pre > code,
-  .md-typeset .locus-hero__code .highlight code {
-    font-size: 0.7rem;
-    line-height: 1.5;
-  }
-}
-
 /* ---------------------------------------------------------------------------
-   Tables — off-white striping, subtle red header underline.
+   Tables — Oracle off-white striping, subtle red header underline.
    --------------------------------------------------------------------------- */
 .md-typeset table:not([class]) {
-  border: 1px solid var(--tl-rule);
+  border: 1px solid var(--or-rule);
   border-radius: 4px;
   overflow: hidden;
   font-size: 0.84rem;
 }
 .md-typeset table:not([class]) th {
-  background-color: var(--tl-bg-soft);
-  color: var(--tl-text);
+  background-color: var(--or-bg-soft);
+  color: var(--or-text);
   font-weight: 700;
-  border-bottom: 2px solid var(--tl-red);
+  border-bottom: 2px solid var(--or-red);
 }
 .md-typeset table:not([class]) tr:nth-child(even) {
   background-color: var(--locus-table-stripe);
 }
 
 /* ---------------------------------------------------------------------------
-   Admonitions — re-tint to accents.
+   Admonitions — re-tint to Oracle accents.
    --------------------------------------------------------------------------- */
 .md-typeset .admonition.note,
 .md-typeset details.note {
-  border-left-color: var(--tl-link);
+  border-left-color: var(--or-link);
 }
 .md-typeset .admonition.note > .admonition-title,
 .md-typeset details.note > summary {
-  background-color: var(--tl-bg-soft);
-  color: var(--tl-link);
+  background-color: rgba(0, 104, 140, 0.08);
+  color: var(--or-link);
 }
-/* Warning and tip take the status tokens (hold and allow), not the brand
-   pink: pink means Locus or an interactive element, never a status. The
-   tokens are defined per scheme, so the title keeps its contrast in dark. */
 .md-typeset .admonition.warning,
 .md-typeset details.warning {
-  border-left-color: var(--tl-hold-border);
+  border-left-color: var(--or-red);
 }
 .md-typeset .admonition.warning > .admonition-title,
 .md-typeset details.warning > summary {
-  background-color: var(--tl-hold-bg);
-  color: var(--tl-hold-fg);
-}
-.md-typeset .admonition.warning > .admonition-title::before,
-.md-typeset details.warning > summary::before {
-  background-color: var(--tl-hold-fg);
+  background-color: rgba(199, 70, 52, 0.08);
+  color: var(--or-red-deep);
 }
 .md-typeset .admonition.tip,
 .md-typeset details.tip {
-  border-left-color: var(--tl-allow-border);
+  border-left-color: var(--or-sage-green);
 }
 .md-typeset .admonition.tip > .admonition-title,
 .md-typeset details.tip > summary {
-  background-color: var(--tl-allow-bg);
-  color: var(--tl-allow-fg);
+  background-color: rgba(134, 181, 150, 0.18);
+  color: #2f6243;
 }
 
 /* ---------------------------------------------------------------------------
-   Buttons / pills — locus red CTA.
+   Buttons / pills — Oracle red CTA.
    --------------------------------------------------------------------------- */
-/* Secondary buttons are neutral ink — one rose element per viewport (the
-   primary CTA). Rose appears on hover only. */
 .md-typeset .md-button {
   background-color: transparent;
-  border: 1px solid color-mix(in srgb, var(--locus-ink) 35%, transparent);
-  color: var(--locus-ink);
+  border: 1px solid var(--or-red);
+  color: var(--or-red);
   border-radius: 3px;
   font-weight: 600;
   letter-spacing: 0.01em;
 }
 .md-typeset .md-button:hover,
 .md-typeset .md-button:focus {
-  background-color: color-mix(in srgb, var(--tl-red) 8%, transparent);
-  color: var(--tl-red);
-  border-color: var(--tl-red);
+  background-color: var(--or-red);
+  color: #FFFFFF;
+  border-color: var(--or-red);
 }
 .md-typeset .md-button--primary {
-  background-color: var(--tl-red);
+  background-color: var(--or-red);
   color: #FFFFFF;
 }
 .md-typeset .md-button--primary:hover {
-  background-color: var(--tl-red-deep);
+  background-color: var(--or-red-deep);
 }
 
 /* ---------------------------------------------------------------------------
-   Footer — dark bar with red micro-accent + locus wordmark.
+   Footer — Oracle dark bar with red micro-accent + Oracle wordmark.
    --------------------------------------------------------------------------- */
 .md-footer-meta {
-  background-color: var(--md-footer-bg-color--dark);
+  background-color: #161A1A;
 }
 .md-footer__inner {
-  border-top: 2px solid var(--tl-red);
+  border-top: 2px solid var(--or-red);
 }
 
-/* Footer brand block — product title + copyright line.
+/* Footer brand block — Oracle Generative AI title + copyright line.
    Driven by HTML in mkdocs.yml `copyright:`. */
 .md-copyright {
   font-size: 0.72rem;
@@ -1122,6 +1020,16 @@ form.md-header__option {
   margin: 0 0 0.25rem;
   text-transform: none;
 }
+.footer-brand__o {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  background-image: url("../img/oci-mark.svg");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  flex: 0 0 auto;
+}
 .footer-copy {
   display: inline-flex;
   align-items: center;
@@ -1129,12 +1037,28 @@ form.md-header__option {
   flex-wrap: wrap;
   color: rgba(255, 255, 255, 0.72);
 }
+/* Footer Oracle wordmark — official aspect 4.763:1 (109.36 × 22.96).
+   Anchor the height; let width compute from aspect-ratio for pixel-perfect
+   proportions. */
+.oracle-mark {
+  display: inline-block;
+  height: 14px;
+  aspect-ratio: 109.36 / 22.96;
+  width: auto;
+  min-width: 66.7px;
+  background-image: url("../img/oracle.svg");
+  background-position: left center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  filter: brightness(0) invert(1) opacity(0.85);
+  vertical-align: middle;
+}
 
 /* ---------------------------------------------------------------------------
    Search input — keep neutral, red focus ring.
    --------------------------------------------------------------------------- */
 .md-search__input {
-  background-color: var(--tl-bg-soft);
+  background-color: var(--or-bg-soft);
   color: var(--locus-ink);
 }
 .md-search__input::placeholder {
@@ -1146,7 +1070,7 @@ form.md-header__option {
 .md-search__input:focus,
 .md-search__input:hover {
   background-color: var(--locus-surface);
-  box-shadow: 0 0 0 2px rgba(229, 72, 103, 0.20);
+  box-shadow: 0 0 0 2px rgba(199, 70, 52, 0.20);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1158,49 +1082,87 @@ form.md-header__option {
 }
 
 /* ---------------------------------------------------------------------------
-   SDK-distinctive callout — used on the Capabilities page to highlight
-   wedge features. locus-red border + warm sand tint, red star icon.
-   Trigger with: `!!! sdk-distinctive "Distinctive to locus"`
+   Oracle-distinctive callout — used on the Capabilities page to highlight
+   wedge features. Oracle-red border + warm sand tint, red star icon.
+   Trigger with: `!!! oracle-distinctive "Distinctive to locus"`
    --------------------------------------------------------------------------- */
 :root {
-  --md-admonition-icon--sdk-distinctive: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>');
+  --md-admonition-icon--oracle-distinctive: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>');
 }
-.md-typeset .admonition.sdk-distinctive,
-.md-typeset details.sdk-distinctive {
-  border-color: var(--tl-red);
+.md-typeset .admonition.oracle-distinctive,
+.md-typeset details.oracle-distinctive {
+  border-color: var(--or-red);
   background: linear-gradient(135deg,
-    rgba(229, 72, 103, 0.04) 0%,
-    rgba(173, 46, 92, 0.04) 100%);
+    rgba(199, 70, 52, 0.04) 0%,
+    rgba(240, 204, 113, 0.04) 100%);
 }
-.md-typeset .sdk-distinctive > .admonition-title,
-.md-typeset .sdk-distinctive > summary {
-  background-color: rgba(229, 72, 103, 0.08);
-  color: var(--tl-red-deep);
+.md-typeset .oracle-distinctive > .admonition-title,
+.md-typeset .oracle-distinctive > summary {
+  background-color: rgba(199, 70, 52, 0.08);
+  color: var(--or-red-deep);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-.md-typeset .sdk-distinctive > .admonition-title::before,
-.md-typeset .sdk-distinctive > summary::before {
-  background-color: var(--tl-red);
-  -webkit-mask-image: var(--md-admonition-icon--sdk-distinctive);
-          mask-image: var(--md-admonition-icon--sdk-distinctive);
+.md-typeset .oracle-distinctive > .admonition-title::before,
+.md-typeset .oracle-distinctive > summary::before {
+  background-color: var(--or-red);
+  -webkit-mask-image: var(--md-admonition-icon--oracle-distinctive);
+          mask-image: var(--md-admonition-icon--oracle-distinctive);
+}
+
+/* ---------------------------------------------------------------------------
+   Diagrams — responsive sizing for the agent-loop SVG and similar.
+   --------------------------------------------------------------------------- */
+.md-typeset img[src*="agent-loop"],
+.md-typeset img[src*="multi-agent-patterns"],
+.md-typeset img[src*="img/patterns/"],
+.md-typeset img.diagram {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+  height: auto;
+  margin: 1.5rem auto;
+}
+.md-typeset img[src*="multi-agent-patterns"] {
+  max-width: 920px;
+}
+
+/* The architecture diagrams (agent-loop, multi-agent-patterns, the
+   per-pattern SVGs under img/patterns/, and the architecture / sequence
+   topologies) are authored against a light background. In dark mode the
+   dark-grey strokes and labels vanish, so render them on a near-white
+   card. */
+[data-md-color-scheme="slate"] .md-typeset img[src*="agent-loop"],
+[data-md-color-scheme="slate"] .md-typeset img[src*="multi-agent-patterns"],
+[data-md-color-scheme="slate"] .md-typeset img[src*="img/patterns/"],
+[data-md-color-scheme="slate"] .md-typeset img[src*="architecture"],
+[data-md-color-scheme="slate"] .md-typeset img[src*="sequence-26ai"],
+[data-md-color-scheme="slate"] .md-typeset img.diagram {
+  background-color: #FBF9F8;
+  padding: 1rem;
+  border-radius: 0.5rem;
 }
 
 /* ---------------------------------------------------------------------------
    Dark-mode logo handling.
-   - locus wordmark → live text in var(--locus-ink), which flips per scheme;
-     no filter.
-   - locus mark → swapped to img/mark-dark.svg on the slate scheme (header
-     and drawer).
+   - Oracle wordmark (black-fill) → invert filter flips to white.
+   - locus mark (dark stroke + red accents) → swap to mark-dark.svg variant
+     which has the stroke recoloured to off-white.
    --------------------------------------------------------------------------- */
-/* Header AND mobile drawer — same mark in dark (the drawer was stuck on the
-   pink variant while the header swapped to the rose→amber one). */
-[data-md-color-scheme="slate"] .md-header__button.md-logo img,
-[data-md-color-scheme="slate"] .md-nav--primary .md-nav__title .md-logo img {
+[data-md-color-scheme="slate"] .md-header__oracle-wordmark {
+  content: url("../img/oracle-white.svg");
+}
+[data-md-color-scheme="slate"] .md-header__button.md-logo img {
   content: url("../img/mark-dark.svg");
 }
+/* Footer Oracle wordmark already inverts the red SVG to white via filter;
+   in dark mode swap to the official white SVG and drop the filter. */
+[data-md-color-scheme="slate"] .oracle-mark {
+  background-image: url("../img/oracle-white.svg");
+  filter: none;
+}
 
-/* Header GitHub link — sits next to the brand source button. */
+/* Header GitHub link — sits next to the OCI / Oracle source button. */
 .md-header__source.md-header__github {
   display: inline-flex;
   align-items: center;
@@ -1215,8 +1177,8 @@ form.md-header__option {
   transition: background-color 0.15s, color 0.15s, transform 0.15s;
 }
 .md-header__source.md-header__github:hover {
-  background-color: rgba(128, 128, 128, 0.14);
-  color: var(--tl-red);
+  background-color: rgba(199, 70, 52, 0.10);
+  color: var(--or-red);
   transform: translateY(-1px);
 }
 .md-header__github-icon {
@@ -1236,7 +1198,7 @@ form.md-header__option {
 }
 
 /* ---------------------------------------------------------------------------
- * Notebook index filter — live search.
+ * Notebook index filter — workbench-style live search.
  * --------------------------------------------------------------------------- */
 
 .notebook-filter {
@@ -1300,31 +1262,15 @@ form.md-header__option {
  *   needed — unlike `break-all` which splits in the middle of perfectly
  *   sized tokens like `openai.gpt-5.5-pro`).
  *
- *   The scrollwrap stays `auto`, not `hidden`: a dense table whose
- *   min-content width exceeds the viewport (code chips + 4-5 columns —
- *   the homepage comparison table, /integrations/, the mkdocstrings
- *   parameter tables) CANNOT shrink to 100%, and with `hidden` its last
- *   column was clipped with no way to reach it. Fit-first still wins
- *   wherever the table can compress; the overflow scrollbar only appears
- *   on the tables that would otherwise lose content.
- *
- *   Also: cap any in-content image (gifs, screenshots) at the column
+ *   Also: cap any in-content image (workbench gif, etc.) at the column
  *   width so it never blows past the viewport edge.
  * --------------------------------------------------------------------- */
 @media (max-width: 48em) {
-  /* Tables: fit the viewport when possible, scroll in-place when not. */
+  /* Tables: make them fit the viewport rather than scroll horizontally. */
   .md-typeset__scrollwrap {
     margin-left: -0.4rem;
     margin-right: -0.4rem;
-    overflow-x: auto;
-  }
-  /* The global table rule sets `overflow: hidden` for rounded corners;
-     Material tables are their own scroll container, so on mobile that
-     clipped the rows of any table too dense to compress (min-content
-     wider than the phone). Restore in-table scrolling here — the tiny
-     unclipped 4px header corner is a fair trade for reachable content. */
-  .md-typeset table:not([class]) {
-    overflow-x: auto;
+    overflow-x: hidden;
   }
   .md-typeset__table {
     display: block;
@@ -1374,24 +1320,27 @@ form.md-header__option {
  *   stage the trimming in two steps:
  *     - ≤ 56em: shrink the wordmark, tighten the tagline letter-spacing.
  *     - ≤ 30em: drop the tagline + the PyPI version pill entirely; the
- *       wordmark and brand/GitHub icons stay.
+ *       wordmark and OCI/GitHub icons stay.
  * --------------------------------------------------------------------- */
 @media (max-width: 56em) {
   .md-header__ellipsis > .md-header__topic:first-of-type > .md-ellipsis {
     font-size: 1.2rem;
   }
+  .md-header__ellipsis > .md-header__topic:first-of-type::after {
+    letter-spacing: 0.06em;
+  }
   /* Title takes only the space it needs; the right rail keeps its slot. */
   .md-header__title { flex: 0 0 auto; }
 }
 @media (max-width: 30em) {
-  /* Drop the PyPI badge to free up room on small phones.
-     !important: the <=60em rule above force-shows the badge with
-     !important, so the narrow-phone hide must outrank it. */
-  .md-header__source.md-header__pypi { display: none !important; }
+  /* Drop the tagline and the PyPI badge to free up room on small phones. */
+  .md-header__ellipsis > .md-header__topic:first-of-type::after { display: none; }
+  .md-header__source.md-header__pypi { display: none; }
   .md-header__ellipsis > .md-header__topic:first-of-type > .md-ellipsis {
     font-size: 1.1rem;
   }
   /* Tighter spacing between right-rail icons. */
+  .md-header__source.md-header__oci { margin-left: 0.15rem; padding: 0.15rem 0.25rem; }
   .md-header__source.md-header__github { margin-left: 0.2rem; }
 }
 
@@ -1403,7 +1352,7 @@ form.md-header__option {
  * #4a4844 in slate). On our pale-cream code-block background the
  * light-scheme variant is practically invisible until you hover.
  * Promote the resting state to ``--lighter`` (darker neutral) for
- * baseline contrast, and switch to locus red on hover so the affordance
+ * baseline contrast, and switch to Oracle red on hover so the affordance
  * is obvious.
  * --------------------------------------------------------------------- */
 .md-clipboard {
@@ -1413,7 +1362,7 @@ form.md-header__option {
 }
 .md-clipboard:focus,
 .md-clipboard:hover {
-  color: var(--tl-red);
+  color: var(--or-red);
   opacity: 1;
 }
 [data-md-color-scheme="slate"] .md-clipboard {
@@ -1422,541 +1371,48 @@ form.md-header__option {
 }
 [data-md-color-scheme="slate"] .md-clipboard:focus,
 [data-md-color-scheme="slate"] .md-clipboard:hover {
-  color: var(--tl-red-light);
+  color: var(--or-red-light);
   opacity: 1;
 }
 
 /* ===================================================================
-   locus brand — polished, cohesive (light + dark).
-   Light: clean WHITE header showcasing the precise locus mark.
-   Dark:  deep header. Pink->rose gradient as a thin hairline + the
-   logo + accents; locus-rose links/CTAs.
-   (Scheme variables + --locus-grad live in the blocks at the top of
-   this file — single source of truth.)
+   Diagram tokens — the inline SVG diagrams (docs/diagrams/*.svg, inlined
+   by hooks/build_metadata.py) are styled through --tl-* tokens. They are
+   aliases onto the locus palette so a diagram themes with the page.
    =================================================================== */
-
-/* Header + tabs: soft elevation + a pink->rose hairline at the bottom. */
-.md-header {
-  box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 2px 12px rgba(0,0,0,0.05);
-  border-bottom: 2px solid transparent;
-  /* Signature hairline — fades at both edges so it garnishes instead of
-     shouting a full-width saturated rule. */
-  border-image: linear-gradient(90deg,
-      transparent 0%, #C74634 18%, #AD2E5C 82%, transparent 100%) 1;
-}
-.md-tabs { border-bottom: 1px solid rgba(0,0,0,0.06); }
-[data-md-color-scheme="slate"] .md-tabs { border-bottom-color: rgba(255,255,255,0.06); }
-
-/* Logo mark: a touch larger so the bloom reads clearly. */
-.md-header__button.md-logo img { height: 1.7rem; width: auto; }
-
-/* Wordmark next to the logo — lowercase, tight. */
-.md-header__topic > .md-ellipsis { font-weight: 700; letter-spacing: -0.02em; }
-
-/* Links + active/hover — via --tl-link so each scheme keeps its own
-   luminance (hardcoding the light value made dark-mode links ~3:1). */
-.md-typeset a { color: var(--tl-link); }
-.md-nav__link--active, .md-nav__item .md-nav__link--active { color: var(--tl-link); }
-
-/* Primary CTA → rose, hover → warm orange. */
-.md-typeset .md-button--primary {
-  background-color: #C74634; border-color: #C74634; color: #FFFFFF;
-}
-.md-typeset .md-button--primary:hover {
-  background-color: #AD2E5C; border-color: #AD2E5C; color: #FFFFFF;
-}
-
-/* Gradient garnish: hero accent word + footer wordmark. */
-.md-typeset .locus-hero h1 .accent,
-.md-footer-meta .footer-brand__text {
-  background: var(--locus-grad);
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent; color: transparent;
-}
-.md-footer-meta .footer-brand__text { font-weight: 700; }
-
-/* ===================================================================
-   locus — "modern dev-brand" redesign (distinct from the stock
-   Material template): sans headings, the Fraunces display face
-   (--locus-display, declared in :root at the top of this file) on the
-   header wordmark only, and bordered hover-lift feature cards.
-   =================================================================== */
-
-/* Product and documentation headings stay crisp and technical. Fraunces is
-   reserved for the header wordmark. */
-.md-typeset h1, .md-typeset h2, .md-typeset h3,
-.md-typeset .locus-hero h1,
-.md-tabs__link,
-.md-footer-meta .footer-brand__text {
-  font-family: var(--locus-sans);
-  letter-spacing: -0.02em;
-}
-.md-header__topic > .md-ellipsis {
-  font-family: var(--locus-display);
-}
-
-/* ---- Feature cards: full border, rounded, hover-lift ---- */
-.md-typeset .grid.cards.locus-feature-cards > ul > li,
-.md-typeset .grid.cards.locus-feature-cards > ol > li {
-  border: 1px solid var(--tl-rule);
-  border-radius: 16px;
-  padding: 1.2rem 1.25rem;
-  background: var(--md-default-bg-color);
-  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
-}
-.md-typeset .grid.cards.locus-feature-cards > ul > li:hover,
-.md-typeset .grid.cards.locus-feature-cards > ol > li:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 40px -16px rgba(20,16,24,0.18);
-  border-color: rgba(229,72,103,0.40);
-  background: var(--md-default-bg-color);
-}
-.md-typeset .grid.cards.locus-feature-cards strong { color: var(--locus-ink); }
-.md-typeset .grid.cards.locus-feature-cards .lg.middle { color: #C74634; }
-
-/* ===================================================================
-   Hero eyebrow ("LOCUS AGENTS · MULTI-AGENT SDK") — tracked monospace
-   label (dev-brand), brand half accented in locus rose.
-   =================================================================== */
-.md-typeset p.locus-product-name {
-  font-family: var(--locus-mono, "JetBrains Mono", ui-monospace, monospace);
-  font-size: 0.7rem;
-  font-weight: 500;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  opacity: 1;
-  color: var(--locus-mute);
-}
-.locus-product-name .tpn-brand { color: #C74634; font-weight: 600; }
-.locus-product-name .tpn-sep   { color: var(--locus-mute); opacity: 0.5; }
-
-/* ===================================================================
-   Two-column hero (left copy / right code) refinements.
-   =================================================================== */
-.md-typeset .locus-hero h1:first-of-type {
-  text-transform: none;
-  font-size: 2.9rem;
-  line-height: 1.06;
-}
-.md-typeset .locus-hero .locus-hero__code .highlight {
-  border-radius: 14px;
-  box-shadow: 0 24px 60px -20px rgba(20, 16, 24, 0.28);
-  overflow: hidden;
-}
-
-/* Header title is clickable → home (see header-home.js). */
-.md-header__title { cursor: pointer; }
-
-/* ===================================================================
-   Nav section labels — hover accent tint
-   =================================================================== */
-
-.md-nav--primary .md-nav__item--section > .md-nav__link:not(.md-nav__link--active):hover {
-  background: var(--md-accent-fg-color--transparent);
-  border-top-color: var(--tl-red-light);
-  color: var(--tl-link) !important;
-}
-
-/* ===================================================================
-   Code — warm syntax palette (both schemes).
-   Stock Material highlights in cool blues/purples that fight the warm
-   canvas. Same token roles, warm hues: rose keywords, amber functions,
-   sage strings, aubergine numbers, warm-grey punctuation.
-   =================================================================== */
-
-[data-md-color-scheme="default"] {
-  --md-code-hl-color:             rgba(214, 51, 108, 0.10);
-  --md-code-hl-keyword-color:     #A61E4D;
-  --md-code-hl-function-color:    #A34E0E;
-  --md-code-hl-string-color:      #1B6E44;
-  --md-code-hl-number-color:      #7E4A8C;
-  --md-code-hl-constant-color:    #7E4A8C;
-  --md-code-hl-special-color:     #C2384F;
-  --md-code-hl-name-color:        var(--md-code-fg-color);
-  --md-code-hl-variable-color:    #4A434C;
-  --md-code-hl-operator-color:    #78716C;
-  --md-code-hl-punctuation-color: #99938D;
-  --md-code-hl-comment-color:     #948D86;
-  --md-code-hl-generic-color:     #4A434C;
+:root {
+  --tl-text:          var(--or-text);
+  --tl-text-soft:     #52525B;
+  --tl-text-mute:     var(--locus-mute);
+  --tl-text-inverse:  #FFFFFF;
+  --tl-bg:            var(--locus-paper);
+  --tl-bg-soft:       var(--or-bg-soft);
+  --tl-surface:       var(--locus-surface);
+  --tl-rule:          var(--or-rule);
+  --tl-rule-subtle:   #F4EFEC;
+  --tl-rule-strong:   #D3CBC5;
+  --tl-accent:        var(--or-red);
+  --tl-accent-subtle: #FBEDEA;
+  --tl-allow-fg:      #15803D;  --tl-allow-bg:   #ECFDF3;  --tl-allow-border:   #6EE7A8;
+  --tl-hold-fg:       #B45309;  --tl-hold-bg:    #FFFBEB;  --tl-hold-border:    #FCD34D;
+  --tl-deny-fg:       #B91C1C;  --tl-deny-bg:    #FEF2F2;  --tl-deny-border:    #FCA5A5;
+  --tl-abstain-fg:    #52525B;  --tl-abstain-bg: #F4F4F7;  --tl-abstain-border: #D3D3DB;
+  --tl-space-sm: 12px; --tl-space-lg: 24px; --tl-space-xl: 32px;
+  --tl-radius-lg: 14px;
 }
 [data-md-color-scheme="slate"] {
-  --md-code-hl-color:             rgba(236, 90, 119, 0.12);
-  --md-code-hl-keyword-color:     #F27E95;
-  --md-code-hl-function-color:    #E5A961;
-  --md-code-hl-string-color:      #8FCE9F;
-  --md-code-hl-number-color:      #C9A3E0;
-  --md-code-hl-constant-color:    #C9A3E0;
-  --md-code-hl-special-color:     #F2C4BD;
-  --md-code-hl-name-color:        var(--md-code-fg-color);
-  --md-code-hl-variable-color:    #D8D2C9;
-  --md-code-hl-operator-color:    #A39C94;
-  --md-code-hl-punctuation-color: #8A837C;
-  --md-code-hl-comment-color:     #837C74;
-  --md-code-hl-generic-color:     #D8D2C9;
-}
-
-/* ===================================================================
-   Dark-mode tuning — hero glow + kicker.
-   =================================================================== */
-
-/* The light-mode glow's orange stop turns brown on the dark canvas —
-   keep the spotlight rose-on-rose in dark. */
-[data-md-color-scheme="slate"] .md-typeset .locus-hero::before {
-  background: radial-gradient(circle,
-              rgba(236, 90, 119, 0.15) 0%,
-              rgba(214, 51, 108, 0.07) 40%,
-              transparent 70%);
-}
-[data-md-color-scheme="slate"] .md-typeset .locus-hero::after {
-  background: radial-gradient(circle,
-              rgba(22, 163, 74, 0.06) 0%,
-              rgba(244, 166, 194, 0.04) 40%,
-              transparent 70%);
-}
-/* Kicker sits below AA at 0.55 opacity on the dark canvas. */
-[data-md-color-scheme="slate"] .md-typeset .locus-hero p.locus-product-name,
-[data-md-color-scheme="slate"] .md-typeset p.locus-product-name {
-  opacity: 0.7;
-}
-
-/* ===================================================================
-   Mobile — CTA buttons stack full-width (no orphan third button on a
-   row of its own), kicker tightens to fit the narrow column.
-   =================================================================== */
-
-@media screen and (max-width: 36em) {
-  .md-typeset .md-button,
-  .md-typeset .locus-hero .md-button {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    margin: 0 0 0.55rem;
-  }
-  .md-typeset .locus-hero p.locus-product-name,
-  .md-typeset p.locus-product-name {
-    font-size: 0.66rem !important;
-    letter-spacing: 0.04em;
-  }
-  /* One tracked line doesn't fit 390px — stack it as a deliberate
-     two-line lockup (brand, then tagline) instead of a ragged wrap. */
-  .md-typeset p.locus-product-name .tpn-sep {
-    display: none;
-  }
-  .md-typeset p.locus-product-name .tpn-tag {
-    display: block;
-    margin-top: 0.2rem;
-    font-size: 0.58rem;
-    letter-spacing: 0.12em;
-  }
-  /* At 0.78rem the one-liner spills past the copy button; at 0.7rem the
-     whole command fits a 390px column with no scroll. */
-  .md-typeset .locus-hero__copy pre {
-    font-size: 0.7rem;
-  }
-}
-
-/* ===================================================================
-   Mobile — code blocks. Material full-bleeds top-level blocks below
-   45em, which turns the rose left rule into a stray sliver at the
-   screen edge, and long lines clipped mid-token with no hint that
-   they scroll. Square the blocks off, and fade sliced glyphs into
-   the block background at the clipped edge: the <code> scrolls under
-   a thin veil pinned to the <pre>. The veil is narrower than the
-   code's own end padding, so at full scroll it covers only padding,
-   never characters.
-   =================================================================== */
-
-@media screen and (max-width: 44.9375em) {
-  .md-content__inner > .highlight {
-    border-left: 0;
-    border-radius: 0;
-  }
-  .md-typeset pre {
-    position: relative;
-  }
-  .md-typeset pre::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 0.9rem;
-    pointer-events: none;
-    border-top-right-radius: inherit;
-    border-bottom-right-radius: inherit;
-    background: linear-gradient(to left, var(--tl-bg-soft) 15%, transparent);
-  }
-  /* The copy button sits in the veil's corner — keep it above. Material
-     renamed .md-clipboard to .md-code__button; cover both. */
-  .md-typeset .md-clipboard,
-  .md-typeset .md-code__button {
-    z-index: 1;
-  }
-}
-
-/* ===================================================================
-   Review pass — readable prose, execution diagram, and API wrapping.
-   =================================================================== */
-
-/* Keep long-form prose at a comfortable measure while allowing tables,
-   diagrams, and API documentation to use the full article column. */
-.md-typeset > p,
-.md-typeset > ul,
-.md-typeset > ol,
-.md-typeset > blockquote {
-  max-width: 48rem;
-}
-
-.md-typeset .execution-flow {
-  display: grid;
-  grid-template-columns: minmax(8rem, 1fr) auto minmax(9rem, 1.1fr) auto minmax(9rem, 1fr);
-  gap: 0.65rem;
-  align-items: center;
-  max-width: 58rem;
-  margin: 1.25rem 0 0.75rem;
-  padding: 1rem;
-  border: 1px solid var(--tl-rule);
-  border-radius: 0.65rem;
-  background: var(--locus-surface);
-}
-.execution-flow__node,
-.execution-flow__audit {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-.execution-flow__node,
-.execution-flow__audit {
-  padding: 0.75rem;
-  border: 1px solid var(--tl-rule);
-  border-radius: 0.45rem;
-  background: var(--tl-bg-soft);
-}
-.execution-flow__node span,
-.execution-flow__audit span {
-  color: var(--locus-mute);
-  font-size: 0.72rem;
-}
-.execution-flow__node--gate {
-  border-color: var(--tl-red);
-}
-.execution-flow__arrow {
-  color: var(--tl-red);
-  font-size: 1.4rem;
-  font-weight: 700;
-}
-.execution-flow__audit {
-  grid-column: 3 / 6;
-  border-style: dashed;
-}
-
-/* mkdocstrings signatures should wrap at tokens instead of forcing the API
-   article to scroll horizontally as one long line. */
-.md-typeset .doc-signature,
-.md-typeset .doc-signature code,
-.md-typeset .doc-signature .highlight,
-.md-typeset .doc-signature pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: normal;
-}
-.md-typeset .doc-signature pre {
-  overflow-x: visible;
-}
-/* Older released docstrings contain indented examples that the Google-style
-   parser exposes as paragraphs. Preserve their whitespace and present them as
-   code until those releases carry fenced examples themselves. */
-.md-typeset .doc details.usage > p,
-.md-typeset .doc details.example > p {
-  margin: 0.6rem 0;
-  padding: 0.75rem 0.9rem;
-  overflow-x: auto;
-  white-space: pre-wrap;
-  font-family: var(--locus-mono);
-  font-size: 0.78rem;
-  line-height: 1.55;
-  background: var(--tl-bg-soft);
-  border-left: 3px solid var(--tl-red);
-}
-.md-typeset math[display="block"] {
-  margin: 1.4rem auto;
-  padding: 0.8rem 1rem;
-  overflow-x: auto;
-  color: var(--tl-text);
-  font-size: 1.08rem;
-}
-
-/* Dark-theme contrast: raise secondary copy, syntax comments, and code-action
-   icons above the subdued palette used by decorative chrome. */
-[data-md-color-scheme="slate"] {
-  --locus-mute: #B4B4BC;
-  --md-default-fg-color--lighter: #A1A1AA;
-}
-[data-md-color-scheme="slate"] .highlight .c,
-[data-md-color-scheme="slate"] .highlight .c1,
-[data-md-color-scheme="slate"] .highlight .cm,
-[data-md-color-scheme="slate"] .highlight .cs {
-  color: #B4B4BC;
-}
-[data-md-color-scheme="slate"] .md-code__button,
-[data-md-color-scheme="slate"] .md-clipboard {
-  color: #F4F4F5;
-  opacity: 0.82;
-}
-
-/* Homepage control workspace. Status colors carry a text label and symbol as
-   well as hue, and the selected rule gets a visible left marker. */
-.md-typeset .action-demo {
-  max-width: 58rem;
-  margin: 1.25rem 0 0.8rem;
-  overflow: hidden;
-  border: 1px solid var(--tl-rule);
-  border-radius: 0.8rem;
-  background: var(--locus-surface);
-  box-shadow: 0 20px 50px -38px rgba(24, 24, 27, 0.45);
-}
-.action-demo__tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--tl-space-2xs);
-  padding: var(--tl-space-sm);
-  border-bottom: 1px solid var(--tl-rule);
-}
-.action-demo__tabs button {
-  flex: 0 1 auto;
-  padding: 0.4rem 0.68rem;
-  border: 1px solid transparent;
-  border-radius: 0.45rem;
-  color: var(--locus-mute);
-  background: transparent;
-  font: 600 0.72rem/1.25 var(--locus-sans);
-  cursor: pointer;
-}
-.action-demo__tabs button:hover,
-.action-demo__tabs button:focus-visible {
-  color: var(--locus-ink);
-  background: var(--tl-bg-soft);
-}
-.action-demo__tabs button[aria-selected="true"] {
-  border-color: var(--tl-accent);
-  color: var(--tl-accent);
-  background: var(--tl-accent-subtle);
-  font-weight: 700;
-}
-/* Keyboard focus needs its own ring: the selected-tab rule above overrides
-   the focus tint, so without an outline the focused selected tab shows no
-   change at all. */
-.action-demo__tabs button:focus-visible {
-  outline: 2px solid var(--tl-focus);
-  outline-offset: 2px;
-}
-.action-demo__workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(17rem, 0.92fr);
-}
-.action-demo__code {
-  min-width: 0;
-  border-right: 1px solid var(--tl-rule);
-  background: var(--md-code-bg-color);
-}
-.action-demo__bar {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.55rem 0.8rem;
-  border-bottom: 1px solid var(--tl-rule);
-  color: var(--locus-mute);
-  font: 500 0.62rem/1.3 var(--locus-mono);
-}
-.md-typeset .action-demo__code pre {
-  margin: 0;
-  padding: 0.8rem 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-.action-demo__code code > span {
-  display: block;
-  min-height: 1.4em;
-  padding: 0 1rem;
-  border-left: 3px solid transparent;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-/* Brand pink is correct here: this marks "look at this line", an interactive
-   pointer, not a decision outcome. */
-.action-demo__code code > span.is-active {
-  border-left-color: var(--tl-accent);
-  background: color-mix(in srgb, var(--tl-accent) 12%, transparent);
-}
-.action-demo__result { padding: 1rem 1.1rem; }
-.action-demo__result p { min-height: 3.4em; margin: 0.7rem 0 0.9rem; }
-.action-demo__status {
-  display: inline-flex;
-  padding: var(--tl-space-2xs) var(--tl-space-xs);
-  border-radius: var(--tl-radius-pill);
-  font: 700 0.7rem/1.2 var(--locus-mono);
-}
-/* The same status tokens the execution flow uses. These pills previously
-   carried a second, different set of greens and reds, so the same decision
-   was one colour in the diagram and another in the demo. The tokens flip with
-   the colour scheme, so no per-scheme duplicate rules are needed.
-
-   `revise` is the abstain case: the agent withheld rather than acted. It reads
-   neutral grey on purpose — it is not a failure, and it is not a denial. */
-.action-demo__status--allow {
-  color: var(--tl-allow-fg);
-  background: var(--tl-allow-bg);
-  border: 1px solid var(--tl-allow-border);
-}
-.action-demo__status--hold {
-  color: var(--tl-hold-fg);
-  background: var(--tl-hold-bg);
-  border: 1px solid var(--tl-hold-border);
-}
-.action-demo__status--deny {
-  color: var(--tl-deny-fg);
-  background: var(--tl-deny-bg);
-  border: 1px solid var(--tl-deny-border);
-}
-.action-demo__status--abstain {
-  color: var(--tl-abstain-fg);
-  background: var(--tl-abstain-bg);
-  border: 1px solid var(--tl-abstain-border);
-}
-.action-demo__result dl { margin: 0; font-size: 0.72rem; }
-.action-demo__result dt {
-  margin-top: 0.55rem;
-  color: var(--locus-mute);
-  font: 600 0.6rem/1.4 var(--locus-mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.action-demo__result dd { margin: 0.08rem 0 0; overflow-wrap: anywhere; }
-.md-typeset .action-demo__note {
-  max-width: none;
-  margin: 0;
-  padding: 0.55rem 0.8rem;
-  border-top: 1px solid var(--tl-rule);
-  color: var(--locus-mute);
-  font-size: 0.65rem;
-  text-align: center;
-}
-
-@media screen and (max-width: 48em) {
-  .action-demo__workspace { grid-template-columns: 1fr; }
-  .action-demo__code { border-right: 0; border-bottom: 1px solid var(--tl-rule); }
-}
-
-@media screen and (max-width: 60em) {
-  .md-typeset .execution-flow {
-    grid-template-columns: 1fr;
-  }
-  .execution-flow__arrow {
-    transform: rotate(90deg);
-    justify-self: center;
-  }
-  .execution-flow__audit {
-    grid-column: 1;
-  }
+  --tl-text:          #F4F4F5;
+  --tl-text-soft:     #D4D4D8;
+  --tl-text-mute:     #A1A1AA;
+  --tl-text-inverse:  #111318;
+  --tl-bg:            #1B1E26;
+  --tl-bg-soft:       #161920;
+  --tl-surface:       #1B1E26;
+  --tl-rule:          #343843;
+  --tl-rule-subtle:   #2A2E38;
+  --tl-rule-strong:   #4A4F5C;
+  --tl-accent-subtle: #3A2320;
+  --tl-allow-bg:      #0F2A1C;  --tl-hold-bg: #2A2110;  --tl-deny-bg: #2E1414;  --tl-abstain-bg: #23262E;
 }
 
 /* ===================================================================
@@ -2043,217 +1499,4 @@ form.md-header__option {
 @media screen and (max-width: 48em) {
   .md-typeset .tl-dia { padding: var(--tl-space-sm); overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .md-typeset .tl-dia svg { min-width: 600px; }
-}
-
-/* ---------------------------------------------------------------------------
-   Homepage bands and the hero bloom motif.
-
-   The landing page is one long markdown article, so its only rhythm used to be
-   heading spacing. These two pieces give it a shape without touching a word of
-   the copy:
-
-   1. `.tl-band` sections break out of the centred article column and run the
-      full width of the viewport, so the page reads as bands — paper, tint,
-      ink, paper, tint, paper — instead of one flat scroll.
-   2. `.locus-hero__motif` puts the mark's own petal geometry behind the hero
-      as a large, low-contrast outline drawing. Brand presence, not a logo
-      pasted at size.
-   --------------------------------------------------------------------------- */
-
-:root {
-  --tl-band-tint: #F1F1F5;
-  --tl-band-deep: #131317;
-}
-[data-md-color-scheme="slate"] {
-  --tl-band-tint: #171A21;
-  --tl-band-deep: #0A0C10;
-}
-
-/* A band is 100vw wide and centred on the article column, which is itself
-   centred in the viewport — so the escape is symmetric. 100vw counts the
-   scrollbar, which would otherwise leave the page scrollable sideways by a few
-   pixels; clipping on `.md-main` (which spans the same area) removes that
-   without touching the sticky header, and `clip` rather than `hidden` means no
-   new scroll container is created. */
-.md-main:has(.tl-band) {
-  overflow-x: clip;
-}
-
-.md-typeset .tl-band {
-  position: relative;
-  width: 100vw;
-  max-width: 100vw;
-  margin-inline: calc(50% - 50vw);
-  margin-block: 0;
-  padding-block: clamp(2.4rem, 5vw, 3.8rem);
-}
-
-/* Re-constrain the band's contents to the same column the unbanded sections
-   use: Material's 61rem grid with its 0.8rem content inset. Keeping both
-   numbers here is what makes a banded heading line up exactly with the hero
-   above it. */
-.md-typeset .tl-band__inner {
-  max-width: 61rem;
-  margin-inline: auto;
-  padding-inline: 0.8rem;
-}
-
-/* `.md-typeset > p` caps prose at a readable measure. Inside a band the text is
-   a grandchild, so the cap has to be restated or the banded paragraphs run the
-   full 61rem while the unbanded ones stay at 48rem. */
-.md-typeset .tl-band__inner > p,
-.md-typeset .tl-band__inner > ul,
-.md-typeset .tl-band__inner > ol,
-.md-typeset .tl-band__inner > blockquote {
-  max-width: 48rem;
-}
-
-/* A band opens with its own heading, so drop the heading's top margin — the
-   band's padding is the spacing. */
-.md-typeset .tl-band__inner > h2:first-child {
-  margin-top: 0;
-}
-
-.md-typeset .tl-band--tint {
-  background: var(--tl-band-tint);
-  border-block: 1px solid var(--tl-rule-subtle);
-}
-
-/* The ink band carries the dark token set in BOTH colour schemes: in light mode
-   that inverts it against the page, and in dark mode it simply stays dark and a
-   shade deeper than the canvas. Every component inside it — the control demo,
-   the execution flow, the status pills — is already token-driven, so redefining
-   the tokens here is all the inversion that is needed. */
-.md-typeset .tl-band--deep {
-  background: var(--tl-band-deep);
-  color: #F4F4F5;
-
-  --locus-ink:         #F4F4F5;
-  --locus-mute:        #B4B4BC;
-  --locus-paper:       #131317;
-  --locus-surface:     #1E222B;
-  --locus-code-inline: #D4D4D8;
-
-  --tl-text:           #F4F4F5;
-  --tl-text-soft:      #D3D3DB;
-  --tl-text-mute:      #A1A1AA;
-  --tl-bg:             #131317;
-  --tl-bg-soft:        #1E212A;
-  --tl-surface:        #1E222B;
-  --tl-surface-raised: #272C36;
-  --tl-rule:           #383D49;
-  --tl-rule-subtle:    #252932;
-  --tl-rule-strong:    #434A56;
-
-  /* `--tl-red` and `--tl-red-deep` are aliases resolved on `:root`, so they do
-     not follow a redefined `--tl-accent` here — they have to be set too. */
-  --tl-accent:        #F472B6;
-  --tl-accent-hover:  #EC4899;
-  --tl-accent-subtle: #4A0A26;
-  --tl-red:           #F472B6;
-  --tl-red-deep:      #EC4899;
-  --tl-red-light:     #F9A8D4;
-  --tl-link:          #F9A8D4;
-  --tl-on-accent:     #111318;
-  --tl-focus:         #F472B6;
-
-  --tl-allow-fg:      #6EE7A8;
-  --tl-allow-bg:      #0B2E1B;
-  --tl-allow-border:  #15803D;
-  --tl-hold-fg:       #FCD34D;
-  --tl-hold-bg:       #3A2708;
-  --tl-hold-border:   #B45309;
-  --tl-deny-fg:       #FCA5A5;
-  --tl-deny-bg:       #3B1113;
-  --tl-deny-border:   #B91C1C;
-  --tl-abstain-fg:    #D3D3DB;
-  --tl-abstain-bg:    #252932;
-  --tl-abstain-border:#434A56;
-
-  --md-typeset-color:           #F4F4F5;
-  --md-typeset-a-color:         #F9A8D4;
-  --md-default-fg-color:        #F4F4F5;
-  --md-default-fg-color--light: #D4D4D8;
-  --md-code-bg-color:           #15181E;
-  --md-code-fg-color:           #F4F4F5;
-}
-
-/* Headings and body text inside the ink band take the inverted ink directly:
-   several base rules name `--locus-ink` at a specificity the band cannot win
-   by token redefinition alone when the rule hardcodes a colour. */
-.md-typeset .tl-band--deep h2,
-.md-typeset .tl-band--deep h3,
-.md-typeset .tl-band--deep p,
-.md-typeset .tl-band--deep li,
-.md-typeset .tl-band--deep dd,
-.md-typeset .tl-band--deep strong {
-  color: var(--locus-ink);
-}
-.md-typeset .tl-band--deep a {
-  color: var(--tl-link);
-}
-
-/* The brand hairline that runs under the site header, reused as the ink band's
-   top edge so the dark slab reads as part of the same system. */
-.md-typeset .tl-band--deep::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 2px;
-  background: var(--locus-grad);
-}
-
-/* Hero bloom — the mark's petals, opened and drawn as outlines. The hero clips
-   its overflow on desktop, so the drawing bleeds off the left edge instead of
-   sitting in a box. */
-.locus-hero__motif {
-  position: absolute;
-  z-index: -2;
-  /* Anchored to the hero's bottom-left corner and mostly clipped by it, so
-     what shows is the upper sweep of the petals in the sparse area beside the
-     install chip — never a watermark behind the headline. */
-  bottom: -15rem;
-  left: -11rem;
-  width: min(32rem, 52vw);
-  aspect-ratio: 1;
-  transform: rotate(-12deg);
-  background: none;  /* the former petal motif; the Oracle mark carries no decorative bloom */
-  opacity: 0.13;
-  pointer-events: none;
-}
-[data-md-color-scheme="slate"] .locus-hero__motif {
-  opacity: 0.2;
-}
-
-@media (max-width: 76em) {
-  /* The stacked hero switches to `overflow: visible` so the code column can
-     breathe; `clip` on the inline axis alone keeps the motif from adding a few
-     pixels of sideways scroll without re-clipping the vertical overflow.
-     (`clip` + `visible` is the one legal mixed pair.) */
-  .md-typeset .locus-hero {
-    overflow-x: clip;
-    overflow-y: visible;
-  }
-  .locus-hero__motif {
-    bottom: auto;
-    top: -2rem;
-    left: auto;
-    right: -4.5rem;
-    width: 13rem;
-    transform: rotate(-12deg);
-    opacity: 0.1;
-  }
-  [data-md-color-scheme="slate"] .locus-hero__motif {
-    opacity: 0.14;
-  }
-}
-
-@media (max-width: 48em) {
-  .md-typeset .tl-band {
-    padding-block: 2rem;
-  }
-  .locus-hero__motif {
-    right: -5rem;
-    width: 10rem;
-  }
 }

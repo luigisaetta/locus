@@ -74,6 +74,6 @@ helm -n litellm upgrade --install gateway litellm/litellm \
 
 ## Full documentation
 
-See the [LiteLLM gateway guide](https://locusagents.oracle.com/how-to/litellm-gateway/)
+See the [LiteLLM gateway guide](https://locusagents.ai/how-to/litellm-gateway/)
 for when to choose this path over direct providers, the auth boundary
 diagram, and the notebook-run-via-gateway recipe.

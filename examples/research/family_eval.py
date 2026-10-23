@@ -12,7 +12,7 @@ benign reads as controls. Two conditions over the identical cases:
   enumerated  the same, but listing all nine families explicitly
 
 Per-family recall in each condition is the result. Write-up, numbers and
-limits: https://locusagents.oracle.com/research/policy-blindness/
+limits: https://locusagents.ai/research/policy-blindness/
 
 Runs against any OpenAI-chat-compatible endpoint. Defaults to a local
 Clusiana at 127.0.0.1:8010; pass a base URL to point it elsewhere:
