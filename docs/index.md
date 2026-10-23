@@ -52,7 +52,7 @@ def get_metric(name: str) -> float:
 
 @tool
 def fetch_runbook(topic: str) -> str:
-    """Pull the runbook section for a topic."""
+    """Runbook section for a topic."""
     return wiki.fetch(topic)
 
 
@@ -63,19 +63,19 @@ def page_oncall(reason: str) -> str:
 
 
 agent = Agent(
-    model="oci:openai.gpt-5",        # OCI GenAI, V1 transport
+    model="oci:openai.gpt-5",   # OCI GenAI
     tools=[get_metric, fetch_runbook, page_oncall],
-    reflexion=True,                  # self-evaluates every turn
-    grounding=True,                  # claims checked against tool output
+    reflexion=True,   # self-evaluates every turn
+    grounding=True,   # claims checked vs tool output
 )
 
 
 async def main() -> None:
     async with run_context() as rid:
-        result = await agent.run(
-            "p99 on checkout-api hit 4.2s — investigate, page if critical."
-        )
-        async for ev in get_event_bus().subscribe(rid):
+        task = "p99 on checkout-api hit 4.2s. Investigate."
+        result = await agent.run(task)
+        bus = get_event_bus()
+        async for ev in bus.subscribe(rid):
             match ev.event_type:
                 case "agent.tool.started":
                     print("🔧", ev.data["tool_name"])
