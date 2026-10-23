@@ -10,6 +10,16 @@ policy.
 
 ### Fixed
 
+- **Tool arguments are coerced to the declared parameter types.** Models do
+  not reliably honour the JSON types in a tool schema: Llama on OCI sends
+  `{"a": "17", "b": "25"}` for two `int` parameters, and `add("17", "25")`
+  returned `"1725"`. `Tool.execute()` now validates each argument against
+  the parameter annotation with pydantic in lax mode (numeric strings,
+  `"true"`, JSON strings for containers, dicts for `BaseModel` parameters,
+  numbers for `str` parameters); values that still do not validate are
+  passed through unchanged, and unannotated or `Any` parameters are left
+  alone.
+
 - **`oci:cohere.command-a-*` reached the wrong transport.** The string
   factory only sent `cohere.command-r*` to the SDK transport, so Command A
   went to `/openai/v1` and failed with `400 Unsupported OpenAI operation`.
