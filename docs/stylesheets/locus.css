@@ -194,20 +194,20 @@ html {
   /* Warm rose-coral primary; lighter in dark for contrast */
   --tl-red:           var(--tl-accent);
   --tl-red-deep:      var(--tl-accent-hover);
-  --tl-red-light:     #F9A8D4;
+  --tl-red-light:     #E2715F;
   /* Warm rose becomes the link colour in dark */
-  --tl-link:          #F9A8D4;
+  --tl-link:          #E2715F;
   --tl-rose-tint:     #F2C4BD;
   --tl-green:         #16A34A;
 
   /* Material overrides — deep header slab, white text/icons on it. */
   --md-primary-fg-color:        #111318;
-  --md-primary-fg-color--light: #F472B6;
+  --md-primary-fg-color--light: #E2715F;
   --md-primary-fg-color--dark:  #E2715F;
   --md-primary-bg-color:        #FFFFFF;
   --md-primary-bg-color--light: #111318cc;
 
-  --md-accent-fg-color:         #F472B6;
+  --md-accent-fg-color:         #E2715F;
   --md-accent-fg-color--transparent: rgba(244, 166, 194, 0.15);
   --md-accent-bg-color:         #1B1E26;
 
@@ -218,7 +218,7 @@ html {
   --md-default-fg-color--lightest: #52525B;
 
   --md-typeset-color:           #F4F4F5;
-  --md-typeset-a-color:         #F9A8D4;
+  --md-typeset-a-color:         #E2715F;
   --md-typeset-mark-color:      rgba(247, 162, 30, 0.28);
 
   --md-footer-bg-color:         #0D0F13;
@@ -235,8 +235,8 @@ html {
   /* Design-system tokens — dark mode. Mirrors the Figma Color collection's
      Dark mode; the status foregrounds lighten and the fills deepen so each
      pair keeps its contrast instead of inverting into mud. */
-  --tl-accent:        #F472B6;
-  --tl-accent-hover:  #EC4899;
+  --tl-accent:        #E2715F;
+  --tl-accent-hover:  #C74634;
   --tl-accent-subtle: #4A0A26;
 
   --tl-surface:        #1B1E26;
@@ -248,7 +248,7 @@ html {
   --tl-on-accent:      #111318;
   --tl-rule-subtle:    #252932;
   --tl-rule-strong:    #434A56;
-  --tl-focus:          #F472B6;
+  --tl-focus:          #E2715F;
 
   --tl-allow-fg:      #6EE7A8;
   --tl-allow-bg:      #0B2E1B;
@@ -2147,15 +2147,15 @@ form.md-header__option {
 
   /* `--tl-red` and `--tl-red-deep` are aliases resolved on `:root`, so they do
      not follow a redefined `--tl-accent` here — they have to be set too. */
-  --tl-accent:        #F472B6;
-  --tl-accent-hover:  #EC4899;
+  --tl-accent:        #E2715F;
+  --tl-accent-hover:  #C74634;
   --tl-accent-subtle: #4A0A26;
-  --tl-red:           #F472B6;
-  --tl-red-deep:      #EC4899;
-  --tl-red-light:     #F9A8D4;
-  --tl-link:          #F9A8D4;
+  --tl-red:           #E2715F;
+  --tl-red-deep:      #C74634;
+  --tl-red-light:     #E2715F;
+  --tl-link:          #E2715F;
   --tl-on-accent:     #111318;
-  --tl-focus:         #F472B6;
+  --tl-focus:         #E2715F;
 
   --tl-allow-fg:      #6EE7A8;
   --tl-allow-bg:      #0B2E1B;
@@ -2171,7 +2171,7 @@ form.md-header__option {
   --tl-abstain-border:#434A56;
 
   --md-typeset-color:           #F4F4F5;
-  --md-typeset-a-color:         #F9A8D4;
+  --md-typeset-a-color:         #E2715F;
   --md-default-fg-color:        #F4F4F5;
   --md-default-fg-color--light: #D4D4D8;
   --md-code-bg-color:           #15181E;
