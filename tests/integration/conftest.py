@@ -132,8 +132,8 @@ def anthropic_available() -> bool:
 
 @lru_cache(maxsize=1)
 def any_model_available() -> bool:
-    """Check if any model (Anthropic or OpenAI) is available."""
-    return anthropic_available() or openai_available()
+    """Check if any model (Anthropic, OpenAI, or OCI Generative AI) is available."""
+    return anthropic_available() or openai_available() or oci_config_available()
 
 
 # =============================================================================

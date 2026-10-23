@@ -125,7 +125,10 @@ def _print_skip_banner(missing: list[str]) -> None:
     from locus.agent import Agent, AgentConfig
     from locus.memory.managers import OracleAgentMemoryManager
 
-    conn = oracledb.connect(
+    # A pool, not a single connection: oracleagentmemory extracts
+    # memories on a background thread and needs its own session.
+    conn = oracledb.create_pool(
+        min=1, max=4,
         user=os.environ["ORACLE_USER"],
         password=os.environ["ORACLE_PASSWORD"],
         dsn=os.environ["ORACLE_DSN"],
@@ -147,10 +150,16 @@ def _print_skip_banner(missing: list[str]) -> None:
 
 
 def _build_connection():
-    """Open a sync oracledb connection — oracleagentmemory wants sync."""
+    """Open a sync oracledb *pool* — oracleagentmemory wants sync, and it
+    runs memory extraction on a background thread. A single
+    ``oracledb.Connection`` shared between that thread and the agent's
+    own queries is not thread-safe (it crashed the thin driver in
+    testing); a pool hands each caller its own session."""
     import oracledb
 
-    return oracledb.connect(
+    return oracledb.create_pool(
+        min=1,
+        max=4,
         user=os.environ["ORACLE_USER"],
         password=os.environ["ORACLE_PASSWORD"],
         dsn=os.environ["ORACLE_DSN"],
@@ -273,7 +282,10 @@ async def show_what_was_extracted(conn) -> None:
     # Use the async variant — calling the sync `search` from inside an
     # `async def` trips oracleagentmemory's "async-in-sync-from-async"
     # guard at oracleagentmemory/core/oracleagentmemory.py:853.
-    hits = await client.search_async("region preference", user_id=USER_ID, max_results=5)
+    try:
+        hits = await client.search_async("region preference", user_id=USER_ID, max_results=5)
+    finally:
+        await client.close_async()
     print(f"\n--- Inspect: client.search(user_id={USER_ID!r}) returned {len(hits)} record(s) ---")
     for i, hit in enumerate(hits, start=1):
         snippet = (getattr(hit, "content", None) or str(hit))[:160].replace("\n", " ")
@@ -290,6 +302,7 @@ async def main() -> None:
     print_config()
     print("\nOpening sync oracledb connection for oracleagentmemory…")
     conn = _build_connection()
+    manager = None
     try:
         manager = _build_manager(conn)
         await session_a(manager)
@@ -301,6 +314,10 @@ async def main() -> None:
             "same Autonomous Database as notebook 11 — the upgrade is the manager."
         )
     finally:
+        # Drain the library's background extraction and close its client
+        # *before* the pool goes away — otherwise the pool is still busy.
+        if manager is not None:
+            await manager.aclose()
         conn.close()
 
 
