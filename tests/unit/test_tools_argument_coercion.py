@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
+import locus.tools.decorator as decorator_module
 from locus.tools import tool
 from locus.tools.context import ToolContext
 
@@ -108,3 +109,42 @@ async def test_untyped_and_any_parameters_are_untouched():
 
 async def test_context_slot_is_untouched():
     assert await with_ctx.execute(a="4") == "8:NoneType"
+
+
+async def test_plain_string_for_a_str_parameter_is_untouched():
+    assert await shout.execute(text="hi") == "HI"
+
+
+async def test_json_that_parses_but_still_does_not_validate_passes_through():
+    # "[1, \"x\"]" parses as JSON but is not a list[int]; the raw string reaches the tool.
+    with pytest.raises(TypeError):
+        await total.execute(values='[1, "x"]')
+
+
+async def test_unknown_argument_names_are_left_for_bind_to_report():
+    with pytest.raises(TypeError, match="wrong arguments"):
+        await add.execute(a=1, b=2, c=3)
+
+
+async def test_unresolvable_type_hints_skip_coercion(monkeypatch):
+    def boom(fn):  # noqa: ANN001, ANN202
+        raise NameError("forward ref")
+
+    monkeypatch.setattr(decorator_module, "get_type_hints", boom)
+    # No coercion: the strings reach the function and concatenate.
+    assert await add.execute(a="1", b="2") == "12"
+
+
+async def test_annotations_pydantic_cannot_model_are_skipped(monkeypatch):
+    class _NoAdapter:
+        def __init__(self, hint):  # noqa: ANN001, ANN204
+            raise TypeError("unsupported")
+
+    monkeypatch.setattr(decorator_module, "TypeAdapter", _NoAdapter)
+    assert await add.execute(a="1", b="2") == "12"
+
+
+async def test_non_string_values_that_do_not_validate_pass_through():
+    # A list for an int parameter is neither coercible nor JSON text; the tool sees it as-is.
+    with pytest.raises(TypeError):
+        await add.execute(a=[1], b=2)

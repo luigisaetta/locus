@@ -205,7 +205,7 @@ class Tool(BaseModel):
             if name in ("ctx", "context") or name not in sig.parameters:
                 continue
             hint = hints.get(name)
-            if hint is None or hint is Any or hint is ToolContext:
+            if hint is None or hint is Any:
                 continue
             if hint is str:
                 if isinstance(value, bool | int | float) and not isinstance(value, str):
