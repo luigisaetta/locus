@@ -51,18 +51,18 @@ Run it::
     export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if encrypted
 
     # oracleagentmemory drives Embedder + Llm through litellm. The
-    # simplest credential to set up is an OpenAI key; the demo defaults
-    # to ``openai/text-embedding-3-small`` + ``openai/gpt-4o-mini``.
+    # demo defaults to ``openai/text-embedding-3-small`` +
+    # ``openai/gpt-4o-mini`` and needs an OpenAI key for those:
     export OPENAI_API_KEY=sk-...
 
-    # For OCI Generative AI instead, pass the OCI auth fields as
-    # default kwargs (litellm's OCI driver does NOT auto-discover them
-    # from ~/.oci/config):
-    #   embedder=Embedder(model="oci/cohere.embed-english-v3.0",
-    #                     oci_region="us-chicago-1",
-    #                     oci_compartment_id="...",
-    #                     oci_tenancy="...", oci_user="...",
-    #                     oci_fingerprint="...", oci_key_file="~/.oci/api_key.pem")
+    # Or pick any litellm model spec — e.g. OCI Generative AI. litellm's
+    # OCI driver does NOT read ~/.oci/config; it takes the auth fields
+    # from these environment variables:
+    export LOCUS_OAM_EMBEDDER=oci/cohere.embed-v4.0
+    export LOCUS_OAM_LLM=oci/meta.llama-3.3-70b-instruct
+    export OCI_REGION=us-chicago-1 OCI_COMPARTMENT_ID=ocid1.tenancy.oc1..xxx
+    export OCI_TENANCY=ocid1.tenancy.oc1..xxx OCI_USER=ocid1.user.oc1..xxx
+    export OCI_FINGERPRINT=aa:bb:... OCI_KEY_FILE=~/.oci/api_key.pem
 
     python examples/notebook_13_oracle_agent_memory.py
 
@@ -97,6 +97,8 @@ _REQUIRED_ENV = (
 THREAD_A = "notebook_13_thread_a"
 THREAD_B = "notebook_13_thread_b"
 USER_ID = "alice"
+EMBEDDER = os.environ.get("LOCUS_OAM_EMBEDDER", "openai/text-embedding-3-small")
+LLM = os.environ.get("LOCUS_OAM_LLM", "openai/gpt-4o-mini")
 TABLE_PREFIX = "locus_notebook_13_oam_"
 
 
@@ -123,7 +125,10 @@ def _print_skip_banner(missing: list[str]) -> None:
     from locus.agent import Agent, AgentConfig
     from locus.memory.managers import OracleAgentMemoryManager
 
-    conn = oracledb.connect(
+    # A pool, not a single connection: oracleagentmemory extracts
+    # memories on a background thread and needs its own session.
+    conn = oracledb.create_pool(
+        min=1, max=4,
         user=os.environ["ORACLE_USER"],
         password=os.environ["ORACLE_PASSWORD"],
         dsn=os.environ["ORACLE_DSN"],
@@ -145,10 +150,16 @@ def _print_skip_banner(missing: list[str]) -> None:
 
 
 def _build_connection():
-    """Open a sync oracledb connection — oracleagentmemory wants sync."""
+    """Open a sync oracledb *pool* — oracleagentmemory wants sync, and it
+    runs memory extraction on a background thread. A single
+    ``oracledb.Connection`` shared between that thread and the agent's
+    own queries is not thread-safe (it crashed the thin driver in
+    testing); a pool hands each caller its own session."""
     import oracledb
 
-    return oracledb.connect(
+    return oracledb.create_pool(
+        min=1,
+        max=4,
         user=os.environ["ORACLE_USER"],
         password=os.environ["ORACLE_PASSWORD"],
         dsn=os.environ["ORACLE_DSN"],
@@ -163,8 +174,8 @@ def _build_manager(conn):
 
     return OracleAgentMemoryManager(
         connection=conn,
-        embedder="openai/text-embedding-3-small",
-        llm="openai/gpt-4o-mini",
+        embedder=EMBEDDER,
+        llm=LLM,
         extract_memories=True,
         table_name_prefix=TABLE_PREFIX,
         # First-run provisioning of the oracleagentmemory schema. For
@@ -263,15 +274,18 @@ async def show_what_was_extracted(conn) -> None:
 
     client = OracleAgentMemory(
         connection=conn,
-        embedder="openai/text-embedding-3-small",
-        llm="openai/gpt-4o-mini",
+        embedder=EMBEDDER,
+        llm=LLM,
         extract_memories=False,  # read-only probe
         table_name_prefix=TABLE_PREFIX,
     )
     # Use the async variant — calling the sync `search` from inside an
     # `async def` trips oracleagentmemory's "async-in-sync-from-async"
     # guard at oracleagentmemory/core/oracleagentmemory.py:853.
-    hits = await client.search_async("region preference", user_id=USER_ID, max_results=5)
+    try:
+        hits = await client.search_async("region preference", user_id=USER_ID, max_results=5)
+    finally:
+        await client.close_async()
     print(f"\n--- Inspect: client.search(user_id={USER_ID!r}) returned {len(hits)} record(s) ---")
     for i, hit in enumerate(hits, start=1):
         snippet = (getattr(hit, "content", None) or str(hit))[:160].replace("\n", " ")
@@ -288,6 +302,7 @@ async def main() -> None:
     print_config()
     print("\nOpening sync oracledb connection for oracleagentmemory…")
     conn = _build_connection()
+    manager = None
     try:
         manager = _build_manager(conn)
         await session_a(manager)
@@ -299,6 +314,10 @@ async def main() -> None:
             "same Autonomous Database as notebook 11 — the upgrade is the manager."
         )
     finally:
+        # Drain the library's background extraction and close its client
+        # *before* the pool goes away — otherwise the pool is still busy.
+        if manager is not None:
+            await manager.aclose()
         conn.close()
 
 

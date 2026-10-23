@@ -10,6 +10,21 @@ policy.
 
 ### Fixed
 
+- **Oracle agent memory with a single connection crashed the driver.**
+  `oracleagentmemory` extracts memories on a background thread; sharing
+  one sync `oracledb.Connection` between that thread and the agent's own
+  queries segfaulted python-oracledb. Notebook 88 and the
+  `OracleAgentMemoryManager` docs now hand the library a connection pool,
+  and the manager gains `aclose()` / `close()` (and `drain()` now waits for
+  the library's background extraction) so callers can shut it down before
+  closing the pool.
+- **Tool calls with Meta Llama on the OCI V1 transport.** OCI's
+  `/openai/v1` rejects a tool-enabled request whose first message is a
+  system message with `400 Tool calling for this Llama model requires the
+  first message to be a user message` — every agent with a `system_prompt`
+  hit it. `OCIChatCompletionsModel` now folds the leading system text into
+  the first user message for `meta.llama*` when tools are present.
+
 - **`oci:cohere.command-a-*` reached the wrong transport.** The string
   factory only sent `cohere.command-r*` to the SDK transport, so Command A
   went to `/openai/v1` and failed with `400 Unsupported OpenAI operation`.

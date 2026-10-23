@@ -14,6 +14,7 @@ import os
 import socket
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
 
 import pytest
@@ -131,8 +132,8 @@ def anthropic_available() -> bool:
 
 @lru_cache(maxsize=1)
 def any_model_available() -> bool:
-    """Check if any model (Anthropic or OpenAI) is available."""
-    return anthropic_available() or openai_available()
+    """Check if any model (Anthropic, OpenAI, or OCI Generative AI) is available."""
+    return anthropic_available() or openai_available() or oci_config_available()
 
 
 # =============================================================================
@@ -177,7 +178,7 @@ skip_without_anthropic = pytest.mark.skipif(
 
 skip_without_model = pytest.mark.skipif(
     not any_model_available(),
-    reason="No model available (need OpenAI or Anthropic API key)",
+    reason="No model available (need OPENAI_API_KEY, ANTHROPIC_API_KEY, or OCI_PROFILE)",
 )
 
 
@@ -193,9 +194,15 @@ def _build_model():
 
     1. OpenAI — when ``OPENAI_API_KEY`` is set.
     2. Anthropic — when ``ANTHROPIC_API_KEY`` is set.
+    3. OCI Generative AI — when ``OCI_PROFILE`` is set. Goes through the
+       ``oci:`` string factory so the transport follows the model id
+       (``OCI_MODEL_ID``, default ``meta.llama-3.3-70b-instruct``);
+       ``OCI_COMPARTMENT`` / ``OCI_COMPARTMENT_ID``, ``OCI_REGION`` and
+       ``OCI_ENDPOINT`` are honoured, ``OCI_AUTH_TYPE`` selects a
+       principal-based mode instead of the profile.
 
     Model id is controlled per-provider by ``OPENAI_MODEL_ID`` /
-    ``ANTHROPIC_MODEL_ID``.
+    ``ANTHROPIC_MODEL_ID`` / ``OCI_MODEL_ID``.
     """
     # OpenAI (preferred)
     if openai_available():
@@ -210,6 +217,35 @@ def _build_model():
 
         model_id = os.getenv("ANTHROPIC_MODEL_ID", "claude-haiku-4-5")
         return AnthropicModel(model=model_id, max_tokens=512)
+
+    # OCI Generative AI — the Oracle-native path.
+    if oci_config_available():
+        from locus.models import get_model
+
+        model_id = os.getenv("OCI_MODEL_ID", "meta.llama-3.3-70b-instruct")
+        profile = os.getenv("OCI_PROFILE", "DEFAULT")
+        region = os.getenv("OCI_REGION", "us-chicago-1")
+        compartment = os.getenv("OCI_COMPARTMENT") or os.getenv("OCI_COMPARTMENT_ID")
+        auth_type = os.getenv("OCI_AUTH_TYPE")
+        kwargs: dict[str, Any] = {"max_tokens": 2048}
+        if compartment:
+            kwargs["compartment_id"] = compartment
+        if model_id.lower().startswith(("cohere.", "ocid1.generativeaiendpoint.")):
+            # SDK transport (OCIModel) argument names.
+            kwargs["profile_name"] = profile
+            kwargs["service_endpoint"] = os.getenv(
+                "OCI_ENDPOINT",
+                f"https://inference.generativeai.{region}.oci.oraclecloud.com",
+            )
+        elif auth_type in ("instance_principal", "resource_principal", "security_token"):
+            kwargs["auth_type"] = auth_type
+            kwargs["region"] = region
+        else:
+            # V1 transport (OCIChatCompletionsModel): profile implies api-key
+            # or session auth from ~/.oci/config.
+            kwargs["profile"] = profile
+            kwargs["region"] = region
+        return get_model(f"oci:{model_id}", **kwargs)
 
     return None
 
@@ -254,7 +290,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "requires_oci: test requires OCI config")
     config.addinivalue_line("markers", "requires_openai: test requires OpenAI API key")
     config.addinivalue_line(
-        "markers", "requires_model: test requires any model (OpenAI or Anthropic)"
+        "markers", "requires_model: test requires any model (OpenAI, Anthropic, or OCI)"
     )
 
 

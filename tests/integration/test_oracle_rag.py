@@ -337,7 +337,7 @@ class TestOracleWithBothEmbedders:
 
     @pytest.mark.asyncio
     async def test_oracle_with_oci_cohere(self):
-        """Test Oracle with OCI Cohere embeddings (1024 dims)."""
+        """Test Oracle with OCI Cohere embeddings (column sized from the model)."""
         if not (Path.home() / ".oci/config").exists():
             pytest.skip("OCI not configured")
 
@@ -360,7 +360,7 @@ class TestOracleWithBothEmbedders:
                 password=ORACLE_PASSWORD,
                 wallet_location=ORACLE_WALLET,
                 wallet_password=ORACLE_WALLET_PASSWORD,
-                dimension=1024,  # Cohere dimension
+                dimension=embedder.dimension,  # 1024 for v3, 1536 for v4
                 table_name="test_oci_cohere",
             )
 
@@ -370,19 +370,21 @@ class TestOracleWithBothEmbedders:
                 retriever = RAGRetriever(embedder=embedder, store=store)
                 await retriever.add_documents(
                     [
-                        "OCI Cohere embeddings are 1024 dimensions.",
+                        f"OCI Cohere embeddings are {embedder.dimension} dimensions.",
                         "Cohere models are optimized for search.",
                     ]
                 )
 
                 result = await retriever.retrieve("embedding dimensions", limit=1)
                 assert len(result.documents) == 1
-                assert "1024" in result.documents[0].document.content
+                assert str(embedder.dimension) in result.documents[0].document.content
 
             finally:
                 await store.clear()
                 await store.close()
 
+        except AssertionError:
+            raise
         except Exception as e:
             pytest.skip(f"OCI Cohere not available: {e}")
 
