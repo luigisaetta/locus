@@ -51,18 +51,18 @@ Run it::
     export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if encrypted
 
     # oracleagentmemory drives Embedder + Llm through litellm. The
-    # simplest credential to set up is an OpenAI key; the demo defaults
-    # to ``openai/text-embedding-3-small`` + ``openai/gpt-4o-mini``.
+    # demo defaults to ``openai/text-embedding-3-small`` +
+    # ``openai/gpt-4o-mini`` and needs an OpenAI key for those:
     export OPENAI_API_KEY=sk-...
 
-    # For OCI Generative AI instead, pass the OCI auth fields as
-    # default kwargs (litellm's OCI driver does NOT auto-discover them
-    # from ~/.oci/config):
-    #   embedder=Embedder(model="oci/cohere.embed-english-v3.0",
-    #                     oci_region="us-chicago-1",
-    #                     oci_compartment_id="...",
-    #                     oci_tenancy="...", oci_user="...",
-    #                     oci_fingerprint="...", oci_key_file="~/.oci/api_key.pem")
+    # Or pick any litellm model spec — e.g. OCI Generative AI. litellm's
+    # OCI driver does NOT read ~/.oci/config; it takes the auth fields
+    # from these environment variables:
+    export LOCUS_OAM_EMBEDDER=oci/cohere.embed-v4.0
+    export LOCUS_OAM_LLM=oci/meta.llama-3.3-70b-instruct
+    export OCI_REGION=us-chicago-1 OCI_COMPARTMENT_ID=ocid1.tenancy.oc1..xxx
+    export OCI_TENANCY=ocid1.tenancy.oc1..xxx OCI_USER=ocid1.user.oc1..xxx
+    export OCI_FINGERPRINT=aa:bb:... OCI_KEY_FILE=~/.oci/api_key.pem
 
     python examples/notebook_13_oracle_agent_memory.py
 
@@ -97,6 +97,8 @@ _REQUIRED_ENV = (
 THREAD_A = "notebook_13_thread_a"
 THREAD_B = "notebook_13_thread_b"
 USER_ID = "alice"
+EMBEDDER = os.environ.get("LOCUS_OAM_EMBEDDER", "openai/text-embedding-3-small")
+LLM = os.environ.get("LOCUS_OAM_LLM", "openai/gpt-4o-mini")
 TABLE_PREFIX = "locus_notebook_13_oam_"
 
 
@@ -163,8 +165,8 @@ def _build_manager(conn):
 
     return OracleAgentMemoryManager(
         connection=conn,
-        embedder="openai/text-embedding-3-small",
-        llm="openai/gpt-4o-mini",
+        embedder=EMBEDDER,
+        llm=LLM,
         extract_memories=True,
         table_name_prefix=TABLE_PREFIX,
         # First-run provisioning of the oracleagentmemory schema. For
@@ -263,8 +265,8 @@ async def show_what_was_extracted(conn) -> None:
 
     client = OracleAgentMemory(
         connection=conn,
-        embedder="openai/text-embedding-3-small",
-        llm="openai/gpt-4o-mini",
+        embedder=EMBEDDER,
+        llm=LLM,
         extract_memories=False,  # read-only probe
         table_name_prefix=TABLE_PREFIX,
     )

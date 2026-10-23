@@ -10,6 +10,13 @@ policy.
 
 ### Fixed
 
+- **Tool calls with Meta Llama on the OCI V1 transport.** OCI's
+  `/openai/v1` rejects a tool-enabled request whose first message is a
+  system message with `400 Tool calling for this Llama model requires the
+  first message to be a user message` — every agent with a `system_prompt`
+  hit it. `OCIChatCompletionsModel` now folds the leading system text into
+  the first user message for `meta.llama*` when tools are present.
+
 - **`oci:cohere.command-a-*` reached the wrong transport.** The string
   factory only sent `cohere.command-r*` to the SDK transport, so Command A
   went to `/openai/v1` and failed with `400 Unsupported OpenAI operation`.
