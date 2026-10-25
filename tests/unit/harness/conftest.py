@@ -53,6 +53,7 @@ from locus.harness import (
     OpenShellBackend,
     SessionBackend,
     WorkspaceBackend,
+    oci_sandbox,
 )
 
 
@@ -168,6 +169,39 @@ class FakeOpenShellClient:
 
     def delete(self, name: str, *, workspace: str, allow_missing: bool = False) -> None:
         self.deleted.append(name)
+
+
+#: The backend's real model loader, for the tests that check its error when
+#: the SDK is missing.
+REAL_OCI_MODELS = oci_sandbox._models
+
+
+def _model(**fields: Any) -> SimpleNamespace:
+    return SimpleNamespace(**fields)
+
+
+def _stand_in_oci_models() -> SimpleNamespace:
+    """The request models the backend builds, for an ``oci`` without sandboxes."""
+    return SimpleNamespace(
+        RunSandboxCommandDetails=_model,
+        CreateSandboxDetails=_model,
+        StopSandboxDetails=_model,
+        ExtendSandboxDetails=_model,
+    )
+
+
+@pytest.fixture(autouse=True)
+def _oci_sandbox_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Use the SDK's request models when it has them, stand-ins otherwise.
+
+    ``oci.generative_ai_sandbox`` ships from ``oci`` 2.189.0. An environment
+    that resolves an older ``oci`` (CI's Python 3.14 job gets 2.188.0) still
+    runs every backend test against the fake client.
+    """
+    try:
+        import oci.generative_ai_sandbox.models  # noqa: F401
+    except ImportError:
+        monkeypatch.setattr(oci_sandbox, "_models", _stand_in_oci_models)
 
 
 class FakeServiceError(Exception):

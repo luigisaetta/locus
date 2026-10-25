@@ -34,7 +34,12 @@ from locus.harness import (
     build_harness,
     oci_sandbox,
 )
-from tests.unit.harness.conftest import FakeOCISandboxClient, FakeServiceError, needs_posix
+from tests.unit.harness.conftest import (
+    REAL_OCI_MODELS,
+    FakeOCISandboxClient,
+    FakeServiceError,
+    needs_posix,
+)
 
 
 class ScriptedClient(FakeOCISandboxClient):
@@ -438,6 +443,7 @@ def test_a_kill_after_the_grace_period_is_a_timeout_only_past_the_deadline() -> 
 
 
 def test_without_the_sdk_a_command_says_what_to_install(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(oci_sandbox, "_models", REAL_OCI_MODELS)
     monkeypatch.setitem(sys.modules, "oci.generative_ai_sandbox", None)
     with pytest.raises(ImportError, match=r"locus-sdk\[oci-sandbox\]"):
         session(ScriptedClient()).run("true", timeout=5)
