@@ -8,6 +8,19 @@ policy.
 
 ## [Unreleased]
 
+### Added
+
+- **OCI GenAI Sandboxes as a coding-harness workspace.**
+  `locus.harness.OCISandboxBackend` runs the harness tools in an OCI
+  Enterprise AI sandbox (`pip install "locus-sdk[oci-sandbox]"`, `oci`
+  2.189.0+). `create(project_id, ...)` makes a sandbox and deletes it on
+  `close()`; `connect(sandbox_id, ...)` attaches to one; `extend()` adds
+  lifetime. Commands stream with their output order kept, run under an
+  in-sandbox deadline, and return at most 900 kB of output, because the
+  service loses larger output. Background state lives in
+  `/workspace/.locus-harness` (`/tmp` is read-only there), now in
+  `SKIP_DIRS`.
+
 ### Fixed
 
 - **Oracle agent memory with a single connection crashed the driver.**
