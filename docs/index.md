@@ -224,6 +224,15 @@ agent you already have, or build on the full runtime.
     either way on a signed audit trail. `governed_agent()` wraps any agent
     in the whole harness in one call.
 
+- :material-cloud-check:{ .lg .middle } **[Day 0 OCI](concepts/providers/oci.md)**
+
+    ---
+    OCI Generative AI is the home ground, not an adapter. `model="oci:…"`
+    reaches 90+ models through three transports with automatic routing and
+    day-0 support for new models; auth is your OCI profile, a session token,
+    or instance / resource principals on OKE and Compute. Same `Agent`, same
+    admission gate.
+
 - :material-graph:{ .lg .middle } **[Multi-agent coordination](concepts/multi-agent.md)**
 
     ---
