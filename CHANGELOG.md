@@ -57,7 +57,11 @@ policy.
 - **Positioning.** Locus is presented as the **Oracle Generative AI Agentic Harness**
   across the README, the documentation site (home page, site description, page
   titles, social card), the package metadata and the security policy. The
-  social card now points at `github.com/oracle/locus`.
+  social card now points at `github.com/oracle/locus`. The site header
+  carries the product name under the `locus` wordmark again (it was dropped
+  with the newer stylesheet), the logo SVG slogan matches, and the social
+  card no longer carries the old "Multi-Agent Reasoning Orchestrator SDK"
+  line.
 
 ## [3.0.1] - 2026-10-22
 

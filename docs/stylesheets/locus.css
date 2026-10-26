@@ -657,10 +657,9 @@ html {
   opacity: 0.85;
 }
 
-/* Title block in the middle — "locus" wordmark only.
-   The slogan lives in the SVG logo and on the homepage; trying to
-   stack a tagline beneath the title fights Material's absolute-
-   positioned topic toggle, so we keep the header clean.
+/* Title block in the middle — "locus" wordmark with the product name
+   stacked beneath it (see the ::after rule below; the topic swap that
+   used to fight the stacked layout is disabled site-wide further down).
    `flex: 0 0 auto` keeps the title from taking the full available row;
    that leaves room for the palette toggle, search, and source slot to
    cluster together on the right (see `form.md-header__option { margin-left: auto }` below). */
@@ -679,34 +678,51 @@ html {
 form.md-header__option {
   margin-left: auto;
 }
-/* Stack the first topic vertically: "locus" wordmark + the full
-   product name beneath ('Multi-Agent SDK',
-   split across two lines), matching the wordmark+tagline lockup the
-   SVG logo carries. The two-line break keeps each line short enough to
-   fit alongside the dark-mode toggle and the search slot at common
+/* Stack the first topic vertically: "locus" wordmark + the approved
+   product name beneath ('Oracle Generative AI Agentic Harness', split
+   across two lines), matching the wordmark+tagline lockup the SVG logo
+   carries. The two-line break keeps each line short enough to fit
+   alongside the dark-mode toggle and the search slot at common
    viewport widths. */
 .md-header__ellipsis > .md-header__topic:first-of-type {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
+  gap: 0.15rem;
 }
 .md-header__ellipsis > .md-header__topic:first-of-type > .md-ellipsis {
   font-family: var(--locus-display);
   font-weight: 700;
   font-size: 1.5rem;
-  line-height: 1.2;
+  line-height: 1.1;
   letter-spacing: -0.015em;
   text-transform: lowercase;
   color: var(--locus-ink);
 }
 .md-header__ellipsis > .md-header__topic:first-of-type::after {
-  content: none;
+  /* `\A` is a CSS newline; `white-space: pre` keeps it as a hard break,
+     so the product name renders on two lines under the wordmark —
+     family brand on top, product descriptor below. The space after
+     `\A` terminates the hex escape (otherwise `\AA` parses as U+00AA
+     and eats the "A" of "Agentic"); CSS consumes that one space. */
+  content: "Oracle Generative AI\A Agentic Harness";
+  font-family: var(--locus-sans);
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--tl-red);
+  line-height: 1.25;
+  white-space: pre;
+  /* Push the line away from the dark-mode toggle that sits immediately
+     to the right of the title slot, so they don't visually touch. */
+  padding-right: 1rem;
 }
 @media (max-width: 56em) {
-  /* Mobile: same full name, slightly tighter tracking to fit. */
+  /* Mobile: same product name, slightly tighter tracking to fit. */
   .md-header__ellipsis > .md-header__topic:first-of-type::after {
-    content: none;
+    font-size: 0.5rem;
+    letter-spacing: 0.06em;
   }
   /* Always show "locus" (site title) in the mobile header — suppress
      Material's page-title swap so users always see the brand name. */
@@ -834,14 +850,18 @@ form.md-header__option {
      search + PyPI + GitHub hug the right edge, leaving the left for the
      brand title. */
   .md-header__button.md-icon[for="__search"] { margin-left: auto !important; }
-  /* Show the brand title (site_name "locusagents") on mobile — small and
-     hard-clamped so it stays clear of the right-aligned controls. Target
-     the REAL title span (.md-header__title .md-ellipsis) directly. */
+  /* Show the brand title ("locus" wordmark + the two-line product name)
+     on mobile — small and hard-clamped so it stays clear of the
+     right-aligned controls. The clamp must fit the wider of the two
+     tagline lines ("Oracle Generative AI", ~157px at 0.55rem/0.12em);
+     below 30em the tagline is dropped, so the clamp only ever bites on
+     the wordmark there. Target the REAL title span
+     (.md-header__title .md-ellipsis) directly. */
   .md-header__title {
     display: flex !important;
     flex: 0 1 auto;
     min-width: 0;
-    max-width: 120px;
+    max-width: 10.5rem;
     overflow: hidden;
     margin-left: 0.4rem;
   }
