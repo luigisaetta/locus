@@ -397,20 +397,46 @@ html {
   border-radius: 50%;
   pointer-events: none;
 }
-/* Compound `.locus-hero p.locus-product-name` (specificity 0,3,1) beats
+/* Hero eyebrow — a pill badge: red dot · "Oracle Generative AI" (ink) ·
+   hairline · "Agentic Harness" (Oracle red). Compound
+   `.locus-hero p.locus-product-name` (specificity 0,3,1) beats
    `.md-typeset .locus-hero p` (0,2,1), so the eyebrow size actually wins
-   inside the hero. Second selector covers usages outside the hero (e.g.
-   a page without a hero) where `.locus-hero p` isn't competing. */
+   inside the hero. Second selector covers usages outside the hero. */
 .md-typeset .locus-hero p.locus-product-name,
 .md-typeset p.locus-product-name {
-  font-size: 0.78rem !important;
-  line-height: 1.35;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 1.1rem;
+  padding: 0.34rem 0.9rem 0.34rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--tl-red) 36%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tl-red) 8%, transparent);
+  font-family: var(--locus-sans);
+  font-size: 0.66rem !important;
+  line-height: 1.2;
   font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--locus-ink);
-  opacity: 0.55;
-  margin: 0 0 1.2rem;
+  opacity: 1;
+}
+.md-typeset p.locus-product-name::before {
+  content: "";
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--tl-red);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tl-red) 22%, transparent);
+}
+.md-typeset p.locus-product-name .locus-product-name__brand {
+  opacity: 0.78;
+}
+.md-typeset p.locus-product-name .locus-product-name__name {
+  color: var(--tl-red);
+  padding-left: 0.6rem;
+  border-left: 1px solid color-mix(in srgb, var(--tl-red) 40%, transparent);
 }
 .md-typeset .locus-hero h1:first-of-type {
   font-family: var(--locus-sans);
@@ -1528,22 +1554,6 @@ form.md-header__option {
 .md-typeset .grid.cards.locus-feature-cards .lg.middle { color: #C74634; }
 
 /* ===================================================================
-   Hero eyebrow ("LOCUS AGENTS · MULTI-AGENT SDK") — tracked monospace
-   label (dev-brand), brand half accented in locus rose.
-   =================================================================== */
-.md-typeset p.locus-product-name {
-  font-family: var(--locus-mono, "JetBrains Mono", ui-monospace, monospace);
-  font-size: 0.7rem;
-  font-weight: 500;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  opacity: 1;
-  color: var(--locus-mute);
-}
-.locus-product-name .tpn-brand { color: #C74634; font-weight: 600; }
-.locus-product-name .tpn-sep   { color: var(--locus-mute); opacity: 0.5; }
-
-/* ===================================================================
    Two-column hero (left copy / right code) refinements.
    =================================================================== */
 .md-typeset .locus-hero h1:first-of-type {
@@ -1626,12 +1636,6 @@ form.md-header__option {
               rgba(244, 166, 194, 0.04) 40%,
               transparent 70%);
 }
-/* Kicker sits below AA at 0.55 opacity on the dark canvas. */
-[data-md-color-scheme="slate"] .md-typeset .locus-hero p.locus-product-name,
-[data-md-color-scheme="slate"] .md-typeset p.locus-product-name {
-  opacity: 0.7;
-}
-
 /* ===================================================================
    Mobile — CTA buttons stack full-width (no orphan third button on a
    row of its own), kicker tightens to fit the narrow column.
@@ -1645,21 +1649,25 @@ form.md-header__option {
     width: 100%;
     margin: 0 0 0.55rem;
   }
+  /* The one-line pill is ~400px; on phones stack brand over name inside a
+     rounded tag instead of overflowing the column. */
   .md-typeset .locus-hero p.locus-product-name,
   .md-typeset p.locus-product-name {
-    font-size: 0.66rem !important;
-    letter-spacing: 0.04em;
+    display: inline-grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 0.6rem;
+    row-gap: 0.15rem;
+    align-items: center;
+    border-radius: 0.75rem;
+    font-size: 0.6rem !important;
+    letter-spacing: 0.06em;
   }
-  /* One tracked line doesn't fit 390px — stack it as a deliberate
-     two-line lockup (brand, then tagline) instead of a ragged wrap. */
-  .md-typeset p.locus-product-name .tpn-sep {
-    display: none;
+  .md-typeset p.locus-product-name::before {
+    grid-row: 1 / span 2;
   }
-  .md-typeset p.locus-product-name .tpn-tag {
-    display: block;
-    margin-top: 0.2rem;
-    font-size: 0.58rem;
-    letter-spacing: 0.12em;
+  .md-typeset p.locus-product-name .locus-product-name__name {
+    padding-left: 0;
+    border-left: 0;
   }
   /* At 0.78rem the one-liner spills past the copy button; at 0.7rem the
      whole command fits a 390px column with no scroll. */
