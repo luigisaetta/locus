@@ -47,6 +47,7 @@ Example::
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -118,6 +119,34 @@ def _load_profile_config(profile: str, config_file: str) -> dict[str, Any]:
     cfg_path = str(Path(config_file).expanduser())
     cfg: dict[str, Any] = oci_config_module.from_file(cfg_path, profile_name=profile)
     return cfg
+
+
+def wrap_tool_results_as_objects(messages: list[Message]) -> list[Message]:
+    """Make every tool result a JSON object, as Gemini on OCI requires.
+
+    OCI maps a ``tool`` message onto Gemini's ``function_response.response``,
+    a protobuf ``Struct``; a bare string or number is rejected with ``400
+    Invalid value at 'contents[n].parts[0].function_response.response'``.
+    Results that already are JSON objects pass through unchanged; anything
+    else becomes ``{"result": <value>}`` — the parsed value when the text is
+    valid JSON, the raw text otherwise. Other roles are untouched.
+    """
+    from locus.core.messages import Role
+
+    out: list[Message] = []
+    for msg in messages:
+        if msg.role != Role.TOOL or msg.content is None:
+            out.append(msg)
+            continue
+        try:
+            parsed: Any = json.loads(msg.content)
+        except ValueError:
+            parsed = msg.content
+        if isinstance(parsed, dict):
+            out.append(msg)
+            continue
+        out.append(msg.model_copy(update={"content": json.dumps({"result": parsed})}))
+    return out
 
 
 def fold_leading_system_into_first_user(messages: list[Message]) -> list[Message]:
@@ -492,8 +521,12 @@ class OCIChatCompletionsModel(OpenAIModel):
         vendors accept a leading system message, and Llama without tools
         does too, so the rewrite is scoped to exactly that case.
         """
-        if tools and (self.config.model or "").lower().startswith("meta.llama"):
-            return fold_leading_system_into_first_user(messages)
+        model = (self.config.model or "").lower()
+        if tools and model.startswith("meta.llama"):
+            messages = fold_leading_system_into_first_user(messages)
+        if model.startswith("google."):
+            # Gemini: tool results must be JSON objects (see the helper).
+            messages = wrap_tool_results_as_objects(messages)
         return messages
 
     async def complete(

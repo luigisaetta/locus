@@ -260,12 +260,14 @@ class OCIEmbeddings(BaseModel, BaseEmbedding):
         # Determine auth type - respect explicit setting, only auto-detect if needed
         auth_type = self.oci_config.auth_type
 
-        # Only auto-detect security_token if:
-        # 1. User didn't explicitly set api_key auth AND
-        # 2. Config has security_token_file AND
-        # 3. Config doesn't have user field (api_key profiles have user)
+        # A profile with ``security_token_file`` and no ``user`` was written by
+        # ``oci session authenticate``; API-key signing cannot work for it, so
+        # switch to the session token — under the default ``api_key`` setting
+        # too, the same rule OCIClient and the V1 transport apply. Only the
+        # explicit principal-based modes (which never read a profile) are
+        # left alone.
         if (
-            auth_type != "api_key"
+            auth_type not in ("instance_principal", "resource_principal")
             and "security_token_file" in config_dict
             and "user" not in config_dict
         ):

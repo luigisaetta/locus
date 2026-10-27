@@ -10,6 +10,26 @@ policy.
 
 ### Fixed
 
+- **Session-token OCI profiles work on every OCI client, not only the V1
+  transport.** `oci session authenticate` writes a profile with
+  `security_token_file` and no `user`; `OCIModel` (the Cohere / SDK
+  transport), `OCIEmbeddings`, `OCICohereReranker` and `OCIBucketBackend`
+  defaulted to API-key signing for it and failed with
+  `InvalidConfig {'user': 'missing'}` unless `auth_type="security_token"` was
+  passed. They now detect the profile shape the way `OCIChatCompletionsModel`
+  always did. Found running the suites against a Frankfurt tenancy with a
+  session profile.
+- **Gemini tool calls on OCI.** OCI maps a tool message onto Gemini's
+  `function_response.response`, which must be a JSON object; a tool that
+  returned a number or a plain string made the next request fail with
+  `400 Invalid value at 'contents[n].parts[0].function_response.response'`.
+  The V1 transport now wraps non-object tool results as `{"result": …}` for
+  `google.*` models.
+- **`max_completion_tokens` for every GPT-5+ and o-series model.** The family
+  check was a fixed prefix list (`o1`, `o3`, `gpt-5`), so `o4-mini`, the
+  `gpt-5.6` and `gpt-6` generations still received `max_tokens` and OCI
+  answered `400 Unsupported parameter: 'max_tokens'`. The check is now a
+  pattern over the generation number.
 - **Tool arguments are coerced to the declared parameter types.** Models do
   not reliably honour the JSON types in a tool schema: Llama on OCI sends
   `{"a": "17", "b": "25"}` for two `int` parameters, and `add("17", "25")`

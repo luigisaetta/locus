@@ -45,9 +45,9 @@ class TestOCIEmbeddingsIntegration:
         result = await embedder.embed("Hello world, this is a test.")
 
         assert result.embedding is not None
-        assert len(result.embedding) == embedder.dimension
+        assert len(result.embedding) == embedder.config.dimension
         assert result.text == "Hello world, this is a test."
-        assert result.model == embedder.config.model_id
+        assert result.model == embedder.oci_config.model_id
 
     @pytest.mark.asyncio
     async def test_embed_batch(self, embedder):
@@ -174,12 +174,15 @@ class TestOCIEmbeddingsLight:
 
     @pytest.mark.asyncio
     async def test_embed_light(self, embedder):
-        """Test light model produces smaller embeddings."""
+        """The light model's vectors match its configured dimension."""
         result = await embedder.embed("Test text")
 
-        # Light model produces 384-dim embeddings
-        assert len(result.embedding) == 384
+        # 384 for the Cohere v3 light models; whatever the table says for an
+        # ``OCI_EMBED_LIGHT_MODEL`` override on tenancies where v3 is retired.
+        assert len(result.embedding) == embedder.config.dimension
 
     def test_config_dimension(self, embedder):
-        """Test light model config dimension."""
+        """The Cohere v3 light models are configured as 384-dim."""
+        if "light" not in embedder.oci_config.model_id:
+            pytest.skip("OCI_EMBED_LIGHT_MODEL overrides the light model; no 384-dim claim")
         assert embedder.config.dimension == 384
