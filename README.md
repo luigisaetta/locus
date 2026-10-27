@@ -80,6 +80,8 @@ Pick the shape; the agents don't change.
 | **A2A and DeepAgent** | Cross-process agents as spec-compliant peers; plan, explore, validate, report with grounding | [A2A](https://locusagents.ai/concepts/multi-agent/a2a/) · [DeepAgent](https://locusagents.ai/concepts/deepagent/) |
 
 ```python
+import asyncio
+
 from locus.agent import Agent
 from locus.agent.composition import SequentialPipeline
 
@@ -89,7 +91,7 @@ mitigate = Agent(model=model, tools=[scale_up, rollback], system_prompt="Fix it,
 brief = Agent(model=model, system_prompt="Write the status update.")
 
 war_room = SequentialPipeline(agents=[diagnose, mitigate, brief])
-result = await war_room.run("checkout p99 hit 4.2s: fix and brief")
+result = asyncio.run(war_room.run("checkout p99 hit 4.2s: fix and brief"))
 print(result.final_output)
 ```
 
