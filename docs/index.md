@@ -204,11 +204,13 @@ same `Agent`, same events, same admission gate.
 
 </div>
 
-<p class="locus-chips__vendor">On OCI Generative AI</p>
-<div class="locus-chips"><span>gpt-5.5</span><span>gpt-5.4</span><span>gpt-5.2</span><span>gpt-5.1</span><span>gpt-5</span><span>gpt-4.1</span><span>gpt-4o</span><span>gpt-oss-120b</span><span>o3</span><span>gemini-2.5-pro</span><span>gemini-2.5-flash</span><span>llama-3.3-70b</span><span>command-a-03-2025</span><span>embed-v4.0</span><span>rerank-v4.0-fast</span><span>text-embedding-3-large</span></div>
+OCI Generative AI first: `oci:` reaches the whole catalog (OpenAI, Google, Meta,
+xAI, Cohere) and your Dedicated AI Clusters, so a new model is a new string, not
+new code. Everything else that speaks the OpenAI API plugs in behind a prefix,
+hosted or self-hosted.
 
-<p class="locus-chips__vendor">Through OpenRouter</p>
-<div class="locus-chips"><span>claude-sonnet-5.5</span><span>claude-opus-5.5</span><span>claude-haiku-5.5</span><span>claude-fable-5.1</span><span>gpt-6.1-sol</span><span>gpt-6.1-terra</span><span>gemini-4-argon</span><span>gemini-3.8-flash</span><span>grok-4.7</span><span>llama-4-maverick</span><span>deepseek-v4.1-flash</span><span>mistral-large-2512</span><span>qwen3.8-max</span><span>kimi-k3.1-pro</span><span>glm-5.3-prime</span><span>gpt-oss-120b</span></div>
+<p class="locus-chips__vendor">One model string, any provider</p>
+<div class="locus-chips locus-chips--prefixes"><span>oci:</span><span>openai:</span><span>anthropic:</span><span>gemini:</span><span>openrouter:</span><span>together:</span><span>groq:</span><span>mistral:</span><span>xai:</span><span>deepseek:</span><span>fireworks:</span><span>cerebras:</span><span>perplexity:</span><span>nvidia:</span><span>litellm:</span><span>ollama:</span><span>vllm:</span><span>llamacpp:</span><span>lmstudio:</span><span>openai-compatible:</span></div>
 
 ```python
 from locus.agent import Agent
