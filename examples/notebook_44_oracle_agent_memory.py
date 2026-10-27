@@ -3,13 +3,13 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
-"""Notebook 04: a Locus agent with Oracle's official agent-memory client.
+"""Notebook 44: a Locus agent with Oracle's official agent-memory client.
 
 The Oracle-native memory path. Wires Locus's
 :class:`~locus.memory.managers.OracleAgentMemoryManager` to
 ``oracleagentmemory.core.OracleAgentMemory`` (Oracle's official
 ``oracleagentmemory`` PyPI package). Compared with the BaseStore-flavoured
-:class:`~locus.memory.manager.LLMMemoryManager` from notebook 06, this
+:class:`~locus.memory.manager.LLMMemoryManager` from notebook 37, this
 manager gets you:
 
 - LLM-backed memory extraction tuned on LongMemEval (94.4 % recall on
@@ -21,9 +21,9 @@ manager gets you:
 The trade-off: it's Oracle-only and the upstream is alpha
 (``oracleagentmemory`` 26.4.0, Dev Status 3). For non-Oracle backends
 (InMemoryStore / Redis / Postgres / OpenSearch) or for test
-environments, stick with notebook 06.
+environments, stick with notebook 37.
 
-Same two-session shape as notebook 06 so you can compare side-by-side:
+Same two-session shape as notebook 37 so you can compare side-by-side:
 
 - Session A (``thread_id="t-a"``, ``user_id="alice"``) — agent learns
   a fact about Alice; the manager's ``on_session_end`` hook ships the
@@ -50,21 +50,21 @@ Run it::
     export ORACLE_WALLET=~/.oci/wallets/mydb
     export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if encrypted
 
-    # oracleagentmemory drives Embedder + Llm through litellm. The
-    # demo defaults to ``openai/text-embedding-3-small`` +
-    # ``openai/gpt-4o-mini`` and needs an OpenAI key for those:
-    export OPENAI_API_KEY=sk-...
+    # oracleagentmemory drives its Embedder + Llm through litellm. The demo
+    # defaults to OCI Generative AI (``oci/cohere.embed-v4.0`` for
+    # embeddings, ``oci/openai.gpt-4.1`` for extraction) and Locus hands
+    # litellm a signer built from your OCI profile — API key or
+    # ``oci session authenticate`` token — plus the region and compartment:
+    export OCI_PROFILE=DEFAULT                    # or OCI_SESSION_PROFILE=...
+    export OCI_REGION=eu-frankfurt-1
+    export OCI_COMPARTMENT_ID=ocid1.compartment.oc1..xxx
 
-    # Or pick any litellm model spec — e.g. OCI Generative AI. litellm's
-    # OCI driver does NOT read ~/.oci/config; it takes the auth fields
-    # from these environment variables:
-    export LOCUS_OAM_EMBEDDER=oci/cohere.embed-v4.0
-    export LOCUS_OAM_LLM=oci/meta.llama-3.3-70b-instruct
-    export OCI_REGION=us-chicago-1 OCI_COMPARTMENT_ID=ocid1.tenancy.oc1..xxx
-    export OCI_TENANCY=ocid1.tenancy.oc1..xxx OCI_USER=ocid1.user.oc1..xxx
-    export OCI_FINGERPRINT=aa:bb:... OCI_KEY_FILE=~/.oci/api_key.pem
+    # Any other litellm model spec works too, with that provider's own
+    # credentials, e.g.:
+    #   export LOCUS_OAM_EMBEDDER=openai/text-embedding-3-small
+    #   export LOCUS_OAM_LLM=openai/gpt-4o-mini  OPENAI_API_KEY=sk-...
 
-    python examples/notebook_64_oracle_agent_memory.py
+    python examples/notebook_44_oracle_agent_memory.py
 
 If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` aren't set the notebook prints
 the wiring snippet and exits cleanly — no traceback, no
@@ -94,12 +94,12 @@ _REQUIRED_ENV = (
 )
 
 
-THREAD_A = "notebook_64_thread_a"
-THREAD_B = "notebook_64_thread_b"
+THREAD_A = "notebook_44_thread_a"
+THREAD_B = "notebook_44_thread_b"
 USER_ID = "alice"
-EMBEDDER = os.environ.get("LOCUS_OAM_EMBEDDER", "openai/text-embedding-3-small")
-LLM = os.environ.get("LOCUS_OAM_LLM", "openai/gpt-4o-mini")
-TABLE_PREFIX = "locus_notebook_64_oam_"
+EMBEDDER = os.environ.get("LOCUS_OAM_EMBEDDER", "oci/cohere.embed-v4.0")
+LLM = os.environ.get("LOCUS_OAM_LLM", "oci/openai.gpt-4.1")
+TABLE_PREFIX = "locus_notebook_44_oam_"
 
 
 def _missing_env() -> list[str]:
@@ -107,7 +107,7 @@ def _missing_env() -> list[str]:
 
 
 def _print_skip_banner(missing: list[str]) -> None:
-    print("\n--- Notebook 64: Oracle agent memory ---")
+    print("\n--- Notebook 44: Oracle agent memory ---")
     print(
         "Required environment variables not set; skipping the live demo so "
         "this file still runs cleanly in CI.\n"
@@ -138,8 +138,8 @@ def _print_skip_banner(missing: list[str]) -> None:
     )
     manager = OracleAgentMemoryManager(
         connection=conn,
-        embedder="openai/text-embedding-3-small",
-        llm="openai/gpt-4o-mini",
+        embedder="oci/cohere.embed-v4.0",      # litellm spec; auth from your OCI profile
+        llm="oci/openai.gpt-4.1",
         table_name_prefix="locus_oam_",
     )
     agent = Agent(config=AgentConfig(model=model, memory_manager=manager))
@@ -268,15 +268,21 @@ async def show_what_was_extracted(conn) -> None:
     memories the LLM extractor produced for Alice between sessions.
 
     Pure diagnostic — uses the client directly, not via the Locus
-    adapter, so the comparison with notebook 06 stays apples-to-apples.
+    adapter, so the comparison with notebook 37 stays apples-to-apples.
     """
-    from oracleagentmemory.core import OracleAgentMemory
+    from oracleagentmemory.core import MemoryExtractionConfig, OracleAgentMemory
+    from oracleagentmemory.core.embedders import Embedder
+    from oracleagentmemory.core.llms import Llm
 
+    from locus.memory.managers.oracle_agent_memory import oci_litellm_auth
+
+    # Same wrappers the Locus manager builds: for ``oci/...`` specs the
+    # signer, region and compartment come from your OCI profile.
     client = OracleAgentMemory(
         connection=conn,
-        embedder=EMBEDDER,
-        llm=LLM,
-        extract_memories=False,  # read-only probe
+        embedder=Embedder(model=EMBEDDER, **oci_litellm_auth(EMBEDDER)),
+        llm=Llm(model=LLM, **oci_litellm_auth(LLM)),
+        memory_extraction_config=MemoryExtractionConfig(extract_memories=False),  # read-only probe
         table_name_prefix=TABLE_PREFIX,
     )
     # Use the async variant — calling the sync `search` from inside an
@@ -311,7 +317,7 @@ async def main() -> None:
         print(
             "\nThread B's Agent never saw Thread A's messages. The context card "
             "from oracleagentmemory carried Alice's preference across. Same wallet, "
-            "same Autonomous Database as notebook 06 — the upgrade is the manager."
+            "same Autonomous Database as notebook 37 — the upgrade is the manager."
         )
     finally:
         # Drain the library's background extraction and close its client

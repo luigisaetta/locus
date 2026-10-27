@@ -44,7 +44,7 @@ Run it::
     export ORACLE_WALLET=~/.oci/wallets/mydb
     export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if the wallet is encrypted
 
-    python examples/notebook_03_oracle_26ai_checkpointer.py
+    python examples/notebook_42_oracle_26ai_checkpointer.py
 
 If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` aren't set the notebook prints
 the wiring snippet and exits cleanly — no traceback, no
@@ -73,8 +73,8 @@ _REQUIRED_ENV = (
 )
 
 
-THREAD_ID = "notebook_03_thread"
-TABLE_NAME = "locus_notebook_07"
+THREAD_ID = "notebook_42_thread"
+TABLE_NAME = "locus_notebook_42"
 
 
 def _missing_env() -> list[str]:
@@ -82,7 +82,7 @@ def _missing_env() -> list[str]:
 
 
 def _print_skip_banner(missing: list[str]) -> None:
-    print("\n--- Notebook 03: Oracle 26ai durable agent thread ---")
+    print("\n--- Notebook 42: Oracle 26ai durable agent thread ---")
     print(
         "Required environment variables not set; skipping the live demo so "
         "this file still runs cleanly in CI.\n"

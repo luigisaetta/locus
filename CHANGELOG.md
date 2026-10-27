@@ -19,6 +19,21 @@ policy.
 
 ### Fixed
 
+- **`OracleAgentMemoryManager` could not use OCI Generative AI models with a
+  profile or session token.** litellm's `oci/` driver, which Oracle's
+  `oracleagentmemory` client uses for its embedder and extraction model,
+  does not read `~/.oci/config`, so the manager's own defaults
+  (`oci/cohere.embed-v4.0`, `oci/openai.gpt-4.1`) failed with "Missing
+  required parameters" unless litellm's `OCI_USER` / `OCI_KEY_FILE`
+  variables were set. For `oci/...` specs the manager now builds the signer
+  from the OCI profile (`OCI_SESSION_PROFILE` / `OCI_PROFILE`, API key or
+  session token, instance and resource principals via `OCI_AUTH_TYPE`) and
+  passes it with `OCI_REGION` and `OCI_COMPARTMENT_ID`; `litellm_kwargs=`
+  overrides any of it and `oci_litellm_auth()` exposes the same derivation.
+  The manager also uses `MemoryExtractionConfig` where `oracleagentmemory`
+  provides it instead of the deprecated inline flag. Notebook 44 runs
+  OCI-only by default.
+
 - **`OCIEmbeddings()` and `OracleAgentMemoryManager` failed with their
   default embedding model.** OCI retired the Cohere v3.0 embedding models
   from on-demand on 2026-09-30 (`404 Entity with key

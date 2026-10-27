@@ -211,7 +211,9 @@ Two ways to keep long-term memory in Oracle Database 26ai. `OracleStore` is a
 `BaseStore`, so it slots under `LLMMemoryManager` with the portable
 extractor and per-user scoping; `OracleAgentMemoryManager` hands the whole
 job to Oracle's own `oracleagentmemory` client (extraction, context cards,
-retrieval scoped by user, agent and thread, all inside the database).
+retrieval scoped by user, agent and thread, all inside the database). Both
+default to OCI Generative AI models for embedding and extraction and take
+the credentials from your OCI profile.
 
 ```python
 import os

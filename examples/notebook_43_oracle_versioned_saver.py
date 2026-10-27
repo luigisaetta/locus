@@ -5,7 +5,7 @@
 
 """Notebook 43: versioned agent history on Oracle Database 26ai.
 
-Notebook 03's ``oracle_checkpointer`` keeps **one row per thread** —
+Notebook 42's ``oracle_checkpointer`` keeps **one row per thread** —
 ``MERGE`` on save means the latest write wins and history is
 destructive. That's the right shape for most agent threads. But when
 you need a LangGraph-shape *history-preserving* saver — one row per
@@ -51,7 +51,7 @@ Run it::
     export ORACLE_WALLET=~/.oci/wallets/mydb
     export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if encrypted
 
-    python examples/notebook_09_oracle_versioned_saver.py
+    python examples/notebook_43_oracle_versioned_saver.py
 
 If those env vars aren't set the notebook prints the wiring snippet and
 exits cleanly — no traceback, no half-initialised state.
@@ -80,7 +80,7 @@ _REQUIRED_ENV = (
 )
 
 
-TABLE_PREFIX = "locus_notebook_12"
+TABLE_PREFIX = "locus_notebook_43"
 THREAD_ID = "agent-incident-001"
 
 
@@ -96,7 +96,7 @@ def _missing_env() -> list[str]:
 
 
 def _print_skip_banner(missing: list[str]) -> None:
-    print("\n--- Notebook 09: OracleCheckpointSaver agent ---")
+    print("\n--- Notebook 43: OracleCheckpointSaver agent ---")
     print(
         "Required environment variables not set; skipping the live demo so "
         "this file still runs cleanly in CI.\n"
@@ -114,9 +114,9 @@ def _print_skip_banner(missing: list[str]) -> None:
     from locus.agent import Agent
     from locus.memory.backends import OracleCheckpointSaver
 
-    cp = oracle_checkpointer(dsn=..., table_name="locus_notebook_09_live")
+    cp = oracle_checkpointer(dsn=..., table_name="locus_notebook_43_live")
     saver = OracleCheckpointSaver(dsn=..., user=..., wallet_location=...,
-                                  table_name="locus_notebook_12")
+                                  table_name="locus_notebook_43")
     agent = Agent(model=model, system_prompt="...", checkpointer=cp,
                   checkpoint_every_n_iterations=1)
 
@@ -280,7 +280,7 @@ async def main() -> None:
     saver = _build_saver()
 
     # Live thread continuity comes from the single-row checkpointer
-    # (notebook 03's primitive); the versioned saver adds an audit
+    # (notebook 42's primitive); the versioned saver adds an audit
     # trail on top. Both ride the same Autonomous Database wallet.
     live_cp = oracle_checkpointer(
         dsn=os.environ["ORACLE_DSN"],

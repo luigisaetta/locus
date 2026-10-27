@@ -72,7 +72,7 @@ Run it::
     export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if the wallet is encrypted
     export OCI_INDB_MODEL=ALL_MINILM_L12_V2      # optional — defaults to this
 
-    python examples/notebook_37_oracle_indb_embeddings.py
+    python examples/notebook_41_oracle_indb_embeddings.py
 
 Difficulty: Intermediate. Self-contained — no prior notebook required.
 """
@@ -130,7 +130,7 @@ def _missing_env() -> list[str]:
 
 
 def _print_skip_banner(missing: list[str]) -> None:
-    print("\n--- Notebook 37: OracleInDBEmbeddings agent ---")
+    print("\n--- Notebook 41: OracleInDBEmbeddings agent ---")
     print(
         "Required environment variables not set; skipping the live demo so "
         "this file still runs cleanly in CI.\n"
@@ -168,7 +168,7 @@ def _print_skip_banner(missing: list[str]) -> None:
 
 
 def _print_model_skip_banner(model: str, exc: Exception) -> None:
-    print("\n--- Notebook 37: OracleInDBEmbeddings agent ---")
+    print("\n--- Notebook 41: OracleInDBEmbeddings agent ---")
     print(
         f"The ONNX model {model!r} isn't loaded (or accessible) in the "
         "target database, so the live path can't run.\n"
@@ -259,7 +259,7 @@ async def main() -> None:
         password=os.environ["ORACLE_PASSWORD"],
         wallet_location=os.path.expanduser(os.environ["ORACLE_WALLET"]),
         wallet_password=os.environ.get("ORACLE_WALLET_PASSWORD", ""),
-        table_name="locus_notebook_10",
+        table_name="locus_notebook_41",
         dimension=_DEFAULT_DIM,
         distance_metric="COSINE",
     )

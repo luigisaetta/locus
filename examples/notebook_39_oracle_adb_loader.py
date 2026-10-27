@@ -27,11 +27,11 @@ Key concepts:
   whole result set in one turn. Switch to ``async for doc in
   loader.lazy_load()`` if you're streaming into a UI.
 - The same connection envelope (DSN, user, wallet) feeds the loader,
-  the vector store (notebook 02), the in-DB chunker (notebook 04),
-  the in-DB embedder (notebook 37), and the checkpointer (07).
+  the vector store (notebook 38), the in-DB chunker (notebook 40),
+  the in-DB embedder (notebook 41), and the checkpointer (42).
 
 This notebook is self-contained: it creates a disposable demo table
-``locus_notebook_05_articles``, populates a few rows, hands the loader
+``locus_notebook_39_articles``, populates a few rows, hands the loader
 to an Agent as a tool, asks the agent two domain questions, and drops
 the table on the way out.
 
@@ -43,7 +43,7 @@ Run it::
     export ORACLE_WALLET=~/.oci/wallets/mydb     # directory holding tnsnames.ora
     export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if the wallet is encrypted
 
-    python examples/notebook_05_oracle_adb_loader.py
+    python examples/notebook_39_oracle_adb_loader.py
 
 If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` / ``ORACLE_WALLET`` aren't set
 the notebook prints the wiring snippet and exits cleanly — no
@@ -74,7 +74,7 @@ _REQUIRED_ENV = (
 )
 
 
-_TABLE = "locus_notebook_05_articles"
+_TABLE = "locus_notebook_39_articles"
 
 _DEMO_ROWS = [
     (
@@ -120,7 +120,7 @@ def _missing_env() -> list[str]:
 
 
 def _print_skip_banner(missing: list[str]) -> None:
-    print("\n--- Notebook 05: OracleADBLoader agent ---")
+    print("\n--- Notebook 39: OracleADBLoader agent ---")
     print(
         "Required environment variables not set; skipping the live demo so "
         "this file still runs cleanly in CI.\n"
