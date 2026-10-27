@@ -5,7 +5,7 @@
 
 """Notebook 37: a Locus agent with cross-thread memory on Oracle 26ai.
 
-``oracle_checkpointer`` (notebook 03) persists *per-thread* agent
+``oracle_checkpointer`` (notebook 42) persists *per-thread* agent
 state — same ``thread_id`` resumes a conversation. :class:`OracleStore`
 is the other half of long-term memory: a namespaced key/value store
 for *cross-thread* facts. The Locus agent loop reaches into it through
@@ -43,7 +43,7 @@ Run it::
     export ORACLE_WALLET=~/.oci/wallets/mydb
     export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if encrypted
 
-    python examples/notebook_06_oracle_store.py
+    python examples/notebook_37_oracle_store.py
 
 If those env vars aren't set the notebook prints the wiring snippet and
 exits cleanly — no traceback, no half-initialised state.
@@ -75,7 +75,7 @@ _REQUIRED_ENV = (
 )
 
 
-TABLE_NAME = "locus_notebook_06_store"
+TABLE_NAME = "locus_notebook_37_store"
 USER_ID = "alice"
 
 
@@ -84,7 +84,7 @@ def _missing_env() -> list[str]:
 
 
 def _print_skip_banner(missing: list[str]) -> None:
-    print("\n--- Notebook 06: OracleStore-backed cross-thread memory agent ---")
+    print("\n--- Notebook 37: OracleStore-backed cross-thread memory agent ---")
     print(
         "Required environment variables not set; skipping the live demo so "
         "this file still runs cleanly in CI.\n"

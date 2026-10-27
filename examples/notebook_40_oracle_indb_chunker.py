@@ -38,7 +38,7 @@ Run it::
     export ORACLE_WALLET=~/.oci/wallets/mydb     # directory holding tnsnames.ora
     export ORACLE_WALLET_PASSWORD='<wallet-pw>'  # if the wallet is encrypted
 
-    python examples/notebook_04_oracle_indb_chunker.py
+    python examples/notebook_40_oracle_indb_chunker.py
 
 If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` / ``ORACLE_WALLET`` aren't set
 the notebook prints the wiring snippet and exits cleanly — no
@@ -70,7 +70,7 @@ _REQUIRED_ENV = (
 )
 
 
-_TABLE = "locus_notebook_04_docs"
+_TABLE = "locus_notebook_40_docs"
 
 
 _LONG_PARAGRAPH = (
@@ -97,7 +97,7 @@ def _missing_env() -> list[str]:
 
 
 def _print_skip_banner(missing: list[str]) -> None:
-    print("\n--- Notebook 04: OracleInDBChunker agent ---")
+    print("\n--- Notebook 40: OracleInDBChunker agent ---")
     print(
         "Required environment variables not set; skipping the live demo so "
         "this file still runs cleanly in CI.\n"
@@ -286,7 +286,7 @@ async def main() -> None:
         """Stream chunks from every row in the demo CLOB table.
 
         Wraps OracleInDBChunker.chunk_column over the
-        ``locus_notebook_04_docs`` table. The source CLOBs never leave
+        ``locus_notebook_40_docs`` table. The source CLOBs never leave
         the database — only the chunk records come back. Useful for
         an ingest agent that wants to know "how big is this corpus, in
         chunks" before committing to write to a vector store.
@@ -336,7 +336,7 @@ async def main() -> None:
             "\nThe agent picked the right primitive for each request — "
             "single-string vs. column-streaming — and every chunk was "
             "produced by UTL_TO_CHUNKS inside Oracle 26ai. Pair with "
-            "OracleInDBEmbeddings (notebook 37) for a fully in-database "
+            "OracleInDBEmbeddings (notebook 41) for a fully in-database "
             "ingest pipeline."
         )
     finally:

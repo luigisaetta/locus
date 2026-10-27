@@ -42,7 +42,7 @@ Run it::
     export OCI_COMPARTMENT=ocid1.compartment.oc1..xxx
     export OCI_AUTH_TYPE=api_key                # or security_token
 
-    python examples/notebook_02_oracle_26ai_rag.py
+    python examples/notebook_38_oracle_26ai_rag.py
 
 If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` / ``OCI_COMPARTMENT`` aren't set
 the notebook prints the wiring snippet and exits cleanly — no
@@ -106,7 +106,7 @@ def _missing_env() -> list[str]:
 
 
 def _print_skip_banner(missing: list[str]) -> None:
-    print("\n--- Notebook 02: Oracle 26ai RAG agent ---")
+    print("\n--- Notebook 38: Oracle 26ai RAG agent ---")
     print(
         "Required environment variables not set; skipping the live demo so "
         "this file still runs cleanly in CI.\n"
@@ -214,7 +214,7 @@ async def main() -> None:
         wallet_password=os.environ.get("ORACLE_WALLET_PASSWORD", ""),
         # Demo defaults. For production, pre-create the table and pass
         # auto_create_table=False so the runtime user only needs DML.
-        table_name="locus_notebook_06",
+        table_name="locus_notebook_38",
         dimension=1536,
         distance_metric="COSINE",
     )
