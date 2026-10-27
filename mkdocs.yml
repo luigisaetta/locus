@@ -144,58 +144,69 @@ nav:
 # Home (index.md) is reached via the header wordmark + logo (both link to "/"),
 # so we don't repeat it as a tab here.
 - Concepts:
-  - concepts/multi-agent.md
-  - Capabilities: capabilities.md
-  - Control layer:
-    - Control-layer architecture: concepts/control-layer.md
-    - Writing a policy that holds: concepts/policy-authoring.md
-    - SecurityContext application: concepts/security-context.md
-    - Security findings (locus-sdk-security): concepts/security.md
-    - Guardrails: concepts/safety.md
-    - Threat scenarios: concepts/threat-scenarios.md
-    - Agentic AI security: concepts/agentic-ai-security.md
-    - Cloud-posture agent: concepts/cloud-posture.md
-  - Multi-agent:
-    - Composition: concepts/multi-agent/composition.md
+  - Start here:
+    - Multi-agent shapes: concepts/multi-agent.md
+    - The Agent: concepts/agent.md
+    - Agent loop: concepts/agent-loop.md
+    - Tools: concepts/tools.md
+    - Model providers: concepts/models.md
+    - How Locus compares: concepts/compare.md
+    - Capabilities: capabilities.md
+  - Multi-agent shapes:
+    - Overview and the eight protocols: concepts/multi-agent.md
+    - Composition (pipelines): concepts/multi-agent/composition.md
+    - StateGraph: concepts/multi-agent/graph.md
+    - Functional API: concepts/multi-agent/functional.md
+    - Graph streaming: concepts/graph-streaming.md
     - Orchestrator: concepts/multi-agent/orchestrator.md
     - Swarm: concepts/multi-agent/swarm.md
     - Handoff: concepts/multi-agent/handoff.md
-    - StateGraph: concepts/multi-agent/graph.md
-    - Functional API: concepts/multi-agent/functional.md
     - A2A protocol: concepts/multi-agent/a2a.md
     - DeepAgent: concepts/deepagent.md
     - Production-readiness: concepts/multi-agent/production.md
-  - Agents:
-    - Overview: concepts/agent.md
-    - Agent Loop: concepts/agent-loop.md
+  - The harness — agents:
     - State: concepts/state.md
     - Prompts: concepts/prompts.md
-    - Conversation Management: concepts/conversation-management.md
-    - Retry Strategies: concepts/retry.md
-    - Hooks: concepts/hooks.md
+    - Conversation management: concepts/conversation-management.md
+    - Structured output: concepts/structured-output.md
     - Termination: concepts/termination.md
-    - Structured Output: concepts/structured-output.md
     - Interrupts: concepts/interrupts.md
+    - Hooks: concepts/hooks.md
+    - Retry strategies: concepts/retry.md
     - Errors: concepts/errors.md
-  - Tools:
-    - Overview: concepts/tools.md
+  - The harness — tools:
     - Idempotency: concepts/idempotency.md
     - Executors: concepts/executors.md
     - MCP: concepts/mcp.md
     - Multi-modal providers: concepts/multi-modal-providers.md
-  - Reasoning:
-    - Overview: concepts/reasoning.md
-    - GSAR (typed grounding): concepts/gsar.md
-  - Memory:
+  - The harness — memory and RAG:
     - Checkpointers & Store: concepts/checkpointers.md
-    - Long-term Memory Manager: concepts/memory-manager.md
-  - Streaming & Server:
-    - Streaming: concepts/streaming.md
+    - Long-term memory manager: concepts/memory-manager.md
+    - RAG: concepts/rag.md
+  - The harness — reasoning:
+    - Reasoning patterns: concepts/reasoning.md
+    - GSAR (typed grounding): concepts/gsar.md
+  - The harness — observability and serving:
+    - Observability: concepts/observability.md
     - Events: concepts/events.md
-    - Graph streaming: concepts/graph-streaming.md
-    - Agent Server: concepts/server.md
+    - Streaming: concepts/streaming.md
     - SSE event catalogue: concepts/sse-events.md
-  - Model Providers:
+    - Agent server: concepts/server.md
+    - Testing: concepts/testing.md
+    - Evaluation: concepts/evaluation.md
+  - The harness — skills and playbooks:
+    - Skills: concepts/skills.md
+    - Playbooks: concepts/playbooks.md
+  - Control layer:
+    - Control-layer architecture: concepts/control-layer.md
+    - Writing a policy that holds: concepts/policy-authoring.md
+    - Guardrails: concepts/safety.md
+    - SecurityContext application: concepts/security-context.md
+    - Security findings (locus-sdk-security): concepts/security.md
+    - Threat scenarios: concepts/threat-scenarios.md
+    - Agentic AI security: concepts/agentic-ai-security.md
+    - Cloud-posture agent: concepts/cloud-posture.md
+  - Model providers:
     - Overview: concepts/models.md
     - OCI Generative AI: concepts/providers/oci.md
     - OCI Responses API: concepts/oci-responses.md
@@ -203,14 +214,6 @@ nav:
     - Anthropic: concepts/providers/anthropic.md
     - OpenAI-compatible endpoints: concepts/providers/openai-compatible.md
     - Resilience: concepts/providers/resilience.md
-  - Skills & Playbooks:
-    - Skills: concepts/skills.md
-    - Playbooks: concepts/playbooks.md
-  - RAG: concepts/rag.md
-  - Observability:
-    - Observability: concepts/observability.md
-    - Testing: concepts/testing.md
-    - Evaluation: concepts/evaluation.md
   - Research:
     - Research: research/index.md
     - Policy blindness: research/policy-blindness.md
@@ -218,7 +221,6 @@ nav:
     - Guarantees & boundaries: why-locus.md
     - Compatibility & releases: compatibility.md
     - About & maintainers: about.md
-    - Legal notices: legal.md
 - Notebooks:
   - Quickstart: how-to/quickstart.md
   - Overview: notebooks/index.md

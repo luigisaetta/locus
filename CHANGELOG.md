@@ -8,16 +8,6 @@ policy.
 
 ## [Unreleased]
 
-### Added
-
-- **The generic integration tests and the notebooks run against any
-  provider.** `LOCUS_TEST_MODEL=provider:model` points the shared `model`
-  fixture at anything `locus.models.get_model` accepts (it only knew OpenAI,
-  Anthropic and OCI), and `LOCUS_MODEL_PROVIDER` / `LOCUS_MODEL_ID` do the
-  same for the notebooks (`scripts/run_notebooks.py --provider <prefix>
-  --model <id>`). Notebooks whose prerequisites are missing exit with 77 and
-  the runner reports them as SKIP instead of FAIL.
-
 ### Removed
 
 - **Amazon Bedrock and Azure OpenAI providers.** The `bedrock:` and `azure:`
@@ -163,6 +153,26 @@ policy.
   `cohere.command*` models now use `CohereProvider`.
 
 ### Changed
+
+- **Documentation site reorganised around the harness.** The home page leads
+  with the eight multi-agent shapes, then the harness (tools and MCP, memory,
+  RAG, grounding, guardrails and the admission gate, observability, serving,
+  skills, providers), a "Verified on OCI" section with the 27 October 2026
+  model matrix, a compact control-layer section, and a comparison with
+  LangGraph and Strands Agents (new `concepts/compare.md`). The Concepts
+  navigation follows the same order: start here, multi-agent shapes, the
+  harness, control layer, providers. The OCI models page carries the verified
+  matrix and corrects the Responses-API note (availability is per region).
+
+### Added
+
+- **The generic integration tests and the notebooks run against any
+  provider.** `LOCUS_TEST_MODEL=provider:model` points the shared `model`
+  fixture at anything `locus.models.get_model` accepts (it only knew OpenAI,
+  Anthropic and OCI), and `LOCUS_MODEL_PROVIDER` / `LOCUS_MODEL_ID` do the
+  same for the notebooks (`scripts/run_notebooks.py --provider <prefix>
+  --model <id>`). Notebooks whose prerequisites are missing exit with 77 and
+  the runner reports them as SKIP instead of FAIL.
 
 - **Embeddings examples use `cohere.embed-v4.0` (1536-dim).** OCI has
   deprecated the Cohere v3.0 embedding family and recently onboarded
