@@ -67,13 +67,13 @@ def get_model():
 
 
 # =============================================================================
-# Notebook 23: RAG Basics Tests
+# Notebook 18: RAG Basics Tests
 # =============================================================================
 
 
 @pytest.mark.skipif(not has_embedder_available(), reason="No embedder available")
 class TestNotebook22RAGBasics:
-    """Tests for Notebook 23: RAG Basics."""
+    """Tests for Notebook 18: RAG Basics."""
 
     @pytest.mark.asyncio
     async def test_embedding_single_text(self):

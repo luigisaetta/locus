@@ -51,9 +51,9 @@ the offline demo and a live deployment.
 | [`query_siem`][siem] | Splunk / Elastic log/alert search (a SIEM) | `SIEM_URL`, `SIEM_TOKEN` |
 
 Hand these to a triage agent end-to-end in
-[live vendor integrations](../notebooks/notebook_70_vendor_integrations.md);
+[live vendor integrations](../notebooks/notebook_80_vendor_integrations.md);
 the GPU probe grounds into a fingerprint finding in
-[specialist agents](../notebooks/notebook_27_specialist_agents.md). The
+[specialist agents](../notebooks/notebook_23_specialist_agents.md). The
 bring-your-own-credentials contract is documented in
 [`examples/integrations/README.md`][int].
 

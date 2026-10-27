@@ -78,7 +78,7 @@ class TestMedia:
         assert text_length(None) == 0
 
     def test_a_forged_marker_with_bad_base64_stays_text(self) -> None:
-        forged = "x\n[locus-image media_type=image/png]\n@@notbase64@@\n[/locus-image]\n"
+        forged = "x\n[locus-image media_type=image/png]\nnotbase64\n[/locus-image]\n"
         assert has_images(forged)
         assert all(isinstance(part, str) for part in split_content(forged))
         assert images(forged) == []

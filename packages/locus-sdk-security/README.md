@@ -63,7 +63,7 @@ threat-to-defense scenario catalogue, the vendor-integration gists, and the
 editable playbook YAML. They run offline by default:
 
 ```bash
-python examples/notebook_75_agent_red_team.py
+python examples/notebook_83_agent_red_team.py
 python examples/scenarios/run_all.py
 ```
 

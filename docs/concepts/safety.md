@@ -212,9 +212,9 @@ the model — and the backstop doesn't trust the gate either.
 
 ## Source and notebooks
 
-- [`notebook_50_guardrails_security.py`](https://github.com/oracle/locus/blob/main/examples/notebook_50_guardrails_security.py) — basic guardrails.
-- [`notebook_51_guardrails_advanced.py`](https://github.com/oracle/locus/blob/main/examples/notebook_51_guardrails_advanced.py) — topic + content + PII layered.
-- [`notebook_49_steering.py`](https://github.com/oracle/locus/blob/main/examples/notebook_49_steering.py) — judge-model approval.
+- [`notebook_69_guardrails_security.py`](https://github.com/oracle/locus/blob/main/examples/notebook_69_guardrails_security.py) — basic guardrails.
+- [`notebook_70_guardrails_advanced.py`](https://github.com/oracle/locus/blob/main/examples/notebook_70_guardrails_advanced.py) — topic + content + PII layered.
+- [`notebook_68_steering.py`](https://github.com/oracle/locus/blob/main/examples/notebook_68_steering.py) — judge-model approval.
 - [`locus.hooks.builtin.guardrails`](https://github.com/oracle/locus/blob/main/src/locus/hooks/builtin/guardrails.py)
 - [`locus.hooks.builtin.steering`](https://github.com/oracle/locus/blob/main/src/locus/hooks/builtin/steering.py)
 

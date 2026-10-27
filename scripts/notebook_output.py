@@ -44,13 +44,13 @@ DOCS = ROOT / "docs" / "notebooks"
 #: Deliberately not "all of them". These are the examples whose printed trail
 #: *is* the point: a gate holding, a decision recorded, a probe refused.
 PAGES: dict[str, str] = {
-    "notebook_75_agent_red_team": "what a red-team run reports",
-    "notebook_79_soc_alert_triage": "the triage an analyst would otherwise do",
-    "notebook_83_payment_refund_gate": "a small refund paid, a large one held",
-    "notebook_84_infra_deploy_gate": "a staging deploy allowed and a production rollback held",
-    "notebook_85_support_account_gate": "the account action that needed a human",
-    "notebook_86_data_deletion_gate": "a GDPR erasure, and the chain that proves it",
-    "notebook_87_cloud_resource_gate": "a staging resize allowed and a production terminate held",
+    "notebook_83_agent_red_team": "what a red-team run reports",
+    "notebook_87_soc_alert_triage": "the triage an analyst would otherwise do",
+    "notebook_71_payment_refund_gate": "a small refund paid, a large one held",
+    "notebook_72_infra_deploy_gate": "a staging deploy allowed and a production rollback held",
+    "notebook_73_support_account_gate": "the account action that needed a human",
+    "notebook_74_data_deletion_gate": "a GDPR erasure, and the chain that proves it",
+    "notebook_75_cloud_resource_gate": "a staging resize allowed and a production terminate held",
 }
 
 _MARKER = "## Output"

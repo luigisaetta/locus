@@ -229,8 +229,8 @@ export LOCUS_MODEL_ID=gpt-4o          # alias from config.yaml
 export OPENAI_BASE_URL=http://localhost:4000
 export OPENAI_API_KEY=$LITELLM_VIRTUAL_KEY                # gateway virtual key
 
-python examples/notebook_06_basic_agent.py
-python examples/notebook_07_agent_with_tools.py
+python examples/notebook_02_basic_agent.py
+python examples/notebook_03_agent_with_tools.py
 # …
 ```
 

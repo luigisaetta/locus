@@ -39,7 +39,7 @@ async def test_add_update_delete_in_one_patch(workspace: WorkspaceBackend) -> No
             "+# Notes",
             "+second",
             "*** Update File: app.py",
-            "@@ def handler():",
+            " def handler():",
             "-    return None",
             "+    return 42",
             "*** Delete File: old.py",
@@ -204,7 +204,7 @@ def test_whitespace_drift_still_matches() -> None:
 
 def test_the_anchor_picks_between_identical_blocks() -> None:
     body = "def a():\n    return 1\n\ndef b():\n    return 1\n"
-    ops = parse(_patch("*** Update File: f.py", "@@ def b():", "-    return 1", "+    return 2"))
+    ops = parse(_patch("*** Update File: f.py", " def b():", "-    return 1", "+    return 2"))
     assert apply_hunks("f.py", body, ops[0].hunks) == (
         "def a():\n    return 1\n\ndef b():\n    return 2\n"
     )
@@ -213,7 +213,7 @@ def test_the_anchor_picks_between_identical_blocks() -> None:
 def test_an_anchor_that_is_also_context_is_kept() -> None:
     ops = parse(
         _patch(
-            "*** Update File: f.py", "@@ def a():", " def a():", "-    return 1", "+    return 3"
+            "*** Update File: f.py", " def a():", " def a():", "-    return 1", "+    return 3"
         )
     )
     assert apply_hunks("f.py", "def a():\n    return 1\n", ops[0].hunks) == (
@@ -222,7 +222,7 @@ def test_an_anchor_that_is_also_context_is_kept() -> None:
 
 
 def test_a_missing_anchor_is_explained() -> None:
-    ops = parse(_patch("*** Update File: f.py", "@@ def nope():", "-x", "+y"))
+    ops = parse(_patch("*** Update File: f.py", " def nope():", "-x", "+y"))
     with pytest.raises(PatchError, match="no line matching"):
         apply_hunks("f.py", "x\n", ops[0].hunks)
 
@@ -233,7 +233,7 @@ def test_end_of_file_anchors_at_the_end() -> None:
 
 
 def test_a_hunk_with_only_additions_inserts_at_the_cursor() -> None:
-    ops = parse(_patch("*** Update File: f.py", "@@ first", "+inserted"))
+    ops = parse(_patch("*** Update File: f.py", " first", "+inserted"))
     assert apply_hunks("f.py", "first\nsecond\n", ops[0].hunks) == "first\ninserted\nsecond\n"
 
 

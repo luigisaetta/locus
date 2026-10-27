@@ -11,7 +11,7 @@ parallel where it can. Here the swarm *is* PILOT, the outage war room:
 mitigation, diagnostics, and comms agents claiming work off the same board
 during a production outage.
 
-Contrast this with Notebook 26: there, STEWARD routes work centrally and
+Contrast this with Notebook 22: there, STEWARD routes work centrally and
 can be audited at the routing step. A swarm trades that for emergent
 parallelism — useful, but worth noting that a self-organizing agent pool
 is also where agentic failure modes concentrate: a mis-tagged or buggy
@@ -35,8 +35,8 @@ The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
 model. Set ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
-- Notebook 06 (Agent basics).
-- Notebook 26 (Orchestrator) if you want the supervised counterpoint.
+- Notebook 02 (Agent basics).
+- Notebook 22 (Orchestrator) if you want the supervised counterpoint.
 """
 
 import asyncio

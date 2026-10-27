@@ -85,7 +85,7 @@ class MySQLConfig(BaseModel):
 
     # Reject unknown keys rather than absorbing them. The backends take
     # **kwargs and splat them in here, so a misspelled or wrong-named
-    # parameter used to vanish silently — notebook 68 passed namespace=
+    # parameter used to vanish silently — notebook 65 passed namespace=
     # instead of prefix= and every run quietly shared one keyspace.
     model_config = {"extra": "forbid"}
 

@@ -176,7 +176,7 @@ idempotency key to the provider.
 - [`@tool` decorator with idempotency hook](https://github.com/oracle/locus/blob/main/src/locus/tools/decorator.py)
 - [`find_matching_execution`](https://github.com/oracle/locus/blob/main/src/locus/tools/executor.py#L21) — the argument match itself.
 - [`_maybe_cached_idempotent_result`](https://github.com/oracle/locus/blob/main/src/locus/agent/runtime_loop.py#L2163) — where the `Agent` runtime checks for a prior matching call before invoking the tool body.
-- [`notebook_07_agent_with_tools.py`](https://github.com/oracle/locus/blob/main/examples/notebook_07_agent_with_tools.py) — walks through the `@tool` decorator end-to-end (idempotency covered in the agent-loop walkthrough).
+- [`notebook_03_agent_with_tools.py`](https://github.com/oracle/locus/blob/main/examples/notebook_03_agent_with_tools.py) — walks through the `@tool` decorator end-to-end (idempotency covered in the agent-loop walkthrough).
 
 ## See also
 

@@ -240,7 +240,7 @@ def main() -> None:
     asyncio.run(_amain(args.transport))
 
     print("=" * 70)
-    print("Next: notebook 02 — OCIChatCompletionsModel deep dive (the default path)")
+    print("Next: notebook 33 — OCIChatCompletionsModel deep dive (the default path)")
     print("=" * 70)
 
 

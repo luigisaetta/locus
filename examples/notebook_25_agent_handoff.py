@@ -39,7 +39,7 @@ slot — a second, typically cheaper model id read from ``LOCUS_MODEL_ID_B``
 — for the L1 front-line seat. With Model B unset, the slot collapses to Model A.
 
 Prerequisites:
-- Notebook 06 (Agent basics).
+- Notebook 02 (Agent basics).
 - Notebook 24 (Swarm) for the unsupervised counterpoint.
 """
 
@@ -315,7 +315,7 @@ async def main():
 
     # =========================================================================
     print("\n" + "=" * 60)
-    print("Next: Notebook 26 — Orchestrator Pattern")
+    print("Next: Notebook 22 — Orchestrator Pattern")
     print("=" * 60)
 
 

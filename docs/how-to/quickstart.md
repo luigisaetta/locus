@@ -102,7 +102,7 @@ quality or vendor behavior.
 git clone https://github.com/oracle/locus.git
 cd locus-sdk
 python -m pip install -e .
-python examples/notebook_83_payment_refund_gate.py
+python examples/notebook_71_payment_refund_gate.py
 ```
 
 That example needs no API key and demonstrates a local payment stub behind an

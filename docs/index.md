@@ -82,8 +82,8 @@ the call stays the same. With an OCI profile in `~/.oci/config`, every notebook
 runs against OCI Generative AI with no further setup.
 
 [The Agent →](concepts/agent.md) ·
-[Notebook 06 — Basic agent →](notebooks/notebook_06_basic_agent.md) ·
-[Notebook 07 — Agent with tools →](notebooks/notebook_07_agent_with_tools.md)
+[Notebook 02 — Basic agent →](notebooks/notebook_02_basic_agent.md) ·
+[Notebook 03 — Agent with tools →](notebooks/notebook_03_agent_with_tools.md)
 
 ## Eight shapes, one `Agent`
 
@@ -122,7 +122,7 @@ the same backends. Pick the shape; the agents don't change.
     Nodes, edges, reducers, `Send` fan-out, interrupts for a human, and
     checkpointed state, LangGraph-style.
 
-- :material-forum:{ .lg .middle } **[Debate and critic loops](notebooks/notebook_32_debate_with_judge.md)**
+- :material-forum:{ .lg .middle } **[Debate and critic loops](notebooks/notebook_26_debate_with_judge.md)**
 
     ---
     Two debaters and a judge, or a skeptical reviewer that kills unproven
@@ -155,9 +155,9 @@ print(result.text)          # findings from 3 parallel probes
 ```
 
 [Multi-agent overview →](concepts/multi-agent.md) ·
-[Notebook 21 — Composition →](notebooks/notebook_21_composition.md) ·
-[Notebook 26 — Orchestrator →](notebooks/notebook_26_orchestrator_pattern.md) ·
-[Notebook 58 — Cognitive router →](notebooks/notebook_58_cognitive_router.md)
+[Notebook 19 — Composition →](notebooks/notebook_19_composition.md) ·
+[Notebook 22 — Orchestrator →](notebooks/notebook_22_orchestrator_pattern.md) ·
+[Notebook 29 — Cognitive router →](notebooks/notebook_29_cognitive_router.md)
 
 ## Oracle Cloud, native
 
@@ -178,25 +178,25 @@ same `Agent`, same events, same admission gate.
     `model="oci:ocid1.generativeaiendpoint…"` targets your own DAC
     endpoint, with the compartment and auth resolved from your profile.
 
-- :material-console:{ .lg .middle } **[OCI tools](notebooks/notebook_89_oci_tools.md)**
+- :material-console:{ .lg .middle } **[OCI tools](notebooks/notebook_36_oci_tools.md)**
 
     ---
     `use_oci()` and `describe_oci()` put the OCI control plane behind
     tools, so an agent can list, inspect and act on your tenancy.
 
-- :material-database-search:{ .lg .middle } **[Oracle Database 26ai RAG](notebooks/notebook_41_oracle_26ai_rag.md)**
+- :material-database-search:{ .lg .middle } **[Oracle Database 26ai RAG](notebooks/notebook_38_oracle_26ai_rag.md)**
 
     ---
     `OracleVectorStore` on native `VECTOR` columns, hybrid search, plus
     in-database chunking and embeddings so text never leaves the database.
 
-- :material-content-save:{ .lg .middle } **[26ai checkpoints and history](notebooks/notebook_53_oracle_26ai_checkpointer.md)**
+- :material-content-save:{ .lg .middle } **[26ai checkpoints and history](notebooks/notebook_42_oracle_26ai_checkpointer.md)**
 
     ---
     `oracle_checkpointer` for durable threads, `OracleCheckpointSaver` for
     versioned history and time travel, OCI Object Storage as the alternative.
 
-- :material-brain:{ .lg .middle } **[26ai long-term memory](notebooks/notebook_88_oracle_agent_memory.md)**
+- :material-brain:{ .lg .middle } **[26ai long-term memory](notebooks/notebook_44_oracle_agent_memory.md)**
 
     ---
     `OracleStore` for cross-thread memory and `OracleAgentMemoryManager`
@@ -296,7 +296,7 @@ pip install locus-sdk && python -m locus.rogue
 
 [How the admission gate works →](concepts/control-layer.md) ·
 [First controlled action →](how-to/first-controlled-action.md) ·
-[Notebook 83 — Payment refund gate →](notebooks/notebook_83_payment_refund_gate.md)
+[Notebook 71 — Payment refund gate →](notebooks/notebook_71_payment_refund_gate.md)
 
 ## How Locus compares
 

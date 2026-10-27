@@ -182,7 +182,7 @@ evidence? — pair the structural checks here with the
 
 ## Source and notebook
 
-- [`notebook_55_evaluation.py`](https://github.com/oracle/locus/blob/main/examples/notebook_55_evaluation.py) — runnable end-to-end suite.
+- [`notebook_56_evaluation.py`](https://github.com/oracle/locus/blob/main/examples/notebook_56_evaluation.py) — runnable end-to-end suite.
 - [`locus.evaluation.framework`](https://github.com/oracle/locus/blob/main/src/locus/evaluation/framework.py) — `EvalCase`, `EvalRunner`, `EvalReport`.
 
 ## See also

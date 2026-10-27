@@ -234,7 +234,7 @@ class TestNotebookE2E:
 
         # Pick a notebook that exists today and is fast under MockModel.
         # 13_sse_streaming is small, deterministic, and uses get_model().
-        notebook = _REPO_ROOT / "examples" / "notebook_13_sse_streaming.py"
+        notebook = _REPO_ROOT / "examples" / "notebook_64_sse_streaming.py"
         if not notebook.exists():
             pytest.skip(f"notebook fixture not found: {notebook}")
 

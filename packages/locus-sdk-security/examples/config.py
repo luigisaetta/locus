@@ -27,21 +27,21 @@ Environment Variables:
 
 Examples:
     # Run with mock (default - no credentials needed):
-    python examples/notebook_06_basic_agent.py
+    python examples/notebook_02_basic_agent.py
 
     # Run with OpenAI:
     export LOCUS_MODEL_PROVIDER=openai
     export OPENAI_API_KEY=sk-...
-    python examples/notebook_06_basic_agent.py
+    python examples/notebook_02_basic_agent.py
 
     # Run with Anthropic:
     export LOCUS_MODEL_PROVIDER=anthropic
     export ANTHROPIC_API_KEY=sk-ant-...
-    python examples/notebook_06_basic_agent.py
+    python examples/notebook_02_basic_agent.py
 
     # Pick a specific model for the selected provider:
     export LOCUS_MODEL_ID=gpt-4o-mini
-    python examples/notebook_06_basic_agent.py
+    python examples/notebook_02_basic_agent.py
 """
 
 import os
@@ -74,7 +74,7 @@ class MockModel(BaseModel):
     # answering either with the other's verdict is how an offline run stops
     # reading like the real thing and starts reading like a broken example.
     _responses: dict[str, str] = {
-        # Payments triage (notebook 06). Three distinct patterns, because a
+        # Payments triage (notebook 02). Three distinct patterns, because a
         # queue where every transaction gets the same verdict teaches nothing.
         "declines": (
             "Consistent with card testing: a run of small declines from one BIN "
@@ -90,7 +90,7 @@ class MockModel(BaseModel):
             "address and the account has prior undisputed orders there. Gather "
             "the delivery signature and order history, then represent."
         ),
-        # Deployment readiness (notebook 07). Keyed on the go/no-go language
+        # Deployment readiness (notebook 03). Keyed on the go/no-go language
         # the release-engineer prompts use.
         "pre-deploy": (
             "No-go on search: the image is unsigned and only 2 of 5 replicas "

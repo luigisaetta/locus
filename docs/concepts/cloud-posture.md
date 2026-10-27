@@ -132,7 +132,7 @@ pip install 'locus-sdk[aws]'
 
 ## Where it shows up
 
-- Notebooks: [grounded cloud-posture agent](../notebooks/notebook_73_cloud_posture_agent.md)
+- Notebooks: [grounded cloud-posture agent](../notebooks/notebook_81_cloud_posture_agent.md)
   (Part 1 runs the grounding decision fully offline).
 - [Security layer](security.md) — the `ground_finding` primitive this builds on.
 - [Threat scenarios](threat-scenarios.md) — the catalogue the findings tag into

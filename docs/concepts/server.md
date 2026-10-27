@@ -307,7 +307,7 @@ your platform expects.
 
 ## Source and notebook
 
-- [`notebook_68_agent_server.py`](https://github.com/oracle/locus/blob/main/examples/notebook_68_agent_server.py) — runnable wrapper plus a curl client.
+- [`notebook_65_agent_server.py`](https://github.com/oracle/locus/blob/main/examples/notebook_65_agent_server.py) — runnable wrapper plus a curl client.
 - [`locus.server`](https://github.com/oracle/locus/tree/main/src/locus/server) — `AgentServer`, `GraphRunnable`, `InvokeRequest`, `InvokeResponse`.
 
 ## See also

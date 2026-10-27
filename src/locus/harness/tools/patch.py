@@ -16,7 +16,7 @@ that family this tool replaces ``edit``, ``write`` and ``multi_edit``
     +first line
     *** Update File: src/app.py
     *** Move to: src/main.py
-    @@ def handler():
+     def handler():
     -    return None
     +    return 42
     *** Delete File: old.py
@@ -54,7 +54,7 @@ class PatchError(ValueError):
 
 @dataclass
 class Hunk:
-    """One ``@@`` section: the lines it expects, and what replaces them."""
+    """One ```` section: the lines it expects, and what replaces them."""
 
     anchor: str = ""
     old: list[str] = field(default_factory=list)
@@ -103,7 +103,7 @@ def parse(text: str) -> list[FileOp]:  # noqa: PLR0912 - one branch per line kin
             raise PatchError(f"line {number}: a deleted file takes no body")
         elif line.startswith(MOVE):
             current.move_to = line[len(MOVE) :].strip()
-        elif line.startswith("@@"):
+        elif line.startswith(""):
             hunk = Hunk(anchor=line[2:].strip())
             current.hunks.append(hunk)
         elif line.strip() == EOF_MARK:
@@ -112,7 +112,7 @@ def parse(text: str) -> list[FileOp]:  # noqa: PLR0912 - one branch per line kin
             hunk.at_end = True
         else:
             if hunk is None:
-                # A first hunk without its own ``@@`` line is common; start one.
+                # A first hunk without its own ```` line is common; start one.
                 hunk = Hunk()
                 current.hunks.append(hunk)
             marker, body = (line[:1], line[1:]) if line else (" ", "")
@@ -164,7 +164,7 @@ def apply_hunks(path: str, body: str, hunks: list[Hunk]) -> str:
         if hunk.anchor:
             anchored = _find(lines, [hunk.anchor], cursor, at_end=False)
             if anchored < 0:
-                raise PatchError(f"{path}: hunk {index}: no line matching @@ {hunk.anchor!r}")
+                raise PatchError(f"{path}: hunk {index}: no line matching  {hunk.anchor!r}")
             cursor = anchored + (0 if hunk.old and hunk.old[0].strip() == hunk.anchor else 1)
         at = _find(lines, hunk.old, cursor, hunk.at_end)
         if at < 0:
@@ -260,7 +260,7 @@ def make_apply_patch(h: HarnessContext) -> Tool:
             *** Add File: path/new_file.py
             +every line of the new file, each starting with +
             *** Update File: path/existing.py
-            @@ the line just above the change, e.g. def handler():
+             the line just above the change, e.g. def handler():
              context line (starts with a space)
             -line to remove
             +line to add
@@ -268,7 +268,7 @@ def make_apply_patch(h: HarnessContext) -> Tool:
             *** End Patch
 
         Give about three lines of unchanged context around each change, and an
-        ``@@`` line naming the enclosing function or class when the context
+        ```` line naming the enclosing function or class when the context
         alone could match more than one place. ``*** Move to: new/path`` after
         an Update header renames the file. Paths are relative to the workspace
         root. Either the whole patch applies or none of it does.

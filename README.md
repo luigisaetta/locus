@@ -431,7 +431,7 @@ The eight primitives:
 The contracts live in the SDK, the SQL is generated locally, and the
 only runtime requirement is `python-oracledb` thin mode.
 
-→ [Notebook 41 — Oracle 26ai RAG](https://locusagents.ai/notebooks/notebook_41_oracle_26ai_rag/) · [Notebook 53 — Oracle 26ai checkpointer](https://locusagents.ai/notebooks/notebook_53_oracle_26ai_checkpointer/) · [Notebooks 42-44, 54, 10, 88 — loader, chunker, embeddings, versioned saver, store, agent memory](https://locusagents.ai/notebooks/#oracle-cloud-database-26ai)
+→ [Notebook 38 — Oracle 26ai RAG](https://locusagents.ai/notebooks/notebook_38_oracle_26ai_rag/) · [Notebook 42 — Oracle 26ai checkpointer](https://locusagents.ai/notebooks/notebook_42_oracle_26ai_checkpointer/) · [Notebooks 39-41, 54, 10, 88 — loader, chunker, embeddings, versioned saver, store, agent memory](https://locusagents.ai/notebooks/#oracle-cloud-database-26ai)
 
 ---
 
@@ -445,10 +445,10 @@ git clone https://github.com/oracle/locus.git
 cd locus-sdk && pip install -e .
 
 python examples/notebook_01_oci_transports.py        # the three OCI GenAI transports
-python examples/notebook_06_basic_agent.py           # your first agent
-python examples/notebook_41_oracle_26ai_rag.py       # RAG on Oracle Database 26ai
-python examples/notebook_58_cognitive_router.py      # the cognitive router
-python examples/notebook_69_research_workflow.py     # full research pipeline
+python examples/notebook_02_basic_agent.py           # your first agent
+python examples/notebook_38_oracle_26ai_rag.py       # RAG on Oracle Database 26ai
+python examples/notebook_29_cognitive_router.py      # the cognitive router
+python examples/notebook_32_research_workflow.py     # full research pipeline
 ```
 
 For production, `AgentServer` is a drop-in FastAPI app (`POST /invoke`, `POST /stream`, `GET/DELETE /threads/{id}`, `GET /health`)

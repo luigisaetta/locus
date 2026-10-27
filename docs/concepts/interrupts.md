@@ -237,15 +237,15 @@ debugging, or branch off a new thread from the partial conversation.
 - [Hooks](hooks.md) — write custom hooks that raise to abort the run.
 - [Conversation Management](conversation-management.md) — how
   `thread_id` resumption works.
-- [Human in the loop](https://github.com/oracle/locus/blob/main/examples/notebook_19_human_in_the_loop.py)
+- [Human in the loop](https://github.com/oracle/locus/blob/main/examples/notebook_15_human_in_the_loop.py)
   — a full runnable example.
-- [Multi-agent + HITL](https://github.com/oracle/locus/blob/main/examples/notebook_33_multiagent_human_in_loop.py)
+- [Multi-agent + HITL](https://github.com/oracle/locus/blob/main/examples/notebook_27_multiagent_human_in_loop.py)
   — three HITL (human-in-the-loop) patterns in one file (approval gate, human-as-tool,
   long-pause snapshot/resume).
-- [Incident response](https://github.com/oracle/locus/blob/main/examples/notebook_63_incident_response.py)
+- [Incident response](https://github.com/oracle/locus/blob/main/examples/notebook_77_incident_response.py)
   — `interrupt()` as the page-the-human gate after severity
   classification.
-- [Support concession approval](https://github.com/oracle/locus/blob/main/examples/notebook_64_procurement_approval.py)
+- [Support concession approval](https://github.com/oracle/locus/blob/main/examples/notebook_78_procurement_approval.py)
   — three stacked `interrupt()` gates on the top tier.
-- [Contract review](https://github.com/oracle/locus/blob/main/examples/notebook_65_contract_review.py)
+- [Contract review](https://github.com/oracle/locus/blob/main/examples/notebook_79_contract_review.py)
   — `interrupt()` for human counsel inside a refinement loop.
