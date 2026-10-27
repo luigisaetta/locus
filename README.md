@@ -73,7 +73,7 @@ Pick the shape; the agents don't change.
 | **Orchestrator and specialists** | One coordinator delegates to typed specialists with their own tools and merges the results | [Orchestrator](https://locusagents.ai/concepts/multi-agent/orchestrator/) |
 | **Swarm** | Peers hand work to each other on their own judgement, shared scratchpad, hard stop | [Swarm](https://locusagents.ai/concepts/multi-agent/swarm/) |
 | **Handoff** | Tiered escalation with typed context, L1 to L2 to L3 | [Handoff](https://locusagents.ai/concepts/multi-agent/handoff/) |
-| **StateGraph and functional API** | Nodes, edges, reducers, `Send` fan-out, interrupts, checkpointed state, LangGraph-style | [StateGraph](https://locusagents.ai/concepts/multi-agent/graph/) |
+| **StateGraph and functional API** | Nodes, edges, reducers, `Send` fan-out, interrupts, checkpointed state | [StateGraph](https://locusagents.ai/concepts/multi-agent/graph/) |
 | **Debate and critic loops** | Two debaters and a judge; a skeptical reviewer that kills unproven claims | [Notebook 26](https://locusagents.ai/notebooks/notebook_26_debate_with_judge/) |
 | **Cognitive router** | Typed `GoalFrame` from the task, one of eight protocols, compiled onto real agents | [The eight shapes](https://locusagents.ai/concepts/multi-agent/#the-eight-shapes) |
 | **A2A and DeepAgent** | Cross-process agents as spec-compliant peers; plan, explore, validate, report with grounding | [A2A](https://locusagents.ai/concepts/multi-agent/a2a/) · [DeepAgent](https://locusagents.ai/concepts/deepagent/) |
@@ -185,7 +185,7 @@ pip install locus-sdk && python -m locus.rogue
 # FINAL SCORE · dangerous attempts: 1 · BREACHES: 0 · audit chain intact: ✓
 ```
 
-Put the same gate around a LangChain chain, a plain OpenAI loop or a CrewAI crew, or build on the
+Put the same gate around an agent loop you already have, whatever it is built on, or build on the
 full runtime.
 
 → [How the admission gate works](https://locusagents.ai/concepts/control-layer/) ·

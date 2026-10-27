@@ -9,7 +9,7 @@ Locus is the Oracle Generative AI Agentic Harness: one `Agent` class, eight
 multi-agent shapes, and the runtime around the model (tools, memory, RAG,
 observability, guardrails), built first-class for OCI Generative AI and
 Oracle Database 26ai and open to every other provider. The [home page](index.md)
-and [Coming from LangGraph or Strands](concepts/compare.md) cover that ground. This page is
+covers that ground. This page is
 about the part that is easiest to over-claim: what the control layer
 guarantees, what you configure, and what stays model-dependent.
 
