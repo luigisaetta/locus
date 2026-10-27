@@ -68,7 +68,23 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 When the text must not leave the database, chunk and embed inside it:
 `OracleInDBChunker` splits with `DBMS_VECTOR_CHAIN`, `OracleInDBEmbeddings`
 runs an ONNX model loaded into the database, and `OracleVectorStore` keeps
-the result, so no document content goes to a hosted embedding API.
+the result, so no document content goes to a hosted embedding API. The
+model is a one-time load. On Autonomous Database, Oracle's prebuilt
+all-MiniLM-L12-v2 (384 dimensions) loads straight from Object Storage:
+
+```sql
+BEGIN
+  DBMS_VECTOR.LOAD_ONNX_MODEL_CLOUD(
+    model_name => 'ALL_MINILM_L12_V2',
+    credential => NULL,   -- pre-authenticated URL
+    uri        => '<URL of all_MiniLM_L12_v2.onnx from the Oracle Machine Learning blog>');
+END;
+/
+SELECT vector_dimension_count(vector_embedding(ALL_MINILM_L12_V2 USING 'hello' AS data)) FROM dual;  -- 384
+```
+
+Then `OracleInDBEmbeddings(model_name="ALL_MINILM_L12_V2", dimension=384)`
+and `OracleVectorStore(dimension=384)`; notebook 41 runs the whole path.
 
 ## Threads and memory
 

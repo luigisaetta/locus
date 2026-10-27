@@ -43,7 +43,21 @@ Prerequisites
 -------------
 
 The ONNX model must be loaded into the database before this notebook
-can run a query. Typical one-time path::
+can run a query. On Autonomous Database the one-time path is a single
+call against Oracle's prebuilt model in Object Storage (the URL is in the
+Oracle Machine Learning blog post "Pre-built Embedding Generation model
+for Oracle Database 26ai"; it is a pre-authenticated URL, so no
+credential)::
+
+    BEGIN
+        DBMS_VECTOR.LOAD_ONNX_MODEL_CLOUD(
+            model_name => 'ALL_MINILM_L12_V2',
+            credential => NULL,
+            uri        => 'https://.../all_MiniLM_L12_v2.onnx');
+    END;
+    /
+
+On-premises, copy the file to a directory object and load it from there::
 
     BEGIN
         DBMS_VECTOR.LOAD_ONNX_MODEL(
