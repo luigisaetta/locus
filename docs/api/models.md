@@ -80,5 +80,3 @@ See [OCI Responses API](../concepts/oci-responses.md).
 
 ::: locus.models.native.anthropic.AnthropicModel
 ::: locus.models.native.anthropic.AnthropicConfig
-
-
