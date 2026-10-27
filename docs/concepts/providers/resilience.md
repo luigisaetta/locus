@@ -77,7 +77,7 @@ reason about headroom without re-parsing strings. Reset values may be seconds
 (`58`) or OpenAI's duration format (`1m60s`, `200ms`).
 
 It understands the OpenAI / OpenRouter header convention. For headers named
-differently (Anthropic's `anthropic-ratelimit-*`, Bedrock's `x-amzn-*`) it
+differently (Anthropic's `anthropic-ratelimit-*`) it
 returns `None` rather than a half-filled state, so you can attach your own parser.
 
 ## Source
@@ -89,4 +89,3 @@ returns `None` rather than a half-filled state, so you can attach your own parse
 ## See also
 
 - [Retry](../retry.md)
-- [Azure OpenAI](azure.md) · [Amazon Bedrock](bedrock.md)

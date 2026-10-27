@@ -8,6 +8,15 @@ policy.
 
 ## [Unreleased]
 
+### Removed
+
+- **Amazon Bedrock and Azure OpenAI providers.** The `bedrock:` and `azure:`
+  model prefixes, `locus.models.native.bedrock` / `locus.models.native.azure`,
+  the `bedrock` extra and their documentation are gone; Locus targets OCI
+  Generative AI first and keeps OpenAI, Anthropic and the OpenAI-compatible
+  endpoints. The `s3` and security `aws` extras (Object Storage on S3, the AWS
+  posture audit) are unaffected.
+
 ### Fixed
 
 - **Session-token OCI profiles work on every OCI client, not only the V1

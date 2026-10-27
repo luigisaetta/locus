@@ -1,7 +1,6 @@
 # Models
 
 Native providers: **OpenAI** (`openai:`), **Anthropic** (`anthropic:`),
-**Azure OpenAI** (`azure:`) and **Amazon Bedrock** (`bedrock:`). Also
 routed by name: a table of OpenAI-compatible prefixes, such as `ollama:`,
 `vllm:`, `lmstudio:`, `groq:`, `together:`, `openrouter:`, `deepseek:`,
 `mistral:` and `gemini:`. Each prefix has its own default endpoint and
@@ -81,18 +80,3 @@ See [OCI Responses API](../concepts/oci-responses.md).
 
 ::: locus.models.native.anthropic.AnthropicModel
 ::: locus.models.native.anthropic.AnthropicConfig
-
-## Azure OpenAI
-
-See [Azure OpenAI](../concepts/providers/azure.md).
-
-::: locus.models.native.azure.AzureOpenAIModel
-::: locus.models.native.azure.AzureOpenAIConfig
-
-## Amazon Bedrock
-
-Needs the `bedrock` extra (`pip install "locus-sdk[bedrock]"`). See
-[Amazon Bedrock](../concepts/providers/bedrock.md).
-
-::: locus.models.native.bedrock.BedrockModel
-::: locus.models.native.bedrock.BedrockConfig

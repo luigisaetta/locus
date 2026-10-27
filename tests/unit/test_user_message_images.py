@@ -12,10 +12,9 @@ placeholder — never a base64 blob read as text — on the one that does not.
 
 from __future__ import annotations
 
-from locus.core.media import IMAGE_OMITTED, encode_image
+from locus.core.media import encode_image
 from locus.core.messages import Message
 from locus.models.native.anthropic import AnthropicModel
-from locus.models.native.bedrock import BedrockModel
 from locus.models.native.openai import OpenAIModel
 
 
@@ -53,14 +52,6 @@ def test_responses_sends_input_image_parts() -> None:
     parts = items[0]["content"]
     assert parts[0] == {"type": "input_text", "text": "what does this show?"}
     assert parts[1]["type"] == "input_image"
-
-
-def test_bedrock_sends_a_placeholder_not_base64() -> None:
-    m = BedrockModel(model="anthropic.claude-sonnet-4-6", region="us-east-1")
-    _, converted = m._convert_messages([Message.user(PROMPT)])
-    text = converted[0]["content"][0]["text"]
-    assert IMAGE_OMITTED in text
-    assert "locus-image" not in text
 
 
 def test_tool_images_follow_the_whole_tool_batch_on_chat_completions() -> None:

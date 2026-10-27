@@ -1,7 +1,7 @@
 # Model providers
 
 A model is a string. The prefix before the colon names the provider —
-`oci:`, `openai:`, `anthropic:`, `azure:`, `bedrock:`, or one of the
+`oci:`, `openai:`, `anthropic:`, or one of the
 OpenAI-compatible prefixes such as `ollama:`, `vllm:`, `groq:` or
 `gemini:` — and the rest is the model id that provider expects.
 `get_model()` parses the string and returns a ready client.
@@ -75,13 +75,6 @@ locus.models
 │                               it at ~1/10th input cost while the ~5-min
 │                               cache holds
 │
-├── azure:                                 ── Azure OpenAI · AzureOpenAIModel
-│   └─ deployments            — the URL names a deployment, not a model id
-│
-├── bedrock:                               ── Amazon Bedrock · BedrockModel
-│   └─ Converse API           — one client for every Bedrock chat model
-│                               that supports Converse
-│
 ├── OpenAI-compatible prefixes             ── OpenAIModel at a routed base_url
 │   ├─ self-hosted            — ollama · vllm · lmstudio · llamacpp
 │   │                           (model call stays on-network)
@@ -112,8 +105,6 @@ export — so audit those separately.
 | **OCI Generative AI** | [OCI Generative AI →](providers/oci.md) · [Responses API →](oci-responses.md) · [DAC →](../how-to/oci-dac.md) |
 | **OpenAI** | [OpenAI →](providers/openai.md) |
 | **Anthropic** | [Anthropic →](providers/anthropic.md) |
-| **Azure OpenAI** | [Azure OpenAI →](providers/azure.md) |
-| **Amazon Bedrock** | [Amazon Bedrock →](providers/bedrock.md) |
 | **OpenRouter** | [OpenAI-compatible providers →](providers/openai-compatible.md#openrouter-and-togetherai) |
 | **Together.ai** | [OpenAI-compatible providers →](providers/openai-compatible.md#openrouter-and-togetherai) |
 | **Other hosted or self-hosted endpoints** | [OpenAI-compatible providers →](providers/openai-compatible.md) |

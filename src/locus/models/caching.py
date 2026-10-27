@@ -5,7 +5,7 @@
 """Prompt-cache breakpoint helpers.
 
 Anthropic (and, as of 2026, a growing set of providers including
-Bedrock-hosted Claude and Gemini) supports ephemeral prompt
+Gemini) supports ephemeral prompt
 caching: mark a message as a cache checkpoint and subsequent requests
 that share the same prefix reuse the provider's computation at a
 fraction of the input cost.
@@ -66,7 +66,7 @@ def mark_cache_breakpoint(
             the same fields plus a ``cache_control`` metadata entry.
         ttl: Cache tier. Currently only ``"ephemeral"`` is defined
             (Anthropic's 5-minute cache). Reserved for future cache
-            tiers (Anthropic 1-hour, Bedrock 24-hour, …).
+            tiers (Anthropic 1-hour, …).
 
     Returns:
         A new :class:`Message` with ``metadata[CACHE_CONTROL_KEY]``

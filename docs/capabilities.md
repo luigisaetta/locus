@@ -8,7 +8,7 @@ does, and where to find it.
 | Capability group | Status | Execution mode and requirements | Important limitation |
 |---|---|---|---|
 | Agent loop, tools, control policy, events | Supported | Core install; provider required only for model calls | Controls apply only where configured and wired |
-| OCI Generative AI, OpenAI, Anthropic, Azure OpenAI, Bedrock, OpenRouter, and Together.ai model access | Supported | Live; provider extra and credential required | Azure and Bedrock are native transports; OpenRouter and Together.ai use the OpenAI-compatible transport; model capabilities vary |
+| OCI Generative AI, OpenAI, Anthropic, OpenRouter, and Together.ai model access | Supported | Live; provider extra and credential required | OpenRouter and Together.ai use the OpenAI-compatible transport; model capabilities vary |
 | Checkpointer and vector-store adapters | Supported interfaces | Live infrastructure for non-memory backends; matching extra/config required | Operate and test the backing service yourself |
 | `SecurityContext` reference adapters | Offline simulation | No credentials | Vendor write templates return simulated receipts unless replaced and verified |
 | Published research and evaluation artifacts | Research-only | See each research page | Some source datasets and evaluated model artifacts are not publicly available |
@@ -51,9 +51,9 @@ guidance.
     - **Idempotent tools** — `@tool(idempotent=True)` dedupes identical
       `(name, args)` calls inside the documented run/checkpoint scope. External
       systems still need stable idempotency keys for crash recovery.
-    - **OCI Generative AI, OpenAI, Anthropic, Azure OpenAI, Bedrock, and compatible providers** —
-      OCI Generative AI (V1, SDK and Responses transports), OpenAI, Anthropic,
-      Azure OpenAI and Bedrock as native transports, plus
+    - **OCI Generative AI, OpenAI, Anthropic, and compatible providers** —
+      OCI Generative AI (V1, SDK and Responses transports), OpenAI and
+      Anthropic as native transports, plus
       hosted and self-hosted OpenAI-compatible endpoints (OpenRouter,
       Together.ai and more) auto-routed by model prefix. One
       `get_model()` call, any provider.
@@ -275,8 +275,6 @@ await ctx.actions.execute(
 | OCI Generative AI | OpenAI, Meta Llama, xAI Grok, Mistral, Google Gemini and Cohere models served on OCI (on-demand or Dedicated AI Cluster) | `locus.models.providers.oci` · [OCI Generative AI](concepts/providers/oci.md) |
 | OpenAI | All commercial models (gpt-5.5, o-series, etc) | `locus.models.native.openai` · [OpenAI](concepts/providers/openai.md) |
 | Anthropic | Claude 4.x (e.g. `claude-sonnet-4-6`) — direct API | `locus.models.native.anthropic` · [Anthropic](concepts/providers/anthropic.md) |
-| Azure OpenAI | OpenAI models on a deployment-named Azure resource | `locus.models.native.azure` · [Azure OpenAI](concepts/providers/azure.md) |
-| Amazon Bedrock | Chat models on Bedrock (Nova, Claude, Llama, Mistral and more) through one Converse-API client | `locus.models.native.bedrock` · [Amazon Bedrock](concepts/providers/bedrock.md) |
 | Auto-routing | `get_model("anthropic:claude-sonnet-4-6")` picks transport from id | `locus.models.registry.get_model` |
 | Resilience helpers | Failover classification, credential pooling, prompt-cache breakpoints, rate-limit buckets | `locus.models.failover` · `locus.models.pooled` · `locus.models.caching` · `locus.models.rate_limits` · [Resilience](concepts/providers/resilience.md) |
 

@@ -15,7 +15,7 @@ provider when the one serving it is overloaded, erroring or slow. That is what
     model = FallbackChain(
         [
             get_model("anthropic:claude-sonnet-4-6"),
-            get_model("bedrock:us.anthropic.claude-sonnet-4-6-v1:0"),
+            get_model("oci:meta.llama-3.3-70b-instruct"),
             get_model("openai:gpt-4o"),
         ],
         first_chunk_timeout=20.0,

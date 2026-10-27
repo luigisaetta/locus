@@ -76,8 +76,8 @@ print(agent.run_sync("What is the capital of France?").text)
 # → Paris
 ```
 
-Swap `oci:openai.gpt-5` for `openai:gpt-4o`, `anthropic:claude-sonnet-4-6` or
-`bedrock:us.amazon.nova-lite-v1:0`; the call stays the same. With an OCI profile
+Swap `oci:openai.gpt-5` for `openai:gpt-4o`, or
+`anthropic:claude-sonnet-4-6`; the call stays the same. With an OCI profile
 in `~/.oci/config`, every notebook runs against OCI Generative AI with no further
 setup.
 

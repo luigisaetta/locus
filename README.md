@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <strong>OCI Generative AI · Oracle Database 26ai · OpenAI · Anthropic · Bedrock · Azure · 16 OpenAI-compatible endpoints</strong><br>
+  <strong>OCI Generative AI · Oracle Database 26ai · OpenAI · Anthropic · 16 OpenAI-compatible endpoints</strong><br>
   <em>Same <code>Agent</code>, same loop, same event stream — only the model id changes.</em>
 </p>
 
@@ -330,7 +330,7 @@ asyncio.run(main())
 
 A model is a string. The prefix picks the provider; the rest is the model id it expects.
 
-**22 prefixes ship built in.** `oci:`, `openai:`, `anthropic:`, `bedrock:` and `azure:` are native;
+**20 prefixes ship built in.** `oci:`, `openai:` and `anthropic:` are native;
 the rest are OpenAI-compatible endpoints with their base URL and key convention already
 filled in — `gemini:` · `ollama:` · `vllm:` · `lmstudio:` · `llamacpp:` · `litellm:` ·
 `groq:` · `together:` · `openrouter:` · `deepseek:` · `mistral:` · `xai:` · `fireworks:` ·
@@ -342,8 +342,6 @@ Agent(model="oci:cohere.command-r-plus")            # OCI GenAI → SDK transpor
 Agent(model="ollama:llama3.2")                      # localhost:11434, no key needed
 Agent(model="groq:llama-3.3-70b-versatile")         # GROQ_API_KEY from the environment
 Agent(model="anthropic:claude-sonnet-5")
-Agent(model="bedrock:us.amazon.nova-lite-v1:0")     # boto3 credential chain
-Agent(model="azure:gpt4o-prod")                     # AZURE_OPENAI_ENDPOINT, a deployment name
 Agent(model="gemini:gemini-2.0-flash")              # GEMINI_API_KEY
 ```
 
@@ -361,16 +359,7 @@ Compute. Install with `pip install "locus-sdk[oci]"`.
 | **OCI Generative AI** | **SDK** (`OCIModel`) — auto for `cohere.*` and DAC OCIDs | Cohere native chat API (Command R and Command A) · Dedicated AI Clusters |
 | **OCI Generative AI** | **Responses** (`OCIResponsesModel`) — opt-in | Server-stateful endpoint for OpenAI / xAI / Gemini Responses-only models |
 
-`bedrock:` goes through the Converse API, so one code path covers every model on the
-service — Nova, Claude, Llama, Mistral, Titan — and credentials are boto3's standard chain
-(environment, profile, SSO, instance role, IRSA). Install with
-`pip install "locus-sdk[bedrock]"`; `boto3` is imported lazily, so the four-package core
-install is unchanged for everyone not on AWS.
-
-`azure:` names a **deployment**, not a model id, and reuses the `openai` extra — Azure's
-`api-key` header, `api-version` and deployment-shaped URLs are handled by the SDK's
-Azure client, so there is no second implementation to drift. `gemini:` uses Google's own
-OpenAI-compatible endpoint, so it needs no additional client either.
+`gemini:` uses Google's own OpenAI-compatible endpoint, so it needs no additional client.
 
 Configuration that is not in the environment travels in `model_kwargs` — a per-agent key, or
 a host that is not the default:
@@ -502,7 +491,7 @@ src/locus/
 ├── deepagent/      create_deepagent + create_research_workflow + 6 node primitives
 ├── memory/         BaseCheckpointer + 10 backends (Oracle 26ai, OCI Object Storage, …), stores, memory managers
 ├── rag/            Embeddings + 6 vector stores (Oracle 26ai, …) + rerankers + loaders + chunkers
-├── models/         Provider registry + OCI GenAI (V1 / SDK / Responses), OpenAI, Anthropic, Bedrock, Azure
+├── models/         Provider registry + OCI GenAI (V1 / SDK / Responses), OpenAI, Anthropic
 ├── tools/          @tool decorator, registry, builtins, executors
 ├── hooks/          Logging, telemetry, retry, guardrails, steering
 ├── observability/  EventBus, run_context, agent yield bridge, EV_* constants

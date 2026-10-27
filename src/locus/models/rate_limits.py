@@ -18,7 +18,7 @@ Header conventions supported:
   (``58``) or OpenAI's human-readable duration (``1m60s`` / ``200ms``).
 
 Providers whose headers use a different naming scheme (Anthropic's
-``anthropic-ratelimit-*``, Bedrock's ``x-amzn-*``, …) are not parsed
+``anthropic-ratelimit-*``, …) are not parsed
 by this module. :func:`parse_rate_limit_headers` returns ``None``
 instead of a half-filled state so callers can attach their own
 provider-specific parser.

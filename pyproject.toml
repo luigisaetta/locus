@@ -128,11 +128,6 @@ s3 = ["boto3>=1.34"]
 # locus-sdk-security package (packages/locus-sdk-security/).
 aws = ["boto3>=1.34"]
 
-# Amazon Bedrock models (src/locus/models/native/bedrock.py). Same single
-# dependency as the other AWS extras: credentials come from boto3's standard
-# chain, so there is nothing else to install or configure.
-bedrock = ["boto3>=1.34"]
-
 # Security-domain tooling — red-team probes, SOC triage, intel / SIEM / EDR /
 # scanner / fingerprint / AWS posture adapters — is a separate, opt-in package
 # in this repo (packages/locus-sdk-security/, imported as ``locus_security``).
