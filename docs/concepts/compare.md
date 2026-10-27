@@ -32,7 +32,7 @@ other projects' docs for anything that matters to you; they move fast.
 | Serving | `locus serve` (FastAPI, bearer auth, threads), runner image | LangGraph Platform | AgentCore |
 | OCI Generative AI | native: V1, SDK and Responses transports, auto-routing, 36 models verified with tool calls | community packages | — |
 | Oracle Database 26ai | native vector store, checkpointer, versioned saver, long-term memory, in-database chunking and embeddings | community packages | — |
-| Other providers | OpenAI, Anthropic, 17 OpenAI-compatible routes | broad | Bedrock-first, others via providers |
+| Other providers | OpenAI, Anthropic, 17 OpenAI-compatible routes; 16 frontier models verified through OpenRouter on 27 October 2026 | broad | Bedrock-first, others via providers |
 
 ## What this means in practice
 

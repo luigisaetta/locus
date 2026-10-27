@@ -218,6 +218,13 @@ Catalogs differ per tenancy and region; re-run `scripts` from the
 [integration README](https://github.com/oracle/locus/tree/main/tests/integration)
 against yours.
 
+The same two calls were also made through `openrouter:` on 16 frontier models the
+same day (Claude Sonnet / Opus / Haiku 5.5, Claude Fable 5.1, GPT-6.1 sol and terra,
+gpt-oss-120b, Gemini 4 argon, Gemini 3.8 flash, Grok 4.7, Llama 4 Maverick,
+DeepSeek V4.1 flash, Mistral Large 2512, Qwen 3.8 Max, Kimi K3.1 Pro, GLM 5.3
+Prime); all 16 passed, Mistral after provider 429s that Locus's retry policy
+absorbed.
+
 ### Pass, completion and tool call (36)
 
 | Vendor | Models |
