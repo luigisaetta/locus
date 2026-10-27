@@ -33,6 +33,15 @@ policy.
   empty. The default is now `None` (rank by similarity, bounded by `limit`,
   scores still returned) and `as_tool()` accepts `limit=` / `threshold=` so a
   deployment can set its own cut-off.
+- **Gemini on OCI rejected schemas with `enum` and validation keywords.**
+  OCI's Gemini translation answers `400 Unsupported JSON Schema feature for
+  Gemini: enum` (also `additionalProperties`, `title`, `pattern`, `minimum`,
+  …) for `response_format` schemas and tool parameters — the cognitive
+  router's strict `GoalFrame` schema has both, so every dispatch failed on
+  `google.*` models. The V1 transport now folds `enum` / `const` values into
+  the property's description (`Allowed values: "a", "b".`), keeps the type,
+  and drops the validation keywords for Gemini; other vendors receive the
+  schema unchanged.
 - **Cohere on OCI rejected turns that end with an instruction.** The SDK
   transport sends the last user message as Cohere's `message` and everything
   before it as history, so a conversation ending in a system message — the

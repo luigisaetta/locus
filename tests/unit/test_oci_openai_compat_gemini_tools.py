@@ -19,6 +19,7 @@ pytest.importorskip("oci")
 from locus.core.messages import Message, Role  # noqa: E402
 from locus.models.providers.oci.openai_compat import (  # noqa: E402
     OCIChatCompletionsModel,
+    fold_schema_enums,
     wrap_tool_results_as_objects,
 )
 
@@ -99,3 +100,109 @@ class TestPrepareMessagesForGemini:
         )
         assert out[0].role is Role.USER
         assert out[-1].content == "42"
+
+
+class TestFoldSchemaEnums:
+    def test_enum_moves_into_description_and_type_stays(self) -> None:
+        schema = {
+            "type": "object",
+            "properties": {
+                "intent": {
+                    "type": "string",
+                    "enum": ["ANSWER", "PLAN"],
+                    "description": "What to do",
+                },
+            },
+        }
+        out = fold_schema_enums(schema)
+        prop = out["properties"]["intent"]
+        assert "enum" not in prop
+        assert prop["type"] == "string"
+        assert prop["description"] == 'What to do Allowed values: "ANSWER", "PLAN".'
+        # The input is not mutated.
+        assert "enum" in schema["properties"]["intent"]
+
+    def test_const_is_folded_and_type_defaults_to_string(self) -> None:
+        out = fold_schema_enums({"const": "fixed"})
+        assert out == {"description": 'Allowed values: "fixed".', "type": "string"}
+
+    def test_nested_arrays_and_anyof_are_walked(self) -> None:
+        schema = {
+            "anyOf": [
+                {"type": "array", "items": {"type": "integer", "enum": [1, 2]}},
+                {"type": "null"},
+            ]
+        }
+        out = fold_schema_enums(schema)
+        items = out["anyOf"][0]["items"]
+        assert "enum" not in items and items["description"] == "Allowed values: 1, 2."
+        assert out["anyOf"][1] == {"type": "null"}
+
+    def test_non_dict_passthrough(self) -> None:
+        assert fold_schema_enums("x") == "x"
+        assert fold_schema_enums(None) is None
+
+    def test_unsupported_validation_keywords_are_dropped(self) -> None:
+        schema = {
+            "type": "object",
+            "title": "Goal",
+            "additionalProperties": False,
+            "properties": {
+                "n": {"type": "integer", "minimum": 0, "maximum": 9, "default": 1},
+                "s": {"type": "string", "pattern": "^a", "format": "uuid", "maxLength": 8},
+                "title": {"type": "string"},
+            },
+            "required": ["n"],
+        }
+        out = fold_schema_enums(schema)
+        assert out == {
+            "type": "object",
+            "properties": {
+                "n": {"type": "integer"},
+                "s": {"type": "string"},
+                "title": {"type": "string"},
+            },
+            "required": ["n"],
+        }
+
+
+class TestGeminiResponseFormatAndTools:
+    _RF = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "Goal",
+            "schema": {
+                "type": "object",
+                "properties": {"k": {"type": "string", "enum": ["a", "b"]}},
+            },
+        },
+    }
+
+    def test_gemini_response_format_loses_enum(self) -> None:
+        m = _model("google.gemini-2.5-flash")
+        out = m._munge_response_format_for_gemini({"response_format": self._RF})
+        prop = out["response_format"]["json_schema"]["schema"]["properties"]["k"]
+        assert "enum" not in prop and "Allowed values" in prop["description"]
+
+    def test_openai_response_format_is_untouched(self) -> None:
+        m = _model("openai.gpt-4.1")
+        kwargs = {"response_format": self._RF}
+        assert m._munge_response_format_for_gemini(kwargs) is kwargs
+
+    def test_gemini_tool_parameters_lose_enum_but_openai_keep_it(self) -> None:
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "set_mode",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"mode": {"type": "string", "enum": ["fast", "slow"]}},
+                    },
+                },
+            }
+        ]
+        gem = _model("google.gemini-2.5-flash")._sanitize_tools_for_oci(tools)
+        assert "enum" not in gem[0]["function"]["parameters"]["properties"]["mode"]
+        oai = _model("openai.gpt-4.1")._sanitize_tools_for_oci(tools)
+        assert oai[0]["function"]["parameters"]["properties"]["mode"]["enum"] == ["fast", "slow"]
