@@ -2443,6 +2443,9 @@ form.md-header__option {
   color: var(--tl-red);
 }
 .md-typeset .locus-chips li.is-partial::before { content: "◐"; }
+/* Provider-prefix chips: the string you type, no check mark. */
+.md-typeset .locus-chips--prefixes span::before { content: none; }
+.md-typeset .locus-chips--prefixes span { font-family: var(--locus-mono); }
 .md-typeset .locus-chips__vendor {
   margin: 0.6rem 0 0.1rem;
   font-size: 0.7rem;
