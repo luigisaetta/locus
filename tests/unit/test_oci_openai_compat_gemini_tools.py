@@ -135,7 +135,8 @@ class TestFoldSchemaEnums:
         }
         out = fold_schema_enums(schema)
         items = out["anyOf"][0]["items"]
-        assert "enum" not in items and items["description"] == "Allowed values: 1, 2."
+        assert "enum" not in items
+        assert items["description"] == "Allowed values: 1, 2."
         assert out["anyOf"][1] == {"type": "null"}
 
     def test_non_dict_passthrough(self) -> None:
@@ -182,7 +183,8 @@ class TestGeminiResponseFormatAndTools:
         m = _model("google.gemini-2.5-flash")
         out = m._munge_response_format_for_gemini({"response_format": self._RF})
         prop = out["response_format"]["json_schema"]["schema"]["properties"]["k"]
-        assert "enum" not in prop and "Allowed values" in prop["description"]
+        assert "enum" not in prop
+        assert "Allowed values" in prop["description"]
 
     def test_openai_response_format_is_untouched(self) -> None:
         m = _model("openai.gpt-4.1")
