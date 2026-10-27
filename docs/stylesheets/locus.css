@@ -2424,3 +2424,83 @@ form.md-header__option {
   .md-header__source.md-header__oci { margin-left: 0.15rem; padding: 0.15rem 0.25rem; }
   .md-header__source.md-header__github { margin-left: 0.2rem; }
 }
+
+/* ---------------------------------------------------------------------------
+   "Verified on OCI" — a stat strip (big numbers in the display face) and
+   model chips with a check mark. Both schemes read from the palette vars.
+   --------------------------------------------------------------------------- */
+.md-typeset .locus-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  margin: 1.25rem 0 1.5rem;
+}
+.md-typeset .locus-stat {
+  padding: 0.9rem 1rem 0.8rem;
+  border: 1px solid var(--tl-rule);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tl-red) 5%, var(--md-default-bg-color));
+}
+.md-typeset .locus-stat__n {
+  display: block;
+  font-family: var(--locus-display);
+  font-size: 2rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--locus-ink);
+}
+.md-typeset .locus-stat__l {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tl-red);
+}
+.md-typeset .locus-stat__s {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+  color: var(--locus-mute);
+}
+.md-typeset .locus-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.45rem;
+  margin: 0.5rem 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+.md-typeset .locus-chips span,
+.md-typeset .locus-chips li {
+  margin: 0;
+  padding: 0.22rem 0.65rem 0.22rem 0.5rem;
+  border: 1px solid var(--tl-rule);
+  border-radius: 999px;
+  font-family: var(--locus-mono);
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--locus-ink);
+  background: var(--md-default-bg-color);
+}
+.md-typeset .locus-chips span::before,
+.md-typeset .locus-chips li::before {
+  content: "✓";
+  margin-right: 0.4rem;
+  font-weight: 700;
+  color: var(--tl-red);
+}
+.md-typeset .locus-chips li.is-partial::before { content: "◐"; }
+.md-typeset .locus-chips__vendor {
+  margin: 0.6rem 0 0.1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--locus-mute);
+}
+@media (max-width: 36em) {
+  .md-typeset .locus-stat__n { font-size: 1.6rem; }
+}
