@@ -218,7 +218,7 @@ Catalogs differ per tenancy and region; re-run `scripts` from the
 [integration README](https://github.com/oracle/locus/tree/main/tests/integration)
 against yours.
 
-**Pass, completion and tool call (36)**
+#### Pass, completion and tool call (36)
 
 | Vendor | Models |
 |---|---|
@@ -227,19 +227,25 @@ against yours.
 | Meta | `llama-3.3-70b-instruct` |
 | Cohere | `command-a-03-2025` (SDK transport) |
 
-**Completion only (7).** `gpt-5.6-luna` / `-sol` / `-terra`, `gpt-6-astra` /
+#### Completion only (7)
+
+`gpt-5.6-luna` / `-sol` / `-terra`, `gpt-6-astra` /
 `-luna` / `-sol`, `gpt-6.1-sol`: tool calls need `/v1/responses`, which the
 region did not serve.
 
-**Not usable (39).** Retired by the service (`o1`, `o3-mini`, `o4-mini`,
+#### Not usable (39)
+
+Retired by the service (`o1`, `o3-mini`, `o4-mini`,
 `gpt-4.1-nano`, the `gpt-4o-search-preview` pair); not servable on-demand
 (`command-r*`, `command-a-vision`, `llama-3-70b`, `llama-3.1-*`,
 `gpt-5-codex`); Responses-only (`gpt-5.2-pro`, `gpt-5.4-pro`, `gpt-5.5-pro`,
 `gpt-5.3-codex`); audio-only (`gpt-audio`).
 
-**Embeddings.** `cohere.embed-v4.0` (1536), `openai.text-embedding-3-small`
+#### Embeddings and rerank
+
+`cohere.embed-v4.0` (1536), `openai.text-embedding-3-small`
 (1536), `openai.text-embedding-3-large` (3072) pass; the Cohere v3 family is
-retired. **Rerank.** `cohere.rerank-v4.0-fast` passes; `rerank-v3.5` and
+retired. `cohere.rerank-v4.0-fast` passes; `rerank-v3.5` and
 `rerank-v4.0-pro` are retired.
 
 Suites run on the same tenancy that day: 9,579 unit tests and 278 integration
