@@ -197,7 +197,7 @@ side-by-side.
   `openai.gpt-5.3-codex`, and tool calls on the `gpt-5.6` / `gpt-6`
   families are served only by `/openai/v1/responses`. `OCIResponsesModel`
   speaks that endpoint, but OCI does not expose it in every region yet
-  (eu-frankfurt-1 answered 404 on 27 October 2026). Where it is missing
+  (some regions return 404). Where it is missing
   those models complete plain prompts on V1 but cannot call tools.
 - **Cohere on V1.** OCI's `/openai/v1` returns `400 Unsupported OpenAI
   operation` for every `cohere.*` id, Command R and Command A alike. Use
@@ -208,24 +208,14 @@ side-by-side.
   `api_key=` to `OCIChatCompletionsModel` as a third auth mode (additive,
   non-breaking).
 
-## Verified on OCI (eu-frankfurt-1, 27 October 2026)
+## Model support on OCI
 
-The full catalog of the tenancy (82 chat models, 9 embedding models, 3
-rerankers) was driven through Locus with a session-token profile: one plain
-completion and one tool call (`add(17, 25)` must be called and answer 42)
-per chat model, one embedding per embedding model, one rerank per reranker.
-Catalogs differ per tenancy and region; re-run `scripts` from the
+What the OCI Generative AI catalog can do through the same `Agent`, grouped
+by capability. Catalogs differ per tenancy and region; the
 [integration README](https://github.com/oracle/locus/tree/main/tests/integration)
-against yours.
+has the scripts to check yours.
 
-The same two calls were also made through `openrouter:` on 16 frontier models the
-same day (Claude Sonnet / Opus / Haiku 5.5, Claude Fable 5.1, GPT-6.1 sol and terra,
-gpt-oss-120b, Gemini 4 argon, Gemini 3.8 flash, Grok 4.7, Llama 4 Maverick,
-DeepSeek V4.1 flash, Mistral Large 2512, Qwen 3.8 Max, Kimi K3.1 Pro, GLM 5.3
-Prime); all 16 passed, Mistral after provider 429s that Locus's retry policy
-absorbed.
-
-### Pass, completion and tool call (36)
+### Completion and tool calls
 
 | Vendor | Models |
 |---|---|
@@ -234,13 +224,13 @@ absorbed.
 | Meta | `llama-3.3-70b-instruct` |
 | Cohere | `command-a-03-2025` (SDK transport) |
 
-### Completion only (7)
+### Completion only
 
 `gpt-5.6-luna` / `-sol` / `-terra`, `gpt-6-astra` /
-`-luna` / `-sol`, `gpt-6.1-sol`: tool calls need `/v1/responses`, which the
-region did not serve.
+`-luna` / `-sol`, `gpt-6.1-sol`: tool calls need `/v1/responses`, which not
+every region serves.
 
-### Not usable (39)
+### Not usable
 
 Retired by the service (`o1`, `o3-mini`, `o4-mini`,
 `gpt-4.1-nano`, the `gpt-4o-search-preview` pair); not servable on-demand
@@ -254,11 +244,6 @@ Retired by the service (`o1`, `o3-mini`, `o4-mini`,
 (1536), `openai.text-embedding-3-large` (3072) pass; the Cohere v3 family is
 retired. `cohere.rerank-v4.0-fast` passes; `rerank-v3.5` and
 `rerank-v4.0-pro` are retired.
-
-Suites run on the same tenancy that day: 9,579 unit tests and 278 integration
-tests, 0 failed, with `OCI_MODEL_ID` set to `gpt-4.1`, `gpt-5.5`, `gpt-5.4`,
-`gpt-5.2`, `gpt-5.1`, `gpt-5-mini`, `gpt-oss-120b`, `gpt-4o-mini`,
-`gemini-2.5-flash`, `llama-3.3-70b-instruct` and `command-a-03-2025`.
 
 ## Testing
 

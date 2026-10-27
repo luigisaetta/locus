@@ -137,16 +137,7 @@ retriever = RAGRetriever(                            # Oracle Database 26ai
 agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 ```
 
-**Verified on 27 October 2026.** On a Frankfurt tenancy with a session-token profile, 36 OCI
-Generative AI models answered and called a tool through the same `Agent` (the gpt-5.5 / 5.4 /
-5.2 / 5.1 / 5 families, gpt-4.1, gpt-4o, gpt-oss, o3, Gemini 2.5 Pro / Flash / Flash-Lite,
-Llama 3.3 70B, Command A), plus embed-v4.0, text-embedding-3, and rerank-v4.0-fast. Through
-`openrouter:` the same test passed on 16 frontier models, among them Claude Sonnet, Opus and
-Haiku 5.5, Claude Fable 5.1, GPT-6.1, Gemini 4, Grok 4.7, Llama 4 Maverick, DeepSeek V4.1,
-Mistral Large, Qwen 3.8 Max, Kimi K3.1 and GLM 5.3. The full suites ran at zero failures: 9,579
-unit tests and 278 integration tests.
-
-→ [OCI GenAI models and the full matrix](https://locusagents.ai/how-to/oci-models/) ·
+→ [OCI GenAI models](https://locusagents.ai/how-to/oci-models/) ·
 [Dedicated AI Clusters](https://locusagents.ai/how-to/oci-dac/) ·
 [Notebook 01 — OCI transports](https://locusagents.ai/notebooks/notebook_01_oci_transports/) ·
 [Notebook 38 — Oracle 26ai RAG](https://locusagents.ai/notebooks/notebook_38_oracle_26ai_rag/) ·

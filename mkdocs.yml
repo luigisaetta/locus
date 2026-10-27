@@ -62,7 +62,6 @@ hooks:
 - hooks/build_metadata.py
 
 extra_css:
-- https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600..700&display=swap
 - stylesheets/locus.css
 
 extra_javascript:
@@ -164,7 +163,7 @@ nav:
     - A2A protocol: concepts/multi-agent/a2a.md
     - DeepAgent: concepts/deepagent.md
     - Production-readiness: concepts/multi-agent/production.md
-  - The harness — agents:
+  - Agents:
     - State: concepts/state.md
     - Prompts: concepts/prompts.md
     - Conversation management: concepts/conversation-management.md
@@ -174,19 +173,19 @@ nav:
     - Hooks: concepts/hooks.md
     - Retry strategies: concepts/retry.md
     - Errors: concepts/errors.md
-  - The harness — tools:
+  - Tools:
     - Idempotency: concepts/idempotency.md
     - Executors: concepts/executors.md
     - MCP: concepts/mcp.md
     - Multi-modal providers: concepts/multi-modal-providers.md
-  - The harness — memory and RAG:
+  - Memory and RAG:
     - Checkpointers & Store: concepts/checkpointers.md
     - Long-term memory manager: concepts/memory-manager.md
     - RAG: concepts/rag.md
-  - The harness — reasoning:
+  - Reasoning:
     - Reasoning patterns: concepts/reasoning.md
     - GSAR (typed grounding): concepts/gsar.md
-  - The harness — observability and serving:
+  - Observability and serving:
     - Observability: concepts/observability.md
     - Events: concepts/events.md
     - Streaming: concepts/streaming.md
@@ -194,7 +193,7 @@ nav:
     - Agent server: concepts/server.md
     - Testing: concepts/testing.md
     - Evaluation: concepts/evaluation.md
-  - The harness — skills and playbooks:
+  - Skills and playbooks:
     - Skills: concepts/skills.md
     - Playbooks: concepts/playbooks.md
   - Control layer:
