@@ -18,15 +18,17 @@ three-method adapter. :class:`SessionBackend` builds the whole
 - **Commands** run through ``exec`` with the workspace root as the working
   directory and standard input closed.
 - **Background commands** are a process group the sandbox owns, started with
-  ``setsid`` and recorded under a per-backend state directory: the group id,
+  ``setsid`` where it exists (util-linux) and under POSIX job control
+  (``set -m``) elsewhere, and recorded under a per-backend state directory: the group id,
   the output as a file, the exit status when it ends, and — for a command
   that takes input — a FIFO held open by a keeper process, so the command
   sees end of input only when the caller closes it. Every operation on one is
   a single ``exec``; nothing has to stay connected while it runs.
 
 The scripts need what any Linux image has: ``sh``, coreutils or busybox
-(``stat -c``, ``tail``, ``head``, ``base64``, ``timeout``, ``setsid``,
-``mkfifo``, ``sha256sum``), ``find``, ``grep`` and ``awk``. Search uses
+(``stat -c``, ``tail``, ``head``, ``base64``, ``timeout``, ``mkfifo``,
+``sha256sum``), ``find``, ``grep`` and ``awk``; ``setsid`` is used when
+present and is not required (macOS and the BSDs lack it). Search uses
 ripgrep when the sandbox has it, and ``grep -P`` (Perl-compatible, the
 closest to Python's ``re``) otherwise, falling back to ``grep -E``.
 
@@ -528,7 +530,10 @@ class SessionBackend(WorkspaceTextMixin):
         source = "$1/in" if not foreground else "/dev/null"
         # The job: its own session, so its process group is the unit that is
         # killed; its pid written first, its exit status written last and
-        # renamed into place, so a reader never sees half of it.
+        # renamed into place, so a reader never sees half of it. ``setsid`` is
+        # util-linux and absent on macOS and BSDs; there ``set -m`` (POSIX job
+        # control) gives every background job its own process group instead,
+        # which is all the kill path needs.
         job = (
             'echo $$ > "$1/pid"; cd "$2" || exit 1; '
             f'sh -c "$3" < "{source}" > "$1/out" 2>&1; '
@@ -541,12 +546,13 @@ class SessionBackend(WorkspaceTextMixin):
             # write.
             keeper = (
                 'mkfifo "$d/in" || exit 1; '
-                'setsid sh -c \'echo $$ > "$1/keeper"; exec tail -f /dev/null\' keeper "$d" '
+                '$setsid sh -c \'echo $$ > "$1/keeper"; exec tail -f /dev/null\' keeper "$d" '
                 '> "$d/in" 2>/dev/null < /dev/null & '
             )
         script = (
+            "if command -v setsid >/dev/null 2>&1; then setsid=setsid; else setsid=; set -m; fi; "
             f'd={d}; mkdir -p "$d" || exit 1; : > "$d/out"; {keeper}'
-            f'{envs}setsid sh -c {_q(job)} job "$d" {_q(workdir)} {_q(command)} '
+            f'{envs}$setsid sh -c {_q(job)} job "$d" {_q(workdir)} {_q(command)} '
             "> /dev/null 2>&1 < /dev/null & "
             'i=0; while [ ! -s "$d/pid" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done; '
             'cat "$d/pid" 2>/dev/null'

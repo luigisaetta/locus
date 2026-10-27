@@ -25,6 +25,12 @@ policy.
   `400 Invalid value at 'contents[n].parts[0].function_response.response'`.
   The V1 transport now wraps non-object tool results as `{"result": …}` for
   `google.*` models.
+- **Harness session backend on macOS and BSDs.** Background jobs were
+  started through `setsid`, a util-linux command that does not exist there,
+  so `start_background()` failed with "could not start … in the session
+  workspace" (and `tests/unit/harness` had one permanent failure on a Mac).
+  Without `setsid` the backend now enables POSIX job control (`set -m`), which
+  gives each job its own process group — the unit the kill path signals.
 - **`max_completion_tokens` for every GPT-5+ and o-series model.** The family
   check was a fixed prefix list (`o1`, `o3`, `gpt-5`), so `o4-mini`, the
   `gpt-5.6` and `gpt-6` generations still received `max_tokens` and OCI
