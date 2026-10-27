@@ -220,34 +220,47 @@ def _build_model():
 
     # OCI Generative AI — the Oracle-native path.
     if oci_config_available():
-        from locus.models import get_model
-
-        model_id = os.getenv("OCI_MODEL_ID", "meta.llama-3.3-70b-instruct")
-        profile = os.getenv("OCI_PROFILE", "DEFAULT")
-        region = os.getenv("OCI_REGION", "us-chicago-1")
-        compartment = os.getenv("OCI_COMPARTMENT") or os.getenv("OCI_COMPARTMENT_ID")
-        auth_type = os.getenv("OCI_AUTH_TYPE")
-        kwargs: dict[str, Any] = {"max_tokens": 2048}
-        if compartment:
-            kwargs["compartment_id"] = compartment
-        if model_id.lower().startswith(("cohere.", "ocid1.generativeaiendpoint.")):
-            # SDK transport (OCIModel) argument names.
-            kwargs["profile_name"] = profile
-            kwargs["service_endpoint"] = os.getenv(
-                "OCI_ENDPOINT",
-                f"https://inference.generativeai.{region}.oci.oraclecloud.com",
-            )
-        elif auth_type in ("instance_principal", "resource_principal", "security_token"):
-            kwargs["auth_type"] = auth_type
-            kwargs["region"] = region
-        else:
-            # V1 transport (OCIChatCompletionsModel): profile implies api-key
-            # or session auth from ~/.oci/config.
-            kwargs["profile"] = profile
-            kwargs["region"] = region
-        return get_model(f"oci:{model_id}", **kwargs)
+        return build_oci_model()
 
     return None
+
+
+def build_oci_model(max_tokens: int = 2048) -> Any:
+    """OCI Generative AI model from the ``OCI_*`` environment.
+
+    ``OCI_MODEL_ID`` (default ``meta.llama-3.3-70b-instruct``) goes through the
+    ``oci:`` string factory so the transport follows the model id;
+    ``OCI_PROFILE``, ``OCI_REGION``, ``OCI_COMPARTMENT`` / ``OCI_COMPARTMENT_ID``
+    and ``OCI_ENDPOINT`` are honoured, ``OCI_AUTH_TYPE`` selects a
+    principal-based mode instead of the profile. Shared by ``_build_model`` and
+    the live test files that parametrize over provider factories.
+    """
+    from locus.models import get_model
+
+    model_id = os.getenv("OCI_MODEL_ID", "meta.llama-3.3-70b-instruct")
+    profile = os.getenv("OCI_PROFILE", "DEFAULT")
+    region = os.getenv("OCI_REGION", "us-chicago-1")
+    compartment = os.getenv("OCI_COMPARTMENT") or os.getenv("OCI_COMPARTMENT_ID")
+    auth_type = os.getenv("OCI_AUTH_TYPE")
+    kwargs: dict[str, Any] = {"max_tokens": max_tokens}
+    if compartment:
+        kwargs["compartment_id"] = compartment
+    if model_id.lower().startswith(("cohere.", "ocid1.generativeaiendpoint.")):
+        # SDK transport (OCIModel) argument names.
+        kwargs["profile_name"] = profile
+        kwargs["service_endpoint"] = os.getenv(
+            "OCI_ENDPOINT",
+            f"https://inference.generativeai.{region}.oci.oraclecloud.com",
+        )
+    elif auth_type in ("instance_principal", "resource_principal", "security_token"):
+        kwargs["auth_type"] = auth_type
+        kwargs["region"] = region
+    else:
+        # V1 transport (OCIChatCompletionsModel): profile implies api-key
+        # or session auth from ~/.oci/config.
+        kwargs["profile"] = profile
+        kwargs["region"] = region
+    return get_model(f"oci:{model_id}", **kwargs)
 
 
 @lru_cache(maxsize=1)

@@ -52,8 +52,18 @@ def _build_openai_native():
     return OpenAIModel(model=os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini"))
 
 
+def _build_oci():
+    """OCI Generative AI when ``OCI_PROFILE`` is set (model from ``OCI_MODEL_ID``)."""
+    if not os.environ.get("OCI_PROFILE"):
+        return None
+    from tests.integration.conftest import build_oci_model
+
+    return build_oci_model()
+
+
 _FACTORIES = [
     pytest.param(_build_openai_native, id="openai-native-gpt-4o-mini"),
+    pytest.param(_build_oci, id="oci-genai"),
 ]
 
 
