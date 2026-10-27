@@ -118,7 +118,7 @@ the same backends. Pick the shape; the agents don't change.
 
     ---
     Nodes, edges, reducers, `Send` fan-out, interrupts for a human, and
-    checkpointed state, LangGraph-style.
+    checkpointed state.
 
 - :material-forum:{ .lg .middle } **[Debate and critic loops](notebooks/notebook_26_debate_with_judge.md)**
 

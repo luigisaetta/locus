@@ -149,7 +149,6 @@ nav:
     - Agent loop: concepts/agent-loop.md
     - Tools: concepts/tools.md
     - Model providers: concepts/models.md
-    - Coming from LangGraph or Strands: concepts/compare.md
     - Capabilities: capabilities.md
   - Multi-agent shapes:
     - Overview and the eight protocols: concepts/multi-agent.md

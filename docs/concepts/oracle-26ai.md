@@ -8,7 +8,7 @@ description: "Every Oracle Database 26ai primitive in Locus — vector search, i
 Locus treats Oracle Database 26ai as the place where an agent's state lives:
 vectors for retrieval, threads for continuity, memories for what it has
 learned, in the same database as the data it acts on. Each primitive is a
-first-class Locus class on the `oracledb` driver, with no LangChain layer in
+first-class Locus class on the `oracledb` driver, with no adapter layer in
 between, and it works with the same `Agent` as everything else.
 
 ```bash
