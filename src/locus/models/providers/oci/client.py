@@ -177,12 +177,28 @@ class OCIClient:
         if auth_type == OCIAuthType.SECURITY_TOKEN:
             return self._create_security_token_client()
 
+        # ``oci session authenticate`` writes profiles with ``security_token_file``
+        # and no ``user``; API-key signing cannot work for them and the SDK
+        # fails with ``InvalidConfig {'user': 'missing'}``. Detect the profile
+        # shape under the default auth type, as the V1 transport does.
+        if self._profile_is_session_token():
+            return self._create_security_token_client()
+
         # Default: API key auth
         return GenerativeAiInferenceClient(
             config=self.oci_config,
             service_endpoint=self.config.service_endpoint,
             timeout=(self.config.connect_timeout, self.config.read_timeout),
         )
+
+    def _profile_is_session_token(self) -> bool:
+        """Whether the configured profile is a session-token profile.
+
+        Such profiles carry ``security_token_file`` and no ``user`` (API-key
+        profiles always have one), so the shape alone decides.
+        """
+        cfg = self.oci_config
+        return bool(cfg.get("security_token_file")) and not cfg.get("user")
 
     def _create_security_token_client(self) -> GenerativeAiInferenceClient:
         """Create client with security token (session) authentication."""

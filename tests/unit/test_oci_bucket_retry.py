@@ -100,3 +100,72 @@ def test_list_objects_passes_retry_strategy(backend_with_explicit_retry):
     mock_client.list_objects.assert_called_once()
     kwargs = mock_client.list_objects.call_args.kwargs
     assert kwargs["retry_strategy"] is sentinel
+
+
+# ---------------------------------------------------------------------------
+# Session-token profiles under the default auth type
+# ---------------------------------------------------------------------------
+
+
+def _stub_object_storage(monkeypatch: pytest.MonkeyPatch, config: dict, tmp_path) -> dict:
+    """Stub the parts of ``oci`` that ``_get_client`` touches and record calls."""
+    probes: dict = {}
+    token_file = tmp_path / "token"
+    token_file.write_text("SESSION_TOKEN")
+    config = (
+        {**config, "security_token_file": str(token_file)}
+        if "security_token_file" in config
+        else config
+    )
+    monkeypatch.setattr(oci.config, "from_file", lambda path, profile: dict(config))
+    monkeypatch.setattr(oci.signer, "load_private_key_from_file", lambda path: "PRIVATE_KEY")
+
+    def signer(*, token, private_key):  # noqa: ANN001
+        probes["token"] = token
+        return "SIGNER"
+
+    monkeypatch.setattr(oci.auth.signers, "SecurityTokenSigner", signer)
+
+    def client(config=None, signer=None):  # noqa: ANN001
+        probes["client_kwargs"] = {"config": config, "signer": signer}
+        return MagicMock(name="object_storage_client")
+
+    monkeypatch.setattr(oci.object_storage, "ObjectStorageClient", client)
+    return probes
+
+
+def test_session_profile_signs_with_token_under_default_auth(monkeypatch, tmp_path):
+    probes = _stub_object_storage(
+        monkeypatch,
+        {
+            "tenancy": "ocid1.tenancy.oc1..t",
+            "region": "eu-frankfurt-1",
+            "security_token_file": "x",
+            "key_file": "k.pem",
+        },
+        tmp_path,
+    )
+    backend = OCIBucketBackend(bucket_name="b", namespace="ns", profile_name="SESSION")
+    backend._get_client()
+    assert probes["token"] == "SESSION_TOKEN"  # noqa: S105 — test fixture value
+    assert probes["client_kwargs"]["signer"] == "SIGNER"
+
+
+def test_api_key_profile_keeps_plain_client(monkeypatch, tmp_path):
+    probes = _stub_object_storage(
+        monkeypatch,
+        {
+            "tenancy": "ocid1.tenancy.oc1..t",
+            "user": "ocid1.user.oc1..u",
+            "region": "eu-frankfurt-1",
+            "key_file": "k.pem",
+        },
+        tmp_path,
+    )
+    backend = OCIBucketBackend(
+        bucket_name="b", namespace="ns", profile_name="API", region="eu-paris-1"
+    )
+    backend._get_client()
+    assert "token" not in probes
+    assert probes["client_kwargs"]["signer"] is None
+    assert probes["client_kwargs"]["config"]["region"] == "eu-paris-1"

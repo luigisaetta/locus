@@ -47,6 +47,7 @@ Example::
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -118,6 +119,104 @@ def _load_profile_config(profile: str, config_file: str) -> dict[str, Any]:
     cfg_path = str(Path(config_file).expanduser())
     cfg: dict[str, Any] = oci_config_module.from_file(cfg_path, profile_name=profile)
     return cfg
+
+
+#: JSON Schema keywords OCI's Gemini translation rejects outright
+#: (``400 Unsupported JSON Schema feature for Gemini: <keyword>``). They are
+#: validation metadata; Locus validates structured output with Pydantic after
+#: the fact, so dropping them for the request loses nothing.
+_GEMINI_UNSUPPORTED_SCHEMA_KEYS: frozenset[str] = frozenset(
+    {
+        "additionalProperties",
+        "title",
+        "$schema",
+        "$id",
+        "default",
+        "examples",
+        "pattern",
+        "format",
+        "minLength",
+        "maxLength",
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "minItems",
+        "maxItems",
+        "uniqueItems",
+        "minProperties",
+        "maxProperties",
+    }
+)
+
+
+def fold_schema_enums(schema: Any) -> Any:
+    """Return a copy of a JSON schema in the subset OCI's Gemini translation accepts.
+
+    The translation rejects ``enum`` and ``const`` (``400 Unsupported JSON
+    Schema feature for Gemini: enum``) and a set of validation keywords
+    (``additionalProperties``, ``title``, ``pattern``, ``minimum``, …; see
+    ``_GEMINI_UNSUPPORTED_SCHEMA_KEYS``). The allowed values are kept where
+    the model still sees them — appended to the property's ``description``
+    as ``Allowed values: "a", "b".`` — and the ``type`` stays, so structured
+    output and tool schemas keep working; the validation keywords are
+    dropped. Nested objects, arrays, ``anyOf`` and friends are walked;
+    non-dict input is returned unchanged.
+    """
+    if isinstance(schema, list):
+        return [fold_schema_enums(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    out: dict[str, Any] = {}
+    values: list[Any] | None = None
+    for key, value in schema.items():
+        if key == "enum" and isinstance(value, list):
+            values = list(value)
+            continue
+        if key == "const":
+            values = [value]
+            continue
+        if key == "properties" and isinstance(value, dict):
+            out[key] = {name: fold_schema_enums(sub) for name, sub in value.items()}
+            continue
+        if key in _GEMINI_UNSUPPORTED_SCHEMA_KEYS:
+            continue
+        out[key] = fold_schema_enums(value)
+    if values is not None:
+        allowed = "Allowed values: " + ", ".join(json.dumps(v) for v in values) + "."
+        desc = str(out.get("description") or "").rstrip()
+        out["description"] = f"{desc} {allowed}".strip() if desc else allowed
+        out.setdefault("type", "string")
+    return out
+
+
+def wrap_tool_results_as_objects(messages: list[Message]) -> list[Message]:
+    """Make every tool result a JSON object, as Gemini on OCI requires.
+
+    OCI maps a ``tool`` message onto Gemini's ``function_response.response``,
+    a protobuf ``Struct``; a bare string or number is rejected with ``400
+    Invalid value at 'contents[n].parts[0].function_response.response'``.
+    Results that already are JSON objects pass through unchanged; anything
+    else becomes ``{"result": <value>}`` — the parsed value when the text is
+    valid JSON, the raw text otherwise. Other roles are untouched.
+    """
+    from locus.core.messages import Role
+
+    out: list[Message] = []
+    for msg in messages:
+        if msg.role != Role.TOOL or msg.content is None:
+            out.append(msg)
+            continue
+        try:
+            parsed: Any = json.loads(msg.content)
+        except ValueError:
+            parsed = msg.content
+        if isinstance(parsed, dict):
+            out.append(msg)
+            continue
+        out.append(msg.model_copy(update={"content": json.dumps({"result": parsed})}))
+    return out
 
 
 def fold_leading_system_into_first_user(messages: list[Message]) -> list[Message]:
@@ -433,7 +532,7 @@ class OCIChatCompletionsModel(OpenAIModel):
             return kwargs
         from locus.core.structured import inline_schema_refs
 
-        schema = inline_schema_refs(rf["json_schema"].get("schema", {}))
+        schema = fold_schema_enums(inline_schema_refs(rf["json_schema"].get("schema", {})))
         rf = {**rf, "json_schema": {**rf["json_schema"], "schema": schema}}
         return {**kwargs, "response_format": rf}
 
@@ -462,18 +561,23 @@ class OCIChatCompletionsModel(OpenAIModel):
             return tools
         from locus.core.structured import sanitize_oci_tool_schema
 
+        gemini = self._requires_inlined_schema_refs
         out: list[dict[str, Any]] = []
         for tool in tools:
             fn = tool.get("function") if isinstance(tool, dict) else None
             if not isinstance(fn, dict) or "parameters" not in fn:
                 out.append(tool)
                 continue
+            parameters = sanitize_oci_tool_schema(fn["parameters"])
+            if gemini:
+                # Gemini's translation also rejects ``enum`` in tool parameters.
+                parameters = fold_schema_enums(parameters)
             out.append(
                 {
                     **tool,
                     "function": {
                         **fn,
-                        "parameters": sanitize_oci_tool_schema(fn["parameters"]),
+                        "parameters": parameters,
                     },
                 }
             )
@@ -492,8 +596,12 @@ class OCIChatCompletionsModel(OpenAIModel):
         vendors accept a leading system message, and Llama without tools
         does too, so the rewrite is scoped to exactly that case.
         """
-        if tools and (self.config.model or "").lower().startswith("meta.llama"):
-            return fold_leading_system_into_first_user(messages)
+        model = (self.config.model or "").lower()
+        if tools and model.startswith("meta.llama"):
+            messages = fold_leading_system_into_first_user(messages)
+        if model.startswith("google."):
+            # Gemini: tool results must be JSON objects (see the helper).
+            messages = wrap_tool_results_as_objects(messages)
         return messages
 
     async def complete(

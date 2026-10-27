@@ -148,8 +148,10 @@ class TestCohereProvider:
         messages = [Message(role=Role.SYSTEM, content="System prompt")]
         result = provider.convert_messages(messages)
 
-        assert result["_current_message"] == ""
-        assert len(result["_chat_history"]) == 1
+        # A conversation that ends in a system message sends it as the current
+        # turn — Cohere rejects an empty ``message`` — so history is empty here.
+        assert result["_current_message"] == "System prompt"
+        assert len(result["_chat_history"]) == 0
         provider.oci_system_message.assert_called_with(message="System prompt")
 
     def test_convert_messages_user_last(self, provider):
@@ -362,3 +364,70 @@ class TestCohereProvider:
         content, tool_calls, is_done = provider.parse_stream_chunk(event_data)
 
         assert tool_calls[0].arguments == {}
+
+
+class TestTrailingSystemMessages:
+    """Cohere needs a non-empty ``message``; Locus often ends a turn with a
+    system instruction (planning prompt, replan guidance)."""
+
+    @pytest.fixture
+    def provider(self):
+        with (
+            patch.dict(
+                "sys.modules",
+                {"oci": MagicMock(), "oci.generative_ai_inference": MagicMock()},
+            ),
+            patch("oci.generative_ai_inference.models", MagicMock()),
+        ):
+            from locus.models.providers.oci.models.cohere import CohereProvider
+
+            return CohereProvider()
+
+    def test_trailing_system_becomes_the_current_message(self, provider):
+        messages = [
+            Message.system("You are a researcher."),
+            Message.user("Research exercise."),
+            Message.system("[Planning Phase]\nMake a plan first."),
+        ]
+        result = provider.convert_messages(messages)
+        assert result["_current_message"] == "[Planning Phase]\nMake a plan first."
+        # The preamble system message and the user turn stay in history; the
+        # trailing system message was lifted out of it.
+        assert len(result["_chat_history"]) == 2
+        assert result["_tool_results"] is None
+
+    def test_several_trailing_system_messages_are_joined_in_order(self, provider):
+        messages = [
+            Message.user("Go."),
+            Message.system("First note."),
+            Message.system("Second note."),
+        ]
+        result = provider.convert_messages(messages)
+        assert result["_current_message"] == "First note.\n\nSecond note."
+        assert len(result["_chat_history"]) == 1
+
+    def test_user_last_is_unchanged(self, provider):
+        messages = [Message.system("Preamble."), Message.user("Hello")]
+        result = provider.convert_messages(messages)
+        assert result["_current_message"] == "Hello"
+        assert len(result["_chat_history"]) == 1
+
+    def test_pending_tool_results_do_not_need_a_message(self, provider):
+        messages = [
+            Message.user("What is 2+2?"),
+            Message(
+                role=Role.ASSISTANT,
+                content="",
+                tool_calls=[ToolCall(id="c1", name="add", arguments={"a": 2, "b": 2})],
+            ),
+            Message(role=Role.TOOL, content="4", tool_call_id="c1", name="add"),
+        ]
+        result = provider.convert_messages(messages)
+        assert result["_current_message"] == ""
+        assert result["_tool_results"] is not None
+
+    def test_assistant_last_asks_to_continue(self, provider):
+        messages = [Message.user("Plan it."), Message(role=Role.ASSISTANT, content="1. Step one")]
+        result = provider.convert_messages(messages)
+        assert result["_current_message"] == "Continue."
+        assert len(result["_chat_history"]) == 2

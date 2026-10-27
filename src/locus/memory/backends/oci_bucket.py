@@ -180,7 +180,18 @@ class OCIBucketBackend(BaseCheckpointer):
             oci_config = oci.config.from_file(str(config_file), cfg.profile_name)
             if cfg.region:
                 oci_config["region"] = cfg.region
-            self._client = oci.object_storage.ObjectStorageClient(oci_config)
+            if oci_config.get("security_token_file") and not oci_config.get("user"):
+                # Session-token profile (``oci session authenticate``): API-key
+                # signing cannot work for it, so sign with the session token.
+                with open(Path(oci_config["security_token_file"]).expanduser()) as f:
+                    token = f.read().strip()
+                private_key = oci.signer.load_private_key_from_file(oci_config.get("key_file"))
+                signer = oci.auth.signers.SecurityTokenSigner(token=token, private_key=private_key)
+                self._client = oci.object_storage.ObjectStorageClient(
+                    config=oci_config, signer=signer
+                )
+            else:
+                self._client = oci.object_storage.ObjectStorageClient(oci_config)
 
         return self._client
 

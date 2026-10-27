@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -422,6 +423,12 @@ _RESPONSES_RESERVED_PARAMS = frozenset(
 )
 
 _RESPONSES_PARAMS = _responses_param_names()
+
+#: Families that take ``max_completion_tokens`` instead of ``max_tokens``:
+#: the o-series (``o1``…``o9``, with or without a suffix) and ``gpt-5`` and
+#: every later generation (``gpt-5.6-sol``, ``gpt-6``, ``gpt-6.1-sol``,
+#: ``gpt-10``…). ``gpt-4o`` / ``gpt-4.1`` stay on ``max_tokens``.
+_MAX_COMPLETION_TOKENS_FAMILY = re.compile(r"^(?:o[1-9]\d*|gpt-(?:[5-9]|[1-9]\d+))(?:[-.]|$)")
 
 #: Model families served only by the Responses API. GPT-5.6 rejects function
 #: tools on chat-completions whenever reasoning is active — the API 400s with
@@ -921,15 +928,19 @@ class OpenAIModel(BaseModel):
     def _uses_max_completion_tokens(model: str) -> bool:
         """Whether the model requires ``max_completion_tokens`` over ``max_tokens``.
 
-        Detects the o1 / o3 / gpt-5* families. Tolerates a leading
-        purely-alphabetic namespace segment so namespaced model ids
-        (``openai.gpt-5``, ``vendor.model-…``) are treated the same as
+        Detects the o-series (``o1``, ``o3``, ``o4-mini``, …) and every
+        ``gpt-5`` and later generation (``gpt-5.6-sol``, ``gpt-6-astra``,
+        ``gpt-6.1-sol``) — OCI answers ``400 Unsupported parameter:
+        'max_tokens' … Use 'max_completion_tokens' instead`` for the newer
+        ones, so a fixed prefix list goes stale with each release. Tolerates
+        a leading purely-alphabetic namespace segment so namespaced model
+        ids (``openai.gpt-5``, ``vendor.model-…``) are treated the same as
         native OpenAI names (``gpt-5.1-chat-latest``). Native ids start
         with a token containing digits/hyphens (``gpt-5``, ``o1-…``) so
         the namespace strip is a no-op for them.
         """
         name = _strip_model_namespace(model.lower())
-        return any(name.startswith(prefix) for prefix in ("o1", "o3", "gpt-5"))
+        return _MAX_COMPLETION_TOKENS_FAMILY.match(name) is not None
 
     @staticmethod
     def _rejects_sampling_params(model: str) -> bool:

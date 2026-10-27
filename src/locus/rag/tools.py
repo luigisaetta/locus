@@ -38,7 +38,7 @@ def create_rag_tool(
     name: str = "search_knowledge",
     description: str | None = None,
     limit: int = 5,
-    threshold: float | None = 0.5,
+    threshold: float | None = None,
 ) -> Any:
     """
     Create a RAG search tool for agent use.
@@ -48,7 +48,11 @@ def create_rag_tool(
         name: Tool name
         description: Tool description
         limit: Default number of results
-        threshold: Default similarity threshold
+        threshold: Default minimum similarity score; ``None`` (the default)
+            ranks by similarity only. Absolute scores differ per embedder —
+            Cohere embed-v4 puts a clearly relevant match near 0.4 where
+            OpenAI text-embedding-3 puts it near 0.7 — so a fixed cut-off
+            belongs to the deployment, not the library.
 
     Returns:
         Decorated tool function

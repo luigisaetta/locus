@@ -10,6 +10,57 @@ policy.
 
 ### Fixed
 
+- **Session-token OCI profiles work on every OCI client, not only the V1
+  transport.** `oci session authenticate` writes a profile with
+  `security_token_file` and no `user`; `OCIModel` (the Cohere / SDK
+  transport), `OCIEmbeddings`, `OCICohereReranker` and `OCIBucketBackend`
+  defaulted to API-key signing for it and failed with
+  `InvalidConfig {'user': 'missing'}` unless `auth_type="security_token"` was
+  passed. They now detect the profile shape the way `OCIChatCompletionsModel`
+  always did. Found running the suites against a Frankfurt tenancy with a
+  session profile. `OCIEmbeddings` also gains the `close()` the other
+  embedders have, so a store can shut any provider down the same way.
+- **Gemini tool calls on OCI.** OCI maps a tool message onto Gemini's
+  `function_response.response`, which must be a JSON object; a tool that
+  returned a number or a plain string made the next request fail with
+  `400 Invalid value at 'contents[n].parts[0].function_response.response'`.
+  The V1 transport now wraps non-object tool results as `{"result": …}` for
+  `google.*` models.
+- **RAG tool returned nothing on OCI embeddings.** `create_rag_tool()` /
+  `RAGRetriever.as_tool()` applied a fixed similarity threshold of 0.5, which
+  is calibrated for OpenAI embeddings; with Cohere embed-v4 on OCI a clearly
+  relevant document scores about 0.4, so the agent's search tool came back
+  empty. The default is now `None` (rank by similarity, bounded by `limit`,
+  scores still returned) and `as_tool()` accepts `limit=` / `threshold=` so a
+  deployment can set its own cut-off.
+- **Gemini on OCI rejected schemas with `enum` and validation keywords.**
+  OCI's Gemini translation answers `400 Unsupported JSON Schema feature for
+  Gemini: enum` (also `additionalProperties`, `title`, `pattern`, `minimum`,
+  …) for `response_format` schemas and tool parameters — the cognitive
+  router's strict `GoalFrame` schema has both, so every dispatch failed on
+  `google.*` models. The V1 transport now folds `enum` / `const` values into
+  the property's description (`Allowed values: "a", "b".`), keeps the type,
+  and drops the validation keywords for Gemini; other vendors receive the
+  schema unchanged.
+- **Cohere on OCI rejected turns that end with an instruction.** The SDK
+  transport sends the last user message as Cohere's `message` and everything
+  before it as history, so a conversation ending in a system message — the
+  planning prompt, grounding replan guidance, the "[Replan]" nudge — went out
+  with an empty `message` and OCI answered `400 message must be at least 1
+  token long or tool results must be specified`. Trailing system messages are
+  now sent as the current turn (a turn ending on an assistant message asks the
+  model to continue).
+- **Harness session backend on macOS and BSDs.** Background jobs were
+  started through `setsid`, a util-linux command that does not exist there,
+  so `start_background()` failed with "could not start … in the session
+  workspace" (and `tests/unit/harness` had one permanent failure on a Mac).
+  Without `setsid` the backend now enables POSIX job control (`set -m`), which
+  gives each job its own process group — the unit the kill path signals.
+- **`max_completion_tokens` for every GPT-5+ and o-series model.** The family
+  check was a fixed prefix list (`o1`, `o3`, `gpt-5`), so `o4-mini`, the
+  `gpt-5.6` and `gpt-6` generations still received `max_tokens` and OCI
+  answered `400 Unsupported parameter: 'max_tokens'`. The check is now a
+  pattern over the generation number.
 - **Tool arguments are coerced to the declared parameter types.** Models do
   not reliably honour the JSON types in a tool schema: Llama on OCI sends
   `{"a": "17", "b": "25"}` for two `int` parameters, and `add("17", "25")`
