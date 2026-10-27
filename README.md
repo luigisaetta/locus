@@ -33,7 +33,6 @@
   <a href="https://locusagents.ai/concepts/multi-agent/">Multi-agent shapes</a> ·
   <a href="https://locusagents.ai/how-to/oci-models/">OCI GenAI models</a> ·
   <a href="https://locusagents.ai/concepts/control-layer/">The admission gate</a> ·
-  <a href="https://locusagents.ai/concepts/compare/">How Locus compares</a> ·
   <a href="https://locusagents.ai/notebooks/">Notebooks</a>
 </p>
 
@@ -191,22 +190,6 @@ full runtime.
 → [How the admission gate works](https://locusagents.ai/concepts/control-layer/) ·
 [First controlled action](https://locusagents.ai/how-to/first-controlled-action/) ·
 [Notebook 71 — Payment refund gate](https://locusagents.ai/notebooks/notebook_71_payment_refund_gate/)
-
----
-
-## How Locus compares
-
-| | Locus | LangGraph | Strands Agents |
-|---|---|---|---|
-| Agent loop with tools | `Agent` + `@tool` | via LangChain | `Agent` + `@tool` |
-| Graphs with state, reducers, interrupts | `StateGraph`, functional API | `StateGraph` | graph tool |
-| Pipelines, orchestrator, swarm, handoff, debate | built in | compose yourself | graph, swarm, workflow |
-| Cognitive router: task to protocol | built in | — | — |
-| Admission gate and signed audit trail | `admit()`, `governed_agent()` | — | — |
-| Grounding of every claim | GSAR | — | — |
-| OCI Generative AI, DAC, Oracle Database 26ai | native | community packages | — |
-
-As documented by each project in October 2026. → [Full comparison](https://locusagents.ai/concepts/compare/)
 
 ---
 
