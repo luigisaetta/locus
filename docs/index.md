@@ -15,7 +15,7 @@ description: "Oracle Generative AI Agentic Harness. Locus is a Python agent harn
 One `Agent` class, eight ways to combine agents, Oracle Cloud underneath, and the runtime around the model: tools, memory, RAG, observability, guardrails, an admission gate.
 
 - **Eight multi-agent shapes.** Pipelines, fan-out, orchestrator, swarm, handoff, graphs, debate, A2A. A cognitive router picks one from the task.
-- **Oracle Cloud, native.** OCI Generative AI on day 0, 36 models verified with tool calls, Dedicated AI Clusters, and Oracle Database 26ai for vectors, threads and memory.
+- **Oracle Cloud, native.** OCI Generative AI on day 0 with 36 models verified, Dedicated AI Clusters, Oracle Database 26ai for vectors, threads and memory; 16 more frontier models verified through OpenRouter.
 - **Production from the first line.** Durable threads, typed events, grounded answers, and `admit()` in front of every consequential action.
 
 [Quickstart](how-to/quickstart.md){ .md-button .md-button--primary }
@@ -205,14 +205,17 @@ same `Agent`, same events, same admission gate.
 </div>
 
 <div class="locus-stats" markdown>
-<div class="locus-stat" markdown><span class="locus-stat__n">36</span><span class="locus-stat__l">OCI models</span><span class="locus-stat__s">completion + tool call</span></div>
+<div class="locus-stat" markdown><span class="locus-stat__n">52</span><span class="locus-stat__l">models verified</span><span class="locus-stat__s">36 on OCI · 16 via OpenRouter</span></div>
 <div class="locus-stat" markdown><span class="locus-stat__n">9,579</span><span class="locus-stat__l">unit tests</span><span class="locus-stat__s">0 failed</span></div>
 <div class="locus-stat" markdown><span class="locus-stat__n">278</span><span class="locus-stat__l">integration tests</span><span class="locus-stat__s">0 failed, live on OCI</span></div>
 <div class="locus-stat" markdown><span class="locus-stat__n">20</span><span class="locus-stat__l">provider prefixes</span><span class="locus-stat__s">one model string</span></div>
 </div>
 
-<p class="locus-chips__vendor">Verified with tool calls on 27 October 2026, eu-frankfurt-1</p>
+<p class="locus-chips__vendor">On OCI Generative AI, eu-frankfurt-1, 27 October 2026</p>
 <div class="locus-chips"><span>gpt-5.5</span><span>gpt-5.4</span><span>gpt-5.2</span><span>gpt-5.1</span><span>gpt-5</span><span>gpt-4.1</span><span>gpt-4o</span><span>gpt-oss-120b</span><span>o3</span><span>gemini-2.5-pro</span><span>gemini-2.5-flash</span><span>llama-3.3-70b</span><span>command-a-03-2025</span><span>embed-v4.0</span><span>rerank-v4.0-fast</span><span>text-embedding-3-large</span></div>
+
+<p class="locus-chips__vendor">Through OpenRouter, same Agent, same tool test</p>
+<div class="locus-chips"><span>claude-sonnet-5.5</span><span>claude-opus-5.5</span><span>claude-haiku-5.5</span><span>claude-fable-5.1</span><span>gpt-6.1-sol</span><span>gpt-6.1-terra</span><span>gemini-4-argon</span><span>gemini-3.8-flash</span><span>grok-4.7</span><span>llama-4-maverick</span><span>deepseek-v4.1-flash</span><span>mistral-large-2512</span><span>qwen3.8-max</span><span>kimi-k3.1-pro</span><span>glm-5.3-prime</span><span>gpt-oss-120b</span></div>
 
 ```python
 from locus.agent import Agent
