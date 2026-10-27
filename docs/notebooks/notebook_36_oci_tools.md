@@ -1,4 +1,4 @@
-# Notebook 80: Drive the entire OCI control plane from natural language — `use_oci` + `describe_oci`
+# Notebook 36: Drive the entire OCI control plane from natural language — `use_oci` + `describe_oci`
 
 Locus ships two built-in tools that, together, expose every OCI Python
 SDK operation to an agent without per-service plumbing:
