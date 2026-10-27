@@ -33,6 +33,14 @@ policy.
   empty. The default is now `None` (rank by similarity, bounded by `limit`,
   scores still returned) and `as_tool()` accepts `limit=` / `threshold=` so a
   deployment can set its own cut-off.
+- **Cohere on OCI rejected turns that end with an instruction.** The SDK
+  transport sends the last user message as Cohere's `message` and everything
+  before it as history, so a conversation ending in a system message — the
+  planning prompt, grounding replan guidance, the "[Replan]" nudge — went out
+  with an empty `message` and OCI answered `400 message must be at least 1
+  token long or tool results must be specified`. Trailing system messages are
+  now sent as the current turn (a turn ending on an assistant message asks the
+  model to continue).
 - **Harness session backend on macOS and BSDs.** Background jobs were
   started through `setsid`, a util-linux command that does not exist there,
   so `start_background()` failed with "could not start … in the session
