@@ -81,8 +81,9 @@ Swap `oci:openai.gpt-5` for `openai:gpt-4o`, `anthropic:claude-sonnet-4-6` or
 in `~/.oci/config`, every notebook runs against OCI Generative AI with no further
 setup.
 
-[Quickstart →](how-to/quickstart.md) ·
-[Notebook 06 — basic agent →](notebooks/notebook_06_basic_agent.md)
+[The Agent →](concepts/agent.md) ·
+[Notebook 06 — Basic agent →](notebooks/notebook_06_basic_agent.md) ·
+[Notebook 07 — Agent with tools →](notebooks/notebook_07_agent_with_tools.md)
 
 ## Try to break it
 
@@ -101,14 +102,15 @@ python -m locus.rogue
 FINAL SCORE  ·  dangerous attempts: 1  ·  💥 BREACHES: 0  ·  audit chain intact: ✓
 ```
 
-[The admission gate →](concepts/security.md) ·
-[Control an action in five minutes →](how-to/first-controlled-action.md)
+[How the admission gate works →](concepts/control-layer.md) ·
+[First controlled action →](how-to/first-controlled-action.md) ·
+[Notebook 83 — Payment refund gate →](notebooks/notebook_83_payment_refund_gate.md)
 
 ## What Locus gives you
 
 <div class="grid cards locus-feature-cards" markdown>
 
-- :material-shield-lock:{ .lg .middle } **[Admission gate](concepts/security.md)**
+- :material-shield-lock:{ .lg .middle } **[Admission gate](concepts/control-layer.md)**
 
     ---
     `admit()` runs a consequential action only if your `ControlPolicy` allows:
@@ -121,13 +123,13 @@ FINAL SCORE  ·  dangerous attempts: 1  ·  💥 BREACHES: 0  ·  audit chain in
     transports with automatic routing. Auth is your OCI profile or instance
     principals.
 
-- :material-database:{ .lg .middle } **[Oracle Database 26ai](concepts/checkpointers.md)**
+- :material-database:{ .lg .middle } **[Oracle Database 26ai](notebooks/index.md#oracle-cloud-database-26ai)**
 
     ---
     Native vector RAG, durable threads, versioned checkpoints and long-term
     memory, in the database you already run.
 
-- :material-graph:{ .lg .middle } **[Multi-agent shapes](concepts/multi-agent.md)**
+- :material-graph:{ .lg .middle } **[Multi-agent workflows](concepts/multi-agent.md)**
 
     ---
     Seven in-process patterns plus A2A, one `Agent` class. Describe the task
@@ -158,7 +160,8 @@ print(result.text)          # findings from 3 parallel probes
 direct answer · pipeline · fan-out · debate · code + test · approval gate ·
 A2A · handoff. The model classifies the task; routing is deterministic.
 
-[The eight shapes →](concepts/multi-agent.md#the-eight-shapes)
+[The eight shapes →](concepts/multi-agent.md#the-eight-shapes) ·
+[Notebook 58 — Cognitive router →](notebooks/notebook_58_cognitive_router.md)
 
 ## Built for Oracle Cloud
 
@@ -174,9 +177,10 @@ Agent(model="oci:cohere.command-r-plus")             # SDK transport, auto-route
 Agent(model="oci:ocid1.generativeaiendpoint.oc1...") # your Dedicated AI Cluster
 ```
 
+[OCI Generative AI →](concepts/providers/oci.md) ·
 [OCI GenAI models →](how-to/oci-models.md) ·
 [Dedicated AI Clusters →](how-to/oci-dac.md) ·
-[OCI Responses API →](concepts/oci-responses.md)
+[Notebook 01 — OCI transports →](notebooks/notebook_01_oci_transports.md)
 
 ## Backed by Oracle Database 26ai
 
@@ -197,20 +201,16 @@ await retriever.add_documents(corpus)
 hits = await retriever.retrieve("…", limit=5)
 ```
 
-[Notebook 41 — RAG →](notebooks/notebook_41_oracle_26ai_rag.md) ·
-[53 — checkpointer →](notebooks/notebook_53_oracle_26ai_checkpointer.md) ·
-[88 — agent memory →](notebooks/notebook_88_oracle_agent_memory.md)
+[Notebook 41 — Oracle 26ai RAG →](notebooks/notebook_41_oracle_26ai_rag.md) ·
+[Notebook 53 — Oracle 26ai checkpointer →](notebooks/notebook_53_oracle_26ai_checkpointer.md) ·
+[Notebook 88 — Oracle agent memory →](notebooks/notebook_88_oracle_agent_memory.md)
 
-## Start with a notebook
+## Where next
 
-[01 — OCI transports](notebooks/notebook_01_oci_transports.md) ·
-[06 — basic agent](notebooks/notebook_06_basic_agent.md) ·
-[41 — Oracle 26ai RAG](notebooks/notebook_41_oracle_26ai_rag.md) ·
-[58 — cognitive router](notebooks/notebook_58_cognitive_router.md) ·
-[83 — payment refund gate](notebooks/notebook_83_payment_refund_gate.md)
-
-Full catalog → [Notebooks index](notebooks/index.md) ·
-[Capabilities matrix](capabilities.md) · [API reference](api/index.md)
+[All notebooks →](notebooks/index.md) ·
+[Capabilities →](capabilities.md) ·
+[API reference →](api/index.md) ·
+[Deploy →](how-to/deploy.md)
 
 ---
 

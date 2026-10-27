@@ -147,10 +147,10 @@ nav:
   - concepts/multi-agent.md
   - Capabilities: capabilities.md
   - Control layer:
-    - The admission gate: concepts/security.md
     - Control-layer architecture: concepts/control-layer.md
     - Writing a policy that holds: concepts/policy-authoring.md
     - SecurityContext application: concepts/security-context.md
+    - Security findings (locus-sdk-security): concepts/security.md
     - Guardrails: concepts/safety.md
     - Threat scenarios: concepts/threat-scenarios.md
     - Agentic AI security: concepts/agentic-ai-security.md

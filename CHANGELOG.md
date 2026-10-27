@@ -65,7 +65,10 @@ policy.
   page's "What Locus gives you" grid. The home page itself is cut to about
   half its length: a three-bullet hero with a `governed_agent()` example,
   six feature cards, one example per section, and a pill-badge eyebrow in
-  place of the monospace kicker.
+  place of the monospace kicker. Home page and README links labelled
+  "admission gate" now land on the control-layer page (they pointed at the
+  `locus-sdk-security` findings page), notebook links carry the notebook's
+  own title, and the nav labels the security page as what it is.
 
 ## [3.0.1] - 2026-10-22
 
