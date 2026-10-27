@@ -238,7 +238,20 @@ def main() -> None:
         f"OCI_RESPONSES_STORE      = {'1 (try store=True too)' if STORE_ENABLED else '0 (ZDR-safe only)'}\n"
     )
 
-    asyncio.run(_amain())
+    try:
+        asyncio.run(_amain())
+    except RuntimeError as exc:
+        # OCI exposes /openai/v1/responses region by region. Where it is not
+        # served yet the first call answers 404 ("Authorization failed or
+        # requested resource not found"); that is the region, not this
+        # notebook, so report it as skipped (77) rather than failed.
+        if "404" in str(exc):
+            sys.stderr.write(
+                f"skipped: the OCI Responses endpoint is not served in {REGION} "
+                "(404) — pick a region that has it, e.g. us-chicago-1\n"
+            )
+            sys.exit(77)
+        raise
 
     print("=" * 70)
     print("See also: docs/concepts/oci-responses.md")
