@@ -31,7 +31,7 @@
 
 <p align="center">
   <a href="https://locusagents.ai/">Documentation</a> ·
-  <a href="https://locusagents.ai/concepts/security/">The admission gate</a> ·
+  <a href="https://locusagents.ai/concepts/control-layer/">The admission gate</a> ·
   <a href="https://locusagents.ai/how-to/quickstart/">Quickstart</a> ·
   <a href="https://locusagents.ai/how-to/oci-models/">OCI GenAI models</a> ·
   <a href="https://locusagents.ai/concepts/multi-agent/">Multi-agent</a> ·
@@ -176,7 +176,7 @@ For tools where a duplicate call would hurt — moving money, paging an on-call 
 `@tool(idempotent=True)`: the loop keys every invocation on `(name, args)` and refuses to fire
 the same one twice, even across retries.
 
-→ [The admission gate](https://locusagents.ai/concepts/security/) ·
+→ [The admission gate](https://locusagents.ai/concepts/control-layer/) ·
 [Idempotency](https://locusagents.ai/concepts/idempotency/)
 
 ---
@@ -229,7 +229,7 @@ profile in `~/.oci/config` the notebooks pick OCI Generative AI automatically.
 
 | | |
 |---|---|
-| **[⚖️ Admission gate](https://locusagents.ai/concepts/security/)** | `admit()` / `approve()` run a consequential action only if your `ControlPolicy` allows — else hold for a human or deny, recorded either way. |
+| **[⚖️ Admission gate](https://locusagents.ai/concepts/control-layer/)** | `admit()` / `approve()` run a consequential action only if your `ControlPolicy` allows — else hold for a human or deny, recorded either way. |
 | **[🧠 GSAR grounding](https://locusagents.ai/concepts/gsar/)** | Claims partitioned grounded / ungrounded / contradicted / complementary; below threshold the agent regenerates, replans, or abstains. `arXiv:2604.23366`. |
 | **[🎯 Decisions](docs/decision.md)** | `locus.decision` — `Choice` / `YesNo` / `Score` answered with a probability per answer from one forward pass, on any OpenAI-compatible server. An admit head plugs into `approve(advisor=)`; safety heads feed verification. Escalate-only. |
 | **[🔁 Idempotent tools](https://locusagents.ai/concepts/idempotency/)** | `@tool(idempotent=True)` — dedupes on `(name, args)`. The model can't double-charge, double-book, or double-page. |
