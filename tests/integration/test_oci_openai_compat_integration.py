@@ -36,6 +36,15 @@ pytestmark = [
     pytest.mark.requires_oci,
 ]
 
+# This file exercises the OpenAI-compatible V1 transport. OCI serves Cohere
+# chat models and Dedicated AI Cluster endpoints only through the SDK
+# transport (the V1 endpoint answers 400 "Unsupported OpenAI operation"), so
+# an OCI_MODEL_ID that routes there has nothing to test here.
+if os.getenv("OCI_MODEL_ID", "").lower().startswith(("cohere.", "ocid1.generativeaiendpoint.")):
+    pytestmark.append(
+        pytest.mark.skip(reason="OCI_MODEL_ID is served by the SDK transport, not the V1 endpoint")
+    )
+
 
 DEFAULT_TEST_MODEL = "meta.llama-3.3-70b-instruct"
 DEFAULT_TEST_REGION = "us-chicago-1"
