@@ -22,7 +22,7 @@ multi-agent shapes, and the provider and gateway matrix, on everyday work in
 payments, customer support, infrastructure, and privacy. Many examples put a
 gate you wrote in front of a consequential action: a hook that cancels the tool
 call, a graph interrupt that waits for a person, or `admit()` checking a
-`ControlPolicy`. The [gate-track examples](#gate-a-high-stakes-action) also
+`ControlPolicy`. The [control-layer examples](#control-layer-and-security) also
 record every decision, allowed or held, on a tamper-evident audit trail.
 The tracks below work through those domains; one dedicated track applies that
 gate to security operations.
@@ -48,12 +48,12 @@ python examples/<file>.py
 ```
 
 !!! tip "New to Locus?"
-    Start with [Foundations](#foundations) — the agent loop, tools, memory,
-    streaming, hooks, and termination. Then pick the domain track that matches
-    your work, or go to [Gate a high-stakes action](#gate-a-high-stakes-action)
-    for the five-domain gate pattern.
+    Start with [Start here](#start-here) — the agent loop, tools, memory,
+    streaming, hooks, and termination — then [Multi-agent shapes](#multi-agent-shapes)
+    and [Oracle Cloud and Database 26ai](#oracle-cloud-and-database-26ai). The
+    five gate notebooks are under [Control layer and security](#control-layer-and-security).
 
-The series runs 01 to 80, ordered by topic: start here, the multi-agent shapes, Oracle Cloud and Database 26ai, the harness, observability and serving, the control layer, real-world workflows. Every notebook runs against OCI Generative AI with an OCI profile; a few need a database or service, stated at the top of each page.
+The series runs 01 to 89 (81–89 live in `locus-sdk-security`), ordered by topic: start here, the multi-agent shapes, Oracle Cloud and Database 26ai, the harness, observability and serving, the control layer, real-world workflows. Every notebook runs against OCI Generative AI with an OCI profile; a few need a database or service, stated at the top of each page.
 
 ## Start here
 

@@ -431,7 +431,7 @@ The eight primitives:
 The contracts live in the SDK, the SQL is generated locally, and the
 only runtime requirement is `python-oracledb` thin mode.
 
-→ [Notebook 38 — Oracle 26ai RAG](https://locusagents.ai/notebooks/notebook_38_oracle_26ai_rag/) · [Notebook 42 — Oracle 26ai checkpointer](https://locusagents.ai/notebooks/notebook_42_oracle_26ai_checkpointer/) · [Notebooks 39-41, 54, 10, 88 — loader, chunker, embeddings, versioned saver, store, agent memory](https://locusagents.ai/notebooks/#oracle-cloud-database-26ai)
+→ [Notebook 38 — Oracle 26ai RAG](https://locusagents.ai/notebooks/notebook_38_oracle_26ai_rag/) · [Notebook 42 — Oracle 26ai checkpointer](https://locusagents.ai/notebooks/notebook_42_oracle_26ai_checkpointer/) · [Notebooks 39-41, 54, 10, 88 — loader, chunker, embeddings, versioned saver, store, agent memory](https://locusagents.ai/notebooks/#oracle-cloud-and-database-26ai)
 
 ---
 

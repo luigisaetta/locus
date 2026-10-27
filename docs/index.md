@@ -232,7 +232,7 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 
 [The full model matrix, including what's retired →](how-to/oci-models.md#verified-on-oci-eu-frankfurt-1-27-october-2026) ·
 [Dedicated AI Clusters →](how-to/oci-dac.md) ·
-[Oracle Database 26ai notebooks →](notebooks/index.md#oracle-cloud-database-26ai)
+[Oracle Database 26ai notebooks →](notebooks/index.md#oracle-cloud-and-database-26ai)
 
 ## The harness
 
