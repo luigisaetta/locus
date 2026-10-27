@@ -244,8 +244,9 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 - :material-database:{ .lg .middle } **[Memory and RAG](concepts/memory.md)**
 
     ---
-    Durable threads on 10 backends, long-term memory, six vector stores,
-    rerankers, and `retriever.as_tool()`.
+    Four layers: working memory, the thread (10 checkpoint backends),
+    long-term memory across threads, and knowledge through RAG (six vector
+    stores, rerankers, `retriever.as_tool()`). All four on Oracle Database 26ai.
 
 - :material-shield-lock:{ .lg .middle } **[Grounding, guardrails, admission gate](concepts/control-layer.md)**
 

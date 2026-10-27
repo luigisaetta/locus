@@ -107,9 +107,12 @@ pages, runbooks, past resolutions. [RAG](rag.md) covers embedders, vector
 stores and `retriever.as_tool()`; on Oracle Database 26ai the whole pipeline
 can run inside the database.
 
-## All three on Oracle Database 26ai
+## Why one database
 
-One database holds the threads, the long-term memories and the vectors, and
-sits next to the tables the agent reads and writes through its tools.
+Threads, memories and vectors can each live in a different system; on
+Oracle Database 26ai they live in one, next to the tables the agent reads
+and writes through its tools. That means one set of credentials, one backup
+and retention policy, one place to audit what the agent knew when it acted,
+and no copy of customer data in a separate memory service.
 [Oracle Database 26ai](oracle-26ai.md) lists every primitive;
 notebooks 37 to 44 run each one.
