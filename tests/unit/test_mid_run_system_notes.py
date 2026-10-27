@@ -8,9 +8,7 @@ The agent loop appends system-role messages partway through a run — the
 iteration-limit notice, grounding and verification reminders, the final-answer
 nudge — and places a recalled-memory block right after the instructions. The
 Anthropic adapter used to send the *last* system message as ``system``, so the
-first such note silently replaced the agent's real instructions; Bedrock
-hoisted every note into ``system``, away from the point in the run it refers
-to.
+first such note silently replaced the agent's real instructions.
 
 Every native adapter is held to the same contract here:
 
@@ -220,66 +218,7 @@ def test_anthropic_convert_messages_still_returns_the_joined_prompt() -> None:
     _assert_valid_anthropic_turns(turns)
 
 
-# -------------------------------------------------------------------- bedrock
-
-
-def _bedrock_params(messages: list[Message]) -> dict[str, Any]:
-    pytest.importorskip("boto3", reason="bedrock extra not installed")
-    from locus.models.native.bedrock import BedrockModel  # noqa: PLC0415
-
-    model = BedrockModel(
-        model="us.amazon.nova-micro-v1:0",
-        region="us-east-1",
-        aws_access_key_id="test-key",
-        aws_secret_access_key="test-secret",  # noqa: S106
-    )
-    params: dict[str, Any] = model._params(messages, None)
-    return params
-
-
-def _assert_valid_converse_turns(turns: list[dict[str, Any]]) -> None:
-    assert turns[0]["role"] == "user"
-    for prev, cur in pairwise(turns):
-        assert prev["role"] != cur["role"], f"consecutive {cur['role']} turns"
-    for i, turn in enumerate(turns):
-        uses = [b["toolUse"]["toolUseId"] for b in turn["content"] if "toolUse" in b]
-        if not uses:
-            continue
-        nxt = turns[i + 1]["content"]
-        assert [b["toolResult"]["toolUseId"] for b in nxt[: len(uses)]] == uses
-
-
-def test_bedrock_keeps_instructions_when_a_note_follows_tool_results() -> None:
-    params = _bedrock_params(_note_after_tool_results())
-
-    assert params["system"] == [{"text": INSTRUCTIONS}, {"text": MEMORY}]
-    turns = params["messages"]
-    _assert_valid_converse_turns(turns)
-    last = turns[-1]["content"]
-    assert ["toolResult" in b for b in last] == [True, True, False]
-    assert last[-1] == {"text": f"<system-note>\n{NOTE}\n</system-note>"}
-
-
-def test_bedrock_note_after_final_text_becomes_the_next_user_turn() -> None:
-    params = _bedrock_params(_note_after_final_text())
-
-    assert params["system"] == [{"text": INSTRUCTIONS}]
-    turns = params["messages"]
-    _assert_valid_converse_turns(turns)
-    assert turns[-1] == {
-        "role": "user",
-        "content": [{"text": f"<system-note>\n{NOTE}\n</system-note>"}],
-    }
-
-
-def test_bedrock_note_never_splits_a_tool_call_from_its_results() -> None:
-    params = _bedrock_params(_note_between_call_and_results())
-
-    _assert_valid_converse_turns(params["messages"])
-    assert params["system"] == [{"text": INSTRUCTIONS}]
-
-
-# ---------------------------------------------------- openai (and azure/gemini)
+# ---------------------------------------------------------- openai (and gemini)
 
 
 def _openai_model(model: str = "gpt-4o") -> Any:
@@ -314,15 +253,3 @@ def test_openai_responses_keeps_one_leading_system_item_and_notes_in_place() -> 
     assert items[-1] == {"role": "user", "content": f"[System guidance] {NOTE}"}
     outputs = [i["call_id"] for i in items if i.get("type") == "function_call_output"]
     assert outputs == ["t1", "t2"]
-
-
-def test_azure_inherits_the_same_mapping() -> None:
-    pytest.importorskip("openai", reason="openai extra not installed")
-    from locus.models.native.azure import AzureOpenAIModel  # noqa: PLC0415
-
-    model = AzureOpenAIModel(
-        model="gpt-4o", endpoint="https://my-resource.openai.azure.com", api_key="k"
-    )
-    entries = model._convert_messages(_note_after_tool_results())
-    assert entries[0]["content"] == f"{INSTRUCTIONS}\n\n{MEMORY}"
-    assert entries[-1]["content"] == f"[System guidance] {NOTE}"

@@ -13,7 +13,7 @@ code, you're talking to GPT-5 or the o-series reasoning models.
 |---|---|
 | GPT-5, GPT-4o, or any latest OpenAI release | ✓ |
 | The o-series reasoning models (`o3`, `o4-mini`) | ✓ |
-| To go through Azure / Portkey / LiteLLM / vLLM | ✓ — same class, different `base_url` |
+| To go through Portkey / LiteLLM / vLLM | ✓ — same class, different `base_url` |
 
 ## Getting started
 
@@ -151,7 +151,6 @@ OpenAI-compatible endpoint:
 
 | Gateway | When to use it | `base_url` |
 |---|---|---|
-| **Azure OpenAI** | Enterprise / regulated workloads, Azure billing | `https://<resource>.openai.azure.com/openai/deployments/<deployment-id>` |
 | **Portkey** | Virtual keys, request routing across providers, retries | `https://api.portkey.ai/v1` |
 | **LiteLLM Proxy** | Self-hosted control plane in front of N providers | `https://<your-litellm-host>/v1` |
 | **vLLM** | Self-hosted inference for open models with the OpenAI shape | `http://localhost:8000/v1` |
@@ -169,9 +168,8 @@ agent = Agent(
 )
 ```
 
-The `api_key` your `OPENAI_API_KEY` provides is forwarded — for Azure
-that's the Azure resource key, for Portkey it's the Portkey virtual
-key, etc.
+The `api_key` your `OPENAI_API_KEY` provides is forwarded — for Portkey
+it's the Portkey virtual key, etc.
 
 ## Handling sensitive data
 
@@ -192,7 +190,7 @@ stream — the faithful trace you forward to your logging backend — and
 admission decisions land on the hash-chained
 [`AuditTrail`](../agentic-ai-security.md) (hash-chained: each entry
 commits to the one before it, so editing any record breaks
-verification). Routing through a gateway (Azure / Portkey /
+verification). Routing through a gateway (Portkey /
 LiteLLM) keeps your `OPENAI_API_KEY` off the egress path when policy
 requires it.
 

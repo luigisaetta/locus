@@ -361,7 +361,7 @@ class AgentState(BaseModel):
         """USD for a call of this size, or ``None`` when the prices are unknown.
 
         ``cache_creation_tokens`` and ``cache_read_tokens`` are the counts
-        Anthropic (and Bedrock) report beside ``prompt_tokens``, priced at
+        Anthropic reports beside ``prompt_tokens``, priced at
         their published multiples of the input price: a write at 1.25x, a
         read at 0.1x. Left out, as they were, a cached Claude run looked
         almost free and a ``max_cost_usd`` never stopped it. OpenAI-style

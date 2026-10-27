@@ -306,8 +306,6 @@ def provider_table() -> str:
         "| `oci` | OCI Generative AI | (OCI region) | _(OCI config profile / instance principal)_ |",
         "| `openai` | OpenAI | (default) | `OPENAI_API_KEY` |",
         "| `anthropic` | Anthropic | (default) | `ANTHROPIC_API_KEY` |",
-        "| `bedrock` | Amazon Bedrock | (AWS region) | _(boto3 credential chain)_ |",
-        "| `azure` | Azure OpenAI | `AZURE_OPENAI_ENDPOINT` | `AZURE_OPENAI_API_KEY` |",
     ]
     for spec in COMPATIBLE_PROVIDERS:
         endpoint = f"`{spec.base_url}`" if spec.base_url else "_(supply `base_url`)_"

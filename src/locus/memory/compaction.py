@@ -202,7 +202,7 @@ class CompactionTracker:
 
     def observe(self, usage: Mapping[str, int], length: int) -> None:
         """Record a model call's reported usage over the first ``length`` messages."""
-        # Anthropic and Bedrock report cached prompt tokens apart from
+        # Anthropic reports cached prompt tokens apart from
         # ``prompt_tokens``; OpenAI-style providers include them in it and do not
         # send the cache keys, so the sum is the whole context either way.
         total = sum(

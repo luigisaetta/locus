@@ -201,8 +201,6 @@ nav:
     - OCI Responses API: concepts/oci-responses.md
     - OpenAI: concepts/providers/openai.md
     - Anthropic: concepts/providers/anthropic.md
-    - Azure OpenAI: concepts/providers/azure.md
-    - Amazon Bedrock: concepts/providers/bedrock.md
     - OpenAI-compatible endpoints: concepts/providers/openai-compatible.md
     - Resilience: concepts/providers/resilience.md
   - Skills & Playbooks:
