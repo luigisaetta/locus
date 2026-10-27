@@ -296,20 +296,6 @@ pip install locus-sdk && python -m locus.rogue
 [First controlled action →](how-to/first-controlled-action.md) ·
 [Notebook 71 — Payment refund gate →](notebooks/notebook_71_payment_refund_gate.md)
 
-## How Locus compares
-
-| | Locus | LangGraph | Strands Agents |
-|---|---|---|---|
-| Agent loop with tools | `Agent` + `@tool` | via LangChain | `Agent` + `@tool` |
-| Graphs with state, reducers, interrupts | `StateGraph`, functional API | `StateGraph` | graph tool |
-| Pipelines, orchestrator, swarm, handoff, debate | built in | compose yourself | graph, swarm, workflow |
-| Cognitive router: task to protocol | built in | — | — |
-| Admission gate and signed audit trail | `admit()`, `governed_agent()` | — | — |
-| Grounding of every claim | GSAR | — | — |
-| OCI Generative AI, DAC, Oracle Database 26ai | native | community packages | — |
-
-As documented by each project in October 2026. [Full comparison →](concepts/compare.md)
-
 ## Where next
 
 [All notebooks →](notebooks/index.md) ·
