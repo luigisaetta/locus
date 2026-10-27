@@ -18,13 +18,21 @@ policy.
   `InvalidConfig {'user': 'missing'}` unless `auth_type="security_token"` was
   passed. They now detect the profile shape the way `OCIChatCompletionsModel`
   always did. Found running the suites against a Frankfurt tenancy with a
-  session profile.
+  session profile. `OCIEmbeddings` also gains the `close()` the other
+  embedders have, so a store can shut any provider down the same way.
 - **Gemini tool calls on OCI.** OCI maps a tool message onto Gemini's
   `function_response.response`, which must be a JSON object; a tool that
   returned a number or a plain string made the next request fail with
   `400 Invalid value at 'contents[n].parts[0].function_response.response'`.
   The V1 transport now wraps non-object tool results as `{"result": …}` for
   `google.*` models.
+- **RAG tool returned nothing on OCI embeddings.** `create_rag_tool()` /
+  `RAGRetriever.as_tool()` applied a fixed similarity threshold of 0.5, which
+  is calibrated for OpenAI embeddings; with Cohere embed-v4 on OCI a clearly
+  relevant document scores about 0.4, so the agent's search tool came back
+  empty. The default is now `None` (rank by similarity, bounded by `limit`,
+  scores still returned) and `as_tool()` accepts `limit=` / `threshold=` so a
+  deployment can set its own cut-off.
 - **Harness session backend on macOS and BSDs.** Background jobs were
   started through `setsid`, a util-linux command that does not exist there,
   so `start_background()` failed with "could not start … in the session

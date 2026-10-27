@@ -77,7 +77,7 @@ class TestCreateRagTool:
         mock_retriever.retrieve.assert_called_once_with(
             query="test query",
             limit=5,
-            threshold=0.5,
+            threshold=None,
         )
         assert result["total"] == 2
         assert len(result["results"]) == 2

@@ -582,7 +582,14 @@ class RAGRetriever(BaseModel):
         """Close resources."""
         await self.store.close()
 
-    def as_tool(self, name: str = "search_knowledge", description: str | None = None) -> Any:
+    def as_tool(
+        self,
+        name: str = "search_knowledge",
+        description: str | None = None,
+        *,
+        limit: int = 5,
+        threshold: float | None = None,
+    ) -> Any:
         """
         Create a tool function for agent use.
 
@@ -591,13 +598,20 @@ class RAGRetriever(BaseModel):
         Args:
             name: Tool name
             description: Tool description
+            limit: Default number of results the tool returns
+            threshold: Default minimum similarity score; ``None`` ranks by
+                similarity only. Absolute scores differ per embedder (Cohere
+                v4 places a clearly relevant match near 0.4, OpenAI near
+                0.7), so set this per deployment rather than globally.
 
         Returns:
             Tool function decorated with @tool
         """
         from locus.rag.tools import create_rag_tool
 
-        return create_rag_tool(self, name=name, description=description)
+        return create_rag_tool(
+            self, name=name, description=description, limit=limit, threshold=threshold
+        )
 
     def __repr__(self) -> str:
         return f"RAGRetriever(embedder={self.embedder!r}, store={self.store!r})"

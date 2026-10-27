@@ -188,6 +188,16 @@ class TestGetClientAuthMatrix:
         assert "signer" not in kwargs
 
     @pytest.mark.asyncio
+    async def test_close_drops_the_cached_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        probes = _stub_oci_modules(monkeypatch)
+        m = OCIEmbeddings()
+        await m._get_client()
+        await m.close()
+        await m._get_client()
+        # Rebuilt after close(): two constructions.
+        assert len(probes["client_kwargs"]) == 2
+
+    @pytest.mark.asyncio
     async def test_caches_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
         probes = _stub_oci_modules(monkeypatch)
         m = OCIEmbeddings()

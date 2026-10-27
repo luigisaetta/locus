@@ -443,5 +443,15 @@ class OCIEmbeddings(BaseModel, BaseEmbedding):
 
         return results
 
+    async def close(self) -> None:
+        """Drop the cached OCI client.
+
+        The OCI SDK client holds no connection pool that needs an explicit
+        shutdown, so this only forgets the client; the next call rebuilds it.
+        Present for parity with the other embedders, so callers can close any
+        provider the same way.
+        """
+        self._client = None
+
     def __repr__(self) -> str:
         return f"OCIEmbeddings(model={self.oci_config.model_id!r})"

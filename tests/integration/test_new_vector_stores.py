@@ -15,11 +15,28 @@ pytestmark = pytest.mark.integration
 
 
 def get_embedder():
-    """Get embedder based on available credentials."""
+    """Get embedder based on available credentials.
+
+    OpenAI when ``OPENAI_API_KEY`` is set; otherwise OCI Generative AI when
+    ``OCI_PROFILE`` is set (``OCI_EMBED_MODEL``, default ``cohere.embed-v4.0``;
+    ``OCI_COMPARTMENT`` / ``OCI_COMPARTMENT_ID`` and ``OCI_ENDPOINT`` honoured),
+    mirroring how ``conftest.get_model`` picks the chat model.
+    """
     if os.environ.get("OPENAI_API_KEY"):
         from locus.rag.embeddings import OpenAIEmbeddings
 
         return OpenAIEmbeddings(model="text-embedding-3-small")
+    if os.environ.get("OCI_PROFILE"):
+        from locus.rag.embeddings.oci import OCIEmbeddings
+
+        return OCIEmbeddings(
+            model_id=os.environ.get("OCI_EMBED_MODEL", "cohere.embed-v4.0"),
+            profile_name=os.environ["OCI_PROFILE"],
+            compartment_id=os.environ.get("OCI_COMPARTMENT")
+            or os.environ.get("OCI_COMPARTMENT_ID")
+            or "",
+            service_endpoint=os.environ.get("OCI_ENDPOINT"),
+        )
     return None
 
 
