@@ -62,7 +62,10 @@ policy.
   SDK"; the line was dropped with the newer stylesheet), the logo SVG slogan
   matches, the social card no longer carries the old "Multi-Agent Reasoning
   Orchestrator SDK" line, and "Day 0 OCI" is the second card in the home
-  page's "What Locus gives you" grid.
+  page's "What Locus gives you" grid. The home page itself is cut to about
+  half its length: a three-bullet hero with a `governed_agent()` example,
+  six feature cards, one example per section, and a pill-badge eyebrow in
+  place of the monospace kicker.
 
 ## [3.0.1] - 2026-10-22
 
