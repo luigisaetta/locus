@@ -15,9 +15,8 @@ html {
 
    Brand (from docs/img/logo.svg):
      - Wordmark is always lowercase "locus", never capitalized.
-     - Body type is sans (Inter), and so are headings, hero, tabs and the
-       footer brand. The Fraunces variable serif (--locus-display below,
-       single source of truth) is used for the header wordmark only.
+     - Body type is sans (Inter), and so are headings, hero, tabs, the
+       footer brand and the header wordmark (the original lockup).
      - Wordmark colour:  #312D2A   (warm near-black)
      - Mark accent:      #C74634   (locus red, also accent3)
      - Tagline:          uppercase, weight 500, letter-spacing 0.16em,
@@ -53,15 +52,14 @@ html {
   --tl-green:       #16A34A;   /* the one true green (success accents) */
 
   /* locus type stack — sans for body and headings; the header title
-     (wordmark) alone uses --locus-display */
+     (wordmark) is sans too */
   --locus-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
                 Helvetica, system-ui, sans-serif;
   --locus-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo,
                 Consolas, monospace;
-  /* display face — Fraunces variable serif (loaded via extra_css in
-     mkdocs.yml); used for the header wordmark only. Headings, hero, tabs
-     and footer brand stay on --locus-sans. */
-  --locus-display: "Fraunces", Georgia, "Times New Roman", serif;
+  /* display face — same as the sans; the Fraunces serif is no longer
+     loaded. Kept so older rules referencing it keep resolving. */
+  --locus-display: var(--locus-sans);
 
   /* pink -> deep-rose brand gradient (hero accent word, footer wordmark,
      header hairline) */
@@ -266,7 +264,7 @@ html {
 
 /* ---------------------------------------------------------------------------
    Typography — sans (Inter) for body and headings; only the header
-   wordmark uses the Fraunces display face (--locus-display). The page-title
+   wordmark uses the body sans (--locus-sans). The page-title
    topic that Material would swap in on scroll is hidden site-wide below.
    Display headings carry the wordmark's tight tracking (-0.04em on h1, -0.02em
    below). Subheadings can opt into the tagline pattern (uppercase + 0.16em)
@@ -299,13 +297,6 @@ html {
   font-family: var(--locus-sans);
 }
 
-/* Brand title — the "locus" header wordmark renders in the Fraunces
-   display face, not the body sans. It is the only display-face element. */
-.md-header__topic:first-child > .md-ellipsis {
-  font-family: var(--locus-display);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
 
 .md-typeset h1 {
   color: var(--locus-ink);
@@ -705,7 +696,7 @@ form.md-header__option {
   margin-left: auto;
 }
 /* Stack the first topic vertically: "locus" wordmark + the slogan
-   beneath ('OCI Agentic Harness SDK'), matching the wordmark+tagline
+   beneath ('Oracle Agentic Harness SDK'), matching the wordmark+tagline
    lockup the SVG logo carries. One short line, so it fits alongside the
    dark-mode toggle and the search slot at common viewport widths. */
 .md-header__ellipsis > .md-header__topic:first-of-type {
@@ -716,16 +707,16 @@ form.md-header__option {
   gap: 0.15rem;
 }
 .md-header__ellipsis > .md-header__topic:first-of-type > .md-ellipsis {
-  font-family: var(--locus-display);
+  font-family: var(--locus-sans);
   font-weight: 700;
-  font-size: 1.5rem;
-  line-height: 1.1;
-  letter-spacing: -0.015em;
+  font-size: 1.55rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
   text-transform: lowercase;
   color: var(--locus-ink);
 }
 .md-header__ellipsis > .md-header__topic:first-of-type::after {
-  content: "OCI Agentic Harness SDK";
+  content: "Oracle Agentic Harness SDK";
   font-family: var(--locus-sans);
   font-size: 0.55rem;
   font-weight: 600;
@@ -871,7 +862,7 @@ form.md-header__option {
   .md-header__button.md-icon[for="__search"] { margin-left: auto !important; }
   /* Show the brand title ("locus" wordmark + the slogan line) on mobile
      — small and hard-clamped so it stays clear of the right-aligned
-     controls. The clamp must fit the slogan ("OCI Agentic Harness SDK",
+     controls. The clamp must fit the slogan ("Oracle Agentic Harness SDK",
      ~180px at 0.55rem/0.12em plus the 1rem right padding); below 30em
      the slogan is dropped, so the clamp only ever bites on the wordmark
      there. Target the REAL title span (.md-header__title .md-ellipsis)
@@ -880,7 +871,7 @@ form.md-header__option {
     display: flex !important;
     flex: 0 1 auto;
     min-width: 0;
-    max-width: 12.5rem;
+    max-width: 13.5rem;
     overflow: hidden;
     margin-left: 0.4rem;
   }
@@ -1516,22 +1507,17 @@ form.md-header__option {
 
 /* ===================================================================
    locus — "modern dev-brand" redesign (distinct from the stock
-   Material template): sans headings, the Fraunces display face
-   (--locus-display, declared in :root at the top of this file) on the
-   header wordmark only, and bordered hover-lift feature cards.
+   Material template): sans headings and wordmark, and bordered
+   hover-lift feature cards.
    =================================================================== */
 
-/* Product and documentation headings stay crisp and technical. Fraunces is
-   reserved for the header wordmark. */
+/* Product and documentation headings stay crisp and technical. */
 .md-typeset h1, .md-typeset h2, .md-typeset h3,
 .md-typeset .locus-hero h1,
 .md-tabs__link,
 .md-footer-meta .footer-brand__text {
   font-family: var(--locus-sans);
   letter-spacing: -0.02em;
-}
-.md-header__topic > .md-ellipsis {
-  font-family: var(--locus-display);
 }
 
 /* ---- Feature cards: full border, rounded, hover-lift ---- */
@@ -2426,45 +2412,9 @@ form.md-header__option {
 }
 
 /* ---------------------------------------------------------------------------
-   "Verified on OCI" — a stat strip (big numbers in the display face) and
-   model chips with a check mark. Both schemes read from the palette vars.
+   Model chips on the home page ("Oracle Cloud, native"): small pills with
+   a check mark. Both schemes read from the palette vars.
    --------------------------------------------------------------------------- */
-.md-typeset .locus-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: 0.75rem;
-  margin: 1.25rem 0 1.5rem;
-}
-.md-typeset .locus-stat {
-  padding: 0.9rem 1rem 0.8rem;
-  border: 1px solid var(--tl-rule);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--tl-red) 5%, var(--md-default-bg-color));
-}
-.md-typeset .locus-stat__n {
-  display: block;
-  font-family: var(--locus-display);
-  font-size: 2rem;
-  line-height: 1;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--locus-ink);
-}
-.md-typeset .locus-stat__l {
-  display: block;
-  margin-top: 0.35rem;
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--tl-red);
-}
-.md-typeset .locus-stat__s {
-  display: block;
-  margin-top: 0.2rem;
-  font-size: 0.7rem;
-  color: var(--locus-mute);
-}
 .md-typeset .locus-chips {
   display: flex;
   flex-wrap: wrap;
@@ -2500,7 +2450,4 @@ form.md-header__option {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--locus-mute);
-}
-@media (max-width: 36em) {
-  .md-typeset .locus-stat__n { font-size: 1.6rem; }
 }
