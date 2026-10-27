@@ -49,7 +49,9 @@ def _test_region() -> str:
     return os.environ.get("OCI_REGION", DEFAULT_TEST_REGION)
 
 
-def _make_model(*, max_tokens: int = 64) -> OCIChatCompletionsModel:
+# 256, not 64: reasoning models (gpt-5-mini, o3, gpt-oss) spend the budget on
+# reasoning first and return empty content with stop_reason="length" below that.
+def _make_model(*, max_tokens: int = 256) -> OCIChatCompletionsModel:
     """Build an ``OCIChatCompletionsModel`` for integration tests via OCI profile."""
     profile = os.environ.get("OCI_PROFILE")
     if not profile:
@@ -122,7 +124,7 @@ class TestStream:
 class TestMultiTurn:
     @pytest.mark.asyncio
     async def test_history_preserved_via_message_list(self):
-        model = _make_model(max_tokens=64)
+        model = _make_model(max_tokens=512)
 
         first = await model.complete(
             [
