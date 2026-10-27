@@ -247,7 +247,7 @@ audit trail.
 ## Source and notebook
 
 - [`locus.integrations.fastmcp`](https://github.com/oracle/locus/blob/main/src/locus/integrations/fastmcp.py) — built on FastMCP.
-- [`notebook_45_mcp_integration.py`](https://github.com/oracle/locus/blob/main/examples/notebook_45_mcp_integration.py) — consumer + producer end-to-end.
+- [`notebook_46_mcp_integration.py`](https://github.com/oracle/locus/blob/main/examples/notebook_46_mcp_integration.py) — consumer + producer end-to-end.
 
 ## See also
 

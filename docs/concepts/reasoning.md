@@ -156,7 +156,7 @@ the causal chain is built after the fact from the run's events.
 
 ## Source and notebook
 
-- [`notebook_36_reasoning_patterns.py`](https://github.com/oracle/locus/blob/main/examples/notebook_36_reasoning_patterns.py) — all three add-ons end-to-end.
+- [`notebook_54_reasoning_patterns.py`](https://github.com/oracle/locus/blob/main/examples/notebook_54_reasoning_patterns.py) — all three add-ons end-to-end.
 - [`locus.reasoning.reflexion`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/reflexion.py)
 - [`locus.reasoning.grounding`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/grounding.py)
 - [`locus.reasoning.causal`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/causal.py)

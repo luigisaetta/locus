@@ -144,7 +144,7 @@ it.
 - [`notebook_25_agent_handoff.py`](https://github.com/oracle/locus/blob/main/examples/notebook_25_agent_handoff.py)
   — support-tier escalation (L1 → L2 → L3) on a duplicate-charge
   ticket, with `execute_handoff` and `chain_handoff`.
-- [`notebook_33_multiagent_human_in_loop.py`](https://github.com/oracle/locus/blob/main/examples/notebook_33_multiagent_human_in_loop.py)
+- [`notebook_27_multiagent_human_in_loop.py`](https://github.com/oracle/locus/blob/main/examples/notebook_27_multiagent_human_in_loop.py)
   — escalating to a human with a graph `interrupt()` (one of three
   human-in-the-loop (HITL) patterns in the same file; it does not use
   the handoff manager).

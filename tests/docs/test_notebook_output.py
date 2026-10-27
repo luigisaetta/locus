@@ -46,7 +46,7 @@ Prose about it.
 ## Source
 
 ```python
---8<-- "examples/notebook_86_data_deletion_gate.py"
+--8<-- "examples/notebook_74_data_deletion_gate.py"
 ```
 """
 
@@ -57,14 +57,14 @@ def page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     docs = tmp_path / "notebooks"
     docs.mkdir()
-    path = docs / "notebook_86_data_deletion_gate.md"
+    path = docs / "notebook_74_data_deletion_gate.md"
     path.write_text(PAGE)
     monkeypatch.setattr(notebook_output, "DOCS", docs)
     return path
 
 
 def _apply(text: str, *, write: bool = True) -> bool:
-    return apply("notebook_86_data_deletion_gate", "the chain", text, write=write)
+    return apply("notebook_74_data_deletion_gate", "the chain", text, write=write)
 
 
 def test_output_lands_before_the_source(page: Path) -> None:
@@ -115,7 +115,7 @@ def test_a_page_without_a_source_section_is_refused(tmp_path: Path, monkeypatch)
 
     docs = tmp_path / "notebooks"
     docs.mkdir()
-    (docs / "notebook_86_data_deletion_gate.md").write_text("# Bare\n\nNo source here.\n")
+    (docs / "notebook_74_data_deletion_gate.md").write_text("# Bare\n\nNo source here.\n")
     monkeypatch.setattr(notebook_output, "DOCS", docs)
 
     with pytest.raises(SystemExit, match="no '## Source' section"):
@@ -136,7 +136,7 @@ def test_a_missing_page_is_refused(tmp_path: Path, monkeypatch) -> None:
 def test_the_rendered_block_is_fenced_as_text() -> None:
     """Not ```python — this is a transcript, and highlighting it as source
     makes a reader look for code that is not there."""
-    block = render("notebook_86_data_deletion_gate", "the chain", "line one\nline two")
+    block = render("notebook_74_data_deletion_gate", "the chain", "line one\nline two")
 
     assert "```text\n" in block
     assert "```python" not in block
@@ -210,7 +210,7 @@ def test_a_notebook_that_fails_is_not_captured(tmp_path: Path, monkeypatch) -> N
     it were the example."""
     import subprocess
 
-    sdk = _fake_sdk(tmp_path, "notebook_86_data_deletion_gate")
+    sdk = _fake_sdk(tmp_path, "notebook_74_data_deletion_gate")
     monkeypatch.setattr(
         subprocess,
         "run",
@@ -218,19 +218,19 @@ def test_a_notebook_that_fails_is_not_captured(tmp_path: Path, monkeypatch) -> N
     )
 
     with pytest.raises(SystemExit, match="exited 1"):
-        run_notebook("notebook_86_data_deletion_gate", sdk)
+        run_notebook("notebook_74_data_deletion_gate", sdk)
 
 
 def test_trailing_blank_lines_are_trimmed(tmp_path: Path, monkeypatch) -> None:
     """Otherwise every capture churns the diff by a newline."""
     import subprocess
 
-    sdk = _fake_sdk(tmp_path, "notebook_86_data_deletion_gate")
+    sdk = _fake_sdk(tmp_path, "notebook_74_data_deletion_gate")
     monkeypatch.setattr(
         subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a[0], 0, "out\n\n\n", "")
     )
 
-    assert run_notebook("notebook_86_data_deletion_gate", sdk) == "out"
+    assert run_notebook("notebook_74_data_deletion_gate", sdk) == "out"
 
 
 # --------------------------------------------------------------------------
@@ -242,10 +242,10 @@ def test_trailing_blank_lines_are_trimmed(tmp_path: Path, monkeypatch) -> None:
 def one_page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     docs = tmp_path / "notebooks"
     docs.mkdir()
-    path = docs / "notebook_86_data_deletion_gate.md"
+    path = docs / "notebook_74_data_deletion_gate.md"
     path.write_text(PAGE)
     monkeypatch.setattr(notebook_output, "DOCS", docs)
-    monkeypatch.setattr(notebook_output, "PAGES", {"notebook_86_data_deletion_gate": "the chain"})
+    monkeypatch.setattr(notebook_output, "PAGES", {"notebook_74_data_deletion_gate": "the chain"})
     monkeypatch.setattr(notebook_output, "sdk_dir", lambda: tmp_path)
     return path
 
@@ -266,7 +266,7 @@ def test_check_fails_and_names_the_stale_page(one_page: Path, monkeypatch, capsy
 
     assert main(["x", "--check"]) == 1
     out = capsys.readouterr().out
-    assert "notebook_86_data_deletion_gate.md" in out
+    assert "notebook_74_data_deletion_gate.md" in out
     assert "--update" in out, "a failure has to say how to fix it"
 
 
@@ -283,14 +283,14 @@ def test_a_mode_is_required(one_page: Path) -> None:
 def test_a_notebook_without_a_model_is_not_described_as_using_one() -> None:
     """Six of the seven gate notebooks call admit() directly and never build a
     model; the lead-in used to promise a "bundled mock model" on every page."""
-    block = render("notebook_84_infra_deploy_gate", "a deploy", "out", with_model=False)
+    block = render("notebook_72_infra_deploy_gate", "a deploy", "out", with_model=False)
 
     assert "no model and no credentials" in block
     assert "mock model" not in block
 
 
 def test_a_notebook_with_a_model_keeps_the_mock_lead_in() -> None:
-    block = render("notebook_79_soc_alert_triage", "the triage", "out", with_model=True)
+    block = render("notebook_87_soc_alert_triage", "the triage", "out", with_model=True)
 
     assert "bundled mock model" in block
 

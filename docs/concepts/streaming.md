@@ -226,8 +226,8 @@ for (;;) {
 
 ## Notebooks
 
-- [`notebook_11_agent_streaming.py`](https://github.com/oracle/locus/blob/main/examples/notebook_11_agent_streaming.py) — your first event consumer.
-- [`notebook_13_sse_streaming.py`](https://github.com/oracle/locus/blob/main/examples/notebook_13_sse_streaming.py) — full SSE wiring against `AgentServer`.
+- [`notebook_06_agent_streaming.py`](https://github.com/oracle/locus/blob/main/examples/notebook_06_agent_streaming.py) — your first event consumer.
+- [`notebook_64_sse_streaming.py`](https://github.com/oracle/locus/blob/main/examples/notebook_64_sse_streaming.py) — full SSE wiring against `AgentServer`.
 
 ## Source
 

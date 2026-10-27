@@ -190,7 +190,7 @@ abstains rather than asserting an identity.
     runnable in CI — never a substitute for the live measurement.
 
 The same shape powers a complete agent workflow in the notebooks
-([forensics specialist](../notebooks/notebook_27_specialist_agents.md)),
+([forensics specialist](../notebooks/notebook_23_specialist_agents.md)),
 where a low-coverage probe correctly abstains and a full-coverage probe
 ships a finding mapped to compliance controls.
 
@@ -200,9 +200,9 @@ ships a finding mapped to compliance controls.
   read-only AWS auditing built on `ground_finding`.
 - Complete defense catalogue: [threat scenarios](threat-scenarios.md) — every
   OWASP LLM / OWASP ASI / MITRE ATLAS ID mapped to a runnable gist.
-- Notebooks flagship: [GSAR typed grounding](../notebooks/notebook_37_gsar_typed_grounding.md)
-- Prompt-injection findings: [guardrails](../notebooks/notebook_50_guardrails_security.md)
-- Fingerprinting: [forensics specialist](../notebooks/notebook_27_specialist_agents.md)
-- RAG poisoning: [intel copilot](../notebooks/notebook_40_rag_agents.md)
+- Notebooks flagship: [GSAR typed grounding](../notebooks/notebook_55_gsar_typed_grounding.md)
+- Prompt-injection findings: [guardrails](../notebooks/notebook_69_guardrails_security.md)
+- Fingerprinting: [forensics specialist](../notebooks/notebook_23_specialist_agents.md)
+- RAG poisoning: [intel copilot](../notebooks/notebook_53_rag_agents.md)
 
 [gh]: https://github.com/oracle/locus/tree/main/src/locus/security

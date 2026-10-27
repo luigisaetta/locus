@@ -134,7 +134,7 @@ when the server owns the history). Memory, Reflexion, GSAR,
 grounding, tool hooks, idempotency, checkpointing, output schema,
 streaming, and termination conditions all work identically. See the
 [OCI Responses concept page](../concepts/oci-responses.md) and
-[notebook 58](../notebooks/notebook_03_oci_responses.md).
+[notebook 29](../notebooks/notebook_34_oci_responses.md).
 
 ## Cohere (Command R and Command A) — `OCIModel`
 
@@ -188,7 +188,7 @@ export LOCUS_OCI_TRANSPORT=v1     # or "sdk"
 
 Notebooks that use `from examples.config import get_model` inherit
 this routing. Notebooks that instantiate a class directly
-(e.g. `notebook_56_model_providers.py`) show both transports
+(e.g. `notebook_11_model_providers.py`) show both transports
 side-by-side.
 
 ## What's not supported today

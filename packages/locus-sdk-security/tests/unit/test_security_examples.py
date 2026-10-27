@@ -36,13 +36,13 @@ def _run(notebook: str) -> subprocess.CompletedProcess[str]:
 @pytest.mark.parametrize(
     ("notebook", "expected"),
     [
-        ("notebook_75_agent_red_team.py", "FINDING"),
-        ("notebook_76_redteam_support_bot.py", "FINDING"),
-        ("notebook_77_ci_security_gate.py", "coverage="),
-        ("notebook_78_verify_findings.py", "SURVIVES"),
-        ("notebook_79_soc_alert_triage.py", "Alert"),
-        ("notebook_80_model_fingerprint.py", "fingerprint"),
-        ("notebook_82_investigate_with_ctx.py", "logs.search"),
+        ("notebook_83_agent_red_team.py", "FINDING"),
+        ("notebook_84_redteam_support_bot.py", "FINDING"),
+        ("notebook_85_ci_security_gate.py", "coverage="),
+        ("notebook_86_verify_findings.py", "SURVIVES"),
+        ("notebook_87_soc_alert_triage.py", "Alert"),
+        ("notebook_88_model_fingerprint.py", "fingerprint"),
+        ("notebook_89_investigate_with_ctx.py", "logs.search"),
     ],
 )
 def test_security_example_runs(notebook: str, expected: str) -> None:
@@ -54,6 +54,6 @@ def test_security_example_runs(notebook: str, expected: str) -> None:
 def test_redteam_examples_show_findings_and_abstentions() -> None:
     # The defining behaviour, end-to-end: a vulnerable target yields findings,
     # a hardened one abstains.
-    out = _run("notebook_76_redteam_support_bot.py").stdout
+    out = _run("notebook_84_redteam_support_bot.py").stdout
     assert "FINDING" in out
     assert "ABSTAIN" in out

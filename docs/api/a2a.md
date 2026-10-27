@@ -9,7 +9,7 @@ the v1 spec — use these for anything new. The unprefixed types are the earlier
 shape, kept because deployed peers still speak it; `A2AServer` accepts both.
 
 For the concepts, start with [the A2A protocol](../concepts/multi-agent/a2a.md)
-and the [walkthrough notebook](../notebooks/notebook_28_a2a_protocol.md).
+and the [walkthrough notebook](../notebooks/notebook_30_a2a_protocol.md).
 
 ## Client and server
 

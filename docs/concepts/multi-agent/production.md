@@ -201,7 +201,7 @@ the loop reach for a shape tool and build the
 right one from a typed intent. Then wire the primitives above through
 it and ship it.
 
-[t44]: https://github.com/oracle/locus/blob/main/examples/notebook_32_debate_with_judge.py
-[t46]: https://github.com/oracle/locus/blob/main/examples/notebook_63_incident_response.py
-[t47]: https://github.com/oracle/locus/blob/main/examples/notebook_64_procurement_approval.py
-[t48]: https://github.com/oracle/locus/blob/main/examples/notebook_65_contract_review.py
+[t44]: https://github.com/oracle/locus/blob/main/examples/notebook_26_debate_with_judge.py
+[t46]: https://github.com/oracle/locus/blob/main/examples/notebook_77_incident_response.py
+[t47]: https://github.com/oracle/locus/blob/main/examples/notebook_78_procurement_approval.py
+[t48]: https://github.com/oracle/locus/blob/main/examples/notebook_79_contract_review.py

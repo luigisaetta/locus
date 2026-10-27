@@ -42,11 +42,11 @@ def _run(notebook: str) -> subprocess.CompletedProcess[str]:
 @pytest.mark.parametrize(
     ("notebook", "domain"),
     [
-        ("notebook_83_payment_refund_gate.py", "payments"),
-        ("notebook_84_infra_deploy_gate.py", "infra/devops"),
-        ("notebook_85_support_account_gate.py", "customer support"),
-        ("notebook_86_data_deletion_gate.py", "data/privacy"),
-        ("notebook_87_cloud_resource_gate.py", "cloud"),
+        ("notebook_71_payment_refund_gate.py", "payments"),
+        ("notebook_72_infra_deploy_gate.py", "infra/devops"),
+        ("notebook_73_support_account_gate.py", "customer support"),
+        ("notebook_74_data_deletion_gate.py", "data/privacy"),
+        ("notebook_75_cloud_resource_gate.py", "cloud"),
     ],
 )
 def test_domain_example_runs(notebook: str, domain: str) -> None:
@@ -61,6 +61,6 @@ def test_domain_example_runs(notebook: str, domain: str) -> None:
 
 def test_ir_audit_trail_example_runs() -> None:
     """The incident-response audit-trail example runs offline on the control core."""
-    proc = _run("notebook_81_ir_audit_trail.py")
+    proc = _run("notebook_76_ir_audit_trail.py")
     assert proc.returncode == 0, f"notebook_81 exited {proc.returncode}:\n{proc.stderr}"
     assert "Incident Response" in proc.stdout

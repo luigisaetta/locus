@@ -7,20 +7,7 @@ and data. The snippets below are the smallest possible shapes; the numbered
 SOC triage, fingerprinting, threat scenarios) live with the opt-in
 [`locus-sdk-security`](../packages/locus-sdk-security/examples/) package.
 
-**A note on the numbers.** They are stable identifiers, not a sequence. The
-series runs `01-72 · 81 · 83-89`, and the gaps are not missing files —
-those numbers (73-80, 82) belong to the security notebooks in
-`packages/locus-sdk-security/examples/`. Notebooks 01-05 are the OCI Generative
-AI transports; 10, 41-44, 53-54 and 88-89 are the Oracle Database 26ai and OCI
-integrations. Numbers are never reused or reassigned,
-so a link, a bookmark, or a cross-reference from another notebook keeps
-pointing at the same example forever; renumbering to close the gaps would
-break every one of them to fix an appearance.
-
-Nor do the numbers carry difficulty or order: 83 is one of the easiest files
-here, and the gate notebooks (83-87) need no credentials at all. Read in
-whatever order the [documentation](https://locusagents.ai/notebooks/) puts in
-front of you — it is ordered by what builds on what.
+**A note on the numbers.** The series runs `01-80` here and continues with `81-89` in [`locus-sdk-security`](../packages/locus-sdk-security/examples/), ordered by topic: start here, the multi-agent shapes, Oracle Cloud and Database 26ai, the harness, observability and serving, the control layer, real-world workflows, then security operations. Numbers are never reused. The gate notebooks (71-75) need no credentials at all; the [documentation](https://locusagents.ai/notebooks/) lists every notebook in this order.
 
 ## Start here
 
@@ -44,7 +31,7 @@ suite credential-free:
 
 ```bash
 pip install "locus-sdk[openai,anthropic]"   # or: pip install -e . from the repo root
-python examples/notebook_06_basic_agent.py     # runs on the mock model, no keys needed
+python examples/notebook_02_basic_agent.py     # runs on the mock model, no keys needed
 ```
 
 To run against a real provider, set the provider and its key:
@@ -56,7 +43,7 @@ export LOCUS_MODEL_PROVIDER=anthropic; export ANTHROPIC_API_KEY=sk-ant-...
 export LOCUS_MODEL_ID=gpt-4o         # optional — provider-specific model id
 ```
 
-The `locus.control` gate notebooks (83–87) are fully offline by design and
+The `locus.control` gate notebooks (71-75) are fully offline by design and
 need no provider at all.
 
 ## Quick Start

@@ -12,7 +12,7 @@ Usage:
     python scripts/run_notebooks.py --provider openai
 
     # Run specific notebook:
-    python scripts/run_notebooks.py --provider openai --notebook 06
+    python scripts/run_notebooks.py --provider openai --notebook 02
 
     # Any other provider the model registry knows (needs --model):
     python scripts/run_notebooks.py --provider gemini --model gemini-2.5-flash

@@ -14,7 +14,7 @@ export LOCUS_MODEL_PROVIDER=openai
 export LOCUS_MODEL_ID=gpt-4o
 export OPENAI_API_KEY=sk-...
 
-python examples/notebook_06_basic_agent.py
+python examples/notebook_02_basic_agent.py
 ```
 
 `LOCUS_MODEL_PROVIDER` is the switch. **Unset, it defaults to `mock`** and
@@ -46,7 +46,7 @@ unchanged. See [OCI GenAI models](oci-models.md).
 | `LOCUS_OCI_COMPARTMENT` / `OCI_COMPARTMENT` | Compartment OCID; derived from the profile's tenancy when unset |
 | `LOCUS_OCI_ENDPOINT` / `OCI_ENDPOINT` | Service endpoint override — SDK transport (`OCIModel`) only |
 | `LOCUS_OCI_TRANSPORT` / `OCI_TRANSPORT` | Force `v1` or `sdk` instead of routing by model id |
-| `OCI_DAC_ENDPOINT_OCID`, `OCI_DAC_COMPARTMENT_ID`, `OCI_DAC_REGION` | Dedicated AI Cluster — notebook 04 |
+| `OCI_DAC_ENDPOINT_OCID`, `OCI_DAC_COMPARTMENT_ID`, `OCI_DAC_REGION` | Dedicated AI Cluster — notebook 35 |
 
 ## Provider keys
 
@@ -71,18 +71,18 @@ self-hosted deployments and proxies. Local servers (`ollama`, `vllm`,
 
 | Variable | Used by |
 |---|---|
-| `REDIS_URL` | Redis checkpointer — notebook 68 |
-| `S3_BUCKET` | S3 checkpointer — notebook 52 |
+| `REDIS_URL` | Redis checkpointer — notebook 65 |
+| `S3_BUCKET` | S3 checkpointer — notebook 50 |
 | `ORACLE_DSN` | Oracle Database 26ai — tnsnames alias or `host:port/service` — notebooks 10, 41-44, 53-54, 88 |
 | `ORACLE_USER` / `ORACLE_PASSWORD` | Oracle Database 26ai credentials |
 | `ORACLE_WALLET` / `ORACLE_WALLET_PASSWORD` | Autonomous Database wallet directory and password (empty string for auto-login wallets) |
-| `S3_ENDPOINT_URL` | S3-compatible endpoint (MinIO, R2) — notebook 52 |
+| `S3_ENDPOINT_URL` | S3-compatible endpoint (MinIO, R2) — notebook 50 |
 
 ## Serving
 
 | Variable | Used by |
 |---|---|
-| `LOCUS_SERVER_API_KEY` | `AgentServer` bearer token — notebook 68 |
+| `LOCUS_SERVER_API_KEY` | `AgentServer` bearer token — notebook 65 |
 | `LOCUS_A2A_API_KEY` | `A2AServer.__init__` bearer token |
 
 ## LiteLLM gateway
@@ -100,18 +100,18 @@ Notebooks 71 and 72. See [the gateway how-to](litellm-gateway.md).
 
 | Variable | Used by |
 |---|---|
-| `LOCUS_AWS_PROFILE` | AWS cloud-posture tools — notebook 73 |
+| `LOCUS_AWS_PROFILE` | AWS cloud-posture tools — notebook 81 |
 | `LOCUS_AWS_REGION` | AWS cloud-posture tools — default `us-east-1` |
 | `AWS_ACCESS_KEY_ID` | Standard AWS credential chain |
 | `AWS_SECRET_ACCESS_KEY` | Standard AWS credential chain |
-| `SCANNER_API_KEY` | Vulnerability-scanner adapter — notebook 70 |
-| `DATAMAP_URL` | Data-map adapter — notebook 70 |
-| `DATAMAP_API_KEY` | Data-map adapter — notebook 70 |
-| `DATAMAP_TOKEN` | Data-map adapter — notebook 70 |
+| `SCANNER_API_KEY` | Vulnerability-scanner adapter — notebook 80 |
+| `DATAMAP_URL` | Data-map adapter — notebook 80 |
+| `DATAMAP_API_KEY` | Data-map adapter — notebook 80 |
+| `DATAMAP_TOKEN` | Data-map adapter — notebook 80 |
 
 ## Model fingerprinting
 
-Notebook 80. See [cloud posture](../concepts/cloud-posture.md).
+Notebook 88. See [cloud posture](../concepts/cloud-posture.md).
 
 | Variable | Used by |
 |---|---|

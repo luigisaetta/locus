@@ -138,7 +138,7 @@ so see [Guarantees and boundaries](why-locus.md).
 | **Target** | One handle over any AI under assessment — remote endpoint, in-process `Agent`, A2A peer, or callable | `Target.endpoint/.agent/.a2a/.from_callable` · [Agentic AI-security](concepts/agentic-ai-security.md) |
 | **Red-teaming** | OWASP-ASI probe suite → grounded `Evidence` (tagged OWASP LLM / ASI / MITRE ATLAS) or `Abstention` | `red_team(target)` · [Agentic AI-security](concepts/agentic-ai-security.md) |
 | **Assurance** | Grounded guardrail-coverage posture across the suite | `assure(target)` |
-| **Verification** | An independent skeptic challenges a finding's evidence and rescores confidence | `verify(finding) -> VerificationResult` · [Verify findings](notebooks/notebook_78_verify_findings.md) |
+| **Verification** | An independent skeptic challenges a finding's evidence and rescores confidence | `verify(finding) -> VerificationResult` · [Verify findings](notebooks/notebook_86_verify_findings.md) |
 | **Policy + approval** | Weigh an action against evidence, verification, and a `ControlPolicy` → allow / hold / deny (`allow` / `require_human` / `deny` in the API) | `approve(action, policy=…)` · [SecurityContext](concepts/security-context.md) |
 | **Admission gate** | Run a side-effecting action only if it clears the chain; `admit(trail=...)` records the decision to the audit trail you pass; else raises `AdmissionError` | `admit(...)` · `ctx.actions.execute(...)` · [SecurityContext](concepts/security-context.md) |
 | **SecurityContext** | Investigate by domain (logs / endpoint / identity / cloud / threat-intel / actions), not by vendor | `SecurityContext()` · [SecurityContext](concepts/security-context.md) |

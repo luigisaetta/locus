@@ -80,12 +80,12 @@ final = await revise.run(initial_draft)
 
 ## Notebooks
 
-- [`notebook_21_composition.py`](https://github.com/oracle/locus/blob/main/examples/notebook_21_composition.py)
+- [`notebook_19_composition.py`](https://github.com/oracle/locus/blob/main/examples/notebook_19_composition.py)
   — `SequentialPipeline`, `ParallelPipeline`, `LoopAgent`.
-- [`notebook_30_map_reduce_code_review.py`](https://github.com/oracle/locus/blob/main/examples/notebook_30_map_reduce_code_review.py)
+- [`notebook_20_map_reduce_code_review.py`](https://github.com/oracle/locus/blob/main/examples/notebook_20_map_reduce_code_review.py)
   — same fan-out shape with `Send` inside a graph (use this when you
   need state-aware fan-out beyond what `ParallelPipeline` gives you).
-- [`notebook_31_supervisor_critic_loop.py`](https://github.com/oracle/locus/blob/main/examples/notebook_31_supervisor_critic_loop.py)
+- [`notebook_21_supervisor_critic_loop.py`](https://github.com/oracle/locus/blob/main/examples/notebook_21_supervisor_critic_loop.py)
   — `LoopAgent`-style refine-until-confidence written as a graph
   (the cycle version when you also need conditional edges).
 

@@ -118,7 +118,7 @@ payment-provider idempotency key for crash-safe external effects.
   enforcement boundary.
 - [Writing a policy that holds](../concepts/policy-authoring.md) covers missing
   risk families and second paths.
-- [Payment refund example](../notebooks/notebook_83_payment_refund_gate.md)
+- [Payment refund example](../notebooks/notebook_71_payment_refund_gate.md)
   provides a more fully narrated runnable file.
 - [Idempotency](../concepts/idempotency.md) explains retries and the external
   operation/recording crash window.

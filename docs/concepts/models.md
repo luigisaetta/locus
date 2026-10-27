@@ -170,7 +170,7 @@ Source:
 
 ## Notebook
 
-[`notebook_56_model_providers.py`](https://github.com/oracle/locus/blob/main/examples/notebook_56_model_providers.py)
+[`notebook_11_model_providers.py`](https://github.com/oracle/locus/blob/main/examples/notebook_11_model_providers.py)
 runs the same agent — a security-operations triage example — against OpenAI and
 Anthropic by swapping one string.
 

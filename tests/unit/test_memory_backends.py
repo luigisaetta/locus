@@ -243,7 +243,7 @@ class TestUnknownKwargsAreRejected:
         with pytest.raises(ValidationError):
             factory(**kwargs, bogus_param_xyz="swallowed")
 
-    def test_the_notebook_68_mistake_is_now_caught(self) -> None:
+    def test_the_notebook_65_mistake_is_now_caught(self) -> None:
         """``namespace`` is not the field; ``prefix`` is."""
         with pytest.raises(ValidationError):
             RedisBackend(url="redis://localhost:6379", namespace="not-the-field")

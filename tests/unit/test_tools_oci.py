@@ -8,7 +8,7 @@ These cover the pure-Python logic — docstring parsing, mutation gating,
 SDK introspection, signer routing, response serialisation, error
 handling — without hitting any real OCI endpoint. The integration-y
 parts (live calls, JSON payloads from the wire) are exercised by the
-notebook 70 walk-through against a real tenancy.
+notebook 80 walk-through against a real tenancy.
 """
 
 from __future__ import annotations
