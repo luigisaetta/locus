@@ -231,7 +231,7 @@ _FAMILY_DEFAULTS: Final[dict[str, dict[str, Any]]] = {
     "default": {"prompt_variant": "default"},
 }
 
-#: A Claude id's tier and version: ``claude-sonnet-4-6`` → (4, 6),
+#: A Claude id's tier and version: ``claude-sonnet-5-5`` → (5, 5),
 #: ``claude-opus-5`` → (5, None), ``claude-sonnet-4-5-20250929`` → (4, 5).
 _CLAUDE_VERSION: Final[re.Pattern[str]] = re.compile(
     r"claude-(?:opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2}))?(?:$|[-@.])"

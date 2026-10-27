@@ -21,7 +21,7 @@ Usage:
     model = OpenAIModel(model="gpt-4o")
 
     from locus.models import AnthropicModel
-    model = AnthropicModel(model="claude-sonnet-4-6")
+    model = AnthropicModel(model="claude-sonnet-5-5")
 
     # OCI GenAI — V1 transport
     from locus.models import OCIChatCompletionsModel
@@ -29,7 +29,7 @@ Usage:
 
     # String factory — "provider:model"
     from locus.models import get_model
-    model = get_model("anthropic:claude-sonnet-4-6")
+    model = get_model("anthropic:claude-sonnet-5-5")
     model = get_model("oci:openai.gpt-5", profile="DEFAULT")
 
 Provider failover — ``FallbackChain`` (see :mod:`locus.models.fallback`)::
@@ -37,7 +37,7 @@ Provider failover — ``FallbackChain`` (see :mod:`locus.models.fallback`)::
     from locus.models import FallbackChain
 
     model = FallbackChain(
-        [get_model("anthropic:claude-sonnet-4-6"), get_model("openai:gpt-4o")]
+        [get_model("anthropic:claude-sonnet-5-5"), get_model("openai:gpt-4o")]
     )
 """
 

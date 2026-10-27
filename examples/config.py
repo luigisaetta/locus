@@ -636,7 +636,7 @@ def _get_anthropic_model(**kwargs: Any) -> Any:
     """Get Anthropic model."""
     from locus.models.native.anthropic import AnthropicModel
 
-    model_id = kwargs.pop("model_id", os.environ.get("LOCUS_MODEL_ID", "claude-sonnet-4-6"))
+    model_id = kwargs.pop("model_id", os.environ.get("LOCUS_MODEL_ID", "claude-sonnet-5-5"))
     api_key = os.environ.get("ANTHROPIC_API_KEY")
 
     if not api_key:

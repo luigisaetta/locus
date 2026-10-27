@@ -70,7 +70,7 @@ def _openai_model() -> Any:
 def _anthropic_model() -> Any:
     from locus.models.native.anthropic import AnthropicModel
 
-    return AnthropicModel(model=os.environ.get("LOCUS_MODEL_ID", "claude-sonnet-4-6"))
+    return AnthropicModel(model=os.environ.get("LOCUS_MODEL_ID", "claude-sonnet-5-5"))
 
 
 def get_model() -> Any:

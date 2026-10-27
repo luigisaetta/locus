@@ -92,7 +92,7 @@ async def main():
     )
 
     # Session 1 — agent learns a standing rule
-    async for event in agent.run("Refunds over $500 need manager approval — page the duty manager first."):
+    async for event in agent.run("Never refund over $500 without manager approval — page the duty manager first."):
         ...
 
     # Session 2 — the agent already knows
@@ -172,9 +172,9 @@ The SDK exposes memory along a spectrum, from "works everywhere" to
 
 | Path | Manager class | When to pick it |
 |---|---|---|
+| Oracle-native | `OracleAgentMemoryManager` ([`oracleagentmemory`](https://pypi.org/project/oracleagentmemory/)) | You run on Oracle Database 26ai and want Oracle's official agent-memory client — context-card summaries, scoped retrieval by user / agent / thread, LongMemEval-benchmarked extraction |
 | Portable / multi-backend | `LLMMemoryManager` + any `BaseStore` (`InMemoryStore`, `HolographicStore`, `PgMemory`, or a custom subclass) | You need backend portability, an LLM-free extractor, or a test-friendly path |
 | Managed | `Mem0MemoryManager` ([`mem0ai`](https://pypi.org/project/mem0ai/)) | You want a managed memory layer with LLM-tuned recall and scoped retrieval by `user_id` without writing your own extractor |
-| Oracle-native | `OracleAgentMemoryManager` ([`oracleagentmemory`](https://pypi.org/project/oracleagentmemory/)) | You run on Oracle Database 26ai and want Oracle's official agent-memory client — context-card summaries, scoped retrieval by user / agent / thread, LongMemEval-benchmarked extraction |
 
 ### Managed memory — `Mem0MemoryManager`
 
@@ -204,6 +204,36 @@ pip install 'locus-sdk[mem0]'
 
 When you need a fully-deterministic LLM-free extractor or a custom
 backend, fall back to the portable path below.
+
+### Oracle Database 26ai: `OracleStore` and `OracleAgentMemoryManager`
+
+Two ways to keep long-term memory in Oracle Database 26ai. `OracleStore` is a
+`BaseStore`, so it slots under `LLMMemoryManager` with the portable
+extractor and per-user scoping; `OracleAgentMemoryManager` hands the whole
+job to Oracle's own `oracleagentmemory` client (extraction, context cards,
+retrieval scoped by user, agent and thread, all inside the database).
+
+```python
+import os
+
+from locus.agent import Agent
+from locus.memory import LLMMemoryManager
+from locus.memory.store_backends import OracleStore
+
+store = OracleStore(
+    dsn=os.environ["ORACLE_DSN"],
+    user=os.environ["ORACLE_USER"],
+    password=os.environ["ORACLE_PASSWORD"],
+    wallet_location=os.environ["ORACLE_WALLET"],
+    wallet_password=os.environ.get("ORACLE_WALLET_PASSWORD", ""),
+)
+agent = Agent(model="oci:openai.gpt-5.5", memory_manager=LLMMemoryManager(store=store))
+```
+
+Notebooks [37](../notebooks/notebook_37_oracle_store.md) and
+[44](../notebooks/notebook_44_oracle_agent_memory.md) run both against a
+live database; [Oracle Database 26ai](oracle-26ai.md) lists the rest of the
+stack.
 
 ### Portable path (any BaseStore backend)
 

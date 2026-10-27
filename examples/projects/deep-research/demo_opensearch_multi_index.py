@@ -102,7 +102,7 @@ async def main() -> int:
     password = os.environ["OPENSEARCH_PASSWORD"]
     verify_certs = os.environ.get("OPENSEARCH_VERIFY_CERTS", "true").lower() == "true"
 
-    model_id = os.environ.get("LOCUS_RESEARCH_MODEL", "anthropic:claude-sonnet-4-6")
+    model_id = os.environ.get("LOCUS_RESEARCH_MODEL", "anthropic:claude-sonnet-5-5")
 
     run_id = uuid.uuid4().hex[:8].lower()
     intel_index = f"locus_intel_{run_id}"

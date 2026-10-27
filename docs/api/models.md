@@ -14,7 +14,7 @@ For the concepts, start with [Model providers](../concepts/models.md).
 ## Registry
 
 String factory — routes `"openai:gpt-4o"`,
-`"anthropic:claude-sonnet-4-6"`, etc. to the right client.
+`"anthropic:claude-sonnet-5-5"`, etc. to the right client.
 
 ::: locus.models.registry.get_model
 ::: locus.models.registry.list_providers

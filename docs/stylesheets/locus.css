@@ -388,47 +388,6 @@ html {
   border-radius: 50%;
   pointer-events: none;
 }
-/* Hero eyebrow — a pill badge: red dot · "Oracle Generative AI" (ink) ·
-   hairline · "Agentic Harness" (Oracle red). Compound
-   `.locus-hero p.locus-product-name` (specificity 0,3,1) beats
-   `.md-typeset .locus-hero p` (0,2,1), so the eyebrow size actually wins
-   inside the hero. Second selector covers usages outside the hero. */
-.md-typeset .locus-hero p.locus-product-name,
-.md-typeset p.locus-product-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin: 0 0 1.1rem;
-  padding: 0.34rem 0.9rem 0.34rem 0.75rem;
-  border: 1px solid color-mix(in srgb, var(--tl-red) 36%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tl-red) 8%, transparent);
-  font-family: var(--locus-sans);
-  font-size: 0.66rem !important;
-  line-height: 1.2;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--locus-ink);
-  opacity: 1;
-}
-.md-typeset p.locus-product-name::before {
-  content: "";
-  flex: none;
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: var(--tl-red);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tl-red) 22%, transparent);
-}
-.md-typeset p.locus-product-name .locus-product-name__brand {
-  opacity: 0.78;
-}
-.md-typeset p.locus-product-name .locus-product-name__name {
-  color: var(--tl-red);
-  padding-left: 0.6rem;
-  border-left: 1px solid color-mix(in srgb, var(--tl-red) 40%, transparent);
-}
 .md-typeset .locus-hero h1:first-of-type {
   font-family: var(--locus-sans);
   font-size: 2.9rem;
@@ -984,11 +943,6 @@ form.md-header__option {
   border-top: none;
   margin-top: 0;
   padding-top: 0.2rem;
-}
-[data-md-color-scheme="slate"] .md-nav--primary .md-nav__item--section > .md-nav__link,
-[data-md-color-scheme="slate"] .md-nav--primary .md-nav__item--section > .md-nav__link:not(.md-nav__link--active) {
-  color: var(--tl-rose-tint) !important;
-  border-top-color: var(--tl-rule);
 }
 
 .md-nav__link--active,
@@ -1637,24 +1591,6 @@ form.md-header__option {
   }
   /* The one-line pill is ~400px; on phones stack brand over name inside a
      rounded tag instead of overflowing the column. */
-  .md-typeset .locus-hero p.locus-product-name,
-  .md-typeset p.locus-product-name {
-    display: inline-grid;
-    grid-template-columns: auto 1fr;
-    column-gap: 0.6rem;
-    row-gap: 0.15rem;
-    align-items: center;
-    border-radius: 0.75rem;
-    font-size: 0.6rem !important;
-    letter-spacing: 0.06em;
-  }
-  .md-typeset p.locus-product-name::before {
-    grid-row: 1 / span 2;
-  }
-  .md-typeset p.locus-product-name .locus-product-name__name {
-    padding-left: 0;
-    border-left: 0;
-  }
   /* At 0.78rem the one-liner spills past the copy button; at 0.7rem the
      whole command fits a 390px column with no scroll. */
   .md-typeset .locus-hero__copy pre {

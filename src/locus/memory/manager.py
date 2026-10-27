@@ -88,7 +88,7 @@ Quick start
 
 
     agent = Agent(
-        model="anthropic:claude-sonnet-4-6",
+        model="anthropic:claude-sonnet-5-5",
         memory_manager=LLMMemoryManager(store=store, extract_fn=my_extractor),
     )
 """
@@ -528,7 +528,7 @@ class LLMMemoryManager(BaseMemoryManager):
             namespace_prefix=("users", user_id),
         )
 
-        agent = Agent(model="anthropic:claude-sonnet-4-6", memory_manager=manager)
+        agent = Agent(model="anthropic:claude-sonnet-5-5", memory_manager=manager)
     """
 
     def __init__(

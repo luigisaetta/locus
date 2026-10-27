@@ -52,7 +52,7 @@ need no provider at all.
 from locus.agent import Agent
 from locus.models import get_model
 
-model = get_model("openai:gpt-4o")  # or "anthropic:claude-sonnet-4-6"
+model = get_model("openai:gpt-4o")  # or "anthropic:claude-sonnet-5-5"
 
 agent = Agent(
     model=model,

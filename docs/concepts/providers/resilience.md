@@ -55,7 +55,7 @@ pool = CredentialPool(
 
 def build(credential: Credential) -> AnthropicModel:
     return AnthropicModel(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         api_key=credential.api_key.get_secret_value(),
     )
 

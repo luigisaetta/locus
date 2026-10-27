@@ -33,12 +33,12 @@ export ANTHROPIC_API_KEY=sk-ant-...
 ```python
 from locus.agent import Agent
 agent = Agent(
-    model="anthropic:claude-sonnet-4-6",
+    model="anthropic:claude-sonnet-5-5",
     system_prompt="You are a support agent.",
 )
 ```
 
-The string `"anthropic:claude-sonnet-4-6"` tells the SDK the
+The string `"anthropic:claude-sonnet-5-5"` tells the SDK the
 provider (`anthropic:`) and the exact model id. Any model id
 Anthropic accepts, the SDK accepts.
 
@@ -62,10 +62,10 @@ examples, not a maintained roster:
 
 | Model | When to pick it |
 |---|---|
-| `claude-opus-4-8` | Hardest problems — timeline reconstruction, complex multi-step plans |
-| `claude-sonnet-5` | Current-generation everyday workhorse |
-| `claude-sonnet-4-6` | Everyday workhorse — fast enough, smart enough, cheap enough for routine work |
-| `claude-haiku-4-5` | High-volume classification and routing — cheap calls, log summaries |
+| `claude-fable-5-1` | Hardest problems — long multi-step plans, timeline reconstruction |
+| `claude-opus-5-5` | Complex reasoning where cost matters less than quality |
+| `claude-sonnet-5-5` | Everyday workhorse — fast enough, smart enough, cheap enough for routine work |
+| `claude-haiku-5-5` | High-volume classification and routing — cheap calls, log summaries |
 
 ### Real SSE streaming
 
@@ -103,7 +103,7 @@ class Triage(BaseModel):
     needs_human: bool
 
 agent = Agent(
-    model="anthropic:claude-sonnet-4-6",
+    model="anthropic:claude-sonnet-5-5",
     output_schema=Triage,
 )
 result = agent.run_sync("Customer 4821 reports a duplicate charge on ord-4821.")
@@ -124,10 +124,9 @@ Opt in with `prompt_cache=True` on `AnthropicModel`. The SDK then sends
 the system prompt as a block list with `cache_control: ephemeral` and
 tags the last entry of the tool catalog the same way (Anthropic walks
 markers in order — the last tag anchors the cache point).
-These markers are applied on the non-streaming path only:
-`AnthropicModel.stream()`, which `agent.run(..., stream_tokens=True)`
-uses, sends the system prompt and tool catalog untagged, so nothing is
-cached while streaming tokens.
+The same markers go on the streaming path: `AnthropicModel.stream()`,
+which `agent.run(..., stream_tokens=True)` uses, builds its request through
+the same code as `complete()`, so streaming turns hit the cache too.
 
 ```python
 from locus.agent import Agent
@@ -135,7 +134,7 @@ from locus.models.native.anthropic import AnthropicModel
 
 agent = Agent(
     model=AnthropicModel(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         prompt_cache=True,
     ),
     tools=[...],
@@ -189,7 +188,7 @@ async for event in agent.run("...", stream_tokens=True):
 | `429 overloaded_error` | Anthropic capacity; the `ModelRetryHook` re-tries with backoff if installed |
 | Prompt caching not visible in usage stats | Cache window expired (5 min ephemeral) or prompt below the threshold |
 | `ThinkEvent`s never fire | The turn produced no assistant `message.content` (e.g. tool-call-only turn) |
-| `temperature` appears to have no effect | Anthropic deprecated `temperature` from `claude-opus-4-7` onward and across the Claude 5 family. The provider matches those ids by prefix (`claude-opus-4-7`, `claude-opus-4-8`, `claude-opus-4-9`, `claude-sonnet-5`, `claude-opus-5`, `claude-haiku-5`, `claude-fable-5`, `claude-mythos-5`) and omits the parameter rather than taking a 400 — it is dropped silently, with no warning, even though `AnthropicConfig.temperature` defaults to `0.7`. Separately, token streaming (`agent.run(..., stream_tokens=True)`) goes through `AnthropicModel.stream()`, which sends no `temperature` for any Claude model, so while streaming the setting has no effect on `claude-sonnet-4-6` or `claude-haiku-4-5` either. Steer with the system prompt instead. |
+| `temperature` appears to have no effect | Anthropic deprecated `temperature` from `claude-opus-4-7` onward and across the Claude 5 family. The provider matches those ids by prefix (`claude-opus-4-7`, `claude-opus-4-8`, `claude-opus-4-9`, `claude-sonnet-5`, `claude-opus-5`, `claude-haiku-5`, `claude-fable-5`, `claude-mythos-5`) and omits the parameter rather than taking a 400 — it is dropped silently, with no warning, even though `AnthropicConfig.temperature` defaults to `0.7`. Separately, token streaming (`agent.run(..., stream_tokens=True)`) goes through `AnthropicModel.stream()`, which sends no `temperature` for any Claude model, so while streaming the setting has no effect on `claude-sonnet-5-5` or `claude-haiku-4-5` either. Steer with the system prompt instead. |
 
 ## Source
 

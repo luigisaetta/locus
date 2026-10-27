@@ -163,6 +163,7 @@ nav:
     - A2A protocol: concepts/multi-agent/a2a.md
     - DeepAgent: concepts/deepagent.md
     - Production-readiness: concepts/multi-agent/production.md
+  - Oracle Database 26ai: concepts/oracle-26ai.md
   - Agents:
     - State: concepts/state.md
     - Prompts: concepts/prompts.md
@@ -179,6 +180,7 @@ nav:
     - MCP: concepts/mcp.md
     - Multi-modal providers: concepts/multi-modal-providers.md
   - Memory and RAG:
+    - Memory — short-term and long-term: concepts/memory.md
     - Checkpointers & Store: concepts/checkpointers.md
     - Long-term memory manager: concepts/memory-manager.md
     - RAG: concepts/rag.md

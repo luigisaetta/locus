@@ -26,7 +26,7 @@ Typical wiring::
 
     def _build(cred: Credential) -> AnthropicModel:
         return AnthropicModel(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5-5",
             api_key=cred.api_key,
             ...
         )

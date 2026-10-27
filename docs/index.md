@@ -8,8 +8,6 @@ description: "Oracle Generative AI Agentic Harness. Locus is a Python agent harn
 <div class="locus-hero" markdown>
 <div class="locus-hero__copy" markdown>
 
-<p class="locus-product-name"><span class="locus-product-name__brand">Oracle Generative AI</span><span class="locus-product-name__name">Agentic Harness</span></p>
-
 # Multi-agent workflows built for <span class="accent">production.</span>
 
 One `Agent` class, eight ways to combine agents, Oracle Cloud underneath, and the runtime around the model: tools, memory, RAG, observability, guardrails, an admission gate.
@@ -77,7 +75,7 @@ print(agent.run_sync("What is the capital of France?").text)
 # → Paris
 ```
 
-Swap `oci:openai.gpt-5.5` for `openai:gpt-4o` or `anthropic:claude-sonnet-4-6`;
+Swap `oci:openai.gpt-5.5` for `openai:gpt-4o` or `anthropic:claude-sonnet-5-5`;
 the call stays the same. With an OCI profile in `~/.oci/config`, every notebook
 runs against OCI Generative AI with no further setup.
 
@@ -228,6 +226,7 @@ retriever = RAGRetriever(                            # Oracle Database 26ai
 agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 ```
 
+[Oracle Database 26ai, every primitive →](concepts/oracle-26ai.md) ·
 [Which OCI models work →](how-to/oci-models.md#model-support-on-oci) ·
 [Dedicated AI Clusters →](how-to/oci-dac.md) ·
 [Oracle Database 26ai notebooks →](notebooks/index.md#oracle-cloud-and-database-26ai)
@@ -242,7 +241,7 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
     `@tool` on any function, typed arguments coerced from whatever the
     model sends, idempotent execution, MCP servers in or out.
 
-- :material-database:{ .lg .middle } **[Memory and RAG](concepts/checkpointers.md)**
+- :material-database:{ .lg .middle } **[Memory and RAG](concepts/memory.md)**
 
     ---
     Durable threads on 10 backends, long-term memory, six vector stores,

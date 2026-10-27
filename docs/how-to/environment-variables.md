@@ -26,7 +26,7 @@ the notebooks run offline against a bundled model — setting only
 | Variable | Used by |
 |---|---|
 | `LOCUS_MODEL_PROVIDER` | `examples/config.py:get_model` — `oci` (auto-detected when `~/.oci/config` has a usable profile), `mock` (default otherwise), `openai`, `anthropic` |
-| `LOCUS_MODEL_ID` | Model id for the selected provider (e.g. `gpt-4o`, `claude-sonnet-4-6`) |
+| `LOCUS_MODEL_ID` | Model id for the selected provider (e.g. `gpt-4o`, `claude-sonnet-5-5`) |
 | `LOCUS_MODEL_ID_B` | Secondary "model B" slot — comparison notebooks |
 | `LOCUS_MODEL_ID_C` | Tertiary "model C" slot |
 | `LOCUS_RESEARCH_MODEL` | Overrides the model for the research/eval scripts |

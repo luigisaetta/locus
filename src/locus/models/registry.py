@@ -37,7 +37,7 @@ def get_model(model_string: str, **kwargs: Any) -> ModelProtocol:
 
     Examples:
         - "openai:gpt-4o"
-        - "anthropic:claude-sonnet-4-6"
+        - "anthropic:claude-sonnet-5-5"
 
     Args:
         model_string: Model identifier in "provider:model" format

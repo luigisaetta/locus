@@ -22,7 +22,7 @@ Usage:
         return "results..."
 
     agent = Agent(
-        model="openai:gpt-4o",  # or anthropic:claude-sonnet-4-6
+        model="openai:gpt-4o",  # or anthropic:claude-sonnet-5-5
         tools=[search],
         system_prompt="You are a helpful assistant.",
     )

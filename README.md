@@ -138,6 +138,7 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 
 → [OCI GenAI models](https://locusagents.ai/how-to/oci-models/) ·
 [Dedicated AI Clusters](https://locusagents.ai/how-to/oci-dac/) ·
+[Oracle Database 26ai](https://locusagents.ai/concepts/oracle-26ai/) ·
 [Notebook 01 — OCI transports](https://locusagents.ai/notebooks/notebook_01_oci_transports/) ·
 [Notebook 38 — Oracle 26ai RAG](https://locusagents.ai/notebooks/notebook_38_oracle_26ai_rag/) ·
 [Notebook 42 — Oracle 26ai checkpointer](https://locusagents.ai/notebooks/notebook_42_oracle_26ai_checkpointer/) ·
@@ -150,7 +151,7 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 | | |
 |---|---|
 | **[Tools and MCP](https://locusagents.ai/concepts/tools/)** | `@tool` on any function; arguments coerced to the declared types whatever the model sends; `@tool(idempotent=True)` dedupes on `(name, args)`; `MCPClient` consumes MCP servers and `LocusMCPServer` exposes yours. |
-| **[Memory](https://locusagents.ai/concepts/checkpointers/)** | 10 checkpoint backends (Oracle Database 26ai and its versioned saver, OCI Object Storage, PostgreSQL, MySQL, Redis, OpenSearch, S3-compatible, in-memory, file, HTTP); `OracleStore`, Oracle agent memory and the portable `LLMMemoryManager` for long-term memory. |
+| **[Memory](https://locusagents.ai/concepts/memory/)** | 10 checkpoint backends (Oracle Database 26ai and its versioned saver, OCI Object Storage, PostgreSQL, MySQL, Redis, OpenSearch, S3-compatible, in-memory, file, HTTP); `OracleStore`, Oracle agent memory and the portable `LLMMemoryManager` for long-term memory. |
 | **[RAG](https://locusagents.ai/concepts/rag/)** | Six vector stores (Oracle 26ai, pgvector, Qdrant, Chroma, OpenSearch, in-memory); OCI, in-database, OpenAI and Cohere embeddings; OCI Cohere, local and Cohere rerankers; `retriever.as_tool()`. |
 | **[Grounded reasoning](https://locusagents.ai/concepts/gsar/)** | GSAR partitions every claim as grounded, ungrounded, contradicted or complementary against typed evidence; below threshold the agent regenerates, replans or abstains. Reflexion scores every turn. |
 | **[Guardrails and the admission gate](https://locusagents.ai/concepts/control-layer/)** | Input, output and tool-call guardrails, steering (LLM-as-judge), trace hygiene, and `admit()` / `approve()`: allow, hold for a human, or deny, on a hash-chained audit trail. |

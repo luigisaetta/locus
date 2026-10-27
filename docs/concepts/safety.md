@@ -123,7 +123,7 @@ from locus.hooks.builtin.steering import SteeringHook
 
 # The steering model is a model instance — it can be a smaller/cheaper
 # model than the agent's main one.
-judge = AnthropicModel(model="claude-sonnet-4-6")
+judge = AnthropicModel(model="claude-sonnet-5-5")
 
 agent = Agent(
     model="{{ locus_example_model }}",

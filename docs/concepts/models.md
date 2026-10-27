@@ -8,9 +8,9 @@ OpenAI-compatible prefixes such as `ollama:`, `vllm:`, `groq:` or
 
 ```python
 # tools, system_prompt, and other kwargs are the same across providers
-Agent(model="oci:openai.gpt-5", tools=[lookup_order, issue_refund])             # OCI Generative AI
+Agent(model="oci:openai.gpt-5.5", tools=[lookup_order, issue_refund])           # OCI Generative AI
 Agent(model="openai:gpt-4o", tools=[lookup_order, issue_refund])                # OpenAI direct
-Agent(model="anthropic:claude-sonnet-4-6", tools=[lookup_order, issue_refund])  # Anthropic direct
+Agent(model="anthropic:claude-sonnet-5-5", tools=[lookup_order, issue_refund])  # Anthropic direct
 Agent(model="openrouter:provider/model-id", tools=[lookup_order, issue_refund]) # OpenRouter
 Agent(model="together:organization/model-id", tools=[lookup_order, issue_refund]) # Together.ai
 ```
@@ -56,10 +56,11 @@ locus.models
 │
 ├── oci:                                   ── OCI Generative AI · auto-routed transport
 │   ├─ V1 (default)            — OCIChatCompletionsModel on /openai/v1:
-│   │                           OpenAI · Meta · xAI · Mistral · Gemini ·
-│   │                           Cohere (non-R) — SSE streaming, day-0 models
-│   ├─ SDK                     — OCIModel for cohere.command-r* and
-│   │                           Dedicated AI Cluster endpoint OCIDs
+│   │                           OpenAI · Meta · xAI · Google — SSE
+│   │                           streaming, new models as OCI lists them
+│   ├─ SDK                     — OCIModel for every cohere.* id (Command R
+│   │                           and Command A; OCI's /openai/v1 rejects
+│   │                           them) and Dedicated AI Cluster endpoint OCIDs
 │   └─ Responses (opt-in)      — OCIResponsesModel, server-stateful
 │
 ├── openai:                                ── OpenAI direct · OpenAIModel
@@ -68,12 +69,12 @@ locus.models
 │
 ├── anthropic:                             ── Anthropic direct · AnthropicModel
 │   ├─ Claude family          — opus · sonnet · haiku
-│   └─ prompt caching         — opt-in (prompt_cache=True), non-streaming
-│                               calls only: marks the system prompt + tool
-│                               catalog; once that prefix passes the model's
-│                               minimum cacheable length, later turns read
-│                               it at ~1/10th input cost while the ~5-min
-│                               cache holds
+│   └─ prompt caching         — opt-in (prompt_cache=True), on complete()
+│                               and stream() alike: marks the system prompt
+│                               + tool catalog; once that prefix passes the
+│                               model's minimum cacheable length, later
+│                               turns read it at ~1/10th input cost while
+│                               the ~5-min cache holds
 │
 ├── OpenAI-compatible prefixes             ── OpenAIModel at a routed base_url
 │   ├─ self-hosted            — ollama · vllm · lmstudio · llamacpp
@@ -131,7 +132,7 @@ register_provider("audited", lambda model_id, **kw: AuditedModel(model_id, **kw)
 agent = Agent(model="audited:internal-llm", tools=[lookup_order, issue_refund])
 ```
 
-Source: [`register_provider` in `models/registry.py:21`](https://github.com/oracle/locus/blob/main/src/locus/models/registry.py#L21).
+Source: [`register_provider` in `models/registry.py`](https://github.com/oracle/locus/blob/main/src/locus/models/registry.py).
 
 ## Credential pooling & rotation
 
@@ -152,7 +153,7 @@ pool = CredentialPool([
 ])
 
 def _build(cred: Credential) -> AnthropicModel:
-    return AnthropicModel(model="claude-sonnet-4-6", api_key=cred.api_key)
+    return AnthropicModel(model="claude-sonnet-5-5", api_key=cred.api_key)
 
 agent = Agent(
     model=CredentialPoolModel(pool=pool, build_model=_build),
@@ -171,7 +172,7 @@ Source:
 ## Notebook
 
 [`notebook_11_model_providers.py`](https://github.com/oracle/locus/blob/main/examples/notebook_11_model_providers.py)
-runs the same agent — a security-operations triage example — against OpenAI and
+runs the same cloud-operations agent against OCI Generative AI, OpenAI and
 Anthropic by swapping one string.
 
 ## Source
