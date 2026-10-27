@@ -238,7 +238,7 @@ def _usage_dict(usage: Any) -> dict[str, int]:
 class AnthropicConfig(ModelConfig):
     """Configuration for Anthropic models."""
 
-    model: str = "claude-sonnet-4-6"
+    model: str = "claude-sonnet-5-5"
     max_tokens: int = 4096
     temperature: float = 0.7
     top_p: float = 0.9
@@ -302,10 +302,11 @@ class AnthropicConfig(ModelConfig):
 class AnthropicModel(BaseModel):
     """Anthropic model provider.
 
-    Supports Claude 4.6, 4.5, 3.5 models with streaming and tool calling.
+    Supports the Claude 5 family (Fable 5.1, Opus / Sonnet / Haiku 5.5) and
+    earlier Claude models, with streaming and tool calling.
 
     Example:
-        >>> model = AnthropicModel(model="claude-sonnet-4-6")
+        >>> model = AnthropicModel(model="claude-sonnet-5-5")
         >>> response = await model.complete([Message.user("Hello!")])
     """
 
@@ -325,7 +326,7 @@ class AnthropicModel(BaseModel):
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-6",
+        model: str = "claude-sonnet-5-5",
         api_key: str | None = None,
         base_url: str | None = None,
         max_tokens: int = 4096,

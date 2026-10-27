@@ -51,7 +51,7 @@ export OPENSEARCH_USERNAME=<your-username>
 export OPENSEARCH_PASSWORD='...'
 export OPENAI_API_KEY=sk-...
 export ANTHROPIC_API_KEY=sk-ant-...
-export LOCUS_RESEARCH_MODEL=anthropic:claude-sonnet-4-6
+export LOCUS_RESEARCH_MODEL=anthropic:claude-sonnet-5-5
 
 python examples/projects/deep-research/demo_opensearch_multi_index.py
 ```

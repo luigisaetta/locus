@@ -20,7 +20,7 @@ Usage::
     from locus.memory.managers import Mem0MemoryManager
 
     manager = Mem0MemoryManager(user_id="alice")
-    agent = Agent(model="anthropic:claude-sonnet-4-6", memory_manager=manager)
+    agent = Agent(model="anthropic:claude-sonnet-5-5", memory_manager=manager)
 
 By default mem0 builds its own OpenAI-backed LLM + embedder + local
 vector store; pass ``config=`` to point it at other backends (a fully

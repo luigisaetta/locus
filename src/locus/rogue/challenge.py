@@ -265,7 +265,7 @@ def build_agent(mode: str) -> Agent:
             temperature=0,
         )
     elif mode == MODE_FRONTIER:
-        model = get_model("anthropic:claude-sonnet-4-6", api_key=os.environ["ANTHROPIC_API_KEY"])
+        model = get_model("anthropic:claude-sonnet-5-5", api_key=os.environ["ANTHROPIC_API_KEY"])
     else:
         model = CompromisedModel()
     return Agent(

@@ -180,7 +180,7 @@ from locus.models import AnthropicModel
 
 agent = Agent(
     ...,
-    hooks=[SteeringHook(model=AnthropicModel(model="claude-sonnet-4-6"))],
+    hooks=[SteeringHook(model=AnthropicModel(model="claude-sonnet-5-5"))],
 )
 ```
 

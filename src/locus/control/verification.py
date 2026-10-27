@@ -265,7 +265,7 @@ class AdversarialSkeptic:
             finding,
             skeptics=[
                 EvidenceQualitySkeptic(),
-                AdversarialSkeptic("anthropic:claude-sonnet-4-6"),
+                AdversarialSkeptic("anthropic:claude-sonnet-5-5"),
             ],
         )
     """

@@ -118,7 +118,7 @@ class Agent(AgentRuntimeMixin, BaseModel):
 
     Usage:
         agent = Agent(
-            model="openai:gpt-4o",  # or anthropic:claude-sonnet-4-6
+            model="openai:gpt-4o",  # or anthropic:claude-sonnet-5-5
             tools=[search, calculate],
             system_prompt="You are a helpful assistant.",
         )

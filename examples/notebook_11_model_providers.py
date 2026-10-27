@@ -4,9 +4,9 @@
 """Notebook 11: Model providers — one cloud-ops agent, swap models with a string.
 
 The Gateway is the seam every AI request in the org flows through: one
-cloud-operations agent codebase, any backing model. Locus supports OpenAI
-and Anthropic as first-class providers, and the same agent code runs
-against either — only the model object changes, so a platform team can
+cloud-operations agent codebase, any backing model. Locus supports OCI
+Generative AI, OpenAI and Anthropic as first-class providers, and the same
+agent code runs against any of them — only the model object changes, so a platform team can
 re-platform a provider (for cost, latency, data residency, or an outage
 failover) without rewriting a single runbook. The provider abstraction is
 also a control point: routing, rate limits, and audit live at the Gateway,
@@ -14,8 +14,9 @@ not in each agent.
 
 Provider matrix:
 
-  OpenAI    — GPT-4o, o1, o3, gpt-5.x against the direct API.
-  Anthropic — Claude models (opus / sonnet / haiku).
+  OCI       — oci:<vendor>.<model>: the OCI Generative AI catalog, auto-routed.
+  OpenAI    — GPT-4o, o3, gpt-5.x against the direct API.
+  Anthropic — Claude models (fable / opus / sonnet / haiku).
   Registry  — get_model("provider:model_name") returns the right client.
 
 Run it
@@ -67,7 +68,7 @@ async def example_providers():
 
     print("\nUsage:")
     print('  model = get_model("openai:gpt-4o")')
-    print('  model = get_model("anthropic:claude-sonnet-4-6")')
+    print('  model = get_model("anthropic:claude-sonnet-5-5")')
     print()
     print("The provider prefix before the colon selects the client; the rest")
     print("is the model id that provider expects. See docs/concepts/models.md.")
@@ -89,7 +90,7 @@ async def example_direct():
 
     print("\nAnthropic (requires ANTHROPIC_API_KEY):")
     print("  from locus.models.native.anthropic import AnthropicModel")
-    print('  model = AnthropicModel(model="claude-sonnet-4-6")')
+    print('  model = AnthropicModel(model="claude-sonnet-5-5")')
 
 
 async def example_live_call() -> None:

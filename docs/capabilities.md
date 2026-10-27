@@ -274,8 +274,8 @@ await ctx.actions.execute(
 |---|---|---|
 | OCI Generative AI | OpenAI, Meta Llama, xAI Grok, Mistral, Google Gemini and Cohere models served on OCI (on-demand or Dedicated AI Cluster) | `locus.models.providers.oci` · [OCI Generative AI](concepts/providers/oci.md) |
 | OpenAI | All commercial models (gpt-5.5, o-series, etc) | `locus.models.native.openai` · [OpenAI](concepts/providers/openai.md) |
-| Anthropic | Claude 4.x (e.g. `claude-sonnet-4-6`) — direct API | `locus.models.native.anthropic` · [Anthropic](concepts/providers/anthropic.md) |
-| Auto-routing | `get_model("anthropic:claude-sonnet-4-6")` picks transport from id | `locus.models.registry.get_model` |
+| Anthropic | Claude 5.x (e.g. `claude-sonnet-5-5`) — direct API | `locus.models.native.anthropic` · [Anthropic](concepts/providers/anthropic.md) |
+| Auto-routing | `get_model("anthropic:claude-sonnet-5-5")` picks transport from id | `locus.models.registry.get_model` |
 | Resilience helpers | Failover classification, credential pooling, prompt-cache breakpoints, rate-limit buckets | `locus.models.failover` · `locus.models.pooled` · `locus.models.caching` · `locus.models.rate_limits` · [Resilience](concepts/providers/resilience.md) |
 
 ## Skills + Playbooks

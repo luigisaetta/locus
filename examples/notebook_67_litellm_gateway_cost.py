@@ -191,7 +191,7 @@ def main() -> None:
     # ----- Step 1: issue two virtual keys, one per payments team -----------
     fraud_ops_key = issue_virtual_key(url, master_key, team="fraud-ops", models=["gpt-4o"])
     dispute_ops_key = issue_virtual_key(
-        url, master_key, team="dispute-ops", models=["gpt-4o", "claude-sonnet-4-6"]
+        url, master_key, team="dispute-ops", models=["gpt-4o", "claude-sonnet-5-5"]
     )
     print(" Virtual keys issued (each with a $5 hard budget):")
     print(f"   fraud-ops   (gpt-4o only):    {fraud_ops_key[:24]}...")

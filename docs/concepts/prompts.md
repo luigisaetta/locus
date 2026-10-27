@@ -103,7 +103,7 @@ charges fewer tokens on cache hits — pass `prompt_cache=True`:
 from locus.models import AnthropicModel
 
 agent = Agent(
-    model=AnthropicModel(model="claude-sonnet-4-6", prompt_cache=True),
+    model=AnthropicModel(model="claude-sonnet-5-5", prompt_cache=True),
     system_prompt=very_long_prompt,
 )
 ```

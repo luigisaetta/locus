@@ -81,6 +81,32 @@ lifecycle policies handle retention, IAM handles auth.
 
 ## Getting started
 
+### Oracle Database 26ai: `oracle_checkpointer()`
+
+Durable threads in the same database as the data the agent acts on. The
+factory returns a ready checkpointer; `OracleCheckpointSaver` is the
+versioned alternative that keeps every checkpoint of a thread (see
+[Oracle Database 26ai](oracle-26ai.md)).
+
+```python
+import os
+
+from locus.agent import Agent
+from locus.memory.backends import oracle_checkpointer
+
+cp = oracle_checkpointer(
+    dsn=os.environ["ORACLE_DSN"],
+    user=os.environ["ORACLE_USER"],
+    password=os.environ["ORACLE_PASSWORD"],
+    wallet_location=os.environ["ORACLE_WALLET"],        # Autonomous Database wallet
+    wallet_password=os.environ.get("ORACLE_WALLET_PASSWORD", ""),
+    table_name="locus_checkpoints",
+)
+agent = Agent(model="oci:openai.gpt-5.5", checkpointer=cp)
+agent.run_sync("My name is Alice.", thread_id="t1")
+agent.run_sync("What's my name?", thread_id="t1")   # resumes from the database
+```
+
 ### Local: `FileCheckpointer`
 
 ```python

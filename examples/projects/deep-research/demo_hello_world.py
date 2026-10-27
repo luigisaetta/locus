@@ -9,7 +9,7 @@ Two `@tool` functions + `create_deepagent(...)`, asking the agent to
 call both tools in one turn.
 
 Run:
-    LOCUS_MODEL=anthropic:claude-sonnet-4-6 \\
+    LOCUS_MODEL=anthropic:claude-sonnet-5-5 \\
     ANTHROPIC_API_KEY=sk-ant-... \\
     python examples/projects/deep-research/demo_hello_world.py
 """
@@ -37,7 +37,7 @@ def fetch_advisory(vendor: str) -> str:
 
 
 def main() -> int:
-    model_id = os.environ.get("LOCUS_MODEL", "anthropic:claude-sonnet-4-6")
+    model_id = os.environ.get("LOCUS_MODEL", "anthropic:claude-sonnet-5-5")
 
     print("== locus hello-world deepagent ==")
     print(f"   model      : {model_id}")
