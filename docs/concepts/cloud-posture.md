@@ -59,12 +59,14 @@ independent controls, neither trusting the model.
 system prompt, a structured `PostureReport` output schema, and
 reflexion + grounding.
 
+{{ locus_model_tabs }}
+
 ```python
 from locus_security import create_soc_analyst, SecurityControls
 
 controls = SecurityControls(min_gsar=0.6, min_confidence=0.6)
 analyst = create_soc_analyst(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     controls=controls,
     scope="Focus on account-level IAM: root access keys and MFA.",
 )

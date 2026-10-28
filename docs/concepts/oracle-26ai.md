@@ -9,7 +9,12 @@ Locus treats Oracle Database 26ai as the place where an agent's state lives:
 vectors for retrieval, threads for continuity, memories for what it has
 learned, in the same database as the data it acts on. Each primitive is a
 first-class Locus class on the `oracledb` driver, with no adapter layer in
-between, and it works with the same `Agent` as everything else.
+between (`OracleAgentMemoryManager` alone sits on Oracle's own agent-memory
+client), and it works with the same `Agent` as everything else. The drawing
+groups them by what the database does for the agent and names the `Agent`
+surface each group is reached through.
+
+{{ locus_diagram oracle-26ai-primitives }}
 
 ```bash
 pip install "locus-sdk[oci,oracledb]"
@@ -26,7 +31,7 @@ pip install "locus-sdk[oci,oracledb]"
 | Durable conversation threads | `oracle_checkpointer()` | [42 — Oracle 26ai checkpointer](../notebooks/notebook_42_oracle_26ai_checkpointer.md) |
 | Every version of a thread, resume from any point | `OracleCheckpointSaver` | [43 — Versioned saver](../notebooks/notebook_43_oracle_versioned_saver.md) |
 | Long-term memory store (`BaseStore`) | `OracleStore` | [37 — Oracle store](../notebooks/notebook_37_oracle_store.md) |
-| Oracle's agent-memory service, in-database extraction and recall | `OracleAgentMemoryManager` | [44 — Oracle agent memory](../notebooks/notebook_44_oracle_agent_memory.md) |
+| Oracle's agent-memory client: LLM-backed extraction, in-database recall | `OracleAgentMemoryManager` | [44 — Oracle agent memory](../notebooks/notebook_44_oracle_agent_memory.md) |
 
 Every class has a synchronous twin (`OracleSyncVectorStore`,
 `OracleSyncInDBEmbeddings`, `OracleSyncInDBChunker`, `OracleSyncADBLoader`,

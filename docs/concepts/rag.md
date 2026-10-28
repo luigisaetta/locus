@@ -7,6 +7,8 @@ calls when it needs facts. The canonical use is grounding the agent
 in your own knowledge: index product docs, runbooks, and past
 resolutions, then let the agent cite them at decision time.
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.rag import (
     RAGRetriever, OpenAIEmbeddings, InMemoryVectorStore, create_rag_tool,
@@ -28,7 +30,7 @@ await retriever.add_documents([
 ])
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[create_rag_tool(retriever)],
     system_prompt="You are a support agent. Cite the indexed "
                   "evidence behind every recommendation; never guess.",
@@ -52,6 +54,14 @@ decision time the agent quotes the matching source — "refund policy
 | Live lookups (is this hash malicious *right now*?) | use a direct API tool such as [`enrich_indicator`](../api/integrations.md); RAG is for indexed corpora, not live lookups |
 
 ## Getting started
+
+The five steps below set up both halves of this picture: ingest, which
+loads, chunks and embeds your documents into a vector store, and
+retrieval, where the agent's query is embedded, the store is searched,
+the hits are optionally reranked and the ranked passages come back
+through a tool the agent calls.
+
+{{ locus_diagram rag-pipeline }}
 
 ### 1. Pick an embedder
 
@@ -188,11 +198,13 @@ catches relevance signals embeddings miss. The pattern:
    to the top-N (e.g. 5).
 4. Feed the top-N to the LLM.
 
-Two rerankers ship:
+Three rerankers ship:
 
 - `CrossEncoderReranker` — local sentence-transformers cross-encoder,
   fully offline.
 - `CohereReranker` — Cohere's direct rerank API (`rerank-v3.5`).
+- `OCICohereReranker` — the same Cohere rerank models served by OCI
+  Generative AI, authenticated with your OCI profile.
 
 ```python
 from locus.rag import CrossEncoderReranker
@@ -256,7 +268,8 @@ Locus retrieval.
 For corpora where keyword precision matters (proper nouns, error codes,
 version strings), the practical levers are: tighten `chunk_size` so each
 chunk is about one fact, filter by `metadata_filter` on `retrieve()`,
-and add a reranker (`CrossEncoderReranker` / `CohereReranker`) to rescore
+and add a reranker (`CrossEncoderReranker`, `CohereReranker` or
+`OCICohereReranker`) to rescore
 the over-fetched candidate pool.
 
 ## RAG poisoning — GSAR grounding as the backstop {#rag-poisoning-gsar-grounding-as-the-backstop}

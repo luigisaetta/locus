@@ -226,10 +226,12 @@ The domain handles are the *programmatic* facade — what your own code calls. W
 you want an autonomous `locus.Agent` to drive the investigation, hand it the
 *agent* facade instead:
 
+{{ locus_model_tabs }}
+
 ```python
 from locus import Agent
 
-agent = Agent(model="{{ locus_example_model }}", tools=ctx.toolset())
+agent = Agent(model="{{ locus_model }}", tools=ctx.toolset())
 ```
 
 `toolset()` returns the agent-ready security tool bundle built from the **bundled

@@ -4,8 +4,9 @@
 
 The model may retry. With `idempotent=True`, an identical call later in the
 same `agent.run()` reuses the recorded result instead of invoking the tool body
-again. When `agent.run(..., thread_id=...)` reloads a checkpointed thread, that
-recorded result can also prevent a replay. A run continued with
+again. When `agent.run(..., thread_id=...)` reloads a checkpointed thread, the
+new turn starts with an empty record, so an earlier turn's result does not
+prevent a replay. A run continued with
 `agent.resume()` does not check for a prior match; see
 [How it works](#how-it-works).
 
@@ -30,7 +31,11 @@ Inside a single agent run, the SDK hashes the tool's
 call with a given key hits the function body** and the result is
 recorded. **A later call with the same key in the `run()` loop
 short-circuits to the cached response** without invoking the body
-(exceptions below).
+(exceptions below). The drawing follows one call through the loop's Execute
+step: the key, the check against the run's record, and the result's way back
+to the model.
+
+{{ locus_diagram idempotent-execution }}
 
 ```python
 from locus.tools import tool
@@ -53,8 +58,10 @@ A call from an earlier turn is matched with a plain `dict == dict` equality
 on `(tool_name, arguments)`; a duplicate inside the same model response is
 matched on a sorted-key JSON serialisation of the arguments. The two agree
 for ordinary arguments, but not on number type: `120` and `120.0` match
-across turns, not within one response. Both checks run in the `run()` loop,
-including a run that reloads a checkpointed thread with `thread_id`. They do
+across turns, not within one response. Both checks run in the `run()` loop
+against the calls recorded in the current turn; a run that reloads a
+checkpointed thread with `thread_id` starts a new turn with an empty record, so
+an earlier turn's call is never matched. They do
 not run after `agent.resume()` answers an interrupt: the continued run
 executes each tool call without looking for a prior match, so an identical
 idempotent call runs the body again. A held call that
@@ -103,22 +110,21 @@ inside the agent runtime; they do not create distributed exactly-once delivery.
 ### Replays after checkpoint resume
 
 When `agent.run(..., thread_id=...)` reloads a checkpointed thread, the model may decide to
-re-issue tool calls it's already seen. Idempotent tools see the
-cache pre-populated from the checkpoint and skip the side effect on
-replay. (This requires `tool_executions` to be restored from the
-checkpoint; the SDK's [native checkpointers](checkpointers.md) handle
-it.)
+re-issue tool calls it's already seen. The new turn starts with an empty
+`tool_executions` record, so an idempotent tool fires again. Across turns,
+only a stable idempotency key sent to the downstream system keeps the side
+effect from repeating.
 
 ## What it is *not*
 
 | Concept | Idempotency is… | Idempotency is *not*… |
 |---|---|---|
-| Scope | within a single agent run | cross-run — restart and the cache is gone (use a [checkpointer](checkpointers.md)) |
+| Scope | within a single agent run | cross-run — a new run starts with an empty record, even on a checkpointed thread |
 | Failure | one fire per identical call in the `run()` loop | retry — if the body raises, the exception propagates as the cached "result" |
 | Boundary | per-agent | network — two different agents both calling `issue_refund(o, a)` each fire once |
 
-If you need cross-run idempotency, configure a checkpointer and an idempotent
-server-side endpoint. Generate a stable operation key from the business
+If you need cross-run idempotency, use an idempotent server-side endpoint.
+Generate a stable operation key from the business
 operation (for example, `refund:ORD-4821:v1`) and send it to that endpoint on
 every attempt.
 
@@ -161,7 +167,7 @@ idempotency key to the provider.
 | Symptom | Likely cause |
 |---|---|
 | Tool re-fires despite `idempotent=True` | Argument changed between calls. Check that the model isn't mutating order ids / amounts between turns. |
-| Idempotent cache survives across runs unexpectedly | It shouldn't — only the checkpointer persists state. If you're seeing this, you're loading state from a checkpoint and don't want to. |
+| Idempotent cache survives across runs unexpectedly | It cannot — the record is the run's own `state.tool_executions`, and a new turn starts it empty even on a checkpointed thread. |
 | Body raised first time, cache returns the exception | This is by design — the failure is part of the "result" of the first call. The model sees the failure and can react. To re-attempt, the model must change an argument. |
 | Read-only lookup tagged `idempotent=True` | Harmless but wasteful — the cache hit savings are negligible vs the read itself. Leave it off. |
 

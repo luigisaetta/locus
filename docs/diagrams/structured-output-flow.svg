@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Structured output, from Agent(output_schema=…) to AgentResult.parsed, per locus-sdk 4.0.0.
+    output_schema=      AgentConfig.output_schema must be a pydantic BaseModel subclass         agent/config.py:777-787, :886-893
+                        output_schema_strict (default True), output_schema_retries              agent/config.py:789-807
+    system prompt       _resolve_system_prompt appends "=== Final-answer schema ===" and
+                        create_schema_prompt(schema) whenever output_schema is set, for
+                        every provider, not only the ones without response_format              agent/runtime_loop.py:2767-2776, core/structured.py:145-159
+                        used by _create_initial_state and by the continue-thread path            agent/runtime_loop.py:2707, :2753
+    native mode?        a loop call carries response_format only when output_schema is set,
+                        the call offers no tools (tool_schemas empty) and
+                        model.supports_structured_output is truthy                               agent/runtime_loop.py:3226-3243, :3265-3266
+                        OpenAIModel: True; OCIChatCompletionsModel inherits it                    models/native/openai.py:712-720, models/providers/oci/openai_compat.py:387
+                        AnthropicModel: False; OCIGenAIModel (native SDK): False;
+                        a model without the attribute: False                                      models/native/anthropic.py:319-325, models/providers/oci/__init__.py:91-95
+    response_format     build_response_format(schema, strict=output_schema_strict) gives
+                        {"type": "json_schema", "json_schema": {name, schema, strict}}; strict
+                        adds additionalProperties false, every property required, bare $ref      core/structured.py:377-408
+    agent loop ->       arun takes the run's final_message and, when output_schema is set,
+    final answer        calls _structure_output on it                                             agent/agent.py:399-406
+    parse               parse_structured(final_message, schema, strict=False): extract_json
+                        (code fences, else the first balanced object or array), json.loads,
+                        schema.model_validate; success returns (parsed, None, state)              agent/runtime_loop.py:3756-3758, core/structured.py:53-142
+    schema repair       on failure, up to output_schema_retries times: a "[Schema Repair]"
+                        system message with format_validation_errors(...), then
+                        model.complete(tools=None, response_format=build_response_format(...));
+                        a TypeError repeats the call without response_format; the reply is
+                        parsed again; the exchange is metered but not written to the state        agent/runtime_loop.py:3760-3812
+                        AnthropicModel turns a response_format into a forced respond_with_schema
+                        tool                                                                      models/native/anthropic.py:580-600, :665-676
+    result.parsed       AgentResult.from_state(parsed=…, parse_error=…,
+                        message=parsed.model_dump_json())                                         agent/agent.py:407-410, :454-467; agent/result.py:209-223
+    parsed_as(Schema)   ValueError when parsed is None, TypeError on another concrete type        agent/result.py:279-298
+    result.parse_error  every retry failed: parsed is None, parse_error is the last error         agent/runtime_loop.py:3812
+  Only arun (and run_sync, which drives it) coerces; the run() event stream does not             agent/agent.py:518, tools/structured_output.py:7-8
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 824 480" role="img" aria-labelledby="title desc">
+  <title id="title">Structured output, from output_schema to result.parsed</title>
+  <desc id="desc">You set output_schema to a Pydantic model. Locus appends a schema instruction to the system prompt. If the model declares native structured output and the call offers no tools, the request also carries response_format, strict when configured; otherwise only the prompt carries the schema. The agent loop runs until the model answers without tool calls, and that final assistant message is parsed into the schema. When it validates, the instance is result.parsed, also reachable through parsed_as. When it fails, schema repair re-prompts the model with the validation errors and parses the new reply, at most output_schema_retries times; if every retry fails, result.parsed is None and result.parse_error holds the last error.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- output_schema -> system prompt -> native mode? -->
+  <path class="edge" marker-end="url(#ah)" d="M164,129 L190,129"/>
+  <path class="edge" marker-end="url(#ah)" d="M360,129 L386,129"/>
+
+  <!-- native mode? -> response_format (yes) -> agent loop -->
+  <path class="edge" marker-end="url(#ah)" d="M483,87 V45 H620"/>
+  <rect class="label-bg" x="467" y="56" width="32" height="20" rx="4"/>
+  <text class="label" x="483" y="66">yes</text>
+  <path class="edge" marker-end="url(#ah)" d="M710,74 L710,98"/>
+
+  <!-- native mode? -> agent loop (no) -->
+  <path class="edge" marker-end="url(#ah)" d="M578,129 L620,129"/>
+  <rect class="label-bg" x="585" y="119" width="28" height="20" rx="4"/>
+  <text class="label" x="599" y="129">no</text>
+
+  <!-- agent loop -> final answer -->
+  <path class="edge" marker-end="url(#ah)" d="M710,158 V196 H114 V220"/>
+  <rect class="label-bg" x="360" y="186" width="104" height="20" rx="4"/>
+  <text class="label" x="412" y="196">no tool calls</text>
+
+  <!-- final answer -> parse -> result.parsed -->
+  <path class="edge" marker-end="url(#ah)" d="M204,251 L234,251"/>
+  <path class="edge" marker-end="url(#ah)" d="M412,251 L536,251"/>
+  <rect class="label-bg" x="452" y="241" width="44" height="20" rx="4"/>
+  <text class="label" x="474" y="251">valid</text>
+
+  <!-- parse -> schema repair -> parse -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M280,280 L280,332"/>
+  <rect class="label-bg" x="251" y="296" width="58" height="20" rx="4"/>
+  <text class="label" x="280" y="306">invalid</text>
+  <path class="edge dashed" marker-end="url(#ah)" d="M368,334 L368,282"/>
+  <rect class="label-bg" x="332" y="296" width="72" height="20" rx="4"/>
+  <text class="label" x="368" y="306">new reply</text>
+
+  <!-- schema repair -> result.parse_error -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M412,363 L536,363"/>
+  <rect class="label-bg" x="424" y="353" width="100" height="20" rx="4"/>
+  <text class="label" x="474" y="363">retries spent</text>
+
+  <g class="node">
+    <rect x="24" y="100" width="140" height="58" rx="12"/>
+    <text x="94" y="119">output_schema=</text>
+    <text class="sub" x="94" y="140">Pydantic model</text>
+  </g>
+  <g class="node">
+    <rect x="192" y="100" width="168" height="58" rx="12"/>
+    <text x="276" y="119">System prompt</text>
+    <text class="sub" x="276" y="140">+ schema instruction</text>
+  </g>
+  <g class="decision node">
+    <polygon points="483,87 578,129 483,171 388,129"/>
+    <text x="483" y="119">Native mode?</text>
+    <text class="sub" x="483" y="140">and no tools</text>
+  </g>
+  <g class="node optional">
+    <rect x="622" y="16" width="176" height="58" rx="12"/>
+    <text x="710" y="35">response_format</text>
+    <text class="sub" x="710" y="56">strict when configured</text>
+  </g>
+  <g class="node">
+    <rect x="622" y="100" width="176" height="58" rx="12"/>
+    <text x="710" y="119">Agent loop</text>
+    <text class="sub" x="710" y="140">model + tool calls</text>
+  </g>
+
+  <g class="node">
+    <rect x="24" y="222" width="180" height="58" rx="12"/>
+    <text x="114" y="241">Final answer</text>
+    <text class="sub" x="114" y="262">last assistant message</text>
+  </g>
+  <g class="node primary">
+    <rect x="236" y="222" width="176" height="58" rx="12"/>
+    <text x="324" y="241">Parse</text>
+    <text class="sub" x="324" y="262">parse_structured()</text>
+  </g>
+  <g class="node end">
+    <rect x="538" y="222" width="180" height="58" rx="29"/>
+    <text x="628" y="241">result.parsed</text>
+    <text class="sub" x="628" y="262">or parsed_as(…)</text>
+  </g>
+
+  <g class="node optional">
+    <rect x="236" y="334" width="176" height="58" rx="12"/>
+    <text x="324" y="353">Schema repair</text>
+    <text class="sub" x="324" y="374">re-prompt with errors</text>
+  </g>
+  <g class="node end">
+    <rect x="538" y="334" width="180" height="58" rx="29"/>
+    <text x="628" y="353">result.parse_error</text>
+    <text class="sub" x="628" y="374">parsed is None</text>
+  </g>
+
+  <text class="note" x="412" y="426">The schema instruction rides the system prompt on both paths. response_format also needs a call with no tools:</text>
+  <text class="note" x="412" y="446">constrained decoding suppresses tool calls, so a tool-using agent sees it on the repair call only.</text>
+  <text class="note" x="412" y="466">Schema repair runs at most output_schema_retries times and never enters the returned state.</text>
+</svg>

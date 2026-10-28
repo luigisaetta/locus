@@ -11,6 +11,8 @@ stops.
 The same class is what multi-agent shapes (orchestrators, swarms,
 handoff desks) instantiate: Locus has a single agent abstraction.
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 from locus.tools import tool
@@ -21,7 +23,7 @@ def lookup_order(order_id: str) -> str:
     return "results"
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order],
     system_prompt="You are a customer-support agent.",
     max_iterations=20,

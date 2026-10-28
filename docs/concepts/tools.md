@@ -9,7 +9,13 @@ affects the world. The model decides *"call `lookup_order` with order_id='ord-48
 the SDK runs your `lookup_order` function, captures the return value, and
 feeds it back. From your side, a tool is **a regular Python function
 with a `@tool` decorator** — the SDK introspects the signature and
-docstring to build the schema the model sees.
+docstring to build the schema the model sees. The drawing follows that
+round trip: `@tool` reads the signature and docstring into a `Tool` with
+a JSON schema, the `ToolRegistry` offers it to the model, and a call
+comes back through the executor, your function and a `ToolResult` to the
+observation the model reads next.
+
+{{ locus_diagram tool-pipeline }}
 
 This is the seam most production code touches. Get tools right and
 the rest of the framework gets out of your way.
@@ -42,8 +48,10 @@ mark optional parameters.
 
 ### 2. Pass to the agent
 
+{{ locus_model_tabs }}
+
 ```python
-agent = Agent(model="{{ locus_example_model }}", tools=[lookup_order])
+agent = Agent(model="{{ locus_model }}", tools=[lookup_order])
 ```
 
 That's the wiring. The model now sees `lookup_order` in its tool list and
@@ -203,7 +211,7 @@ through `LocusMCPServer` — same `@tool`, no rewrite. See
 |---|---|
 | Model never calls the tool | Description / docstring isn't telling the model when to use it. Be explicit: *"Use this tool when the user asks about X."* |
 | Tool fires twice on the same input | You're seeing the model retry. Add `idempotent=True` (a refund goes out once, not twice). |
-| `TypeError: missing 1 required positional argument` at call time | Function signature has a parameter without a default that you didn't surface in the docstring; the model omitted it. Add a default or explain the parameter. |
+| `TypeError: lookup_order was called with the wrong arguments — missing required argument(s): …` in the tool result | Function signature has a parameter without a default that you didn't surface in the docstring; the model omitted it, and `sig.bind()` rejects the call before your function runs. Add a default or explain the parameter. |
 | Tool returns Python objects but the model echoes `<__main__.X object at 0x…>` | Tool return value isn't JSON-serialisable. Return a dict / Pydantic model / list of strings, not arbitrary objects. |
 | Async tool blocks the event loop | The "async" body is calling sync I/O. Wrap the blocking call in `asyncio.to_thread(...)` or use an async client. |
 

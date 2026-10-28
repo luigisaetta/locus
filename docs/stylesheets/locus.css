@@ -2622,3 +2622,38 @@ form.md-header__option {
    still takes a slot at the end of the title line; on a title that fills the
    column it wraps alone onto a second, empty-looking line. Drop it on H1 only. */
 .md-typeset h1 .headerlink { display: none; }
+
+/* ===================================================================
+   Table filter — docs/javascripts/table-filter.js adds a search box above
+   any article table with fifteen or more rows (event catalogues, environment
+   variables, backend comparisons). Same field styling as the Examples filter.
+   =================================================================== */
+.md-typeset .locus-table-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-sm);
+  margin: var(--tl-space-md) 0 var(--tl-space-xs);
+}
+.md-typeset .locus-table-filter__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--tl-text);
+  background: var(--tl-surface);
+  border: 1px solid var(--tl-rule);
+  border-radius: var(--tl-radius-md);
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.md-typeset .locus-table-filter__input:focus {
+  outline: none;
+  border-color: var(--tl-accent);
+  box-shadow: 0 0 0 3px var(--tl-accent-subtle);
+}
+.md-typeset .locus-table-filter__count {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  color: var(--tl-text-mute);
+  font-variant-numeric: tabular-nums;
+}

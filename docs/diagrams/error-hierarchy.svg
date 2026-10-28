@@ -50,11 +50,11 @@
   <path class="edge" marker-end="url(#ah)" d="M190,407 V349 Q190,343 196,343 H218"/>
   <path class="edge" marker-end="url(#ah)" d="M190,407 V465 Q190,471 196,471 H218"/>
   <path class="edge" d="M634,171 H648"/>
-  <path class="edge" marker-end="url(#ah)" d="M648,171 V145 Q648,139 654,139 H676"/>
-  <path class="edge" marker-end="url(#ah)" d="M648,171 V197 Q648,203 654,203 H676"/>
+  <path class="edge" marker-end="url(#ah)" d="M648,171 V145 Q648,139 654,139 H666"/>
+  <path class="edge" marker-end="url(#ah)" d="M648,171 V197 Q648,203 654,203 H666"/>
   <path class="edge" d="M634,311 H648"/>
-  <path class="edge" marker-end="url(#ah)" d="M648,311 V285 Q648,279 654,279 H676"/>
-  <path class="edge" marker-end="url(#ah)" d="M648,311 V337 Q648,343 654,343 H676"/>
+  <path class="edge" marker-end="url(#ah)" d="M648,311 V285 Q648,279 654,279 H666"/>
+  <path class="edge" marker-end="url(#ah)" d="M648,311 V337 Q648,343 654,343 H666"/>
 
   <g class="node primary">
     <rect x="353" y="20" width="150" height="54" rx="12"/>
@@ -103,12 +103,12 @@
     <text class="sub" x="116" y="418">model_error</text>
   </g>
   <g class="node">
-    <rect x="678" y="112" width="240" height="54" rx="12"/>
+    <rect x="668" y="112" width="260" height="54" rx="12"/>
     <text x="798" y="129">CheckpointNotFoundError</text>
     <text class="sub" x="798" y="150">checkpoint_not_found</text>
   </g>
   <g class="node">
-    <rect x="678" y="176" width="240" height="54" rx="12"/>
+    <rect x="668" y="176" width="260" height="54" rx="12"/>
     <text x="798" y="193">CheckpointSerializationError</text>
     <text class="sub" x="798" y="214">checkpoint_serialization</text>
   </g>
@@ -118,12 +118,12 @@
     <text class="sub" x="544" y="182">checkpoint_error</text>
   </g>
   <g class="node">
-    <rect x="678" y="252" width="240" height="54" rx="12"/>
+    <rect x="668" y="252" width="260" height="54" rx="12"/>
     <text x="798" y="269">EmbeddingError</text>
     <text class="sub" x="798" y="290">embedding_error</text>
   </g>
   <g class="node">
-    <rect x="678" y="316" width="240" height="54" rx="12"/>
+    <rect x="668" y="316" width="260" height="54" rx="12"/>
     <text x="798" y="333">VectorStoreError</text>
     <text class="sub" x="798" y="354">vector_store_error</text>
   </g>

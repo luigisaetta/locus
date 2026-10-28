@@ -5,9 +5,11 @@ The `Execute` node is where tool calls actually fire. The agent's
 single Think turn run **concurrently** (the default) or **one at a
 time**:
 
+{{ locus_model_tabs }}
+
 ```python
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, fetch_customer_history, shipping_status],
     tool_execution="concurrent",   # default — fan out
     # tool_execution="sequential", # opt-in — one at a time

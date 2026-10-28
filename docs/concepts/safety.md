@@ -32,6 +32,8 @@ others.
 
 ### Guardrails — block dangerous tools and redact PII
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 from locus.hooks.builtin.guardrails import (
@@ -45,7 +47,7 @@ config = GuardrailConfig(
 )
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[query_siem, summarise],
     hooks=[GuardrailsHook(config=config)],
 )

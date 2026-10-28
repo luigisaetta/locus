@@ -59,6 +59,8 @@ across consecutive iterations count as a loop.
 
 ## Quickstart
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.deepagent import create_deepagent
 from locus.tools import tool
@@ -84,7 +86,7 @@ def submit_research(result: ResearchResult) -> str:
 
 
 agent = create_deepagent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[search_kb, submit_research],
     system_prompt="You are a market-research agent. Submit when confident.",
     output_schema=ResearchResult,

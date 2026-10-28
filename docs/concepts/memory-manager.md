@@ -76,6 +76,8 @@ fact under the same key **updates** the record, not duplicates it.
 
 ## Quick start
 
+{{ locus_model_tabs }}
+
 ```python
 import asyncio
 from locus.agent import Agent
@@ -87,7 +89,7 @@ async def main():
     store = InMemoryStore()   # swap for a persistent backend in production
 
     agent = Agent(
-        model="{{ locus_example_model }}",
+        model="{{ locus_model }}",
         memory_manager=LLMMemoryManager(store=store),
     )
 

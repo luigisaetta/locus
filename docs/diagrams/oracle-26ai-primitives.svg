@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Every Locus primitive that runs against Oracle Database 26ai, grouped by what the database
+  does for the agent (line numbers as of locus-sdk 4.0.0). Complements memory-layers.svg, which
+  is organised by lifetime; this one is organised by the database and the Agent surface.
+    Agent -> vectors   tools=[RAGRetriever(...).as_tool()]   agent/config.py:350, agent/agent.py:190;
+                       as_tool() delegates to create_rag_tool   rag/retriever.py:585-614, rag/tools.py:36;
+                       the tool calls retriever.retrieve   rag/tools.py:99, which embeds the query
+                       (rag/retriever.py:488) and calls store.search (:497)
+      OracleVectorStore        rag/stores/oracle.py:175; CREATE TABLE ... VECTOR(dim, FLOAT32)   :383-391;
+                               INSERT ... TO_VECTOR(:embedding)   :525;
+                               VECTOR_DISTANCE(col, TO_VECTOR(:query_vec), metric) ... ORDER BY distance_ FETCH FIRST :limit   :744, :771-782
+      OracleInDBEmbeddings     rag/embeddings/oracle_indb.py:191; SELECT ... DBMS_VECTOR_CHAIN.UTL_TO_EMBEDDING(:text,
+                               JSON('{"provider":"database","model":"<model_name>"}'))   :351-354; the model is an ONNX
+                               model loaded into the database with DBMS_VECTOR.LOAD_ONNX_MODEL   :144; embed_query   :494
+      OracleInDBChunker        rag/chunkers/oracle_indb.py:65; TABLE(DBMS_VECTOR_CHAIN.UTL_TO_CHUNKS(:text, JSON(:params)))
+                               :199-203 (chunk_text); UTL_TO_CHUNKS(src.text_column) over a table, no Python round trip   :252-256 (chunk_column)
+      OracleADBLoader          rag/loaders/oracle.py:98; runs the caller's SELECT with bind_params   :280;
+                               yields Document(id, content, metadata) per row   :333-337; load()   :339
+      ingest path: retriever.add_documents embeds the chunks and calls store.add_batch   rag/retriever.py:227, :305, :328
+    Agent -> threads   checkpointer=   agent/config.py:706, agent/agent.py:196;
+                       load(thread_id) when a run starts   agent/runtime_loop.py:2689-2690;
+                       save(state, thread_id) when it ends   :2461-2475, with no checkpoint_id; per iteration the loop
+                       saves under an explicit uuid4 checkpoint_id   :2546-2549 and deletes those rows once the final
+                       save of the run succeeded   :2488-2492 (unless keep_iteration_checkpoints)
+      oracle_checkpointer()    memory/backends/adapters.py:694 returns StorageBackendAdapter(OracleBackend)   :729-735, :33.
+                               The adapter, not the bare backend, is what the Agent talks to: save() takes the given
+                               checkpoint_id or a fresh uuid4().hex   :132, writes the state under the composite key
+                               <thread_id>:<checkpoint_id>   :136-150, then under <thread_id>:latest   :152, and appends
+                               the id to the <thread_id>:_checkpoints index   :159-200. So every save adds a row and the
+                               final save of each run is a new row. load(thread_id) reads <thread_id>:latest and
+                               load(thread_id, checkpoint_id) reads that checkpoint's row   :202-225; list_checkpoints
+                               reads the index   :228-238; persistent_checkpoint_ids=True   :120.
+                               OracleBackend   memory/backends/oracle.py:29 receives the composite key in its thread_id
+                               argument (the (key, data) calling convention   :217-223) and MERGEs on that key   :227-240,
+                               so each <thread_id>:<checkpoint_id> key is its own row behind the PRIMARY KEY   :169.
+                               The "one row per thread_id, latest write wins" note at oracle.py:318-322 and
+                               oracle_versioned.py:14-16 describes a bare OracleBackend, not this factory.
+      OracleCheckpointSaver    memory/backends/oracle_versioned.py:87; one row per (thread_id, checkpoint_ns, checkpoint_id),
+                               parent_checkpoint_id walks the lineage   :14-19, :253-262; put() INSERTs a new row   :403-447;
+                               get(checkpoint_id=None) is the newest   :454-463; list_checkpoints   :526.
+                               It exposes put/get, not the save/load the loop calls, so it is not a checkpointer= value:
+                               your code calls saver.put(thread_id, checkpoint_id, parent_checkpoint_id,
+                               checkpoint_data=result.state.to_checkpoint()) after each run
+                               docs/notebooks/notebook_43_oracle_versioned_saver.md:19-24
+    Agent -> memory    memory_manager=   agent/config.py:695, agent/agent.py:478;
+                       on_session_start injects memories before the first model call   agent/runtime_loop.py:817-818;
+                       on_session_end extracts and persists after the run   :1954-1957
+      OracleStore              memory/store_backends/oracle.py:184 (BaseStore); table (namespace, key, value JSON,
+                               embedding VECTOR(dim) optional), PRIMARY KEY (namespace, key)   :15-21; MERGE INTO   :432-434;
+                               search_by_embedding uses VECTOR_DISTANCE(embedding, TO_VECTOR(:q), metric)   :688, :706;
+                               reached through LLMMemoryManager(store=...)   memory/manager.py:476
+      OracleAgentMemoryManager memory/managers/oracle_agent_memory.py:162 (BaseMemoryManager) over Oracle's
+                               oracleagentmemory client   :5-9, :289, :335; takes an oracledb pool   :171-186;
+                               the client provisions <prefix>messages, <prefix>facts, ...   :222-225;
+                               on_session_start: context card + search_async, injected into the state   :426-494;
+                               on_session_end: thread.add_messages_async, then the client's LLM extractor runs on
+                               a background thread   :496-513, :218-221
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 548" role="img" aria-labelledby="title desc">
+  <title id="title">The Locus primitives on Oracle Database 26ai</title>
+  <desc id="desc">One Oracle Database 26ai sits at the centre and the Agent, on the left, reaches three groups of Locus primitives, each named for what the database does. Vectors: OracleVectorStore keeps documents on a VECTOR column and searches it with VECTOR_DISTANCE; OracleInDBEmbeddings embeds inside the database with UTL_TO_EMBEDDING and an ONNX model loaded there; OracleInDBChunker splits text inside the database with UTL_TO_CHUNKS; OracleADBLoader reads rows from your tables as Documents. The Agent reaches this group through tools, as RAGRetriever(…).as_tool(); the loader and chunker run at ingest, from your code. Threads: oracle_checkpointer() wraps OracleBackend in a StorageBackendAdapter, so every save adds a row keyed thread_id:checkpoint_id and updates a thread_id:latest row; the Agent reaches it through checkpointer=, loading the latest row by thread_id when a run starts and saving when it ends, and earlier checkpoints stay listable and loadable by id. OracleCheckpointSaver is the versioned saver keyed by thread_id, checkpoint_ns and checkpoint_id, each row linked to its parent, with a second table for pending writes; it exposes put and get rather than save and load, so it is not a checkpointer= value: your code calls put() with result.state.to_checkpoint() after each run. Memory: OracleStore is a BaseStore of namespaced key/value rows with an optional VECTOR column, reached through LLMMemoryManager(store=…) in memory_manager=; OracleAgentMemoryManager is a memory manager over Oracle's agent-memory client, which keeps threads and extracted memories in the database. All three groups read and write the same database, next to the data the agent acts on.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- vectors: what the database stores, searches, embeds and chunks -->
+  <g class="lane">
+    <rect x="16" y="16" width="908" height="104" rx="12"/>
+    <text class="lane-title" x="32" y="38">Vectors · search, embed and chunk in the database, read your tables</text>
+  </g>
+  <g class="node">
+    <rect x="28" y="52" width="236" height="58" rx="12"/>
+    <text x="146" y="71">OracleVectorStore</text>
+    <text class="sub" x="146" y="92">VECTOR column, VECTOR_DISTANCE</text>
+  </g>
+  <g class="node">
+    <rect x="274" y="52" width="232" height="58" rx="12"/>
+    <text x="390" y="71">OracleInDBEmbeddings</text>
+    <text class="sub" x="390" y="92">UTL_TO_EMBEDDING, ONNX model</text>
+  </g>
+  <g class="node">
+    <rect x="516" y="52" width="196" height="58" rx="12"/>
+    <text x="614" y="71">OracleInDBChunker</text>
+    <text class="sub" x="614" y="92">UTL_TO_CHUNKS in SQL</text>
+  </g>
+  <g class="node">
+    <rect x="722" y="52" width="190" height="58" rx="12"/>
+    <text x="817" y="71">OracleADBLoader</text>
+    <text class="sub" x="817" y="92">SELECT rows → Documents</text>
+  </g>
+
+  <!-- threads: the state of each thread -->
+  <g class="lane">
+    <rect x="282" y="166" width="258" height="176" rx="12"/>
+    <text class="lane-title" x="298" y="188">Threads · state per thread</text>
+  </g>
+  <g class="node">
+    <rect x="294" y="202" width="234" height="58" rx="12"/>
+    <text x="411" y="221">oracle_checkpointer()</text>
+    <text class="sub" x="411" y="242">a row per save, newest on load</text>
+  </g>
+  <g class="node">
+    <rect x="294" y="270" width="234" height="58" rx="12"/>
+    <text x="411" y="289">OracleCheckpointSaver</text>
+    <text class="sub" x="411" y="310">parent lineage, via put()</text>
+  </g>
+
+  <!-- memory: what the agent has learned -->
+  <g class="lane">
+    <rect x="16" y="388" width="908" height="104" rx="12"/>
+    <text class="lane-title" x="32" y="410">Memory · what the agent has learned, across threads</text>
+  </g>
+  <g class="node">
+    <rect x="28" y="424" width="320" height="58" rx="12"/>
+    <text x="188" y="443">OracleStore</text>
+    <text class="sub" x="188" y="464">BaseStore · LLMMemoryManager(store=…)</text>
+  </g>
+  <g class="node">
+    <rect x="360" y="424" width="320" height="58" rx="12"/>
+    <text x="520" y="443">OracleAgentMemoryManager</text>
+    <text class="sub" x="520" y="464">over Oracle's agent-memory client</text>
+  </g>
+
+  <!-- the agent and the surfaces it reaches each group through -->
+  <path class="edge" marker-end="url(#ah)" d="M66,196 L66,121"/>
+  <rect class="label-bg" x="76" y="140" width="224" height="20" rx="4"/>
+  <text class="label" x="188" y="150">tools · RAGRetriever(…).as_tool()</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M116,231 L280,231"/>
+  <rect class="label-bg" x="148" y="242" width="100" height="20" rx="4"/>
+  <text class="label" x="198" y="252">checkpointer=</text>
+
+  <!-- dashed: reached from your code after the run, not an Agent surface (footnote) -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M116,299 L280,299"/>
+  <rect class="label-bg" x="138" y="310" width="120" height="20" rx="4"/>
+  <text class="label" x="198" y="320">your code · put()</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M66,312 L66,387"/>
+  <rect class="label-bg" x="76" y="347" width="128" height="20" rx="4"/>
+  <text class="label" x="140" y="357">memory_manager=</text>
+
+  <!-- each group into the one database -->
+  <path class="edge" marker-end="url(#ah)" d="M786,120 L786,181"/>
+  <rect class="label-bg" x="578" y="140" width="200" height="20" rx="4"/>
+  <text class="label" x="678" y="150">VECTOR columns + your tables</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M540,265 L646,265"/>
+  <rect class="label-bg" x="551" y="276" width="86" height="20" rx="4"/>
+  <text class="label" x="594" y="286">by thread_id</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M786,388 L786,327"/>
+  <rect class="label-bg" x="706" y="347" width="72" height="20" rx="4"/>
+  <text class="label" x="742" y="357">memories</text>
+
+  <g class="node">
+    <rect x="16" y="196" width="100" height="116" rx="12"/>
+    <text x="66" y="244">Agent</text>
+    <text class="sub" x="66" y="265">the harness</text>
+  </g>
+
+  <g class="store">
+    <path d="M648,191 A138,9 0 0 1 924,191 V317 A138,9 0 0 1 648,317 Z M648,191 A138,9 0 0 0 924,191"/>
+    <g class="node primary">
+      <text x="786" y="244">Oracle Database 26ai</text>
+      <text class="sub" x="786" y="265">next to the data the agent acts on</text>
+    </g>
+  </g>
+
+  <text class="note" x="470" y="516">Loader and chunker run at ingest; at run time the retriever tool embeds the query and searches the VECTOR column.</text>
+  <text class="note" x="470" y="532">OracleCheckpointSaver is not a checkpointer= value: after each run your code calls put() with result.state.to_checkpoint().</text>
+</svg>

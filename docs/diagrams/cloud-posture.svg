@@ -34,42 +34,42 @@
 
   <!-- AWS APIs -> analyst: the response -->
   <path class="edge" marker-end="url(#ah)" d="M792,98 C792,40 150,40 150,96"/>
-  <rect class="label-bg" x="380" y="44" width="182" height="20" rx="4"/>
+  <rect class="label-bg on-lane" x="380" y="44" width="182" height="20" rx="4"/>
   <text class="label" x="471" y="54">raw response, the evidence</text>
 
   <!-- analyst -> use_aws -->
   <path class="edge" marker-end="url(#ah)" d="M220,127 L338,127"/>
-  <rect class="label-bg" x="245" y="138" width="68" height="20" rx="4"/>
+  <rect class="label-bg on-lane" x="245" y="138" width="68" height="20" rx="4"/>
   <text class="label" x="279" y="148">tool call</text>
 
   <!-- use_aws -> AWS APIs -->
   <path class="edge" marker-end="url(#ah)" d="M536,127 L698,127"/>
-  <rect class="label-bg" x="585" y="138" width="64" height="20" rx="4"/>
+  <rect class="label-bg on-lane" x="585" y="138" width="64" height="20" rx="4"/>
   <text class="label" x="617" y="148">read op</text>
 
   <!-- use_aws -> analyst: a write is refused -->
   <path class="edge deny" marker-end="url(#ah)" d="M410,156 C410,196 200,196 200,158"/>
-  <rect class="label-bg" x="255" y="176" width="100" height="20" rx="4"/>
+  <rect class="label-bg on-lane" x="255" y="176" width="100" height="20" rx="4"/>
   <text class="label" x="305" y="186">write: refused</text>
 
   <!-- analyst -> PostureReport -->
   <path class="edge" marker-end="url(#ah)" d="M128,156 L128,291"/>
-  <rect class="label-bg" x="74" y="176" width="108" height="20" rx="4"/>
+  <rect class="label-bg on-lane" x="74" y="176" width="108" height="20" rx="4"/>
   <text class="label" x="128" y="186">submit_posture</text>
 
   <!-- PostureReport -> ground_report -->
   <path class="edge" marker-end="url(#ah)" d="M220,322 L338,322"/>
-  <rect class="label-bg" x="233" y="333" width="92" height="20" rx="4"/>
+  <rect class="label-bg on-lane" x="233" y="333" width="92" height="20" rx="4"/>
   <text class="label" x="279" y="343">after the run</text>
 
   <!-- ground_report -> ship -->
   <path class="edge allow" marker-end="url(#ah)" d="M536,322 C620,322 614,278 698,278"/>
-  <rect class="label-bg" x="561" y="281" width="112" height="20" rx="4"/>
+  <rect class="label-bg on-lane" x="561" y="281" width="112" height="20" rx="4"/>
   <text class="label" x="617" y="291">score ≥ min_gsar</text>
 
   <!-- ground_report -> abstain -->
   <path class="edge" marker-end="url(#ah)" d="M536,322 C620,322 614,366 698,366"/>
-  <rect class="label-bg" x="561" y="343" width="112" height="20" rx="4"/>
+  <rect class="label-bg on-lane" x="561" y="343" width="112" height="20" rx="4"/>
   <text class="label" x="617" y="353">score &lt; min_gsar</text>
 
   <g class="node">
@@ -101,7 +101,7 @@
   <g class="node allow">
     <rect x="700" y="249" width="184" height="58" rx="12"/>
     <text x="792" y="268">Ship</text>
-    <text class="sub" x="792" y="289">typed Evidence</text>
+    <text class="sub" x="792" y="289">allow · typed Evidence</text>
   </g>
   <g class="node abstain">
     <rect x="700" y="337" width="184" height="58" rx="12"/>

@@ -22,11 +22,13 @@ below — it's opt-in, not automatic.
 
 For production agents you usually want explicit policy:
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.hooks.builtin.retry import ModelRetryHook
 from locus.agent import Agent
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[...],
     hooks=[
         ModelRetryHook(

@@ -2,9 +2,18 @@
 
 Model calls fail: rate limits, exhausted quota, revoked keys, requests too large
 for the context window, transient 5xx. Retrying all of them the same way wastes
-time on the ones a retry cannot fix. The SDK ships three provider-neutral pieces
-that let a caller decide *what to do* about a failure rather than only *what went
+time on the ones a retry cannot fix. The SDK ships provider-neutral pieces that
+let a caller decide *what to do* about a failure rather than only *what went
 wrong*.
+
+`locus.models.fallback.FallbackChain` builds on the classifier: an ordered list
+of models, each behind a circuit breaker, that moves a call to the next tier
+when the classifier blames the provider. The drawing follows one call through
+it: a tier that fails for a health reason hands the call on, a tier whose
+breaker is open is skipped, and the call ends served, exhausted, or raised at
+once when the request itself is at fault.
+
+{{ locus_diagram fallback-chain }}
 
 ## Classifying an error
 

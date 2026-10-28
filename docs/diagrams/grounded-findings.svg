@@ -59,14 +59,14 @@
   <text class="label" x="400" y="242">scored</text>
 
   <!-- ground_finding -> Evidence -->
-  <path class="edge" marker-end="url(#ah)" d="M632,221 L748,221"/>
-  <rect class="label-bg" x="658" y="232" width="64" height="20" rx="4"/>
-  <text class="label" x="690" y="242">proceed</text>
+  <path class="edge" marker-end="url(#ah)" d="M632,221 L742,221"/>
+  <rect class="label-bg" x="655" y="232" width="64" height="20" rx="4"/>
+  <text class="label" x="687" y="242">proceed</text>
 
   <!-- ground_finding -> Abstention -->
-  <path class="edge" marker-end="url(#ah)" d="M540,250 L540,293 C540,315 554,329 576,329 L748,329"/>
-  <rect class="label-bg" x="592" y="340" width="140" height="20" rx="4"/>
-  <text class="label" x="662" y="350">regenerate or replan</text>
+  <path class="edge" marker-end="url(#ah)" d="M540,250 L540,293 C540,315 554,329 576,329 L742,329"/>
+  <rect class="label-bg" x="589" y="340" width="140" height="20" rx="4"/>
+  <text class="label" x="659" y="350">regenerate or replan</text>
 
   <g class="node">
     <rect x="30" y="30" width="324" height="58" rx="12"/>
@@ -79,14 +79,14 @@
     <text class="sub" x="540" y="232">score ≥ threshold?</text>
   </g>
   <g class="node allow">
-    <rect x="750" y="192" width="180" height="58" rx="12"/>
-    <text x="840" y="211">Evidence</text>
-    <text class="sub" x="840" y="232">ships · score + refs</text>
+    <rect x="744" y="192" width="186" height="58" rx="12"/>
+    <text x="837" y="211">Evidence ships</text>
+    <text class="sub" x="837" y="232">allow · score + refs</text>
   </g>
   <g class="node abstain">
-    <rect x="750" y="300" width="180" height="58" rx="12"/>
-    <text x="840" y="319">Abstention</text>
-    <text class="sub" x="840" y="340">withheld · reason</text>
+    <rect x="744" y="300" width="186" height="58" rx="12"/>
+    <text x="837" y="319">Abstention</text>
+    <text class="sub" x="837" y="340">abstain · withheld · why</text>
   </g>
 
   <text class="note" x="480" y="394">An Evidence is built only on proceed; below the threshold the finding is withheld, and the Abstention says why.</text>

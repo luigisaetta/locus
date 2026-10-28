@@ -23,6 +23,8 @@ PROVIDER_TABLE_TOKEN = "{{ locus_provider_table }}"  # noqa: S105 — template p
 EXAMPLE_MODEL_TOKEN = "{{ locus_example_model }}"  # noqa: S105 — template placeholder, not a secret
 EVENT_COUNT_TOKEN = "{{ locus_event_count }}"  # noqa: S105 — template placeholder, not a secret
 EVENT_PREFIXES_TOKEN = "{{ locus_event_prefixes }}"  # noqa: S105 — template placeholder, not a secret
+MODEL_TABS_TOKEN = "{{ locus_model_tabs }}"  # noqa: S105 — template placeholder, not a secret
+MODEL_TOKEN = "{{ locus_model }}"  # noqa: S105 — template placeholder, not a secret
 
 _SDK_REPO = "https://github.com/oracle/locus/"
 #: A link into the SDK repo on its moving ``main`` branch.
@@ -35,6 +37,12 @@ _DIAGRAM_TOKEN = re.compile(r"\{\{\s*locus_diagram\s+([a-z0-9][a-z0-9-]*)\s*\}\}
 _XML_PROLOG = re.compile(r"<\?xml[^>]*\?>\s*")
 _COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _ID_ATTR = re.compile(r'\bid="([^"]+)"')
+#: ``{{ locus_model_tabs }}`` directly above a fenced block that contains
+#: ``{{ locus_model }}`` renders the block once per provider as a tab set.
+_MODEL_TABS = re.compile(
+    r"^\{\{\s*locus_model_tabs\s*\}\}[ \t]*\n\n?(```[A-Za-z0-9_-]*\n.*?\n```)[ \t]*$",
+    re.MULTILINE | re.DOTALL,
+)
 
 
 def _sdk_version() -> str:
@@ -140,6 +148,27 @@ def render_diagram(name: str, docs_dir: Path) -> str:
     return f'\n<figure class="tl-dia">\n{body}\n</figure>\n'
 
 
+def render_model_tabs(block: str, tabs: list[dict[str, str]]) -> str:
+    """One code block, shown once per provider as a linked tab set.
+
+    The page author writes the example a single time with ``{{ locus_model }}``
+    where the model string goes; ``extra.model_tabs`` in mkdocs.yml says which
+    providers to show and the one example id each. Material's
+    ``content.tabs.link`` keeps the chosen provider in sync across the site, so
+    a reader who picks OCI once reads every page with OCI model ids.
+    """
+    if MODEL_TOKEN not in block:
+        raise RuntimeError(
+            "A {{ locus_model_tabs }} block must contain {{ locus_model }} where the model string goes"
+        )
+    parts = []
+    for tab in tabs:
+        body = block.replace(MODEL_TOKEN, tab["model"])
+        indented = "\n".join(f"    {line}" if line else "" for line in body.splitlines())
+        parts.append(f'=== "{tab["label"]}"\n\n{indented}\n')
+    return "\n".join(parts)
+
+
 def on_config(config: Any) -> Any:
     extra = dict(config.get("extra", {}))
     extra["sdk_version"] = _sdk_version()
@@ -153,7 +182,15 @@ def on_page_markdown(markdown: str, *, config: Any, **_: Any) -> str:
     """Expand build facts only where their explicit tokens appear."""
     extra = config["extra"]
     sdk_version = extra["sdk_version"]
-    rendered = markdown.replace(SDK_VERSION_TOKEN, sdk_version)
+    rendered = markdown
+    if "locus_model_tabs" in rendered:
+        tabs = extra.get("model_tabs")
+        if not tabs:
+            raise RuntimeError(
+                "A page uses {{ locus_model_tabs }} but mkdocs.yml sets no extra.model_tabs"
+            )
+        rendered = _MODEL_TABS.sub(lambda m: render_model_tabs(m.group(1), tabs), rendered)
+    rendered = rendered.replace(SDK_VERSION_TOKEN, sdk_version)
     if PROVIDER_TABLE_TOKEN in rendered:
         rendered = rendered.replace(PROVIDER_TABLE_TOKEN, _provider_table())
     if EXAMPLE_MODEL_TOKEN in rendered:

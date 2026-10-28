@@ -4,6 +4,8 @@ Sometimes you want the model to *fill a shape*, not write prose. Set
 `output_schema=` to a Pydantic model and Locus parses the agent's final answer into a typed
 instance for you.
 
+{{ locus_model_tabs }}
+
 ```python
 from pydantic import BaseModel, Field
 from locus.agent import Agent
@@ -17,7 +19,7 @@ class TriageList(BaseModel):
     tickets: list[TicketTriage]
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_ticket],
     output_schema=TriageList,
     system_prompt="Triage the top three tickets from this queue.",
@@ -32,17 +34,22 @@ for t in picks.tickets:
 
 `output_schema` must be a `pydantic.BaseModel` subclass — including
 nested models, lists, optionals, discriminated unions, and any
-`@field_validator` / `@model_validator` you attach. The schema flows to
-the provider as a strict `response_format` when supported (OpenAI,
-OpenAI-compatible); otherwise the SDK falls back to prompted JSON +
-extraction + validation.
+`@field_validator` / `@model_validator` you attach. The schema always
+rides the system prompt as a JSON instruction; on providers with native
+structured output (OpenAI, OpenAI-compatible) a model call that offers
+no tools also carries it as a strict `response_format`, and either way
+the final answer is extracted and validated client-side. The drawing
+below follows the schema from `output_schema=` to `result.parsed`,
+repair included.
+
+{{ locus_diagram structured-output-flow }}
 
 ## What ends up on `AgentResult`
 
 | Attribute | Type | Meaning |
 |---|---|---|
-| `result.parsed` | `BaseModel \| None` | The parsed instance. `None` if every retry failed. |
-| `result.parse_error` | `str \| None` | Last Pydantic validation error, when `parsed is None`. |
+| `result.parsed` | `BaseModel | None` | The parsed instance. `None` if every retry failed. |
+| `result.parse_error` | `str | None` | Last Pydantic validation error, when `parsed is None`. |
 | `result.message` | `str` | The canonical JSON dump of `parsed` (when set), otherwise the raw final assistant message. |
 
 ### Typed access
@@ -83,11 +90,13 @@ When `output_schema_retries=0`, the first response is the final attempt.
 | Provider | Native mode | Mechanism | Prompted fallback | Tested |
 |---|---|---|---|---|
 | `openai:` (gpt-4o, gpt-4.1, gpt-5*, o-series) | ✓ strict | `response_format={"type":"json_schema","strict":true}` | ✓ | yes |
-| `anthropic:claude-*` | ✓ tool-use | synthetic `respond_with_schema` tool + pinned `tool_choice` | ✓ | unit-mocked |
+| `anthropic:claude-*` | repair call only, tool-use | synthetic `respond_with_schema` tool + pinned `tool_choice` | ✓ | unit-mocked |
 
-For Anthropic, the SDK translates `response_format` into the idiomatic
-tool-use pattern: a single `respond_with_schema` tool whose
-`input_schema` is your Pydantic schema, with `tool_choice` pinned to it.
+Anthropic models do not declare native mode, so the loop sends them the
+prompted schema only; when the repair call carries `response_format`,
+the SDK translates it into the idiomatic tool-use pattern: a single
+`respond_with_schema` tool whose `input_schema` is your Pydantic schema,
+with `tool_choice` pinned to it.
 Anthropic's API guarantees the tool's arguments match the schema, and
 the SDK surfaces those arguments as the message content for downstream
 parsing — **the synthetic tool never reaches your agent's tool list**.

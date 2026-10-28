@@ -25,7 +25,7 @@ from locus.core.termination import MaxIterations, ToolCalled
 |---|---|---|
 | [Agent](agent.md) | `Agent`, `AgentConfig`, `AgentResult` and `AgentState`: configure an agent, run it, and read back a typed result | [Agent](../concepts/agent.md), [The agent loop](../concepts/agent-loop.md) |
 | [Termination](termination.md) | Stop conditions such as `MaxIterations`, `TimeLimit` and `ToolCalled`, composed into one rule and set on `AgentConfig.termination` | [Termination](../concepts/termination.md) |
-| [Hooks](hooks.md) | `HookProvider` and `HookRegistry`, which dispatches providers in priority order; the hook event types; and the built-in logging, telemetry, retry, guardrail and steering hooks | [Hooks](../concepts/hooks.md) |
+| [Hooks](hooks.md) | `HookProvider` and `HookRegistry`, which orders providers by priority for the agent's `HookOrchestrator` to run; the hook event types; and the built-in logging, telemetry, retry, guardrail and steering hooks | [Hooks](../concepts/hooks.md) |
 | [Events](events.md) | The typed, frozen `LocusEvent` models that `async for event in agent.run(...)` yields | [Events](../concepts/events.md) |
 | [Streaming](streaming.md) | Handlers that send the event stream to a terminal, a Server-Sent Events response or a buffer, and structured-output streaming | [Streaming](../concepts/streaming.md), [Graph streaming](../concepts/graph-streaming.md) |
 | [Core primitives](core.md) | The shared types underneath: settings, protocols, messages, the error hierarchy, and the `Command` and `interrupt` helpers for graph control flow | [State](../concepts/state.md), [Errors](../concepts/errors.md) |

@@ -2,11 +2,12 @@
 
 A checkpointer is the contract for **persisting agent state** between
 runs. Pass one to `Agent(checkpointer=...)` and the agent saves
-`AgentState` when the run finishes or raises and before it pauses on an
-interrupt (add `checkpoint_every_n_iterations=1` to also save after each
-tool-calling iteration); resume a thread by re-running with the same
-`thread_id`. Same code, same case context, different process,
-different day.
+`AgentState` when the run finishes or raises, before it pauses on an
+interrupt and, when the checkpointer can delete a single checkpoint,
+after each tool-calling iteration (`checkpoint_every_n_iterations` sets
+that interval; the turn's final save deletes the iteration saves it
+supersedes); resume a thread by re-running with the same `thread_id`.
+Same code, same case context, different process, different day.
 
 This is the continuity story for production agents. A case outlives a
 process: a refund case opens Friday, the service redeploys over the
@@ -22,6 +23,8 @@ The same story, security-operations flavored: a host gets isolated at
 must pick up the *same* investigation — every enriched indicator, every
 containment receipt, the case record carried forward.
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 from locus.memory.backends import S3Backend
@@ -29,7 +32,7 @@ from locus.memory.backends import S3Backend
 from locus_security import security_toolset
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=security_toolset(),   # query_siem, enrich_indicator, isolate_host, ...
     checkpointer=S3Backend(
         bucket="soc-case-checkpoints",
@@ -222,7 +225,12 @@ Connector/Python asyncio driver.
 ## Two checkpointer shapes — the gotcha to know
 
 The SDK has **two** kinds of checkpointer implementations and you need
-to wire them differently:
+to wire them differently. Both sit behind the `BaseCheckpointer`
+contract the loop calls — loading the thread's newest checkpoint before
+the first model call, saving at its three save points — as the drawing
+shows:
+
+{{ locus_diagram checkpointer-shapes }}
 
 1. **Native checkpointers** implement `BaseCheckpointer` directly and
    accept `AgentState`:

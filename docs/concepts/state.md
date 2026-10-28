@@ -11,7 +11,12 @@ thing round-trips through JSON without loss. That immutability is
 load-bearing — it's why checkpoints are reproducible, why two
 parallel branches in a graph can each "modify" the state without
 stepping on each other, and why a hook reading `state.tool_executions`
-can't accidentally corrupt the run.
+can't accidentally corrupt the run. Here is one iteration of the agent
+loop seen from the state's side: each node takes the current
+`AgentState` and returns a new one, hooks read it, and the checkpointer
+saves it at its save points.
+
+{{ locus_diagram state-flow }}
 
 ```python
 from locus.core.state import AgentState
@@ -43,7 +48,7 @@ for you. Reach for it when:
 | Field | Type | Meaning |
 |---|---|---|
 | `run_id` | `str` (UUID) | Unique to this run. |
-| `agent_id` | `str \| None` | Stable identifier carried across runs of the same agent. |
+| `agent_id` | `str | None` | Stable identifier carried across runs of the same agent. |
 | `messages` | `tuple[Message, ...]` | Full conversation, in order. |
 | `iteration` | `int` | Current ReAct iteration index. |
 | `max_iterations` | `int` | Upper bound before termination. |
@@ -56,7 +61,7 @@ for you. Reach for it when:
 | `tool_loop_threshold` | `int` | How many identical consecutive calls qualify as a loop. |
 | `terminal_tools` | `frozenset[str]` | Tool names that auto-end the run when called. |
 | `total_tokens_used` | `int` | Running total. `prompt_tokens_used` + `completion_tokens_used`. |
-| `token_budget` | `int \| None` | Optional cap; `TokenLimit` reads this. |
+| `token_budget` | `int | None` | Optional cap; `TokenLimit` reads this. |
 | `errors` | `tuple[str, ...]` | Tool/model error messages encountered this run. |
 | `metadata` | `dict[str, Any]` | Free-form context you can attach. |
 | `started_at`, `updated_at` | `datetime` | UTC timestamps. |

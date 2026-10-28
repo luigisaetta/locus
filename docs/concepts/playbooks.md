@@ -9,6 +9,8 @@ If your agent issues refunds, rolls out changes, or isolates a host —
 anything an auditor will review — you want a playbook. The model still
 picks the wording; the *side effects* follow the plan.
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.playbooks import Playbook, PlaybookStep
 
@@ -38,11 +40,20 @@ refund_escalation = Playbook(
 )
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, lookup_customer, check_refund_policy, issue_refund],
     playbook=refund_escalation,   # installs the PlaybookEnforcerHook for you
 )
 ```
+
+The drawing below shows how that playbook is enforced. The
+`PlaybookEnforcerHook` sits on the tool-call hook point and checks each
+tool the model proposes against the current step: an in-sequence call
+runs, and the step advances once its expected tools have all fired; an
+out-of-sequence call is cancelled, and the model reads the hint as the
+tool's result. Every call that runs lands in the step's `StepExecution`.
+
+{{ locus_diagram playbook-enforcement }}
 
 ## When to reach for a playbook
 

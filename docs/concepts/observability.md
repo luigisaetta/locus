@@ -9,6 +9,13 @@ built-in hooks plus the standard OpenTelemetry stack cover every piece
 you need. No vendor lock-in: Locus emits OTLP (the OpenTelemetry wire
 protocol), you point it at whatever backend you run.
 
+Alongside the two hooks, the SDK ships a third channel, the in-process
+`EventBus`. The drawing follows an event from the code that emits it,
+through the `run_context()` gate, onto the bus and out to the subscribers
+that read it; [In-process SSE](#in-process-sse-eventbus) below has the code.
+
+{{ locus_diagram observability-pipeline }}
+
 ## When to wire what
 
 | Need | Add |
@@ -22,13 +29,15 @@ protocol), you point it at whatever backend you run.
 
 ### Structured logs
 
+{{ locus_model_tabs }}
+
 ```python
 import logging
 from locus.agent import Agent
 from locus.hooks.builtin import StructuredLoggingHook
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, check_refund_policy, issue_refund],
     hooks=[StructuredLoggingHook(level=logging.INFO)],
 )
@@ -216,7 +225,7 @@ the SDK ships a zero-dependency in-process pub/sub bus.
 
 ### How it works
 
-Every emission site in the SDK reads `current_run_id()` from a `ContextVar`.
+Every `emit()` call site in the SDK reads `current_run_id()` from a `ContextVar`.
 When no `run_context()` is active the emit returns immediately — no bus, no
 allocation, one `ContextVar.get()` per call site. The singleton is never
 instantiated.

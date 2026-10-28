@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  How an eval suite runs, per src/locus/evaluation; line numbers as of this commit.
+    EvalCase            name, prompt and what to expect                framework.py:41-106
+                        expected_tools :58, expected_output_contains :62, expected_output_not_contains :66,
+                        max_iterations :70, max_duration_ms :74, expected_tool_sequence :80
+                        (+ exact_tool_sequence :86), rubric :92
+    EvalRunner          EvalRunner(agent, judge=None, concurrency=4)   framework.py:228-247
+                        run() grades the cases one after another       framework.py:249-256
+                        arun() runs them concurrently and can judge    framework.py:258-285
+    runner -> agent     one call per case: agent.run_sync(case.prompt) framework.py:388-390
+                        or await agent.arun(case.prompt)               framework.py:363-365
+                        a StateGraph is wrapped by as_eval_target(graph), which has the same
+                        run_sync/arun shape                            graph.py:107-158, :161-191
+                        and presents node ids as tool executions       graph.py:90-102
+    agent -> runner     output = result.message, tools_called from result.tool_executions,
+                        iterations                                     framework.py:394-398, :496-498
+    budget              max_duration_ms is a timeout: _call_sync_with_budget :328-355,
+                        _call_async_with_budget :357-380; a run still going at the budget is
+                        cancelled and the case is _timed_out_result: passed=False, score=0.0,
+                        checks={within_duration_budget: False}, timed_out=True
+                                                                       framework.py:316-325, :391-392, :494-495
+    checks              _structural_checks                             framework.py:444-482
+                        tool_called:<tool> per expected_tools entry           :461-462
+                        output_contains:<text> per expected_output_contains   :463-464
+                        output_not_contains:<text> per ..._not_contains       :465-466
+                        within_iteration_budget when max_iterations is set    :467-468
+                        within_duration_budget when max_duration_ms is set    :469-472
+                        tool_sequence via check_trajectory(exact=...)         :474-480, judge.py:196-241
+    rubric (dashed)     graded only in arun() with a judge: judge.score(prompt, output, rubric)
+                        returns a Verdict(passed, score, reason, unparseable)
+                                                                       framework.py:519-533, judge.py:89-101, :127-144
+                        recorded as the check rubric:<reason>, or judge_unparseable:<reason>
+                        when the reply was not a verdict               framework.py:531-532, judge.py:146-193
+                        run() fails the case with rubric:requires_arun framework.py:252-253, :415-418
+                        arun() without a judge fails it with rubric:no_judge_configured :520-523
+                        an unreachable judge raises JudgeUnavailableError out of arun()
+                                                                       framework.py:525-530, judge.py:78-86, :141-142
+    grade               _grade: no checks -> has_expectations=False; passed = every check passed;
+                        score = fraction of checks passed, or min(judge score, fraction)
+                                                                       framework.py:302-313
+    EvalResult          case_name, passed, score, output, tools_called, iterations, duration_ms,
+                        checks, error, timed_out                       framework.py:109-127
+                        an agent that raises is a failed result with error set
+                                                                       framework.py:433-442, :508-516
+    EvalReport          results, total_cases, passed, failed, timed_out, avg_score,
+                        total_duration_ms                              framework.py:130-141, :287-299
+                        summary() prints the pass rate and, for each failed case, every failed
+                        check by name                                  framework.py:143-162
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 552" role="img" aria-labelledby="title desc">
+  <title id="title">How an eval suite runs</title>
+  <desc id="desc">A list of EvalCase objects goes to the EvalRunner, which runs the agent under test, or a StateGraph wrapped by as_eval_target, once per case with the case's prompt and gets back the output, the tools called and the iteration count. It grades those against the checks the case declares: expected_tools, expected_tool_sequence, expected_output_contains, expected_output_not_contains, max_iterations and max_duration_ms, plus a rubric, which is graded only in arun() with a judge: an LLMJudge reads the answer and returns a Verdict. Each case yields an EvalResult with passed, score and the named checks. A run still going at its max_duration_ms budget is cancelled and its result is timed_out with score 0, skipping the checks. The results aggregate into an EvalReport with the pass rate and the failed checks by name.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- cases -> runner -->
+  <path class="edge" marker-end="url(#ah)" d="M186,69 L244,69"/>
+
+  <!-- runner -> agent: the prompt, once per case -->
+  <path class="edge" marker-end="url(#ah)" d="M416,59 L628,59"/>
+  <rect class="label-bg" x="448" y="28" width="148" height="20" rx="4"/>
+  <text class="label" x="522" y="38">prompt, once per case</text>
+
+  <!-- agent -> runner: what the runner grades -->
+  <path class="edge" marker-end="url(#ah)" d="M630,79 L418,79"/>
+  <rect class="label-bg" x="437" y="90" width="170" height="20" rx="4"/>
+  <text class="label" x="522" y="100">output, tools, iterations</text>
+
+  <!-- runner -> checks -->
+  <path class="edge" marker-end="url(#ah)" d="M331,98 L331,158"/>
+
+  <!-- over budget: the run is cancelled and the checks are skipped -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M270,98 V128 H120 V429 H244"/>
+  <rect class="label-bg" x="45" y="260" width="150" height="20" rx="4"/>
+  <text class="label" x="120" y="270">over budget: timed_out</text>
+
+  <!-- checks -> result -->
+  <path class="edge" marker-end="url(#ah)" d="M331,336 L331,398"/>
+  <rect class="label-bg" x="299" y="357" width="64" height="20" rx="4"/>
+  <text class="label" x="331" y="367">per case</text>
+
+  <!-- result -> report -->
+  <path class="edge" marker-end="url(#ah)" d="M446,429 L534,429"/>
+  <rect class="label-bg" x="455" y="440" width="70" height="20" rx="4"/>
+  <text class="label" x="490" y="450">all cases</text>
+
+  <!-- the checks the case declares -->
+  <g class="lane">
+    <rect x="246" y="160" width="466" height="176" rx="12"/>
+    <text class="lane-title" x="262" y="182">Checks the case declares</text>
+  </g>
+  <g class="node"><rect x="258" y="196" width="216" height="26" rx="8"/><text class="sub" x="366" y="209">expected_tools</text></g>
+  <g class="node"><rect x="484" y="196" width="216" height="26" rx="8"/><text class="sub" x="592" y="209">expected_output_contains</text></g>
+  <g class="node"><rect x="258" y="230" width="216" height="26" rx="8"/><text class="sub" x="366" y="243">expected_tool_sequence</text></g>
+  <g class="node"><rect x="484" y="230" width="216" height="26" rx="8"/><text class="sub" x="592" y="243">expected_output_not_contains</text></g>
+  <g class="node"><rect x="258" y="264" width="216" height="26" rx="8"/><text class="sub" x="366" y="277">max_iterations</text></g>
+  <g class="node"><rect x="484" y="264" width="216" height="26" rx="8"/><text class="sub" x="592" y="277">max_duration_ms</text></g>
+  <text class="note" x="366" y="315">graded in arun() with a judge</text>
+  <g class="node optional"><rect x="484" y="298" width="216" height="26" rx="8"/><text class="sub" x="592" y="311">rubric</text></g>
+
+  <!-- rubric <-> judge -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M700,304 L786,304"/>
+  <rect class="label-bg" x="716" y="282" width="56" height="20" rx="4"/>
+  <text class="label" x="744" y="292">rubric</text>
+  <path class="edge dashed" marker-end="url(#ah)" d="M788,318 L702,318"/>
+  <rect class="label-bg" x="716" y="320" width="56" height="20" rx="4"/>
+  <text class="label" x="744" y="330">Verdict</text>
+
+  <g class="node">
+    <rect x="16" y="40" width="170" height="58" rx="12"/>
+    <text x="101" y="59">EvalCase list</text>
+    <text class="sub" x="101" y="80">prompt + expectations</text>
+  </g>
+  <g class="node primary">
+    <rect x="246" y="40" width="170" height="58" rx="12"/>
+    <text x="331" y="59">EvalRunner</text>
+    <text class="sub" x="331" y="80">run() or arun()</text>
+  </g>
+  <g class="node">
+    <rect x="630" y="40" width="190" height="58" rx="12"/>
+    <text x="725" y="59">Agent under test</text>
+    <text class="sub" x="725" y="80">or as_eval_target(graph)</text>
+  </g>
+  <g class="node optional">
+    <rect x="788" y="282" width="136" height="58" rx="12"/>
+    <text x="856" y="301">LLMJudge</text>
+    <text class="sub" x="856" y="322">returns a Verdict</text>
+  </g>
+  <g class="node">
+    <rect x="246" y="400" width="200" height="58" rx="12"/>
+    <text x="346" y="419">EvalResult</text>
+    <text class="sub" x="346" y="440">passed, score, checks</text>
+  </g>
+  <g class="node end">
+    <rect x="536" y="400" width="250" height="58" rx="29"/>
+    <text x="661" y="419">EvalReport</text>
+    <text class="sub" x="661" y="440">pass rate, failed checks by name</text>
+  </g>
+
+  <text class="note" x="470" y="492">Budget: a run still going at max_duration_ms is cancelled; the case is timed_out with score 0 and skips the checks.</text>
+  <text class="note" x="470" y="512">A case passes only when every check passed; its score is the fraction of checks passed, or min(judge score, fraction) on a rubric case.</text>
+  <text class="note" x="470" y="532">A rubric with no judge, or under run(), fails rather than passing. A case that declares nothing fails has_expectations.</text>
+</svg>

@@ -11,8 +11,11 @@ many domain skills) without blowing the context budget on capabilities
 the run won't use.
 
 Each skill is a folder with a `SKILL.md`. Point your agent at the
-parent directory and Locus
-handles the disclosure tiers:
+parent directory and Locus handles the disclosure tiers. The drawing
+follows one skill folder from disk through the three levels the model
+sees:
+
+{{ locus_diagram skills-disclosure }}
 
 - **L1 — catalog.** Names + one-line descriptions live in the system
   prompt. Cheap, always loaded.
@@ -25,6 +28,8 @@ handles the disclosure tiers:
   one tool — the `skills` activation tool — and no file reader, so the
   agent can only open a listed file if you register a filesystem or MCP
   read tool alongside the skill.
+
+{{ locus_model_tabs }}
 
 ```python
 from locus.agent import Agent
@@ -44,7 +49,7 @@ skill = Skill(
 )
 
 agent = Agent(config=AgentConfig(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     system_prompt="You are a release manager. Use available skills.",
     skills=[skill],
 ))

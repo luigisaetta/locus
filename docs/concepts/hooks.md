@@ -1,8 +1,9 @@
 # Hooks
 
-A hook is a callback the agent calls at eight fixed moments in a run:
+A hook is a callback the agent calls at fixed moments in a run:
 before / after the run starts, before / after each loop iteration,
-before / after each model call, before / after each tool call.
+before / after each model call, before / after each tool call, and
+before the context is compacted.
 Everything that should happen *around* the
 agent's primary task — logging, OpenTelemetry traces, retry, guardrails,
 PII redaction, an LLM-as-judge approval gate on tool calls — lives in
@@ -23,10 +24,14 @@ ships (covers most production needs out of the box) or write your own
 | Add a tool to the registry | use [`tools=[...]` on Agent](tools.md) |
 | Change the system prompt mid-run | hooks can read state but not mutate the prompt; use a [skill](skills.md) instead |
 
-## The eight lifecycle phases
+## The lifecycle phases
 
 A hook can subscribe to any of these. Each method receives a typed,
-write-protected event object.
+write-protected event object. The drawing places each hook point on
+the agent loop and follows every event to the providers in your
+`hooks=[...]` list:
+
+{{ locus_diagram hook-lifecycle }}
 
 | Phase | Fires | Useful for |
 |---|---|---|
@@ -38,6 +43,7 @@ write-protected event object.
 | `on_after_model_call` | after each response from the model | log usage, retry on empty |
 | `on_before_tool_call` | before each tool body runs | guardrails, audit, approval gates |
 | `on_after_tool_call` | after each tool body completes | log result, update metrics, mirror calls into a host-side queue |
+| `on_before_compaction` | before a `ContextCompactor` compacts the context | save the full transcript, steer the summary, skip a compaction |
 
 ## Getting started
 
@@ -68,7 +74,7 @@ no-op defaults from the base class.
 | `tool_call_id` | `str` | read-only | The same id as the matching `BeforeToolCallEvent.tool_call_id` — use it to correlate before/after for parallel tool calls. |
 | `arguments` | `dict[str, Any]` | read-only | The arguments the tool was invoked with, *post* any mutation by a `before` hook. |
 | `result` | `Any` | writable via `event.result = ...` | Replace the tool result before downstream hooks / the agent see it. |
-| `error` | `str \| None` | read-only | Set when the tool raised; mutually exclusive with a useful `result`. |
+| `error` | `str | None` | read-only | Set when the tool raised; mutually exclusive with a useful `result`. |
 | `retry` | `bool` | writable via `event.retry = True` | Re-execute the tool with the same arguments. |
 
 **Common pattern — mirror every tool call into a host-side queue** (e.g. an
@@ -96,9 +102,11 @@ the *real* side effect lives in the host process, not in the tool body.
 
 ### 2. Pass to the agent
 
+{{ locus_model_tabs }}
+
 ```python
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, issue_refund],
     hooks=[AuditHook()],
 )
@@ -236,7 +244,8 @@ any field; this is intentionally tight.
 
 ## Source and examples
 
-- [`HookProvider` and `HookOrchestrator`](https://github.com/oracle/locus/blob/main/src/locus/hooks/provider.py)
+- [`HookProvider`](https://github.com/oracle/locus/blob/main/src/locus/hooks/provider.py)
+- [`HookOrchestrator`](https://github.com/oracle/locus/blob/main/src/locus/agent/hook_orchestrator.py)
 - [Built-in hooks](https://github.com/oracle/locus/tree/main/src/locus/hooks/builtin)
 - [`notebook_09_agent_hooks.py`](https://github.com/oracle/locus/blob/main/examples/notebook_09_agent_hooks.py) — write your first hook.
 - [`notebook_10_hooks_advanced.py`](https://github.com/oracle/locus/blob/main/examples/notebook_10_hooks_advanced.py) — guardrails + steering, end to end.

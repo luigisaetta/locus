@@ -18,6 +18,8 @@ token clients send to `/invoke`, `/stream`, and thread routes.
 
 ## The shape you ship
 
+{{ locus_model_tabs }}
+
 ```python
 # server.py
 import os
@@ -26,7 +28,7 @@ from locus.agent import Agent
 from locus.server import AgentServer
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[],
     system_prompt="Answer concisely.",
 )

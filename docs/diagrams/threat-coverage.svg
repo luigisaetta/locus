@@ -50,14 +50,14 @@
   <text class="label" x="692" y="199">to record it</text>
 
   <!-- ground_finding -> Evidence -->
-  <path class="edge" marker-end="url(#ah)" d="M651,283 L740,283"/>
-  <rect class="label-bg" x="664" y="294" width="64" height="20" rx="4"/>
-  <text class="label" x="696" y="304">proceed</text>
+  <path class="edge" marker-end="url(#ah)" d="M651,283 L734,283"/>
+  <rect class="label-bg" x="660" y="294" width="64" height="20" rx="4"/>
+  <text class="label" x="692" y="304">proceed</text>
 
   <!-- ground_finding -> Abstention -->
-  <path class="edge" marker-end="url(#ah)" d="M571,312 L571,349 C571,363 581,371 595,371 L740,371"/>
-  <rect class="label-bg" x="610" y="382" width="116" height="20" rx="4"/>
-  <text class="label" x="668" y="392">below threshold</text>
+  <path class="edge" marker-end="url(#ah)" d="M571,312 L571,349 C571,363 581,371 595,371 L734,371"/>
+  <rect class="label-bg" x="606" y="382" width="116" height="20" rx="4"/>
+  <text class="label" x="664" y="392">below threshold</text>
 
   <g class="node">
     <rect x="20" y="20" width="200" height="58" rx="12"/>
@@ -102,14 +102,14 @@
     <text class="sub" x="571" y="294">score ≥ threshold?</text>
   </g>
   <g class="node allow">
-    <rect x="742" y="254" width="180" height="58" rx="12"/>
-    <text x="832" y="273">Evidence</text>
-    <text class="sub" x="832" y="294">ships · can carry IDs</text>
+    <rect x="736" y="254" width="186" height="58" rx="12"/>
+    <text x="829" y="273">Evidence ships</text>
+    <text class="sub" x="829" y="294">allow · can carry IDs</text>
   </g>
   <g class="node abstain">
-    <rect x="742" y="342" width="180" height="58" rx="12"/>
-    <text x="832" y="361">Abstention</text>
-    <text class="sub" x="832" y="382">withheld · says why</text>
+    <rect x="736" y="342" width="186" height="58" rx="12"/>
+    <text x="829" y="361">Abstention</text>
+    <text class="sub" x="829" y="382">abstain · withheld · why</text>
   </g>
 
   <text class="note" x="480" y="438">Every taxonomy ID has at least one gist, and an Evidence you record can carry those same IDs.</text>

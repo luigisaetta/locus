@@ -58,6 +58,8 @@ its stdin/stdout, and prepares tool discovery. (For an HTTP server, pass
 
 ### 3. Pass the tools straight into an Agent
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 
@@ -65,7 +67,7 @@ from locus.agent import Agent
 mcp_tools = ti.to_locus_tools(await ti.list_tools())
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=mcp_tools,
     system_prompt="Triage the alert. Enrich every indicator before you act.",
 )

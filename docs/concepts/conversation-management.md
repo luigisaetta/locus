@@ -3,16 +3,23 @@
 A Locus agent holds one user's
 conversation in `state.messages`. To make that conversation **survive
 across requests** — across deploys, restarts, and "I'll come back
-tomorrow" gaps — you wire a checkpointer and a `thread_id`.
+tomorrow" gaps — you wire a checkpointer and a `thread_id`. Within a
+run, a conversation manager keeps that list inside the model's context
+window; the drawing shows where the loop runs it and what each strategy
+keeps.
+
+{{ locus_diagram context-strategies }}
 
 ## The minimum
+
+{{ locus_model_tabs }}
 
 ```python
 from locus.agent import Agent
 from locus.memory.backends import S3Backend
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[...],
     checkpointer=S3Backend(
         bucket="locus-threads",
@@ -113,13 +120,17 @@ bug — you'll race on the checkpoint. Three patterns to avoid that:
 
 After dozens of turns, even the most disciplined conversation
 exceeds the model's context window, so an agent manages its context
-by default. With no `conversation_manager`, an agent whose model has
-registered metadata (a built-in entry, or one you add with
-`locus.models.metadata.register_metadata`) gets
-`LLMCompactor(context_length=<model window>)` with no summariser.
-Stale tool output is pruned and a token-budgeted tail is kept, with
-no extra model calls. When the window is unknown, the agent falls
-back to `SlidingWindowManager(window_size=max(20, max_iterations * 2))`.
+by default. With no `conversation_manager`, an agent whose model's
+window is known (`context_window=`, registered metadata — a built-in
+entry, or one you add with `locus.models.metadata.register_metadata` —
+or the model itself) gets a `ContextCompactor`: old tool output is
+cleared first and, when that is not enough, older turns are summarised
+by the agent's own model (or `compaction.summary_model`) and the run
+carries on. With `compaction=False` it gets
+`LLMCompactor(context_length=<model window>)` with no summariser
+instead: stale tool output is pruned and a token-budgeted tail is
+kept, with no extra model calls. When the window is unknown, the agent
+falls back to `SlidingWindowManager(window_size=max(20, max_iterations * 2))`.
 Pass `NullManager()` to turn management off.
 
 `LLMCompactor` is the token-aware built-in `ConversationManager`: it

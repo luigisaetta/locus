@@ -393,6 +393,8 @@ distinct arguments.
 
 ## Putting it together
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent, ReflexionConfig
 from locus.tools import tool
@@ -407,7 +409,7 @@ def issue_refund(order_id: str, request_id: str) -> dict:
     return billing.refund(order_id, request_id)
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, issue_refund],
     system_prompt="You are a customer-support agent.",
     reflexion=ReflexionConfig(evaluate_every_n_iterations=2),  # Reflect every 2nd iteration, as in the walkthrough

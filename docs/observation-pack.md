@@ -104,7 +104,7 @@ a named agent such as a subagent. Per-session counters are also available from
 | Piece | Location |
 |---|---|
 | Mechanism | `src/locus/memory/observation_pack.py` (SoL-Pi MIT notice in the header and in `THIRD_PARTY_LICENSES.txt`) |
-| Config | `ObservationPackConfig` in `src/locus/agent/config.py`; `AgentConfig(observation_pack=True \| ObservationPackConfig(...))`, off by default in the SDK |
+| Config | `ObservationPackConfig` in `src/locus/agent/config.py`; `AgentConfig(observation_pack=True | ObservationPackConfig(...))`, off by default in the SDK |
 | Request transform | `_get_model_response` in `src/locus/agent/runtime_loop.py` |
 | Compaction hooks | `src/locus/memory/compaction.py` (`archive=` on `compact`) |
 | Tests | `tests/unit/test_observation_pack.py`; prefix-break bounds in `tests/unit/test_cache_prefix.py` |

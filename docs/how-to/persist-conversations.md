@@ -45,6 +45,8 @@ save/load will fail at runtime (the agent calls
 
 Native checkpointer (no wrapping):
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 from locus.memory.backends import S3Backend
@@ -55,7 +57,7 @@ checkpointer = S3Backend(
 )
 
 agent = Agent(
-    model="{{ locus_example_model }}",   # any model — see concepts/models.md
+    model="{{ locus_model }}",   # any model — see concepts/models.md
     tools=[...],
     checkpointer=checkpointer,
 )

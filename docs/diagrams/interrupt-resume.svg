@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pause and resume with interrupt(), per locus/core/interrupt.py, locus/core/command.py and
+  StateGraph.execute in locus/multiagent/graph.py; the Agent lane per locus/agent/runtime_loop.py
+  and locus/agent/agent.py. Drawn for an async def node: see "Async def nodes only" below.
+    interrupt(payload) -> Unwinds    not resuming: builds InterruptValue(payload, node_id, metadata) and
+                                     raises InterruptException. node_id is the contextvar that
+                                     NodeExecutionContext sets; graph_id stays None because StateGraph
+                                     never passes one                          (interrupt.py:238-249, :281-285;
+                                                                                InterruptValue :79-100, InterruptException :143-156;
+                                                                                graph.py:326-330)
+    Unwinds -> Paused                Node.execute catches it inside NodeExecutionContext and returns
+                                     NodeResult(status=INTERRUPTED, output=InterruptValue)
+                                                                                (graph.py:326-330, :390-401)
+                                     execute() then builds InterruptState(interrupt, node_id,
+                                     pending_nodes, state_snapshot) and returns GraphResult(
+                                     success=False, interrupt=InterruptState,
+                                     final_state={...state, "__resume_node__": node_id})
+                                                                                (graph.py:1247-1253, :1286-1297;
+                                                                                 InterruptState interrupt.py:116-133)
+    Paused -> Checkpointer (dashed)  only with a checkpointer and a thread_id: checkpointer.save(
+                                     AgentState(metadata={graph_state, interrupted_node, interrupt}))
+                                                                                (graph.py:1258-1271)
+    Paused -> Hold                   the caller shows interrupt.payload and waits for a person. Nothing
+                                     in StateGraph or the Agent runtime invokes an InterruptHandler: it is
+                                     a base class the caller can subclass for a CLI, web callback or
+                                     queue                                     (interrupt.py:143-152, :337-365)
+    Hold -> Resume                   execute(Command(resume=value)); resume_with(value) builds the same
+                                     Command                                    (command.py:57, :75, :90-93, :245-260)
+    Checkpointer -> Resume (dashed)  checkpointer.load(thread_id) gives back graph_state and the
+                                     interrupted_node                           (graph.py:1008-1015)
+                                     without one, "__resume_node__" is popped from Command.update,
+                                     so the caller passes the returned final_state back  (graph.py:1027-1031)
+    Resume -> interrupt(payload)     current_nodes = [resume_node]: the whole node body runs again, with
+                                     resume_value and is_resuming=True set on contextvars by
+                                     NodeExecutionContext                       (graph.py:1042-1043,
+                                                                                 :1153-1170, :1203-1219, :326-330)
+    interrupt(payload) -> Continues  resuming: interrupt() returns the resume value and clears the flag,
+                                     so a second interrupt() in the same node pauses again (interrupt.py:231-236);
+                                     the node's output updates state and the next nodes run (graph.py:1300-1317)
+    Async def nodes only             a plain def body runs via loop.run_in_executor(None, ...) (graph.py:351),
+                                     which does not copy contextvars into the worker thread. The first run
+                                     still pauses (with InterruptValue.node_id=None), but on resume
+                                     is_resuming is never seen there: interrupt() raises again and the run
+                                     pauses again instead of continuing. The drawing and the page are scoped
+                                     to async def nodes until the body runs under a copied context.
+  Agent lane (the same shape, different objects):
+    ask_user returns the "__interrupt__" marker (agent/initializer.py:421-440); so does a gated call
+    held for approval with on_refusal="interrupt" (control/gate.py:459-475). The loop parks the run as
+    a PendingInterrupt keyed by thread_id (runtime_loop.py:633-641; run_context.py:95-104), checkpoints
+    before yielding only with a checkpointer and a thread_id (runtime_loop.py:1702-1703), yields
+    InterruptEvent(question, options, fields, interrupt_id, metadata) and returns
+    (runtime_loop.py:1689-1711; events.py:311-328). agent.pending_interrupts() lists the parked threads
+    (agent.py:667-674). agent.resume(answer) takes the parked run, or rehydrates it from the checkpointer,
+    and folds the answer in as the dangling call's ToolResult (agent.py:789-916, :1190-1194); with
+    perform_dangling=True a held call other than ask_user is re-invoked and its real result folded
+    (agent.py:1066-1072). A plain tool body that raises InterruptException does not pause an Agent run:
+    the executor turns every exception into an error ToolResult (tools/executor.py:420-430).
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 490" role="img" aria-labelledby="title desc">
+  <title id="title">Pause and resume with interrupt()</title>
+  <desc id="desc">An async node body calls interrupt(payload). On the first run that raises InterruptException, which unwinds to the graph: the node result is marked interrupted, an InterruptState is built and, when the graph has a checkpointer and a thread_id, saved to it with the state, and execute() returns a GraphResult whose interrupt field holds it. The run is paused: your code shows the payload and the hold waits for a person. The caller resumes with Command(resume=value), also spelled resume_with(value); the graph loads the saved state and the interrupted node runs again from the top, and this time interrupt() returns the value instead of raising, so the node completes, its update is applied and the next nodes run. Without a checkpointer the caller passes the returned final_state back inside the Command. This holds for async def nodes only: a plain def body runs in a worker thread that never sees the resume value, so it pauses on the first run and pauses again on resume instead of continuing. An Agent run has the same shape with different objects: ask_user, or a gated call held for approval, returns an interrupt marker; the run is parked, checkpointed when the agent has a checkpointer and a thread_id, and yields an InterruptEvent, a hold until a person answers; agent.resume(answer) folds the answer in as that call's result, or with perform_dangling=True re-invokes the held call instead.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- pause: left to right along the top row -->
+  <path class="edge" marker-end="url(#ah)" d="M200,81 L288,81"/>
+  <rect class="label-bg" x="226" y="92" width="48" height="20" rx="4"/>
+  <text class="label" x="250" y="102">raises</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M440,81 L528,81"/>
+  <rect class="label-bg" x="461" y="92" width="48" height="20" rx="4"/>
+  <text class="label" x="485" y="102">caught</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M696,81 L764,81"/>
+  <rect class="label-bg" x="704" y="92" width="54" height="20" rx="4"/>
+  <text class="label" x="731" y="102">payload</text>
+
+  <!-- the checkpoint, written at the pause and read at the resume (only with a checkpointer) -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M613,110 L613,140"/>
+  <rect class="label-bg" x="622" y="115" width="44" height="20" rx="4"/>
+  <text class="label" x="644" y="125">saves</text>
+
+  <path class="edge dashed" marker-end="url(#ah)" d="M613,230 L613,274"/>
+  <rect class="label-bg" x="622" y="242" width="44" height="20" rx="4"/>
+  <text class="label" x="644" y="252">loads</text>
+
+  <!-- the person answers: hold -> resume -->
+  <path class="edge" marker-end="url(#ah)" d="M841,110 V305 H698"/>
+  <rect class="label-bg" x="805" y="190" width="72" height="20" rx="4"/>
+  <text class="label" x="841" y="200">the answer</text>
+
+  <!-- resume -> the node runs again -->
+  <path class="edge" marker-end="url(#ah)" d="M528,305 H500 V160 H150 V112"/>
+  <rect class="label-bg" x="256" y="150" width="138" height="20" rx="4"/>
+  <text class="label" x="325" y="160">the node runs again</text>
+
+  <!-- second run: interrupt() returns, the node completes -->
+  <path class="edge" marker-end="url(#ah)" d="M112,110 V200 H365 V274"/>
+  <rect class="label-bg" x="134" y="190" width="208" height="20" rx="4"/>
+  <text class="label" x="238" y="200">interrupt() returns the value</text>
+
+  <g class="node primary">
+    <rect x="24" y="52" width="176" height="58" rx="12"/>
+    <text x="112" y="71">interrupt(payload)</text>
+    <text class="sub" x="112" y="92">inside an async node</text>
+  </g>
+  <g class="node">
+    <rect x="290" y="52" width="150" height="58" rx="12"/>
+    <text x="365" y="71">Unwinds</text>
+    <text class="sub" x="365" y="92">InterruptException</text>
+  </g>
+  <g class="node">
+    <rect x="530" y="52" width="166" height="58" rx="12"/>
+    <text x="613" y="71">Paused</text>
+    <text class="sub" x="613" y="92">GraphResult.interrupt</text>
+  </g>
+  <g class="node hold">
+    <rect x="766" y="52" width="150" height="58" rx="12"/>
+    <text x="841" y="71">Hold</text>
+    <text class="sub" x="841" y="92">waits for a person</text>
+  </g>
+
+  <g class="store">
+    <path d="M535,150 A78,8 0 0 1 691,150 V222 A78,8 0 0 1 535,222 Z M535,150 A78,8 0 0 0 691,150"/>
+    <g class="node">
+      <text x="613" y="176">Checkpointer</text>
+      <text class="sub" x="613" y="197">InterruptState saved</text>
+    </g>
+  </g>
+
+  <g class="node end">
+    <rect x="290" y="276" width="150" height="58" rx="29"/>
+    <text x="365" y="295">Continues</text>
+    <text class="sub" x="365" y="316">next nodes run</text>
+  </g>
+  <g class="node">
+    <rect x="530" y="276" width="166" height="58" rx="12"/>
+    <text x="613" y="295">Resume</text>
+    <text class="sub" x="613" y="316">Command(resume=value)</text>
+  </g>
+
+  <text class="note" x="470" y="356">Dashed: only with a checkpointer and a thread_id; otherwise pass the returned final_state back inside the Command.</text>
+  <text class="note" x="470" y="376">Async def nodes only: a plain def body runs in a worker thread that never sees the resume value, so on resume it pauses again.</text>
+
+  <!-- the same shape in an Agent run -->
+  <g class="lane">
+    <rect x="24" y="392" width="892" height="86" rx="12"/>
+    <text class="lane-title" x="40" y="414">In an Agent run · the same shape</text>
+  </g>
+  <text class="note" x="730" y="414">perform_dangling=True re-invokes the held call instead</text>
+  <g class="node"><rect x="36" y="430" width="216" height="26" rx="8"/><text class="sub" x="144" y="443">ask_user · a held gated call</text></g>
+  <path class="edge" marker-end="url(#ah)" d="M254,443 L282,443"/>
+  <g class="node hold"><rect x="284" y="430" width="166" height="26" rx="8"/><text class="sub" x="367" y="443">InterruptEvent · hold</text></g>
+  <path class="edge" marker-end="url(#ah)" d="M452,443 L480,443"/>
+  <g class="node"><rect x="482" y="430" width="160" height="26" rx="8"/><text class="sub" x="562" y="443">agent.resume(answer)</text></g>
+  <path class="edge" marker-end="url(#ah)" d="M644,443 L672,443"/>
+  <g class="node"><rect x="674" y="430" width="230" height="26" rx="8"/><text class="sub" x="789" y="443">folded in as the call's result</text></g>
+</svg>

@@ -47,7 +47,8 @@
 
   <!-- grounding_eval -> done -->
   <path class="edge" marker-end="url(#ah)" d="M764,183 L838,183 Q868,183 868,213 L868,302"/>
-  <rect class="label-bg" x="808" y="238" width="120" height="40" rx="4"/>
+  <rect class="label-bg" x="808" y="238" width="120" height="20" rx="4"/>
+  <rect class="label-bg" x="808" y="258" width="120" height="20" rx="4"/>
   <text class="label" x="868" y="248">score ≥ threshold</text>
   <text class="label" x="868" y="268">or both used up</text>
 

@@ -125,6 +125,8 @@ Used to skip the revision loop when the analyst says RESOLVED.
 
 ### `Agent(output_schema=...)` — typed terminal artifacts
 
+{{ locus_model_tabs }}
+
 ```python
 from pydantic import BaseModel
 from locus.agent import Agent, AgentConfig
@@ -133,7 +135,7 @@ class Verdict(BaseModel):
     confidence: float
     reasoning: str
 
-agent = Agent(config=AgentConfig(model="{{ locus_example_model }}", output_schema=Verdict))
+agent = Agent(config=AgentConfig(model="{{ locus_model }}", output_schema=Verdict))
 result = agent.run_sync("...")
 verdict: Verdict = result.parsed   # validated Pydantic instance, not free text
 ```

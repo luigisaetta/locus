@@ -25,6 +25,14 @@ async for event in agent.run("Plan a trip"):
             print(f"[{r}] {m}")
 ```
 
+The classes in that `match` are one of two event families. The
+drawing below sets them beside the dotted `event_type` names the
+event bus carries (`"think"` on the typed event, `agent.think` on the
+bus) and shows the bridge that turns the first family into the
+second.
+
+{{ locus_diagram event-taxonomy }}
+
 ## Common fields
 
 Every event inherits from `LocusEvent` and carries:

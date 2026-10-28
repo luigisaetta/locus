@@ -64,12 +64,14 @@ shape (`text`, `raw`, `url`, `data`) and back.
 
 ### Host side — expose an agent over A2A
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 from locus.a2a import A2AServer, AgentSkill
 
 research_agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[web_search, fetch_page, cite],
     system_prompt="You research questions across sources and summarise the evidence.",
 )

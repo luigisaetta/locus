@@ -29,12 +29,14 @@ messages, `SummarizingManager` folds older turns into a summary, and
 `ContextCompactor` archives tool output and replaces it with a reference.
 See [the agent loop](agent-loop.md) for where it runs.
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 from locus.memory.conversation import SlidingWindowManager
 
 agent = Agent(
-    model="oci:openai.gpt-5.5",
+    model="{{ locus_model }}",
     conversation_manager=SlidingWindowManager(window_size=20),
 )
 ```

@@ -20,6 +20,13 @@ action at the [admission gate](control-layer.md#the-enforcement-boundary),
 and with `on_refusal="interrupt"` and an approval store the run itself
 pauses until a named person decides ([below](#a-hold-that-pauses-the-run)).
 
+Both pauses share one shape, drawn below for an `async def` graph node that
+calls `interrupt()`: the run unwinds and, with a checkpointer, is
+checkpointed, a person decides, and the caller resumes with the answer so the
+node runs again and carries on.
+
+{{ locus_diagram interrupt-resume }}
+
 ## The shape
 
 The SDK ships a built-in `ask_user` tool. The model calls it like any
@@ -27,6 +34,8 @@ other tool; instead of returning a value, the run **pauses** — the
 agent yields an `InterruptEvent` and stops. Your app reads the question
 off the event, gets an answer, and calls `agent.resume(answer)` to
 continue.
+
+{{ locus_model_tabs }}
 
 ```python
 from locus.agent import Agent
@@ -38,7 +47,7 @@ def issue_refund(order_id: str, amount: float) -> dict:
     return billing.refund(order_id, amount)
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, issue_refund],
     # ``ask_user`` is auto-registered only in explicit-completion mode; the
     # default is "auto", where it is absent and the prompt below would ask
@@ -60,10 +69,12 @@ async for event in agent.run("Refund order ord-4821 if the return is eligible.")
 When the model calls `ask_user`, the runtime captures the question and
 yields an `InterruptEvent(question=..., options=..., interrupt_id=...)`,
 then pauses. Your app surfaces the question to a human and threads the
-answer back via `agent.resume(...)`. You can also expose your own
-pause-for-input by calling
-[`interrupt(...)`](https://github.com/oracle/locus/blob/main/src/locus/core/interrupt.py)
-from inside a tool body — `ask_user` is just the built-in wrapper.
+answer back via `agent.resume(...)`. Inside an `async def` graph node the
+same pause is
+[`interrupt(...)`](https://github.com/oracle/locus/blob/main/src/locus/core/interrupt.py),
+which the `StateGraph` catches and resumes with `Command(resume=...)`; in an
+Agent run the pause is the interrupt marker `ask_user` returns, and a gated
+tool held for approval returns the same marker ([below](#a-hold-that-pauses-the-run)).
 
 ## Three ways the human responds
 

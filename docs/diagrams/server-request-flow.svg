@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A request through AgentServer, per locus/server/app.py:
+    client -> bearer check       every route except /health takes auth_dep (app.py:433, :473, :504, :584, :618).
+                                 With an api_key, _require_auth() wants "Authorization: Bearer <key>" and compares it
+                                 with hmac.compare_digest (:289-319); with none, the dependency is the fixed principal
+                                 "anon" (:361-371), and run() refuses a non-loopback bind unless allow_unauthenticated (:654-661)
+    bearer check -> 401          missing or wrong token: HTTPException 401, WWW-Authenticate: Bearer (:304-316)
+    bearer check -> routes       a valid token becomes the principal sha256(token)[:12] (:70-81, :317)
+    client -> GET /health        no dependency; returns {"status": "ok"} (:425-427)
+    POST /invoke  -> Agent       agent.run(prompt, thread_id=principal:thread_id, metadata=...) (:447-451); the run is
+                                 reduced to InvokeResponse(message, success, stop_reason, iterations, tool_calls,
+                                 duration_ms) as JSON (:452-467, :188-196)
+    POST /stream  -> Agent       agent.run(prompt, thread_id=..., metadata=..., stream_tokens when accepted) (:475-485)
+                                 as a StreamingResponse, media_type text/event-stream (:495-498)
+    POST /resume  -> Agent       agent.resume(response, thread_id=principal:thread_id, perform_dangling, metadata?)
+                                 (:520-543); the first event is pulled before answering, so a still-undecided approval
+                                 is a 409 approval_pending, and an unknown thread (no paused run in memory and no
+                                 checkpoint under that id: agent/agent.py:862-882) is a 404 (:547-569); then the same
+                                 SSE stream (:571-579). A finished thread that still has a checkpoint is NOT refused:
+                                 it is rehydrated (agent.py:880-883), the response is folded as a system message when
+                                 no tool call is dangling (:1193-1194) and the loop runs again as a new segment
+                                 (:897-916). 404 when the runnable has no resume() (:516-518), 400 when a decision is
+                                 sent without a decision_handler (:521-526)
+    SSE frames                   "data: {json}\n\n" per event (:388-389; shapes in _event_payload :124-176), one
+                                 sanitized "error" frame on failure (:391-402, :420-421), "data: [DONE]" last (:423)
+    thread scoping               _scoped_thread_id(): f"{principal}:{thread_id}" (:321-329); responses show the
+                                 client's own id, never the scoped key (:171-174, :608, :635)
+    Agent <-> thread store       agent.config.checkpointer: load(thread_id) when a run starts (agent/runtime_loop.py:2689-2690),
+                                 save before an InterruptEvent is yielded (:1702-1703) and when the run ends (:2472-2475);
+                                 resume rehydrates a thread from it when nothing is paused in memory (agent/agent.py:873-883)
+    GET /threads/{thread_id}     checkpointer.load(principal:thread_id) -> thread_id, iteration, messages,
+                                 tool_executions, metadata; 404 without a checkpointer or for an unknown thread (app.py:581-613)
+    DELETE /threads/{thread_id}  checkpointer.delete(principal:thread_id) -> {"thread_id", "deleted"}; 404 without
+                                 a checkpointer (:615-635). Neither route runs the agent.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 420" role="img" aria-labelledby="title desc">
+  <title id="title">A request through the agent server</title>
+  <desc id="desc">A client sends an HTTP request. GET /health answers without a token. Every other route sits behind the bearer check: a missing or wrong Authorization: Bearer token is denied with 401 Unauthorized, and a valid one becomes the caller's principal. POST /invoke, POST /stream and POST /resume reach the Agent: invoke and stream call agent.run with the prompt, resume calls agent.resume to continue one paused thread. The Agent loads and saves its state in the thread store, its checkpointer, under the key principal:thread_id. GET and DELETE /threads/{thread_id} read or drop that stored state directly, without running the agent. /invoke returns an InvokeResponse as JSON; /stream and /resume return a Server-Sent Events stream of data: {json} frames that ends with data: [DONE]. /resume answers 409 while the thread's held approval is still undecided, and 404 for an unknown thread: no paused run and no checkpoint under that id. A finished thread that still has a checkpoint is continued, not refused. Without an api_key there is no token check and every caller is the principal anon.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the routes app.py registers, in file order; /health first because it alone skips the bearer check -->
+  <g class="lane">
+    <rect x="336" y="24" width="250" height="250" rx="12"/>
+    <text class="lane-title" x="352" y="48">FastAPI routes</text>
+  </g>
+  <g class="node"><rect x="352" y="62" width="206" height="26" rx="8"/><text class="sub" x="455" y="75">GET /health</text></g>
+  <g class="node"><rect x="352" y="96" width="206" height="26" rx="8"/><text class="sub" x="455" y="109">POST /invoke</text></g>
+  <g class="node"><rect x="352" y="130" width="206" height="26" rx="8"/><text class="sub" x="455" y="143">POST /stream</text></g>
+  <g class="node"><rect x="352" y="164" width="206" height="26" rx="8"/><text class="sub" x="455" y="177">POST /resume</text></g>
+  <g class="node"><rect x="352" y="198" width="206" height="26" rx="8"/><text class="sub" x="455" y="211">GET /threads/{thread_id}</text></g>
+  <g class="node"><rect x="352" y="232" width="206" height="26" rx="8"/><text class="sub" x="455" y="245">DELETE /threads/{thread_id}</text></g>
+
+  <!-- client -> /health: the one route without auth_dep -->
+  <path class="edge" marker-end="url(#ah)" d="M70,114 V75 H350"/>
+  <rect class="label-bg" x="150" y="65" width="100" height="20" rx="4"/>
+  <text class="label" x="200" y="75">no token needed</text>
+
+  <!-- client -> bearer check -->
+  <path class="edge" marker-end="url(#ah)" d="M120,143 L134,143"/>
+
+  <!-- bearer check -> the five authenticated routes: one bar feeds them all -->
+  <path class="edge" marker-end="url(#ah)" d="M296,143 L344,143"/>
+  <path class="edge" d="M346,109 V245 M346,109 H352 M346,143 H352 M346,177 H352 M346,211 H352 M346,245 H352"/>
+
+  <!-- bearer check -> 401 -->
+  <path class="edge deny" marker-end="url(#ah)" d="M216,193 L216,260"/>
+  <rect class="label-bg" x="118" y="216" width="196" height="20" rx="4"/>
+  <text class="label" x="216" y="226">denied: missing or wrong token</text>
+
+  <!-- /invoke, /stream, /resume -> Agent -->
+  <path class="edge" d="M558,109 H570 V177 H558"/>
+  <path class="edge" marker-end="url(#ah)" d="M570,143 L602,143"/>
+
+  <!-- GET and DELETE /threads -> thread store, without running the agent -->
+  <path class="edge" d="M558,211 H570 V245 H558"/>
+  <path class="edge" marker-end="url(#ah)" d="M570,245 V296 H602"/>
+
+  <!-- Agent <-> thread store -->
+  <path class="edge" marker-start="url(#ah)" marker-end="url(#ah)" d="M669,174 L669,258"/>
+  <rect class="label-bg" x="605" y="206" width="128" height="20" rx="4"/>
+  <text class="label" x="669" y="216">principal:thread_id</text>
+
+  <!-- Agent -> the two reply shapes -->
+  <path class="edge" marker-end="url(#ah)" d="M734,133 C758,133 758,81 778,81"/>
+  <path class="edge" marker-end="url(#ah)" d="M734,153 C758,153 758,205 778,205"/>
+
+  <g class="node">
+    <rect x="20" y="114" width="100" height="58" rx="12"/>
+    <text x="70" y="133">Client</text>
+    <text class="sub" x="70" y="154">HTTP request</text>
+  </g>
+  <g class="decision node">
+    <polygon points="216,93 296,143 216,193 136,143"/>
+    <text x="216" y="133">Bearer token</text>
+    <text class="sub" x="216" y="154">valid?</text>
+  </g>
+  <g class="node deny">
+    <rect x="131" y="262" width="170" height="58" rx="12"/>
+    <text x="216" y="281">401 Unauthorized</text>
+    <text class="sub" x="216" y="302">request denied</text>
+  </g>
+
+  <g class="node primary">
+    <rect x="604" y="114" width="130" height="58" rx="12"/>
+    <text x="669" y="133">Agent</text>
+    <text class="sub" x="669" y="154">run() · resume()</text>
+  </g>
+  <g class="store node">
+    <path d="M734,268 L734,324 A65,8 0 0 1 604,324 L604,268 M604,268 A65,8 0 0 1 734,268 A65,8 0 0 1 604,268 Z"/>
+    <text x="669" y="294">Thread store</text>
+    <text class="sub" x="669" y="315">checkpointer</text>
+  </g>
+
+  <g class="node end">
+    <rect x="780" y="52" width="140" height="58" rx="29"/>
+    <text x="850" y="71">InvokeResponse</text>
+    <text class="sub" x="850" y="92">/invoke · JSON</text>
+  </g>
+  <g class="node end">
+    <rect x="780" y="176" width="140" height="58" rx="29"/>
+    <text x="850" y="195">SSE stream</text>
+    <text class="sub" x="850" y="216">/stream · /resume</text>
+  </g>
+
+  <text class="note" x="470" y="362">/health needs no token; every other route runs behind the bearer check, and without an api_key the caller is the principal anon.</text>
+  <text class="note" x="470" y="382">SSE frames are data: {json}, closed by data: [DONE]. /resume: 409 while the held approval is undecided, 404 for an unknown thread.</text>
+  <text class="note" x="470" y="402">An unknown thread has no paused run and no checkpoint under that id; a finished thread that still has a checkpoint is continued, not refused.</text>
+</svg>

@@ -7,6 +7,8 @@ deploy. Every primitive on this page works inside any of the eight
 
 ## Typed terminal artifacts
 
+{{ locus_model_tabs }}
+
 ```python
 from pydantic import BaseModel
 from locus.agent import Agent, AgentConfig
@@ -17,7 +19,7 @@ class Postmortem(BaseModel):
     action_items: list[str]
 
 writer = Agent(config=AgentConfig(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     output_schema=Postmortem,
 ))
 result = writer.run_sync("Write a postmortem for incident #4421")

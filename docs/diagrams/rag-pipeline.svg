@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The RAG pipeline as locus.rag runs it: ingest through RAGRetriever.add_documents(), retrieval
+  through RAGRetriever.retrieve() behind a tool the Agent calls. Both lanes share one embedder and
+  one vector store.
+    INGEST
+    documents -> loader        load_directory() dispatches by suffix to load_markdown / load_html / load_pdf /
+                               load_text (rag/loaders/__init__.py:224-267, table :50-56); each returns Documents
+                               carrying source (+ page for PDFs) metadata (:64-76, :220). OracleADBLoader yields one
+                               Document per row of a SELECT (rag/loaders/oracle.py:98, lazy_load :269, load :339).
+                               The documented bridge is add_documents([d.content for d in docs]) (rag/loaders/__init__.py:12-15).
+    loader -> chunker          add_document() splits anything longer than chunk_size with the retriever's own
+                               splitter (rag/retriever.py:196-199, _chunk_text :136-172, chunk_size/chunk_overlap :114-115);
+                               recursive_chunks() (rag/chunkers/__init__.py:97-169) and OracleInDBChunker
+                               (rag/chunkers/oracle_indb.py:65, chunk_text :180, chunk_column :221) chunk before add_documents().
+    chunker -> embedder        embedder.embed_documents(chunks) (rag/retriever.py:202; :305 for add_file);
+                               protocol rag/embeddings/base.py:154; OpenAIEmbeddings rag/embeddings/openai.py:65,
+                               CohereEmbeddings cohere.py:40, OCIEmbeddings oci.py:124, OracleInDBEmbeddings oracle_indb.py:191.
+    embedder -> vector store   Documents built with the vectors and chunk_index / total_chunks / parent_id metadata
+                               (rag/retriever.py:206-221), then store.add_batch(documents) (:224; :328). Protocol
+                               rag/stores/base.py:141. Stores: InMemoryVectorStore rag/stores/memory.py:20,
+                               ChromaVectorStore chroma.py:49, PgVectorStore pgvector.py:118, QdrantVectorStore qdrant.py:72,
+                               OpenSearchVectorStore opensearch.py:61, OracleVectorStore oracle.py:175.
+    add_file()                 rag/retriever.py:250-329: MultimodalProcessor (rag/multimodal.py:483, process :558)
+                               extracts the text (:280-286), then the same chunk / embed / add_batch steps run (:299-328).
+    RETRIEVE
+    Agent -> tool              create_rag_tool(retriever, name, description, limit, threshold) builds a @tool
+                               (rag/tools.py:36-124); RAGRetriever.as_tool() delegates to it (rag/retriever.py:585-614).
+                               Agent(tools=[tool]) (rag/tools.py:60-67); the model decides when to call it.
+    tool -> RAGRetriever       the tool body calls retriever.retrieve(query, limit=max_results, threshold=min_score)
+                               (rag/tools.py:99-103).
+    RAGRetriever -> embed      retrieve() first calls embedder.embed_query(query) (rag/retriever.py:488; protocol
+                               rag/embeddings/base.py:140).
+    embed -> store search      store.search(query_embedding, limit=store_limit, threshold, metadata_filter)
+                               (rag/retriever.py:497-502; protocol rag/stores/base.py:174-192, results sorted by similarity);
+                               store_limit = max(limit, rerank_candidate_pool) when a reranker is set, else limit (:494).
+    store -> reranker          optional: reranker defaults to None, rerank_candidate_pool to 50 (rag/retriever.py:116-132);
+                               when set, reranker.rerank(query, results) then [:limit] (:504-506). Reranker.rerank returns a
+                               new list in descending relevance, .score replaced, the embedding score kept on .distance
+                               (rag/reranker/base.py:39-57). CrossEncoderReranker rag/reranker/cross_encoder.py:40,
+                               CohereReranker cohere.py:33, OCICohereReranker cohere_oci.py:56.
+    reranker -> RAGRetriever   RetrievalResult(documents=results, query, total_results) (rag/retriever.py:517-521).
+    RAGRetriever -> Agent      the tool returns {"results": [{content, score, metadata, id}], total, query, _security_note}
+                               (rag/tools.py:105-122).
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 436" role="img" aria-labelledby="title desc">
+  <title id="title">The RAG pipeline: ingest and retrieve</title>
+  <desc id="desc">Two lanes that share one embedder and one vector store. Ingest: your documents, files or database rows, pass through a loader such as load_directory() or OracleADBLoader, a chunker that splits them by chunk_size (the retriever's own splitter, or recursive_chunks() run first) and the embedder's embed_documents(), and the chunks with their vectors are written to the vector store with add_batch(). The store is one of the in-memory, Chroma, pgvector, Qdrant, OpenSearch or Oracle Database 26ai stores. Retrieve: the Agent calls the search tool that create_rag_tool(retriever) or retriever.as_tool() built. The tool calls RAGRetriever.retrieve() with the query, limit and threshold; the retriever embeds the query with the same embedder's embed_query(), searches the store with search(), passes the ranked hits through the reranker when one is configured, and returns a RetrievalResult. The tool hands the results, each with content, score, metadata and id, back to the Agent.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- lane 1: ingest, what add_documents() / add_file() do -->
+  <g class="lane">
+    <rect x="16" y="16" width="908" height="124" rx="12"/>
+    <text class="lane-title" x="32" y="38">Ingest · index the corpus</text>
+  </g>
+  <text class="note" x="795" y="38">retriever.add_documents() · add_file()</text>
+
+  <!-- lane 2: retrieve, one tool call -->
+  <g class="lane">
+    <rect x="16" y="154" width="908" height="212" rx="12"/>
+    <text class="lane-title" x="32" y="176">Retrieve · one tool call</text>
+  </g>
+
+  <!-- ingest row -->
+  <path class="edge" marker-end="url(#ah)" d="M138,90 L166,90"/>
+  <path class="edge" marker-end="url(#ah)" d="M324,90 L352,90"/>
+  <path class="edge" marker-end="url(#ah)" d="M500,90 L528,90"/>
+  <path class="edge" marker-end="url(#ah)" d="M670,90 L756,90"/>
+  <rect class="label-bg on-lane" x="675" y="96" width="78" height="20" rx="4"/>
+  <text class="label" x="714" y="106">add_batch()</text>
+
+  <!-- call row: the Agent's tool call goes out to the store -->
+  <path class="edge" marker-end="url(#ah)" d="M138,228 L166,228"/>
+  <path class="edge" marker-end="url(#ah)" d="M324,228 L352,228"/>
+  <path class="edge" marker-end="url(#ah)" d="M500,228 L528,228"/>
+  <path class="edge" marker-end="url(#ah)" d="M670,228 L756,228"/>
+  <rect class="label-bg on-lane" x="683" y="234" width="62" height="20" rx="4"/>
+  <text class="label" x="714" y="244">search()</text>
+
+  <!-- return row: the hits come back, through the reranker when there is one, to the Agent -->
+  <path class="edge" marker-end="url(#ah)" d="M758,325 L672,325"/>
+  <rect class="label-bg on-lane" x="676" y="331" width="76" height="20" rx="4"/>
+  <text class="label" x="714" y="341">ranked hits</text>
+  <path class="edge" marker-end="url(#ah)" d="M530,325 L502,325"/>
+  <path class="edge" marker-end="url(#ah)" d="M354,325 H83 V268"/>
+  <rect class="label-bg on-lane" x="107" y="331" width="228" height="20" rx="4"/>
+  <text class="label" x="221" y="341">results · content, score, metadata, id</text>
+
+  <!-- ingest nodes -->
+  <g class="node">
+    <rect x="28" y="52" width="110" height="76" rx="12"/>
+    <text x="83" y="73">Documents</text>
+    <text class="sub" x="83" y="93">files</text>
+    <text class="sub" x="83" y="111">database rows</text>
+  </g>
+  <g class="node">
+    <rect x="168" y="52" width="156" height="76" rx="12"/>
+    <text x="246" y="73">Loader</text>
+    <text class="sub" x="246" y="93">load_directory()</text>
+    <text class="sub" x="246" y="111">OracleADBLoader</text>
+  </g>
+  <g class="node">
+    <rect x="354" y="52" width="146" height="76" rx="12"/>
+    <text x="427" y="73">Chunker</text>
+    <text class="sub" x="427" y="93">by chunk_size</text>
+    <text class="sub" x="427" y="111">recursive_chunks()</text>
+  </g>
+
+  <!-- the one embedder, used by both lanes -->
+  <g class="node">
+    <rect x="530" y="52" width="140" height="214" rx="12"/>
+    <text class="sub" x="600" y="90">embed_documents()</text>
+    <text x="600" y="159">Embedder</text>
+    <text class="sub" x="600" y="228">embed_query()</text>
+  </g>
+
+  <!-- retrieve nodes -->
+  <g class="node">
+    <rect x="28" y="190" width="110" height="76" rx="12"/>
+    <text x="83" y="218">Agent</text>
+    <text class="sub" x="83" y="239">tools=[…]</text>
+  </g>
+  <g class="node">
+    <rect x="168" y="190" width="156" height="76" rx="12"/>
+    <text x="246" y="211">Search tool</text>
+    <text class="sub" x="246" y="231">create_rag_tool()</text>
+    <text class="sub" x="246" y="249">retriever.as_tool()</text>
+  </g>
+  <g class="node primary">
+    <rect x="354" y="190" width="146" height="164" rx="12"/>
+    <text x="427" y="211">RAGRetriever</text>
+    <text class="sub" x="427" y="231">retrieve(query)</text>
+    <text class="sub" x="427" y="249">limit · threshold</text>
+    <text class="sub" x="427" y="325">RetrievalResult</text>
+  </g>
+  <g class="node optional">
+    <rect x="530" y="296" width="140" height="58" rx="12"/>
+    <text x="600" y="315">Reranker</text>
+    <text class="sub" x="600" y="336">reranker=… opt-in</text>
+  </g>
+
+  <!-- the one vector store, written by ingest and searched by retrieve -->
+  <g class="store">
+    <path d="M758,61 A80,9 0 0 1 918,61 V345 A80,9 0 0 1 758,345 Z M758,61 A80,9 0 0 0 918,61"/>
+    <g class="node">
+      <text x="838" y="164">Vector store</text>
+      <text class="sub" x="838" y="190">in-memory · Chroma</text>
+      <text class="sub" x="838" y="208">pgvector · Qdrant</text>
+      <text class="sub" x="838" y="226">OpenSearch</text>
+      <text class="sub" x="838" y="244">Oracle Database 26ai</text>
+    </g>
+  </g>
+
+  <text class="note" x="470" y="390">RAGRetriever splits anything longer than chunk_size itself; recursive_chunks() and OracleInDBChunker chunk before add_documents().</text>
+  <text class="note" x="470" y="406">add_file() takes PDF, image and audio straight in: MultimodalProcessor extracts the text, then chunk, embed and store run as above.</text>
+  <text class="note" x="470" y="422">With a reranker, retrieve() over-fetches rerank_candidate_pool hits; the reranker rescores them and the top limit are kept.</text>
+</svg>

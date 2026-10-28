@@ -5,13 +5,17 @@ service — drop in an `Agent` (a refund bot, a deploy operator, an
 access-grant approver, or a SOC triage agent), and get a FastAPI app
 with `/invoke`, `/stream`, and per-thread management out of the box. It
 re-emits the same event stream the Python API exposes as Server-Sent
-Events, gated by optional bearer-token auth.
+Events, gated by optional bearer-token auth. A request takes the path
+below: the bearer check, one of the routes, the agent with its thread
+store, and a JSON or SSE reply.
+
+{{ locus_diagram server-request-flow }}
 
 !!! note "Single shared key — single principal"
     `AgentServer` takes **one** `api_key`. Every authenticated request
     presents that same token, so all callers hash to the **same**
     principal and share one thread namespace. The bearer check (a 401 on
-    `/invoke`, `/stream` and `/threads/{tid}`) is what stops a caller
+    `/invoke`, `/stream`, `/resume` and `/threads/{tid}`) is what stops a caller
     without the key; the principal prefix on thread IDs only keeps
     thread IDs from colliding between deployments with different keys
     that share a checkpointer — it does **not** give you per-analyst or
@@ -44,6 +48,8 @@ if __name__ == "__main__":
 
 ### 1. Wrap the refund bot
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 from locus.core.termination import ToolCalled, ConfidenceMet, MaxIterations
@@ -51,7 +57,7 @@ from locus.memory.backends.file import FileCheckpointer
 from locus.server import AgentServer
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, check_refund_policy, issue_refund],
     system_prompt="You are a refund agent. Cite order evidence; escalate without it.",
     reflexion=True,
@@ -76,8 +82,10 @@ curl -sS -X POST http://localhost:8080/invoke \
   -d '{"prompt": "Refund the duplicate charge on ord-4821.", "thread_id": "ord-4821"}'
 ```
 
-Returns the full `AgentResult` JSON in one response. Use this for
-scheduled jobs, workflow-engine steps, and anything that doesn't render
+Returns an `InvokeResponse` JSON (`message`, `success`, `stop_reason`,
+`iterations`, `tool_calls`, `duration_ms`) in one response — the run
+reduced to its result, not the event stream. Use this for scheduled
+jobs, workflow-engine steps, and anything that doesn't render
 incrementally.
 
 ### 3. Call `/stream` (Server-Sent Events)
@@ -87,9 +95,12 @@ and the token from the `Authorization` header. The browser `EventSource`
 API only issues GET requests, so it can't drive this route — use
 `fetch()` + a `ReadableStream` reader and parse the `data:` frames
 yourself. Each frame is `data: {json}\n\n`; the JSON carries a `type`
-field (`think`, `tool_start`, `tool_complete`, `done`, `error`), and the
-stream ends with a literal `data: [DONE]` frame. The route does **not**
-emit named SSE events.
+field — `think`, `tool_start`, `tool_complete`, `done` and `error` keep
+their historical shapes, `model_chunk` is a token delta (on by default;
+`stream_tokens=False` on the server turns it off), `interrupt` is a
+pause, and every other event is its `model_dump` under its `type` — and
+the stream ends with a literal `data: [DONE]` frame. The route does
+**not** emit named SSE events.
 
 ```javascript
 const res = await fetch("/stream", {
@@ -173,13 +184,14 @@ same adapter slots into `locus.a2a.A2AServer`.
 |---|---|---|---|
 | `/invoke` | POST | `{"prompt": "...", "thread_id": "..."}` | `InvokeResponse` JSON (`message`, `success`, `stop_reason`, `iterations`, `tool_calls`, `duration_ms`) |
 | `/stream` | POST | same | `text/event-stream` SSE of `data: {json}` frames |
+| `/resume` | POST | `{"thread_id": "...", "response": "...", "decision": {...}}` | SSE of the continued thread; 409 while a held approval is undecided, 404 for an unknown thread (no paused run and no checkpoint under that id) |
 | `/health` | GET | — | liveness probe (200 OK) |
 | `/threads/{tid}` | GET | — | thread state (requires checkpointer) |
 | `/threads/{tid}` | DELETE | — | drop a thread |
 
-There is no `/resume` route on the reference `AgentServer` — see
-[Human-in-the-loop](#human-in-the-loop) below for how the in-process
-interrupt/resume flow actually works.
+`/resume` continues one thread, strictly by `thread_id`: the run this
+process paused, or otherwise the thread rehydrated from its checkpoint —
+see [Human-in-the-loop](#human-in-the-loop) below.
 
 `/docs`, `/redoc`, and `/openapi.json` are only mounted when
 `debug=True` in your settings — production deployments don't expose
@@ -244,16 +256,23 @@ def request_human_approval(reason: str, action: str) -> str:
     return interrupt({"reason": reason, "action": action})
 ```
 
-!!! warning "AgentServer does not expose this over HTTP yet"
-    There is **no `PendingApproval` exception** in the SDK and **no
-    `/resume` endpoint** on the reference `AgentServer`. The
-    interrupt/resume flow above runs in-process. Over `/stream`, an
-    unexpected tool exception is caught and returned as a sanitized
-    `{"type": "error", "error": "internal error", "correlation_id": ...}`
-    frame (details land in the server log under that id) — it does **not**
-    park a resumable case. To drive human-in-the-loop over HTTP today,
-    handle `InterruptEvent` in your own wrapper around `Agent.run` /
-    `Agent.resume` and add your own resume route.
+!!! note "Over HTTP: `/stream` pauses, `/resume` continues"
+    Over `/stream`, the pause arrives as a `{"type": "interrupt", ...}`
+    frame; with a checkpointer and a `thread_id`, the agent saves the
+    thread before yielding it. `POST /resume` with `{"thread_id": ...,
+    "response": ...}` (plus an optional `decision` payload, recorded by
+    the server's `decision_handler`) continues that one thread as a new
+    SSE stream: 409 `approval_pending` while a held approval is still
+    undecided, 404 for an unknown thread — no run paused in this process
+    and no checkpoint under that id (so, without a checkpointer, any
+    thread that is not paused). A thread whose run already finished but
+    still has a checkpoint is **not** refused: the agent reloads it,
+    appends the response as a `[User Response]` system message when no
+    tool call is left unanswered, and runs the loop again as a new
+    segment. An unexpected exception on either stream is returned as a
+    sanitized `{"type": "error", "error": "internal error",
+    "correlation_id": ...}` frame, with details in the server log under
+    that id.
 
 ## Case persistence
 

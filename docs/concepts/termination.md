@@ -29,6 +29,13 @@ This is one of the SDK's signature primitives. Every stop condition is
 inspectable, unit-testable, and serialisable — no hand-rolled `if`
 ladders sprinkled through the response loop.
 
+Each `&` or `|` builds one two-child node, so a composed condition is a
+tree. Here is `(ToolCalled("issue_refund") & ConfidenceMet(0.9)) | MaxIterations(10)`
+as the tree it builds, and the point in the loop where its root is
+evaluated — the start of every iteration, before Think:
+
+{{ locus_diagram termination-algebra }}
+
 ## When to pick which condition
 
 | Situation | Use |
@@ -44,12 +51,14 @@ ladders sprinkled through the response loop.
 
 ### 1. Pick one condition
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 from locus.core.termination import MaxIterations
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, issue_refund],
     termination=MaxIterations(8),
 )
@@ -151,7 +160,7 @@ and `|` work across the whole hierarchy.
 | Symptom | Likely cause |
 |---|---|
 | Agent always stops at `MaxIterations` | The "done" condition never fires — model isn't calling `issue_refund`, or confidence never reaches the threshold. Lower the threshold or check the tool name. |
-| `&` / `\|` precedence surprises | Python's normal precedence applies: `&` binds tighter than `\|`. Add parentheses when in doubt — `(A & B) \| C` reads cleaner anyway. |
+| `&` / `|` precedence surprises | Python's normal precedence applies: `&` binds tighter than `|`. Add parentheses when in doubt — `(A & B) | C` reads cleaner anyway. |
 | `ConfidenceMet` never trips | `reflexion=True` is required — without it, confidence stays at the default, so the agent never early-stops on a high-confidence resolution. |
 | `ToolCalled("issue_refund")` fires before the refund settles | It checks the *call*, not the *result* — `require_success=True` additionally skips a call that raised, so a terminal tool can reject a submission by raising and the loop continues. For a check on the returned content, pair with `ConfidenceMet` or a `CustomCondition` that inspects `tool_executions`. |
 
