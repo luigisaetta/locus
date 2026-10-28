@@ -129,6 +129,10 @@ backend = OpenShellBackend.connect("my-sandbox", workspace="team-a", endpoint="g
 harness = build_harness(backend, wrap=gateway_gate)
 ```
 
+No gateway yet? `examples/openshell-gateway/` starts one with `docker compose up -d`
+(loopback, Docker-outside-of-Docker) and `LOCUS_OPENSHELL_ENDPOINT=127.0.0.1:8080`
+points the harness and the live tests at it.
+
 OpenShell has no file RPC, so files move over `exec`: downloads are a `tar`
 of the one file on standard output, uploads are `cat >` with the bytes on
 standard input (so an executable keeps its mode), in chunks for large files.
