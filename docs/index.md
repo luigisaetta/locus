@@ -228,6 +228,7 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 
 [Oracle Database 26ai, every primitive →](concepts/oracle-26ai.md) ·
 [Which OCI models work →](how-to/oci-models.md#model-support-on-oci) ·
+[Configure any provider →](how-to/configure-providers.md) ·
 [Dedicated AI Clusters →](how-to/oci-dac.md) ·
 [Oracle Database 26ai notebooks →](notebooks/index.md#oracle-cloud-and-database-26ai)
 

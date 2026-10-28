@@ -108,7 +108,8 @@ export — so audit those separately.
 | **Anthropic** | [Anthropic →](providers/anthropic.md) |
 | **OpenRouter** | [OpenAI-compatible providers →](providers/openai-compatible.md#openrouter-and-togetherai) |
 | **Together.ai** | [OpenAI-compatible providers →](providers/openai-compatible.md#openrouter-and-togetherai) |
-| **Other hosted or self-hosted endpoints** | [OpenAI-compatible providers →](providers/openai-compatible.md) |
+| **RunPod** | [Configure a model provider →](../how-to/configure-providers.md#runpod) |
+| **Other hosted or self-hosted endpoints** | [OpenAI-compatible providers →](providers/openai-compatible.md) · [Configure a model provider →](../how-to/configure-providers.md) |
 | **Failover, credential pools, rate limits** | [Resilience →](providers/resilience.md) |
 
 ## Custom providers

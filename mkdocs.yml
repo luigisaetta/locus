@@ -14,11 +14,7 @@ exclude_docs: |
   diagrams/README.md
   # Engineering notes that live next to the code they describe (linked from
   # the README and CHANGELOG on GitHub), not pages of the site.
-  decision.md
-  harness.md
   observation-pack.md
-  pg-checkpointer.md
-  runner.md
 
 theme:
   name: material
@@ -178,14 +174,17 @@ nav:
     - Executors: concepts/executors.md
     - MCP: concepts/mcp.md
     - Multi-modal providers: concepts/multi-modal-providers.md
+    - The coding harness: harness.md
   - Memory and RAG:
     - Memory — short-term and long-term: concepts/memory.md
     - Checkpointers & Store: concepts/checkpointers.md
     - Long-term memory manager: concepts/memory-manager.md
     - RAG: concepts/rag.md
+    - PgCheckpointer and retention: pg-checkpointer.md
   - Reasoning:
     - Reasoning patterns: concepts/reasoning.md
     - GSAR (typed grounding): concepts/gsar.md
+    - Typed decisions: decision.md
   - Observability and serving:
     - Observability: concepts/observability.md
     - Events: concepts/events.md
@@ -221,8 +220,21 @@ nav:
     - Guarantees & boundaries: why-locus.md
     - Compatibility & releases: compatibility.md
     - About & maintainers: about.md
-- Notebooks:
+- How-to:
   - Quickstart: how-to/quickstart.md
+  - Configure a model provider: how-to/configure-providers.md
+  - Environment variables: how-to/environment-variables.md
+  - First controlled action: how-to/first-controlled-action.md
+  - Persist conversations: how-to/persist-conversations.md
+  - Build a custom tool: how-to/custom-tools.md
+  - Add a checkpointer backend: how-to/custom-checkpointer.md
+  - Build a security integration: how-to/build-an-integration.md
+  - OCI Generative AI models: how-to/oci-models.md
+  - Dedicated AI Clusters: how-to/oci-dac.md
+  - LiteLLM gateway: how-to/litellm-gateway.md
+  - Deploy: how-to/deploy.md
+  - The box runner: runner.md
+- Notebooks:
   - Overview: notebooks/index.md
   - Start here:
     - 01 · OCI transports — start here: notebooks/notebook_01_oci_transports.md
