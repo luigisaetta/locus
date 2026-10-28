@@ -430,12 +430,16 @@ _RESPONSES_PARAMS = _responses_param_names()
 #: ``gpt-10``…). ``gpt-4o`` / ``gpt-4.1`` stay on ``max_tokens``.
 _MAX_COMPLETION_TOKENS_FAMILY = re.compile(r"^(?:o[1-9]\d*|gpt-(?:[5-9]|[1-9]\d+))(?:[-.]|$)")
 
-#: Model families served only by the Responses API. GPT-5.6 rejects function
-#: tools on chat-completions whenever reasoning is active — the API 400s with
-#: "Function tools with reasoning_effort are not supported … use /v1/responses
-#: or set reasoning_effort to 'none'" — and disabling reasoning defeats the
-#: family's purpose, so ``api="auto"`` routes these to ``/v1/responses``.
-_RESPONSES_ONLY_PREFIXES = ("gpt-5.6",)
+#: Model families served only by the Responses API. GPT-5.6 and GPT-6 (6,
+#: 6.1, …) reject function tools on chat-completions whenever reasoning is
+#: active — the API 400s with "Function tools with reasoning_effort are not
+#: supported … use /v1/responses or set reasoning_effort to 'none'" — and
+#: disabling reasoning defeats the family's purpose, so ``api="auto"`` routes
+#: these to ``/v1/responses``. The ``-pro`` models (gpt-5-pro, gpt-5.2-pro,
+#: gpt-5.4-pro, gpt-5.5-pro, …) are not chat models at all: chat-completions
+#: answers 404 "This is not a chat model".
+_RESPONSES_ONLY_PREFIXES = ("gpt-5.6", "gpt-6")
+_RESPONSES_ONLY_PRO = re.compile(r"^gpt-5(?:\.\d+)?-pro(?:-|$)")
 
 #: ``Message.metadata`` key under which the Responses path stashes the raw
 #: output items of an assistant turn (reasoning items with their
@@ -960,17 +964,21 @@ class OpenAIModel(BaseModel):
     def _requires_responses_api(model: str) -> bool:
         """Whether the model family is served only by the Responses API.
 
-        The GPT-5.6 family (sol / terra / luna) rejects function tools on
-        chat-completions whenever reasoning is active: the API 400s with
-        "Function tools with reasoning_effort are not supported … To use
-        function tools, use /v1/responses or set reasoning_effort to
-        'none'". Setting effort to none defeats the family's purpose, so
-        these models route to ``/v1/responses`` under ``api="auto"``.
-        Tolerates a leading purely-alphabetic namespace segment like the
-        other family detectors.
+        The GPT-5.6 and GPT-6 families (sol / terra / luna / astra, 6.1 …)
+        reject function tools on chat-completions whenever reasoning is
+        active: the API 400s with "Function tools with reasoning_effort are
+        not supported … To use function tools, use /v1/responses or set
+        reasoning_effort to 'none'". Setting effort to none defeats the
+        family's purpose, so these models route to ``/v1/responses`` under
+        ``api="auto"``. The ``gpt-5*-pro`` models are Responses-only outright
+        (chat-completions: 404 "This is not a chat model"). Tolerates a
+        leading purely-alphabetic namespace segment like the other family
+        detectors.
         """
         name = _strip_model_namespace(model.lower())
-        return name.startswith(_RESPONSES_ONLY_PREFIXES)
+        return (
+            name.startswith(_RESPONSES_ONLY_PREFIXES) or _RESPONSES_ONLY_PRO.match(name) is not None
+        )
 
     def _use_responses_api(self) -> bool:
         """Whether this instance's requests go to ``/v1/responses``.

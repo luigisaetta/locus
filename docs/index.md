@@ -208,7 +208,7 @@ new code. Everything else that speaks the OpenAI API plugs in behind a prefix,
 hosted or self-hosted.
 
 <p class="locus-chips__vendor">One model string, any provider</p>
-<div class="locus-chips locus-chips--prefixes"><span>oci:</span><span>openai:</span><span>anthropic:</span><span>gemini:</span><span>openrouter:</span><span>together:</span><span>groq:</span><span>mistral:</span><span>xai:</span><span>deepseek:</span><span>fireworks:</span><span>cerebras:</span><span>perplexity:</span><span>nvidia:</span><span>litellm:</span><span>ollama:</span><span>vllm:</span><span>llamacpp:</span><span>lmstudio:</span><span>openai-compatible:</span></div>
+<div class="locus-chips locus-chips--prefixes"><span>oci:</span><span>openai:</span><span>anthropic:</span><span>gemini:</span><span>openrouter:</span><span>together:</span><span>runpod:</span><span>groq:</span><span>mistral:</span><span>xai:</span><span>deepseek:</span><span>fireworks:</span><span>cerebras:</span><span>perplexity:</span><span>nvidia:</span><span>litellm:</span><span>ollama:</span><span>vllm:</span><span>llamacpp:</span><span>lmstudio:</span><span>openai-compatible:</span></div>
 
 ```python
 from locus.agent import Agent
