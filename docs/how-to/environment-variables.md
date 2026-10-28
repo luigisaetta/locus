@@ -50,6 +50,9 @@ unchanged. See [OCI GenAI models](oci-models.md).
 
 ## Provider keys
 
+Per-provider setup, with the model string for each, is in
+[Configure a model provider](configure-providers.md).
+
 | Variable | Used by |
 |---|---|
 | `OPENAI_API_KEY` | `OpenAIModel`, `OpenAIEmbeddings` |

@@ -158,7 +158,7 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 | **[Observability and streaming](https://locusagents.ai/concepts/observability/)** | Opt-in `EventBus`; one `run_context()` streams 40+ typed events from every layer; SSE and token streaming; OpenTelemetry hook. |
 | **[Server and deploy](https://locusagents.ai/concepts/server/)** | `locus serve` / `AgentServer` (FastAPI, bearer auth, `POST /invoke`, `POST /stream`, threads); multi-stage `Dockerfile` and the `ghcr.io/oracle/locus-runner` image for OKE. |
 | **[Skills, playbooks, evaluation](https://locusagents.ai/concepts/skills/)** | Progressive-disclosure skills, enforced playbooks, `EvalCase` / `EvalRunner` / `EvalReport` regression suites. |
-| **[Model providers](https://locusagents.ai/concepts/models/)** | `oci:`, `openai:`, `anthropic:` native; `gemini:`, `openrouter:`, `together:`, `runpod:`, `groq:`, `ollama:`, `vllm:` and 11 more OpenAI-compatible routes; failover chains, credential pooling, prompt-cache breakpoints. |
+| **[Model providers](https://locusagents.ai/how-to/configure-providers/)** | `oci:`, `openai:`, `anthropic:` native; `gemini:`, `openrouter:`, `together:`, `runpod:`, `groq:`, `ollama:`, `vllm:` and 11 more OpenAI-compatible routes; failover chains, credential pooling, prompt-cache breakpoints. |
 
 Every backend is an optional extra — install only what you use
 (`pip install "locus-sdk[oci,oracledb]"` for the Oracle stack, `[qdrant,s3,rerank-local]` for others).
