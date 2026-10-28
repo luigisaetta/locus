@@ -722,13 +722,20 @@ def safe_math_eval(expression: str) -> float:
 
 
 def print_config():
-    """Print current configuration for debugging."""
-    provider = os.environ.get("LOCUS_MODEL_PROVIDER", "").lower() or "mock"
-    model_id = os.environ.get("LOCUS_MODEL_ID", "(default)")
+    """Print the provider and model the notebook will actually use.
 
+    Uses :func:`resolved_provider`, so an OCI profile picked up by
+    auto-detection is reported as OCI rather than as the mock model.
+    """
+    provider = resolved_provider()
     print(f"Model Provider: {provider}")
 
     if provider == "mock":
         print("Using mock model (no API calls)")
-    else:
-        print(f"Model ID: {model_id}")
+        return
+    if provider == "oci":
+        try:
+            print(f"OCI profile: {_resolve_oci_profile()}")
+        except RuntimeError as exc:
+            print(f"OCI profile: unresolved ({exc})")
+    print(f"Model ID: {os.environ.get('LOCUS_MODEL_ID', '(provider default)')}")
