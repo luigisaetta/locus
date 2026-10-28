@@ -70,6 +70,51 @@ which is what this gateway serves. For a TLS gateway pass `tls=` and, when the
 gateway requires it, `bearer_token=` or `client_credentials=` through
 `client_options`.
 
+## OCI Generative AI through the sandbox proxy
+
+OpenShell ships an `oci-genai` provider profile: the gateway keeps an OCI
+Generative AI API key, the sandbox sees `OCI_GENAI_API_KEY` as a placeholder,
+and the sandbox proxy swaps in the real key only on requests to
+`inference.generativeai.<region>.oci.oraclecloud.com/openai/v1/...` from the
+binaries the profile names (`curl`). The key never enters the sandbox.
+
+With the OpenShell CLI:
+
+```bash
+openshell provider profile import -f providers/oci-genai.yaml     # from the OpenShell repository
+openshell provider create --name oci-genai --type oci-genai --credential OCI_GENAI_API_KEY="$OCI_GENAI_API_KEY"
+```
+
+With only the Python package, `provider.py` does the same over the SDK's gRPC
+stub; the secret is read from standard input:
+
+```bash
+python provider.py import oci-genai.yaml
+python provider.py create oci-genai oci-genai OCI_GENAI_API_KEY < key.txt
+```
+
+The key is a compartment-scoped Generative AI API key
+(`oci generative-ai api-key create ...`), with an IAM policy that allows
+`request.principal.type='generativeaiapikey'` to use `generative-ai-family`
+in that compartment; the profile's header comments walk through both.
+
+Then a sandbox with the provider attached, in an image that has `curl` (the
+default image does not):
+
+```python
+backend = OpenShellBackend.create(
+    image="docker.io/library/buildpack-deps:noble-curl", providers=["oci-genai"]
+)
+```
+
+The live test for this path runs with:
+
+```bash
+LOCUS_OPENSHELL_PROVIDER=oci-genai \
+LOCUS_OPENSHELL_IMAGE=docker.io/library/buildpack-deps:noble-curl \
+pytest tests/integration/test_harness_openshell_live.py -k provider
+```
+
 ## Scope
 
 Loopback only, TLS off and user calls unauthenticated — a developer or CI
