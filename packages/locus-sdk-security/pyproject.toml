@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "locus-sdk-security"
 # Released in lockstep with locus-sdk: bump this, and the locus-sdk floor
 # below, together with the core version.
-version = "3.0.1"
+version = "4.0.0"
 description = "Security-domain tooling for Locus agents — AI red-team probes, SOC triage, threat-intel / SIEM / EDR / scanner / fingerprint / AWS posture adapters, and IR playbooks, all grounded through the locus-sdk control core."
 readme = "README.md"
 license = "UPL-1.0"
@@ -50,7 +50,7 @@ classifiers = [
 # read-only triage loop works on locus-sdk alone (offline samples need
 # nothing).
 dependencies = [
-    "locus-sdk>=3.0.1",
+    "locus-sdk>=4.0.0",
 ]
 
 [project.optional-dependencies]
