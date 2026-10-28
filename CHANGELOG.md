@@ -19,6 +19,19 @@ policy.
 
 ### Fixed
 
+- **The `a2a-mesh` example routed no requests, and spoke only the pre-v1.0
+  surface.** `A2AClient.get_agent_card()` returns v1.0 cards whose skills
+  are `AgentSkill` objects, but the orchestrator matched them as strings, so
+  every query failed with "No peer advertises skill". The orchestrator now
+  routes on skill ids, prints each peer's `protocolVersion` and
+  `supportedInterfaces`, and talks A2A v1.0 JSON-RPC: `SendMessage`, with
+  the reply read from the task's artifacts, and `SendStreamingMessage` for
+  `--stream`. `--legacy` keeps the flat `/a2a/invoke` and `/a2a/stream`
+  endpoints to show backwards compatibility. The web console does the same:
+  it discovers peers from `/.well-known/agent-card.json`, sends with
+  `SendMessage` and renders the `SendStreamingMessage` task events. Tests
+  cover the v1.0 card, both methods and routing on v1.0 skill ids (#274).
+
 - **`OracleAgentMemoryManager` could not use OCI Generative AI models with a
   profile or session token.** litellm's `oci/` driver, which Oracle's
   `oracleagentmemory` client uses for its embedder and extraction model,
