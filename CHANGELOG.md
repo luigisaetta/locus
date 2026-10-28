@@ -19,6 +19,13 @@ policy.
 
 ### Fixed
 
+- **OpenAI GPT-6 and `-pro` models could not call tools (or answer at all)
+  through `openai:`.** Chat-completions rejects function tools for the
+  gpt-6 / gpt-6.1 families when reasoning is active and does not serve the
+  `gpt-5*-pro` models at all. `api="auto"` now routes both to
+  `/v1/responses`, as it already did for gpt-5.6; verified live on
+  gpt-6-sol, gpt-6.1-sol, gpt-6.1-terra and gpt-5.5-pro.
+
 - **`OracleAgentMemoryManager` could not use OCI Generative AI models with a
   profile or session token.** litellm's `oci/` driver, which Oracle's
   `oracleagentmemory` client uses for its embedder and extraction model,
@@ -199,6 +206,14 @@ policy.
   matrix and corrects the Responses-API note (availability is per region).
 
 ### Added
+
+- **`runpod:` provider prefix.** RunPod serverless and public endpoints
+  (`https://api.runpod.ai/v2/<endpoint-id>/openai/v1`) behind one prefix:
+  set `RUNPOD_API_KEY` and `RUNPOD_ENDPOINT_ID` (or `RUNPOD_BASE_URL` /
+  `LOCUS_RUNPOD_BASE_URL`), then `Agent(model="runpod:Qwen/Qwen3-32B-AWQ")`.
+  Verified against RunPod's public `qwen3-32b-awq` endpoint with a tool call.
+  A live integration test (`tests/integration/test_compatible_providers_live.py`)
+  covers OpenRouter, Together and RunPod whenever their keys are present.
 
 - **The generic integration tests and the notebooks run against any
   provider.** `LOCUS_TEST_MODEL=provider:model` points the shared `model`

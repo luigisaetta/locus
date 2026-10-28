@@ -91,6 +91,11 @@ class CompatibleProvider:
             overrides ``base_url``, if the vendor defines one.
         requires_key: When ``False`` a placeholder key is used, for local
             servers that do not authenticate.
+        base_url_template: For providers whose endpoint embeds a per-account
+            or per-deployment id (RunPod: ``…/v2/<endpoint-id>/openai/v1``),
+            a ``str.format`` template with one ``{}`` slot, filled from
+            ``template_env`` when no explicit or env base URL is given.
+        template_env: Environment variable that fills ``base_url_template``.
     """
 
     prefix: str
@@ -99,6 +104,8 @@ class CompatibleProvider:
     label: str
     env_base_url: str | None = None
     requires_key: bool = True
+    base_url_template: str | None = None
+    template_env: str | None = None
 
     @property
     def locus_base_url_env(self) -> str:
@@ -106,12 +113,15 @@ class CompatibleProvider:
         return f"LOCUS_{self.prefix.replace('-', '_').upper()}_BASE_URL"
 
     def resolve_base_url(self, explicit: str | None = None) -> str | None:
-        """Resolve the endpoint: explicit > LOCUS_ override > vendor env > default."""
+        """Resolve the endpoint: explicit > LOCUS_ override > vendor env > id template > default."""
         if explicit:
             return explicit
         for var in (self.locus_base_url_env, self.env_base_url):
             if var and (value := os.environ.get(var)):
                 return value
+        if self.base_url_template and self.template_env:
+            if ident := os.environ.get(self.template_env):
+                return self.base_url_template.format(ident.strip())
         return self.base_url
 
     def resolve_api_key(self, explicit: str | None = None) -> str | None:
@@ -180,6 +190,15 @@ COMPATIBLE_PROVIDERS: tuple[CompatibleProvider, ...] = (
         base_url="https://api.together.xyz/v1",
         env_key="TOGETHER_API_KEY",
         label="Together AI",
+    ),
+    CompatibleProvider(
+        prefix="runpod",
+        base_url=None,
+        env_key="RUNPOD_API_KEY",
+        label="RunPod",
+        env_base_url="RUNPOD_BASE_URL",
+        base_url_template="https://api.runpod.ai/v2/{}/openai/v1",
+        template_env="RUNPOD_ENDPOINT_ID",
     ),
     CompatibleProvider(
         prefix="openrouter",
@@ -259,9 +278,10 @@ def _build(spec: CompatibleProvider, model_id: str, **kwargs: Any) -> ModelProto
 
     base_url = spec.resolve_base_url(kwargs.pop("base_url", None))
     if base_url is None:
+        hint = f" or {spec.template_env} (the endpoint id)" if spec.template_env else ""
         raise ValueError(
             f"{spec.label} needs an endpoint. Pass base_url=... to the model, "
-            f"or set {spec.locus_base_url_env}. Example: "
+            f"or set {spec.locus_base_url_env}{hint}. Example: "
             f'Agent(model="{spec.prefix}:{model_id}", base_url="https://your-host/v1")'
         )
 

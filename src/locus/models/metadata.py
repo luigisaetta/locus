@@ -111,6 +111,7 @@ _PROVIDER_PREFIXES: Final[frozenset[str]] = frozenset(
         "groq",
         "together",
         "openrouter",
+        "runpod",
         "deepseek",
         "mistral",
         "xai",

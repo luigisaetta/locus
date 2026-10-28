@@ -80,7 +80,7 @@ locus.models
 │   ├─ self-hosted            — ollama · vllm · lmstudio · llamacpp
 │   │                           (model call stays on-network)
 │   ├─ gateway                — litellm (on-network only if its upstreams are)
-│   ├─ managed                — groq · together · openrouter · deepseek ·
+│   ├─ managed                — groq · together · openrouter · runpod · deepseek ·
 │   │                           mistral · xai · fireworks · cerebras ·
 │   │                           perplexity · nvidia · gemini
 │   └─ openai-compatible:     — any other endpoint; you supply base_url
