@@ -8,8 +8,9 @@ All configuration is via environment variables - nothing is hardcoded.
 
 Required for OpenSearch tests:
 - OPENSEARCH_HOSTS: Comma-separated OpenSearch hosts (REQUIRED)
-- OPENSEARCH_USER: OpenSearch username (REQUIRED)
-- OPENSEARCH_PASSWORD: OpenSearch password (REQUIRED)
+- OPENSEARCH_USER / OPENSEARCH_PASSWORD: basic-auth credentials; leave both
+  unset for a cluster that accepts anonymous requests (security disabled or
+  permissive)
 - OPENSEARCH_USE_SSL: Use SSL (default: true)
 - OPENSEARCH_VERIFY_CERTS: Verify certs (default: false)
 """
@@ -49,10 +50,11 @@ def get_opensearch_config():
 
     Required environment variables:
     - OPENSEARCH_HOSTS: Comma-separated host list (e.g., "host1:9200,host2:9200")
-    - OPENSEARCH_USER: Username
-    - OPENSEARCH_PASSWORD: Password
 
     Optional:
+    - OPENSEARCH_USER / OPENSEARCH_PASSWORD: basic-auth credentials. Both unset
+      means anonymous requests, for a cluster with security disabled or in
+      permissive mode.
     - OPENSEARCH_USE_SSL: Use SSL (default: true)
     - OPENSEARCH_VERIFY_CERTS: Verify certs (default: false)
     """
@@ -65,16 +67,16 @@ def get_opensearch_config():
 
     user = os.environ.get("OPENSEARCH_USER")
     password = os.environ.get("OPENSEARCH_PASSWORD")
-    if not user or not password:
+    if bool(user) != bool(password):
         raise ValueError(
-            "OPENSEARCH_USER and OPENSEARCH_PASSWORD environment variables must be set."
+            "Set both OPENSEARCH_USER and OPENSEARCH_PASSWORD, or neither for anonymous access."
         )
 
     hosts = [h.strip() for h in hosts_str.split(",")]
 
     return {
         "hosts": hosts,
-        "http_auth": (user, password),
+        "http_auth": (user, password) if user and password else None,
         "use_ssl": os.environ.get("OPENSEARCH_USE_SSL", "true").lower() == "true",
         "verify_certs": os.environ.get("OPENSEARCH_VERIFY_CERTS", "false").lower() == "true",
     }
