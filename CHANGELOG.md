@@ -19,6 +19,14 @@ policy.
 
 ### Fixed
 
+- **`OpenAISearchPreviewProvider` always failed against `gpt-5-search-api`.**
+  The provider asked the search model for a strict `json_schema`
+  `response_format`, which that model answers with an HTTP 500
+  (`json_object` gets a 400). It now reads the `url_citation` annotations
+  the search models attach to their reply — title, URL and the cited span
+  as the snippet — and only falls back to a prompt-described JSON request
+  when a model returns no citations.
+
 - **OpenAI GPT-6 and `-pro` models could not call tools (or answer at all)
   through `openai:`.** Chat-completions rejects function tools for the
   gpt-6 / gpt-6.1 families when reasoning is active and does not serve the
