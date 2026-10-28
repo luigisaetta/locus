@@ -23,9 +23,10 @@ Older minors are not backported — upgrade within the major instead, which
 
 | Version                       | Supported          |
 | ----------------------------- | ------------------ |
-| Latest `3.x` minor            | :white_check_mark: |
-| Earlier `3.x` minors          | :x: — upgrade to the latest `3.x` |
-| `2.x` (published as `tulip-agents`) | :x: — retired; upgrade to `locus-sdk` `3.x` |
+| Latest `4.x` minor            | :white_check_mark: |
+| Earlier `4.x` minors          | :x: — upgrade to the latest `4.x` |
+| `3.x`                         | :x: — upgrade to `4.x` (the 4.0 changes are listed in the CHANGELOG) |
+| `2.x` (published as `tulip-agents`) | :x: — retired; upgrade to `locus-sdk` `4.x` |
 | `< 2.0`                       | :x:                |
 
 Pin a major, as in `locus-sdk>=3,<4`, and take the newest minor within it.
