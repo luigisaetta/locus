@@ -15,7 +15,7 @@ vector store.
   call, tagging each chunk with the pillar/practice metadata the cloud-ops
   agent uses to narrow results.
 
-The corpus is AWS Well-Architected best practices (`REL-xx`, `COST-xx`,
+The corpus is Well-Architected cloud best practices (`REL-xx`, `COST-xx`,
 `SEC-xx`, `OPS-xx`) mapped to your runbooks — the Index the cloud-ops
 agent (ATLAS, notebook 53) reads from.
 

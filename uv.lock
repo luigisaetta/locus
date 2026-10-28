@@ -2942,9 +2942,6 @@ anthropic = [
 audit = [
     { name = "cryptography" },
 ]
-aws = [
-    { name = "boto3" },
-]
 browser = [
     { name = "playwright" },
 ]
@@ -3112,7 +3109,6 @@ requires-dist = [
     { name = "asyncpg", marker = "extra == 'postgresql'", specifier = ">=0.29" },
     { name = "asyncpg", marker = "extra == 'rag'", specifier = ">=0.29" },
     { name = "asyncpg", marker = "extra == 'sdk'", specifier = ">=0.29" },
-    { name = "boto3", marker = "extra == 'aws'", specifier = ">=1.34" },
     { name = "boto3", marker = "extra == 'checkpoints'", specifier = ">=1.34" },
     { name = "boto3", marker = "extra == 's3'", specifier = ">=1.34" },
     { name = "boto3", marker = "extra == 'sdk'", specifier = ">=1.34" },
@@ -3210,7 +3206,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'sdk'", specifier = ">=0.27" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.27" },
 ]
-provides-extras = ["openai", "anthropic", "oci", "llm", "telemetry", "mcp", "server", "redis", "postgresql", "mysql", "opensearch", "s3", "aws", "browser", "audit", "temporal", "gemini", "dbos", "openshell", "mem0", "oracledb", "agentmemory", "checkpoints", "pgvector", "qdrant", "chroma", "cohere", "rerank-local", "rerank", "rag", "sdk", "docs", "dev"]
+provides-extras = ["openai", "anthropic", "oci", "llm", "telemetry", "mcp", "server", "redis", "postgresql", "mysql", "opensearch", "s3", "browser", "audit", "temporal", "gemini", "dbos", "openshell", "mem0", "oracledb", "agentmemory", "checkpoints", "pgvector", "qdrant", "chroma", "cohere", "rerank-local", "rerank", "rag", "sdk", "docs", "dev"]
 
 [[package]]
 name = "locus-sdk-security"
@@ -3220,17 +3216,8 @@ dependencies = [
     { name = "locus-sdk" },
 ]
 
-[package.optional-dependencies]
-aws = [
-    { name = "boto3" },
-]
-
 [package.metadata]
-requires-dist = [
-    { name = "boto3", marker = "extra == 'aws'", specifier = ">=1.34" },
-    { name = "locus-sdk", editable = "." },
-]
-provides-extras = ["aws"]
+requires-dist = [{ name = "locus-sdk", editable = "." }]
 
 [[package]]
 name = "markdown"

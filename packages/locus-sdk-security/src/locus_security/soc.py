@@ -4,10 +4,10 @@
 
 """``create_soc_analyst()`` — a grounded cloud-posture agent factory.
 
-Composes the read-only AWS posture tools (:func:`~locus_security.describe_aws`
-/ :func:`~locus_security.use_aws`) into a SOC-analyst-shaped agent that:
+Composes the core read-only OCI tools (:func:`locus.tools.describe_oci` /
+:func:`locus.tools.use_oci`) into a SOC-analyst-shaped agent that:
 
-1. discovers the shape of an AWS account from the API spec,
+1. discovers the shape of an OCI tenancy from the OCI Python SDK,
 2. gathers evidence with read-only API calls, and
 3. proposes posture findings, each citing the exact API facts it stood on.
 
@@ -22,9 +22,14 @@ Example::
 
     from locus_security import create_soc_analyst, ground_report, is_finding
 
-    analyst = create_soc_analyst(model="anthropic:claude-sonnet-4-6")
+    analyst = create_soc_analyst(
+        model="oci:openai.gpt-4o",
+        controls=SecurityControls(
+            profile="security-audit", compartment_id="ocid1.tenancy..."
+        ),
+    )
     result = await analyst.run(
-        "Review the IAM and account-level posture of this AWS account."
+        "Review the IAM and tenancy-level posture of this OCI tenancy."
     )
     for grounded in ground_report(result.output):
         if is_finding(grounded):
@@ -43,8 +48,8 @@ from pydantic import BaseModel, Field
 from locus.control.grounded import GroundedFinding, ground_finding
 from locus.control.taxonomy import Severity, TaxonomyTag
 from locus.reasoning.gsar import Claim, EvidenceType, GSARThresholds, Partition
+from locus.tools import describe_oci, use_oci
 from locus.tools.decorator import tool
-from locus_security.aws import describe_aws_tool, use_aws_tool
 from locus_security.edr import (
     fetch_host_timeline_tool,
     isolate_host_tool,
@@ -63,12 +68,13 @@ class PostureEvidence(BaseModel):
     """One atomic fact the analyst observed, with a pointer to its source."""
 
     statement: str = Field(
-        description="The atomic observation, e.g. 'Account has 1 root access key present'.",
+        description=(
+            "The atomic observation, e.g. 'User admin has 2 API keys, oldest created 2024-01-09'."
+        ),
     )
     ref: str = Field(
         description=(
-            "Reference to the source read-only call, e.g. "
-            "'aws:iam:GetAccountSummary:AccountAccessKeysPresent'."
+            "Reference to the source read-only call, e.g. 'oci:identity:list_api_keys:timeCreated'."
         ),
     )
     grounded: bool = Field(
@@ -87,7 +93,7 @@ class PostureFinding(BaseModel):
     title: str = Field(description="One-line summary of the issue.")
     description: str = Field(description="What was observed and why it matters.")
     severity: Severity = Field(description="Severity band.")
-    asset: str = Field(description="Affected AWS resource (ARN / id / service).")
+    asset: str = Field(description="Affected OCI resource (OCID / name / service).")
     remediation: str = Field(description="Recommended remediation.")
     evidence: list[PostureEvidence] = Field(
         default_factory=list,
@@ -111,7 +117,7 @@ class PostureFinding(BaseModel):
 class PostureReport(BaseModel):
     """The structured posture report the agent submits to end the run."""
 
-    summary: str = Field(description="Executive summary of the account's posture.")
+    summary: str = Field(description="Executive summary of the tenancy's posture.")
     findings: list[PostureFinding] = Field(
         default_factory=list,
         description="Proposed posture findings.",
@@ -146,17 +152,17 @@ class SecurityControls:
 
     Holds the knobs that make a posture agent trustworthy: the grounding
     threshold a finding's evidence must clear, the submission-confidence floor,
-    and whether the read-only AWS tools are attached. Passed to
-    :func:`create_soc_analyst`; reused by :func:`ground_report` so the agent and
-    the grounding step share one source of truth.
+    whether the read-only OCI tools are attached, and the OCI identity they run
+    as. Passed to :func:`create_soc_analyst`; reused by :func:`ground_report`
+    so the agent and the grounding step share one source of truth.
     """
 
     min_gsar: float = 0.6
     """GSAR ``τ_proceed`` — a finding's evidence must score at or above this."""
     min_confidence: float = 0.7
     """Submission-confidence floor wired into the agent's termination."""
-    readonly_aws: bool = True
-    """Attach the read-only ``describe_aws`` / ``use_aws`` tools."""
+    readonly_oci: bool = True
+    """Attach the core read-only ``describe_oci`` / ``use_oci`` tools."""
     threat_intel: bool = False
     """Attach the IOC-enrichment tool (``enrich_indicator``)."""
     siem: bool = False
@@ -169,8 +175,14 @@ class SecurityControls:
     """Attach the inference-fingerprinting tool (``fingerprint_endpoint``)."""
     allow_containment: bool = False
     """Attach the containment write (``isolate_host``). Requires ``edr``; off by default."""
+    profile: str | None = None
+    """``~/.oci/config`` profile the OCI calls run as (``use_oci`` defaults to ``DEFAULT``)."""
+    auth_type: str | None = None
+    """``api_key`` (``use_oci``'s default), ``security_token``, ``instance_principal``, …"""
     region: str | None = None
-    """Default AWS region hint (informational; tools read ``LOCUS_AWS_REGION``)."""
+    """OCI region for the calls; unset means the profile's home region."""
+    compartment_id: str | None = None
+    """Compartment (or tenancy) OCID the review is scoped to."""
 
     @classmethod
     def default(cls) -> SecurityControls:
@@ -181,7 +193,7 @@ class SecurityControls:
     def soc_triage(cls) -> SecurityControls:
         """The read-only SOC triage loop — intel, SIEM, EDR, scanner, fingerprint."""
         return cls(
-            readonly_aws=False,
+            readonly_oci=False,
             threat_intel=True,
             siem=True,
             edr=True,
@@ -192,8 +204,8 @@ class SecurityControls:
     def tools(self) -> list[Any]:
         """The security toolset implied by these controls."""
         bag: list[Any] = []
-        if self.readonly_aws:
-            bag.extend([describe_aws_tool, use_aws_tool])
+        if self.readonly_oci:
+            bag.extend([describe_oci, use_oci])
         if self.threat_intel:
             bag.append(enrich_indicator_tool)
         if self.siem:
@@ -214,6 +226,21 @@ class SecurityControls:
             proceed=self.min_gsar,
             regenerate=min(self.min_gsar * 0.6, self.min_gsar - 1e-6),
         )
+
+    def oci_target(self) -> dict[str, str]:
+        """The ``use_oci`` arguments that pin the review to one OCI identity and scope.
+
+        Only the fields that are set. :func:`create_soc_analyst` appends them to
+        the system prompt so the model passes them on every ``use_oci`` call —
+        the core tool takes them as call arguments, not from the environment.
+        """
+        target = {
+            "profile": self.profile,
+            "auth_type": self.auth_type,
+            "region": self.region,
+            "compartment_id": self.compartment_id,
+        }
+        return {key: value for key, value in target.items() if value}
 
 
 # --- Grounding the submitted report ----------------------------------------
@@ -277,31 +304,41 @@ def ground_report(
 
 
 _DEFAULT_SYSTEM_PROMPT = """\
-You are a read-only cloud security posture analyst auditing an AWS account.
+You are a read-only cloud security posture analyst auditing an OCI tenancy.
 
-You have two spec-driven tools, both read-only by construction:
+You have two spec-driven tools, both read-only by default:
 
-- `describe_aws(service, operation)` — discover the shape of AWS. With no
-  arguments it lists every service; with a service it lists that service's
-  read-only operations; with a service and operation it lists the operation's
-  parameters. Use it to find out what you can inspect.
-- `use_aws(service, operation, parameters)` — run one read-only operation and
-  get back the raw API response. The response is your evidence. It refuses any
-  non-read operation, so you cannot change anything.
+- `describe_oci(service, client, operation)` — discover the shape of the OCI
+  control plane. With no arguments it lists every service; with a service it
+  lists that service's clients; with a service and client it lists the
+  client's operations, read-only and mutating apart; with an operation too it
+  lists the operation's parameters. Use it to find out what you can inspect.
+- `use_oci(service, client, operation, parameters)` — run one read-only
+  operation and get back the response. The response is your evidence. It
+  refuses any operation that is not a list/get/summarize-style read, so you
+  cannot change anything.
 
 Method:
 
-1. Orient. Start from the account-level and identity surfaces (iam, sts,
-   accessanalyzer), then the high-signal services (s3, ec2, cloudtrail, kms,
-   rds, lambda). Use `describe_aws` to find the right read-only operations.
-2. Gather. Call `use_aws` to collect concrete facts. Compare them against
-   well-known baselines (CIS AWS Foundations): root access keys present, root
-   or users without MFA, public S3 buckets, security groups open to 0.0.0.0/0,
-   CloudTrail disabled or not multi-region, unused over-privileged roles.
+1. Orient. Start from the identity surface (`identity` / `IdentityClient`:
+   `get_tenancy`, `list_compartments`, `list_users`, `list_api_keys`,
+   `list_groups`, `list_policies`), then the high-signal services:
+   `audit` (`get_configuration`), `cloud_guard` (`get_configuration`),
+   `object_storage` (`get_namespace`, `list_buckets`, `get_bucket`), `core`
+   (`VirtualNetworkClient.list_security_lists`,
+   `list_network_security_groups`), `database`, `key_management`. Use
+   `describe_oci` to find the right read-only operations and their parameters.
+2. Gather. Call `use_oci` to collect concrete facts. Compare them against
+   well-known baselines (CIS OCI Foundations Benchmark): console users without
+   MFA, API keys on tenancy administrators, keys older than 90 days, policies
+   granting `manage all-resources` to non-admin groups, security lists or NSGs
+   open to 0.0.0.0/0 on 22 or 3389, audit-log retention under 365 days, Cloud
+   Guard disabled, publicly visible buckets, buckets without a customer-managed
+   key.
 3. Report. For each issue, propose a finding and cite the exact API facts it
    rests on in `evidence` — mark direct API observations `grounded=true` and
    anything you inferred `grounded=false`, with a `ref` pointing back to the
-   call (e.g. `aws:iam:GetAccountSummary:AccountAccessKeysPresent`).
+   call (e.g. `oci:identity:list_users:isMfaActivated`).
 
 Rules:
 
@@ -312,6 +349,17 @@ Rules:
 
 When you have gathered enough evidence, call `submit_posture` with the report.
 """
+
+
+def _target_block(target: dict[str, str]) -> str:
+    """The prompt lines that pin every ``use_oci`` call to one identity and scope."""
+    lines = "\n".join(f"- {key}={value}" for key, value in target.items())
+    return (
+        "\nOCI target for this review — pass these arguments on every `use_oci` "
+        "call (`compartment_id` is the compartment to list resources in; use it "
+        "for tenancy-scoped listings too):\n"
+        f"{lines}\n"
+    )
 
 
 def create_soc_analyst(
@@ -325,26 +373,26 @@ def create_soc_analyst(
     max_iterations: int = 30,
     **deepagent_kwargs: Any,
 ) -> Any:
-    """Construct a grounded, read-only AWS cloud-posture agent.
+    """Construct a grounded, read-only OCI cloud-posture agent.
 
     A thin security-shaped layer over :func:`~locus.create_deepagent`: it bakes
-    in the read-only AWS posture tools, a SOC-analyst system prompt, the
+    in the core read-only OCI tools, a SOC-analyst system prompt, the
     :class:`PostureReport` output schema, and grounding/reflexion. The agent
     proposes findings; pass its ``result.output`` to :func:`ground_report` to
     get typed :class:`~locus.control.Evidence` / ``Abstention`` results.
 
     Args:
-        model: A locus model string (``"anthropic:claude-sonnet-4-6"``) or a
+        model: A locus model string (``"oci:openai.gpt-4o"``) or a
             ``ModelProtocol`` instance.
         controls: The :class:`SecurityControls` bundle (grounding threshold,
-            confidence floor, AWS tooling). Defaults to
-            :meth:`SecurityControls.default`.
-        tools: Extra tools to attach alongside the AWS posture tools and the
+            confidence floor, OCI tooling and the OCI identity / compartment
+            the calls target). Defaults to :meth:`SecurityControls.default`.
+        tools: Extra tools to attach alongside the OCI posture tools and the
             ``submit_posture`` tool (e.g. threat-intel or SIEM enrichment).
         system_prompt: Override the default SOC-analyst prompt entirely. When
-            set, ``scope`` is ignored.
+            set, ``scope`` and the controls' OCI target block are not appended.
         scope: Optional one-line narrowing appended to the default prompt
-            (e.g. ``"Focus only on IAM and S3."``). Ignored when
+            (e.g. ``"Focus only on IAM and Object Storage."``). Ignored when
             ``system_prompt`` is given.
         min_confidence: Submission-confidence floor for early-exit. Defaults to
             ``controls.min_confidence``.
@@ -361,10 +409,13 @@ def create_soc_analyst(
 
     if system_prompt is not None:
         prompt = system_prompt
-    elif scope:
-        prompt = f"{_DEFAULT_SYSTEM_PROMPT}\nScope for this review: {scope}\n"
     else:
         prompt = _DEFAULT_SYSTEM_PROMPT
+        target = controls.oci_target()
+        if target:
+            prompt += _target_block(target)
+        if scope:
+            prompt += f"\nScope for this review: {scope}\n"
 
     all_tools: list[Any] = [*controls.tools(), submit_posture, *(tools or [])]
 

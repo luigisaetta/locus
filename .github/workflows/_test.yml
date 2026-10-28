@@ -54,7 +54,7 @@ jobs:
       # (packages/locus-sdk-security). Install it from the checkout so its
       # suite runs here too — it is not on PyPI.
       - name: Install locus-sdk-security
-        run: pip install -e "packages/locus-sdk-security[aws]"
+        run: pip install -e "packages/locus-sdk-security"
 
       - name: Run unit tests with coverage
         # Hard org-wide gate: ``--cov-fail-under=95`` makes this step (and the

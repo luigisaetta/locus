@@ -121,16 +121,13 @@ redis = ["redis>=5.0"]
 postgresql = ["asyncpg>=0.29"]
 mysql = ["mysql-connector-python>=9.0"]
 opensearch = ["opensearch-py>=2.4"]
-# S3 / MinIO / R2 object-storage checkpointer (src/locus/memory/backends/s3.py).
+# S3-compatible object-storage checkpointer (src/locus/memory/backends/s3.py):
+# OCI Object Storage through its S3-compatible API, MinIO, R2, …
 s3 = ["boto3>=1.34"]
 
-# boto3 alone. The AWS cloud-posture tools that used it ship in the separate
-# locus-sdk-security package (packages/locus-sdk-security/).
-aws = ["boto3>=1.34"]
-
 # Security-domain tooling — red-team probes, SOC triage, intel / SIEM / EDR /
-# scanner / fingerprint / AWS posture adapters — is a separate, opt-in package
-# in this repo (packages/locus-sdk-security/, imported as ``locus_security``).
+# scanner / fingerprint adapters, OCI cloud posture — is a separate, opt-in
+# package in this repo (packages/locus-sdk-security/, imported as ``locus_security``).
 # It is not published to PyPI, so there is no extra for it: install it from
 # the repository.
 

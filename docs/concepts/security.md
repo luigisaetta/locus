@@ -197,7 +197,7 @@ ships a finding mapped to compliance controls.
 ## Where it shows up
 
 - Applied end-to-end: [cloud-posture agent](cloud-posture.md) — grounded,
-  read-only AWS auditing built on `ground_finding`.
+  read-only OCI auditing built on `ground_finding`.
 - Complete defense catalogue: [threat scenarios](threat-scenarios.md) — every
   OWASP LLM / OWASP ASI / MITRE ATLAS ID mapped to a runnable gist.
 - Notebooks flagship: [GSAR typed grounding](../notebooks/notebook_55_gsar_typed_grounding.md)

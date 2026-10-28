@@ -31,7 +31,7 @@ from typing import Any, Protocol, runtime_checkable
 from locus.control.findings import Evidence
 from locus.control.policy import Action, ApprovalDecision, ControlPolicy, approve
 from locus.control.verification import VerificationResult
-from locus_security.aws import describe_aws, use_aws
+from locus.tools import describe_oci, use_oci
 from locus_security.edr import fetch_host_timeline, isolate_host, list_detections
 from locus_security.intel import enrich_indicator
 from locus_security.siem import query_siem
@@ -70,13 +70,29 @@ class IdentitySource(Protocol):
 
 @runtime_checkable
 class CloudSource(Protocol):
-    """Cloud control-plane evidence (read-only)."""
+    """Cloud control-plane evidence (read-only).
+
+    ``describe`` zooms in on the control plane's shape — services, then the
+    clients of a service, then a client's operations, then one operation's
+    parameters. ``events`` runs one read-only operation and returns its
+    response as evidence. ``client`` is the OCI SDK client class inside a
+    service (``core`` has several); providers for a flat API may ignore it.
+    """
 
     async def describe(
-        self, service: str | None = None, operation: str | None = None
+        self,
+        service: str | None = None,
+        operation: str | None = None,
+        *,
+        client: str | None = None,
     ) -> dict[str, Any]: ...
     async def events(
-        self, service: str, operation: str, parameters: dict[str, Any] | None = None
+        self,
+        service: str,
+        operation: str,
+        parameters: dict[str, Any] | None = None,
+        *,
+        client: str | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -185,21 +201,80 @@ class _RefIdentity:
 
 @dataclass(frozen=True)
 class _RefCloud:
+    """The OCI control plane through the core ``describe_oci`` / ``use_oci`` tools.
+
+    Read-only by default: ``use_oci`` refuses a mutating operation before any
+    call is made. Both tools report a missing ``oci`` SDK, an unknown profile
+    or a service error as ``{"status": "error", ...}`` instead of raising, so
+    the port degrades gracefully with no credentials. ``profile`` /
+    ``auth_type`` / ``region`` select the ``~/.oci/config`` identity the calls
+    run as; leave them at the defaults to use the ``[DEFAULT]`` API-key
+    profile.
+    """
+
+    profile: str = "DEFAULT"
+    auth_type: str = "api_key"
+    region: str | None = None
+
     async def describe(
-        self, service: str | None = None, operation: str | None = None
+        self,
+        service: str | None = None,
+        operation: str | None = None,
+        *,
+        client: str | None = None,
     ) -> dict[str, Any]:
-        try:
-            return describe_aws(service=service, operation=operation)
-        except Exception as exc:  # noqa: BLE001 — degrade gracefully without boto3
-            return {"available": False, "reason": f"{exc}", "hint": "pip install locus-sdk[aws]"}
+        if service is not None and operation is not None and client is None:
+            client = self._only_client(service)
+            if client is None:
+                return self._need_client(service)
+        result: dict[str, Any] = describe_oci(service=service, client=client, operation=operation)
+        return result
 
     async def events(
-        self, service: str, operation: str, parameters: dict[str, Any] | None = None
+        self,
+        service: str,
+        operation: str,
+        parameters: dict[str, Any] | None = None,
+        *,
+        client: str | None = None,
     ) -> dict[str, Any]:
-        try:
-            return use_aws(service, operation, parameters=parameters)
-        except Exception as exc:  # noqa: BLE001 — degrade gracefully without boto3
-            return {"available": False, "reason": f"{exc}", "hint": "pip install locus-sdk[aws]"}
+        if client is None:
+            client = self._only_client(service)
+            if client is None:
+                return self._need_client(service)
+        result: dict[str, Any] = use_oci(
+            service=service,
+            client=client,
+            operation=operation,
+            parameters=parameters,
+            region=self.region,
+            profile=self.profile,
+            auth_type=self.auth_type,
+        )
+        return result
+
+    @staticmethod
+    def _only_client(service: str) -> str | None:
+        """The one ``*Client`` in ``service`` when it has exactly one, else ``None``."""
+        listing: dict[str, Any] = describe_oci(service=service)
+        clients = listing.get("clients") if listing.get("status") == "ok" else None
+        if isinstance(clients, list) and len(clients) == 1:
+            return str(clients[0])
+        return None
+
+    @staticmethod
+    def _need_client(service: str) -> dict[str, Any]:
+        listing: dict[str, Any] = describe_oci(service=service)
+        if listing.get("status") != "ok":
+            return listing
+        return {
+            "status": "error",
+            "service": service,
+            "error": (
+                f"OCI service '{service}' has several clients; pass client=<name> to pick one."
+            ),
+            "clients": listing.get("clients", []),
+        }
 
 
 @dataclass(frozen=True)

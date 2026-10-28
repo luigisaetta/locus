@@ -12,7 +12,7 @@
   Importing one of those names from here still works, with a
   :class:`~locus.core.warnings.LocusDeprecationWarning` naming the new path.
 - The security-domain tooling (``red_team``, ``Target``, ``SecurityContext``,
-  the SOC analyst, the intel / SIEM / EDR / scanner / fingerprint / AWS
+  the SOC analyst, the intel / SIEM / EDR / scanner / fingerprint
   adapters, the IR playbooks, …) moved to the separate, opt-in
   ``locus-sdk-security`` distribution, imported as :mod:`locus_security`.
   Importing one of those names from here resolves it lazily from that package
@@ -94,7 +94,6 @@ _DOMAIN_NAMES = frozenset(
         "PostureReport",
         "Probe",
         "ProbeOutcome",
-        "READONLY_PREFIXES",
         "SecurityAdapter",
         "SecurityContext",
         "SecurityControls",
@@ -108,13 +107,10 @@ _DOMAIN_NAMES = frozenset(
         "all_probes",
         "as_json",
         "assure",
-        "aws_services",
         "classify_indicator",
         "cloud_posture_audit",
         "create_soc_analyst",
         "default_classifier",
-        "describe_aws",
-        "describe_aws_tool",
         "dispatch_timing_probe_reference",
         "enrich_indicator",
         "enrich_indicator_tool",
@@ -128,7 +124,6 @@ _DOMAIN_NAMES = frozenset(
         "guardrail_coverage",
         "indicator_type",
         "inference_claim",
-        "is_readonly_operation",
         "isolate_host",
         "isolate_host_tool",
         "list_detections",
@@ -150,8 +145,6 @@ _DOMAIN_NAMES = frozenset(
         "submit_posture",
         "suite_probes",
         "tool_match",
-        "use_aws",
-        "use_aws_tool",
     }
 )
 
@@ -174,7 +167,6 @@ _DOMAIN_MODULES = frozenset(
         "_adapters",
         "adapter",
         "assess",
-        "aws",
         "context",
         "edr",
         "fingerprint",

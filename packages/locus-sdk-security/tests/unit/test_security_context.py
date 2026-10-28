@@ -54,7 +54,7 @@ async def test_identity_surfaces_risk() -> None:
 async def test_threat_intel_and_cloud_return_dicts() -> None:
     ctx = SecurityContext()
     assert isinstance(await ctx.threat_intel.enrich("198.51.100.23"), dict)
-    # cloud degrades gracefully whether or not boto3 is installed
+    # cloud degrades gracefully whether or not the oci SDK is installed
     assert isinstance(await ctx.cloud.describe(), dict)
 
 
