@@ -2,41 +2,44 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
-"""Notebook 81: Grounded AWS cloud-posture agent.
+"""Notebook 81: Grounded OCI cloud-posture agent.
 
-A SOC-analyst-shaped agent that audits an AWS account read-only, then
+A SOC-analyst-shaped agent that audits an OCI tenancy read-only, then
 *grounds* every finding it proposes against the API facts it actually
-observed. ``create_soc_analyst`` composes two spec-driven, read-only tools —
-``describe_aws`` (discover the shape of AWS from botocore's service models)
-and ``use_aws`` (run one read-only operation, return the raw response as
-evidence) — behind a ``create_deepagent`` core. The agent proposes findings;
+observed. ``create_soc_analyst`` composes the two core spec-driven, read-only
+OCI tools — ``describe_oci`` (discover the shape of the OCI control plane from
+the installed OCI Python SDK: services, clients, operations, parameters) and
+``use_oci`` (run one read-only operation, return the response as evidence) —
+behind a ``create_deepagent`` core. The agent proposes findings;
 ``ground_report`` decides which survive: a proposed finding becomes a typed
 ``Evidence`` only if its cited evidence clears the GSAR threshold, otherwise it
 abstains. The model gathers and proposes; Python decides what ships.
 
-This is the differentiator. A commodity "AWS agent" will confidently narrate
+This is the differentiator. A commodity "cloud agent" will confidently narrate
 misconfigurations it never actually observed. Here, an ungrounded claim cannot
 become an ``Evidence`` — it abstains — so the report is trustworthy by construction.
 
-Maps to OWASP ASI: Identity & Privilege Abuse (the root-access-key class of
-finding); the read-only-by-construction tooling is the control that keeps the
-auditor itself from becoming a liability.
+Maps to OWASP ASI: Identity & Privilege Abuse (the API-key-on-an-administrator
+class of finding); the read-only-by-default tooling is the control that keeps
+the auditor itself from becoming a liability.
 
 Run it:
     python packages/locus-sdk-security/examples/notebook_81_cloud_posture_agent.py
 
 Part 1 (the grounding decision) runs fully offline and deterministically — no
-model, no cloud account. Part 2 builds the live agent; it runs against a real
-account only when BOTH a real model (``get_model()`` auto-detects OCI GenAI
-from your OCI profile, or set ``LOCUS_MODEL_PROVIDER``) and AWS credentials
-(the read-only ``locus-security-audit`` profile, or ``LOCUS_AWS_PROFILE``)
-are present. With neither, it prints the bring-your-own-credentials note and
-exits cleanly.
+model, no tenancy. Part 2 builds the live agent; it runs against a real
+tenancy only when BOTH a real model (``get_model()`` auto-detects OCI GenAI
+from your OCI profile, or set ``LOCUS_MODEL_PROVIDER``) and a usable
+``~/.oci/config`` profile (``LOCUS_OCI_PROFILE`` / ``OCI_PROFILE``, e.g.
+``<your-profile>``; ``DEFAULT`` otherwise) are present. With neither, it prints
+the bring-your-own-credentials note and exits cleanly.
 
 Prerequisites:
 - Notebook 31 (DeepAgent) — the core this factory wraps.
-- For the live Part 2 only: a structured-output-capable provider + an AWS
-  identity. The agent is strictly read-only; ``use_aws`` refuses writes.
+- For the live Part 2 only: a structured-output-capable provider + the ``oci``
+  SDK (``pip install 'locus-sdk[oci]'``) with a profile whose IAM group grants
+  only inspect / read verbs. The agent is read-only by default; ``use_oci``
+  refuses mutating operations.
 """
 
 from __future__ import annotations
@@ -70,54 +73,61 @@ from locus_security import (
 
 def _sample_report() -> PostureReport:
     return PostureReport(
-        summary="Account-level IAM review of 000000000000.",
+        summary="IAM review of tenancy ocid1.tenancy.oc1..example.",
         confidence=0.9,
         findings=[
-            # Grounded in a concrete GetAccountSummary fact → will ship.
+            # Grounded in a concrete list_api_keys fact → will ship.
             PostureFinding(
-                title="Root account has an active access key",
+                title="Tenancy administrator has a long-lived API key",
                 description=(
-                    "The account root user has a long-lived access key, against "
-                    "CIS AWS Foundations 1.4. Root keys cannot be scoped and are a "
-                    "standing compromise of the entire account."
+                    "A member of the Administrators group holds an API key created "
+                    "over a year ago, against the CIS OCI Foundations Benchmark IAM "
+                    "controls. An administrator's key cannot be scoped below the "
+                    "tenancy and is a standing compromise of everything in it."
                 ),
                 severity=Severity.CRITICAL,
-                asset="aws-account:000000000000:root",
-                remediation="Delete the root access key; use scoped IAM roles instead.",
+                asset="oci:identity:user/admin (Administrators)",
+                remediation=(
+                    "Delete the key; administrators should authenticate with "
+                    "`oci session authenticate` or instance principals instead."
+                ),
                 taxonomy=[OwaspASI.IDENTITY_AND_PRIVILEGE_ABUSE],
                 evidence=[
                     PostureEvidence(
-                        statement="GetAccountSummary reports AccountAccessKeysPresent=1",
-                        ref="aws:iam:GetAccountSummary:AccountAccessKeysPresent",
+                        statement="list_api_keys for user admin returns 1 key, timeCreated 2024-01-09",
+                        ref="oci:identity:list_api_keys:timeCreated",
                         grounded=True,
                     )
                 ],
             ),
             # Grounded positive observation → ships as an informational Evidence.
             PostureFinding(
-                title="Root account MFA is enabled",
-                description="The root user has an MFA device, per the account summary.",
+                title="MFA is active for every console user",
+                description="Every user with a console password has MFA activated.",
                 severity=Severity.INFO,
-                asset="aws-account:000000000000:root",
-                remediation="Maintain MFA; periodically verify the device.",
+                asset="oci:identity:users (tenancy)",
+                remediation="Maintain the MFA requirement; re-check on each new user.",
                 evidence=[
                     PostureEvidence(
-                        statement="GetAccountSummary reports AccountMFAEnabled=1",
-                        ref="aws:iam:GetAccountSummary:AccountMFAEnabled",
+                        statement="list_users reports isMfaActivated=true for all 12 console users",
+                        ref="oci:identity:list_users:isMfaActivated",
                         grounded=True,
                     )
                 ],
             ),
             # No observation behind it — only an inference. → abstains.
             PostureFinding(
-                title="Possible lateral-movement path via over-broad roles",
-                description="The account may have over-privileged roles enabling pivoting.",
+                title="Possible lateral-movement path via an over-broad policy",
+                description=(
+                    "The tenancy may carry a policy granting `manage all-resources` "
+                    "to a non-administrator group."
+                ),
                 severity=Severity.MEDIUM,
-                asset="aws-account:000000000000",
-                remediation="Review role trust policies and attached permissions.",
+                asset="oci:tenancy:ocid1.tenancy.oc1..example",
+                remediation="Review policy statements and group memberships.",
                 evidence=[
                     PostureEvidence(
-                        statement="An attacker could pivot if such roles existed",
+                        statement="An attacker could pivot if such a policy existed",
                         ref="inference:no-call-made",
                         grounded=False,
                     )
@@ -148,48 +158,68 @@ def part1_grounding_offline() -> None:
 # =============================================================================
 # Part 2 — the live agent.
 #
-# Build the analyst with ``create_soc_analyst`` (read-only AWS tools baked in).
-# Run it against a real account only when a real model AND AWS creds are
-# present; otherwise show the shape and exit cleanly.
+# Build the analyst with ``create_soc_analyst`` (the core read-only OCI tools
+# baked in, pinned to your profile and tenancy through ``SecurityControls``).
+# Run it against a real tenancy only when a real model AND a usable OCI
+# profile are present; otherwise show the shape and exit cleanly.
 # =============================================================================
 
 
-def _aws_available() -> bool:
-    try:
-        import boto3
+def _oci_env(name: str, default: str) -> str:
+    """``LOCUS_OCI_<name>`` first, then the OCI-CLI-standard ``OCI_<name>``."""
+    return os.environ.get(f"LOCUS_OCI_{name}") or os.environ.get(f"OCI_{name}") or default
 
-        profile = os.environ.get("LOCUS_AWS_PROFILE", "locus-security-audit")
-        return boto3.Session(profile_name=profile).get_credentials() is not None
+
+def _oci_target() -> SecurityControls | None:
+    """Controls pinned to the configured profile's tenancy, or ``None`` when unusable."""
+    try:
+        import oci
+
+        profile = _oci_env("PROFILE", "DEFAULT")
+        config = oci.config.from_file(profile_name=profile)
     except Exception:
-        return False
+        return None
+    tenancy = config.get("tenancy")
+    if not tenancy:
+        return None
+    return SecurityControls(
+        min_gsar=0.6,
+        min_confidence=0.6,
+        profile=profile,
+        auth_type=_oci_env("AUTH_TYPE", "api_key"),
+        compartment_id=tenancy,
+    )
 
 
 async def part2_live_agent() -> None:
     print("\n--- Part 2: the live cloud-posture agent ---")
-    controls = SecurityControls(min_gsar=0.6, min_confidence=0.6)
+    target = _oci_target()
+    controls = target or SecurityControls(min_gsar=0.6, min_confidence=0.6)
     model = get_model()
     analyst = create_soc_analyst(model=model, controls=controls, max_iterations=14)
 
     tool_names = sorted(getattr(t, "name", "?") for t in analyst.config.tools)
     print(f"analyst tools: {tool_names}")
-    print("read-only by construction: use_aws refuses any non-describe/list/get call.")
+    print("read-only by default: use_oci refuses any operation that is not a list/get-style read.")
 
     # get_model() already auto-detected OCI (or honoured LOCUS_MODEL_PROVIDER);
     # only the bundled mock means there is no real model to drive the audit.
-    if isinstance(model, MockModel) or not _aws_available():
+    if isinstance(model, MockModel) or target is None:
         print(
             "\nLive run skipped (bring-your-own-credentials).\n"
             "  Configure an OCI profile (or set LOCUS_MODEL_PROVIDER to a live provider)\n"
-            "  and the read-only locus-security-audit AWS profile to audit a real account.\n"
-            "  Offline, Part 1 already showed the grounding decision that gates the report."
+            "  and point LOCUS_OCI_PROFILE / OCI_PROFILE at a read-only profile to audit\n"
+            "  a real tenancy. Offline, Part 1 already showed the grounding decision\n"
+            "  that gates the report."
         )
         return
 
-    print("\nrunning the analyst against the live account (read-only)…")
+    print(f"\nrunning the analyst against tenancy {controls.compartment_id} (read-only)…")
     result = await analyst.arun(
-        "Review the account-level IAM posture: root access keys and root MFA. "
-        "Start with iam GetAccountSummary, cite the exact API facts as evidence, "
-        "then submit your report."
+        "Review the IAM posture of the tenancy: whether console users have MFA "
+        "activated and whether members of the Administrators group hold API keys. "
+        "Start with identity IdentityClient list_users on the tenancy compartment, "
+        "cite the exact API facts as evidence, then submit your report."
     )
     report = result.parsed
     if report is None:

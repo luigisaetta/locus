@@ -193,9 +193,27 @@ def fake_openshell(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
             made["active"] = True
             return client
 
+    class SandboxSpec:
+        """The protobuf message's surface that ``create`` touches."""
+
+        def __init__(self) -> None:
+            self.template = types.SimpleNamespace(image="")
+            self.providers: list[str] = []
+
+        def CopyFrom(self, other: SandboxSpec) -> None:  # noqa: N802 - protobuf's name
+            self.template = types.SimpleNamespace(image=other.template.image)
+            self.providers = list(other.providers)
+
     module = types.ModuleType("openshell")
     module.SandboxClient = SandboxClient  # type: ignore[attr-defined]
+    proto = types.ModuleType("openshell._proto")
+    pb2 = types.ModuleType("openshell._proto.openshell_pb2")
+    pb2.SandboxSpec = SandboxSpec  # type: ignore[attr-defined]
+    proto.openshell_pb2 = pb2  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "openshell", module)
+    monkeypatch.setitem(sys.modules, "openshell._proto", proto)
+    monkeypatch.setitem(sys.modules, "openshell._proto.openshell_pb2", pb2)
+    made["SandboxSpec"] = SandboxSpec
     return made
 
 
@@ -221,6 +239,45 @@ def test_create_makes_a_sandbox_and_owns_it(fake_openshell: dict[str, Any], root
     b._jobs_dir = str(root.parent / "state")
     b.close()
     assert client.deleted == ["fresh"]
+
+
+def test_create_passes_the_spec_through_untouched_by_default(
+    fake_openshell: dict[str, Any], root: Path
+) -> None:
+    OpenShellBackend.create(workspace="w", name="plain", root=str(root), spec="theirs").close()
+    assert fake_openshell["client"].specs == ["theirs"]
+
+
+def test_create_puts_the_image_and_providers_on_a_spec(
+    fake_openshell: dict[str, Any], root: Path
+) -> None:
+    OpenShellBackend.create(
+        workspace="w",
+        name="with-provider",
+        root=str(root),
+        image="example.com/curl:1",
+        providers=["oci-genai", "github"],
+    ).close()
+    (spec,) = fake_openshell["client"].specs
+    assert isinstance(spec, fake_openshell["SandboxSpec"])
+    assert spec.template.image == "example.com/curl:1"
+    assert spec.providers == ["oci-genai", "github"]
+
+
+def test_create_adds_to_a_copy_of_the_callers_spec(
+    fake_openshell: dict[str, Any], root: Path
+) -> None:
+    theirs = fake_openshell["SandboxSpec"]()
+    theirs.template.image = "example.com/base:1"
+    theirs.providers.append("github")
+    OpenShellBackend.create(
+        workspace="w", name="merged", root=str(root), spec=theirs, providers=["oci-genai"]
+    ).close()
+    (spec,) = fake_openshell["client"].specs
+    assert spec is not theirs
+    assert spec.template.image == "example.com/base:1"
+    assert spec.providers == ["github", "oci-genai"]
+    assert theirs.providers == ["github"]
 
 
 def test_without_the_package_the_error_says_what_to_install(

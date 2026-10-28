@@ -7,7 +7,7 @@ name = "locus-sdk-security"
 # Released in lockstep with locus-sdk: bump this, and the locus-sdk floor
 # below, together with the core version.
 version = "4.0.0"
-description = "Security-domain tooling for Locus agents — AI red-team probes, SOC triage, threat-intel / SIEM / EDR / scanner / fingerprint / AWS posture adapters, and IR playbooks, all grounded through the locus-sdk control core."
+description = "Security-domain tooling for Locus agents — AI red-team probes, SOC triage, threat-intel / SIEM / EDR / scanner / fingerprint adapters, OCI cloud posture, and IR playbooks, all grounded through the locus-sdk control core."
 readme = "README.md"
 license = "UPL-1.0"
 license-files = ["LICENSE", "LICENSE.txt"]
@@ -48,15 +48,11 @@ classifiers = [
 # The intel / SIEM / EDR / fingerprint adapters run their live paths on the
 # core httpx dependency and the scanner uses only the stdlib, so the full
 # read-only triage loop works on locus-sdk alone (offline samples need
-# nothing).
+# nothing). Cloud posture runs on the core describe_oci / use_oci tools,
+# which need the ``oci`` SDK from ``locus-sdk[oci]``.
 dependencies = [
     "locus-sdk>=4.0.0",
 ]
-
-[project.optional-dependencies]
-# AWS cloud-posture tools (locus_security.aws) — boto3 + its botocore service
-# models are the spec that drives use_aws / describe_aws.
-aws = ["boto3>=1.34"]
 
 [project.urls]
 Homepage = "https://github.com/oracle/locus"

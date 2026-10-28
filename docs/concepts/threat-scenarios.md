@@ -98,7 +98,7 @@ SIEM-ready record, wrap the observation in [`ground_finding`](security.md):
 the result is a typed `Evidence` finding tagged with the same taxonomy IDs in the
 tables above — or an `Abstention` when the evidence doesn't clear the bar. The
 [cloud-posture agent](cloud-posture.md) is the worked end-to-end version of
-that loop against a real AWS account.
+that loop against a real OCI tenancy.
 
 ## See also
 

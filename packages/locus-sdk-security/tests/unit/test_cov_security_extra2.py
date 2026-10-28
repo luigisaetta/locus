@@ -177,27 +177,27 @@ def test_submit_posture_formats_message() -> None:
     assert "83%" in msg
 
 
-def test_security_controls_default_returns_aws_toolset() -> None:
+def test_security_controls_default_returns_oci_toolset() -> None:
     """Line 177: SecurityControls.default() return cls()."""
     controls = SecurityControls.default()
-    assert controls.readonly_aws is True
+    assert controls.readonly_oci is True
     names = {t.name for t in controls.tools()}
-    assert "describe_aws" in names
-    assert "use_aws" in names
+    assert "describe_oci" in names
+    assert "use_oci" in names
 
 
 def test_ground_report_grounded_finding_ships() -> None:
     """Lines 243-272: ground_report with grounded evidence → Finding."""
     finding = PostureFinding(
-        title="Root access keys present",
-        description="CIS 1.4 violation.",
+        title="Tenancy administrator has API keys",
+        description="CIS OCI Foundations IAM control.",
         severity=Severity.HIGH,
-        asset="aws-account:000:root",
-        remediation="Delete root access keys.",
+        asset="oci:identity:user/admin",
+        remediation="Delete the administrator's API keys.",
         evidence=[
             PostureEvidence(
-                statement="AccountAccessKeysPresent=1",
-                ref="aws:iam:GetAccountSummary:AccountAccessKeysPresent",
+                statement="list_api_keys returns 1 key for user admin",
+                ref="oci:identity:list_api_keys:fingerprint",
                 grounded=True,
             )
         ],
@@ -216,7 +216,7 @@ def test_ground_report_ungrounded_finding_abstains() -> None:
         title="Speculative risk",
         description="Pure speculation.",
         severity=Severity.LOW,
-        asset="aws-account:000",
+        asset="oci:tenancy:ocid1.tenancy.oc1..example",
         remediation="n/a",
         evidence=[
             PostureEvidence(
@@ -235,15 +235,15 @@ def test_ground_report_ungrounded_finding_abstains() -> None:
 def test_ground_report_custom_controls_threshold() -> None:
     """Passes non-default controls → thresholds derived correctly."""
     finding = PostureFinding(
-        title="S3 public",
-        description="Public bucket.",
+        title="Public bucket",
+        description="Object Storage bucket is publicly visible.",
         severity=Severity.HIGH,
-        asset="s3:my-bucket",
-        remediation="Block public access.",
+        asset="oci:object_storage:bucket/exports",
+        remediation="Set the bucket's public access type to NoPublicAccess.",
         evidence=[
             PostureEvidence(
-                statement="BlockPublicAcls=False",
-                ref="aws:s3:GetBucketPublicAccessBlock",
+                statement="get_bucket reports publicAccessType=ObjectRead",
+                ref="oci:object_storage:get_bucket:publicAccessType",
                 grounded=True,
             )
         ],
@@ -262,7 +262,7 @@ def test_create_soc_analyst_wires_tools_and_schema() -> None:
     assert kwargs["output_schema"] is PostureReport
     assert kwargs["grounding"] is True
     tool_names = {t.name for t in kwargs["tools"]}
-    assert {"describe_aws", "use_aws", "submit_posture"} <= tool_names
+    assert {"describe_oci", "use_oci", "submit_posture"} <= tool_names
 
 
 def test_create_soc_analyst_with_scope_appended() -> None:

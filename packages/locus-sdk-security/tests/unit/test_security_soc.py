@@ -25,15 +25,15 @@ from locus_security import (
 
 def _grounded_finding(**over: object) -> PostureFinding:
     base: dict[str, object] = {
-        "title": "Root account has active access keys",
-        "description": "The account root user has access keys (CIS 1.4).",
+        "title": "Tenancy administrator has active API keys",
+        "description": "A member of the Administrators group has a long-lived API key.",
         "severity": Severity.HIGH,
-        "asset": "aws-account:000000000000:root",
-        "remediation": "Delete the root access keys.",
+        "asset": "oci:identity:user/admin",
+        "remediation": "Delete the administrator's API keys.",
         "evidence": [
             PostureEvidence(
-                statement="GetAccountSummary reports AccountAccessKeysPresent=1",
-                ref="aws:iam:GetAccountSummary:AccountAccessKeysPresent",
+                statement="list_api_keys for user admin returns 1 key",
+                ref="oci:identity:list_api_keys:fingerprint",
                 grounded=True,
             )
         ],
@@ -47,7 +47,7 @@ def _speculative_finding() -> PostureFinding:
         title="Speculative lateral-movement risk",
         description="No evidence; speculation only.",
         severity=Severity.MEDIUM,
-        asset="aws-account:000000000000",
+        asset="oci:tenancy:ocid1.tenancy.oc1..example",
         remediation="n/a",
         evidence=[
             PostureEvidence(
@@ -60,12 +60,25 @@ def _speculative_finding() -> PostureFinding:
 
 
 class TestSecurityControls:
-    def test_default_attaches_readonly_aws_tools(self) -> None:
+    def test_default_attaches_readonly_oci_tools(self) -> None:
         names = {t.name for t in SecurityControls.default().tools()}
-        assert names == {"describe_aws", "use_aws"}
+        assert names == {"describe_oci", "use_oci"}
 
-    def test_readonly_aws_disabled_drops_tools(self) -> None:
-        assert SecurityControls(readonly_aws=False).tools() == []
+    def test_readonly_oci_disabled_drops_tools(self) -> None:
+        assert SecurityControls(readonly_oci=False).tools() == []
+
+    def test_oci_target_keeps_only_the_set_fields(self) -> None:
+        assert SecurityControls().oci_target() == {}
+        controls = SecurityControls(
+            profile="security-audit",
+            auth_type="security_token",
+            compartment_id="ocid1.tenancy.oc1..example",
+        )
+        assert controls.oci_target() == {
+            "profile": "security-audit",
+            "auth_type": "security_token",
+            "compartment_id": "ocid1.tenancy.oc1..example",
+        }
 
     def test_thresholds_are_strictly_ordered(self) -> None:
         th = SecurityControls(min_gsar=0.6).thresholds()
@@ -125,7 +138,7 @@ def test_submit_posture_summarizes() -> None:
 
 
 class TestCreateSocAnalyst:
-    def test_wires_aws_tools_schema_and_submit(self) -> None:
+    def test_wires_oci_tools_schema_and_submit(self) -> None:
         with patch("locus.deepagent.create_deepagent") as make:
             create_soc_analyst(model="mock:test")
             kwargs = make.call_args.kwargs
@@ -133,10 +146,10 @@ class TestCreateSocAnalyst:
         assert kwargs["submit_tool"] == "submit_posture"
         assert kwargs["grounding"] is True
         tool_names = {t.name for t in kwargs["tools"]}
-        assert {"describe_aws", "use_aws", "submit_posture"} <= tool_names
+        assert {"describe_oci", "use_oci", "submit_posture"} <= tool_names
 
-    def test_controls_can_drop_aws_tools(self) -> None:
-        controls = SecurityControls(readonly_aws=False)
+    def test_controls_can_drop_oci_tools(self) -> None:
+        controls = SecurityControls(readonly_oci=False)
         with patch("locus.deepagent.create_deepagent") as make:
             create_soc_analyst(model="mock:test", controls=controls)
             tool_names = {t.name for t in make.call_args.kwargs["tools"]}
@@ -155,12 +168,34 @@ class TestCreateSocAnalyst:
 
     def test_scope_is_appended_to_prompt(self) -> None:
         with patch("locus.deepagent.create_deepagent") as make:
-            create_soc_analyst(model="mock:test", scope="Focus only on IAM and S3.")
-            assert "Focus only on IAM and S3." in make.call_args.kwargs["system_prompt"]
+            create_soc_analyst(model="mock:test", scope="Focus only on IAM and Object Storage.")
+            prompt = make.call_args.kwargs["system_prompt"]
+        assert "Focus only on IAM and Object Storage." in prompt
+        assert "OCI target for this review" not in prompt  # no identity set → no block
+
+    def test_oci_target_is_appended_to_prompt(self) -> None:
+        controls = SecurityControls(
+            profile="security-audit",
+            auth_type="security_token",
+            region="us-ashburn-1",
+            compartment_id="ocid1.tenancy.oc1..example",
+        )
+        with patch("locus.deepagent.create_deepagent") as make:
+            create_soc_analyst(model="mock:test", controls=controls, scope="IAM only.")
+            prompt = make.call_args.kwargs["system_prompt"]
+        assert "OCI target for this review" in prompt
+        assert "- profile=security-audit" in prompt
+        assert "- auth_type=security_token" in prompt
+        assert "- region=us-ashburn-1" in prompt
+        assert "- compartment_id=ocid1.tenancy.oc1..example" in prompt
+        assert prompt.index("compartment_id=") < prompt.index("Scope for this review: IAM only.")
 
     def test_explicit_system_prompt_replaces_default(self) -> None:
+        controls = SecurityControls(profile="security-audit")
         with patch("locus.deepagent.create_deepagent") as make:
-            create_soc_analyst(model="mock:test", system_prompt="custom", scope="ignored")
+            create_soc_analyst(
+                model="mock:test", controls=controls, system_prompt="custom", scope="ignored"
+            )
             assert make.call_args.kwargs["system_prompt"] == "custom"
 
     def test_extra_tools_are_appended(self) -> None:

@@ -103,10 +103,9 @@ Notebooks 71 and 72. See [the gateway how-to](litellm-gateway.md).
 
 | Variable | Used by |
 |---|---|
-| `LOCUS_AWS_PROFILE` | AWS cloud-posture tools — notebook 81 |
-| `LOCUS_AWS_REGION` | AWS cloud-posture tools — default `us-east-1` |
-| `AWS_ACCESS_KEY_ID` | Standard AWS credential chain |
-| `AWS_SECRET_ACCESS_KEY` | Standard AWS credential chain |
+| `LOCUS_OCI_PROFILE` / `OCI_PROFILE` | OCI cloud-posture agent — the read-only profile notebook 81 audits as (see the OCI table above) |
+| `LOCUS_OCI_AUTH_TYPE` / `OCI_AUTH_TYPE` | OCI cloud-posture agent — `api_key` (default) or `security_token` |
+| `LOCUS_USE_OCI_ALLOW_MUTATIONS` | `use_oci` write opt-in — never set for the posture agent |
 | `SCANNER_API_KEY` | Vulnerability-scanner adapter — notebook 80 |
 | `DATAMAP_URL` | Data-map adapter — notebook 80 |
 | `DATAMAP_API_KEY` | Data-map adapter — notebook 80 |

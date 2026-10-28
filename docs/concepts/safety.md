@@ -180,14 +180,14 @@ capability-restricted tool removes the capability, so there is nothing to
 decide. The two compose — but when you can constrain the tool, do that first.
 
 The [cloud-posture agent](cloud-posture.md) is the worked example. Its
-`use_aws` tool admits an operation only if its name starts with a read verb
-(`Describe` / `List` / `Get` / …), and it checks **before** any API call:
+`use_oci` tool admits an operation only if its name starts with a read prefix
+(`list_` / `get_` / `summarize_` / …), and it checks **before** any API call:
 
 ```python
-from locus_security import use_aws
+from locus.tools import use_oci
 
-use_aws("iam", "CreateUser", {"UserName": "x"})
-# PermissionError: refused: iam:CreateUser is not a read-only operation.
+use_oci("identity", "IdentityClient", "create_user", parameters={"name": "x"})
+# {"status": "error", "error": "Operation 'create_user' looks mutating ... Refusing by default."}
 ```
 
 The principle is **defense in depth across a trust boundary**: pair an
@@ -196,7 +196,7 @@ doesn't trust your code at all —
 
 | In-process gate | Out-of-process backstop |
 |---|---|
-| read-verb allowlist in `use_aws` | read-only IAM identity (`SecurityAudit` + `ViewOnlyAccess`) |
+| read-prefix allowlist in `use_oci` | read-only IAM group (policies with `inspect` / `read` verbs only) |
 | `block_dangerous_tools` in `GuardrailsHook` | container without the binary; seccomp profile |
 | SQL-shape detection in tool inputs | database role with `SELECT`-only grants |
 

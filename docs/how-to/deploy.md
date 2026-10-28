@@ -109,11 +109,11 @@ Azure Container Apps, or any other container host.
 ## Serverless — scale to zero
 
 Best for low-frequency or bursty traffic. Wrap the FastAPI app in an
-adapter for your platform — [Mangum](https://mangum.io/) for
-AWS Lambda, or deploy the container image directly to a
-scale-to-zero container runtime (Cloud Run, Container Apps). The adapter
-wraps `server.app`; the FastAPI app is built on first access to it. Set the
-provider key and `LOCUS_SERVER_API_KEY` as function secrets.
+ASGI adapter for your functions platform, or deploy the container image
+directly to a scale-to-zero container runtime (OCI Container Instances,
+Cloud Run, Container Apps). The adapter wraps `server.app`; the FastAPI
+app is built on first access to it. Set the provider key and
+`LOCUS_SERVER_API_KEY` as function secrets.
 
 ## Kubernetes — for production
 

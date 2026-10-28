@@ -161,7 +161,7 @@ The series runs 01 to 89, ordered by topic: start here, the multi-agent shapes, 
 
 ## Security operations (locus-sdk-security)
 
-- **81 · [Grounded cloud-posture agent](notebook_81_cloud_posture_agent.md)** — a read-only AWS posture audit that grounds every finding in observed API facts
+- **81 · [Grounded cloud-posture agent](notebook_81_cloud_posture_agent.md)** — a read-only OCI posture audit that grounds every finding in observed API facts
 - **82 · [SOC playbooks](notebook_82_security_playbooks.md)** — bundled incident-response playbooks run over the security toolset, step-gated by `PlaybookEnforcer`
 - **83 · [Red-team an AI agent](notebook_83_agent_red_team.md)** — the OWASP-ASI / MITRE-ATLAS suite against a vulnerable and a hardened bot — grounded findings or abstentions
 - **84 · [Red-team a support bot](notebook_84_redteam_support_bot.md)** — red-team a customer-support chatbot for prompt injection and data leakage
