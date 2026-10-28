@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Handoff card: Handoff.chain_handoff escalates a case one tier at a time, L1
+  to L2 to L3; each execute_handoff gives the next HandoffAgent a HandoffContext
+  (task, findings, chain), so there is no shortcut from the first tier to the last.
+  locus/multiagent/handoff.py: Handoff.execute_handoff, Handoff.chain_handoff, HandoffAgent.receive_handoff
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>Three tiers stepping up in a chain, each handing the case to the next</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="6" y="37" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M17,37 L17,28 L35,28"/>
+  <g class="node"><rect x="37" y="21" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M48,21 L48,12 L66,12"/>
+  <g class="node primary"><rect x="68" y="5" width="22" height="14" rx="3"/></g>
+</svg>

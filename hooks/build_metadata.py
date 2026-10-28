@@ -34,6 +34,9 @@ _RELEASE = re.compile(r"^\d+\.\d+\.\d+$")
 
 #: ``{{ locus_diagram agent-loop }}`` inlines docs/diagrams/agent-loop.svg.
 _DIAGRAM_TOKEN = re.compile(r"\{\{\s*locus_diagram\s+([a-z0-9][a-z0-9-]*)\s*\}\}")
+#: ``{{ locus_glyph pipelines }}`` inlines docs/diagrams/cards/pipelines.svg, a
+#: card illustration drawn in the diagram vocabulary.
+_GLYPH_TOKEN = re.compile(r"\{\{\s*locus_glyph\s+([a-z0-9][a-z0-9-]*)\s*\}\}")
 _XML_PROLOG = re.compile(r"<\?xml[^>]*\?>\s*")
 _COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _ID_ATTR = re.compile(r'\bid="([^"]+)"')
@@ -130,10 +133,17 @@ def render_diagram(name: str, docs_dir: Path) -> str:
     path = docs_dir / "diagrams" / f"{name}.svg"
     if not path.is_file():
         raise RuntimeError(f"{{{{ locus_diagram {name} }}}} names {path}, which does not exist")
-    svg = _COMMENT.sub("", _XML_PROLOG.sub("", path.read_text()))
+    svg = _namespace_ids(_COMMENT.sub("", _XML_PROLOG.sub("", path.read_text())), name)
+    # Blank lines would end the raw-HTML block early and hand the rest to Markdown.
+    body = "\n".join(line for line in svg.strip().splitlines() if line.strip())
+    return f'\n<figure class="tl-dia">\n{body}\n</figure>\n'
+
+
+def _namespace_ids(svg: str, prefix: str) -> str:
+    """Prefix every id in an inlined SVG, and every reference to it."""
     ids = set(_ID_ATTR.findall(svg))
     for old in sorted(ids, key=len, reverse=True):
-        new = f"{name}--{old}"
+        new = f"{prefix}--{old}"
         svg = re.sub(rf'\bid="{re.escape(old)}"', f'id="{new}"', svg)
         svg = svg.replace(f"url(#{old})", f"url(#{new})").replace(
             f'href="#{old}"', f'href="#{new}"'
@@ -143,9 +153,25 @@ def render_diagram(name: str, docs_dir: Path) -> str:
             lambda m: m.group(1) + new,
             svg,
         )
-    # Blank lines would end the raw-HTML block early and hand the rest to Markdown.
-    body = "\n".join(line for line in svg.strip().splitlines() if line.strip())
-    return f'\n<figure class="tl-dia">\n{body}\n</figure>\n'
+    return svg
+
+
+def render_glyph(name: str, docs_dir: Path) -> str:
+    """Inline one card illustration as a single line of markup.
+
+    Card glyphs live under docs/diagrams/cards and use the diagram classes,
+    scoped by ``.tl-glyph`` in locus.css, so they theme with the page like the
+    diagrams do. They are decorative: the card title beside them carries the
+    meaning, so the span is hidden from assistive technology. The markup is
+    one line because the span sits inside a list item's paragraph, where a
+    line break would start a new block.
+    """
+    path = docs_dir / "diagrams" / "cards" / f"{name}.svg"
+    if not path.is_file():
+        raise RuntimeError(f"{{{{ locus_glyph {name} }}}} names {path}, which does not exist")
+    svg = _namespace_ids(_COMMENT.sub("", _XML_PROLOG.sub("", path.read_text())), f"card-{name}")
+    one_line = " ".join(part.strip() for part in svg.strip().splitlines() if part.strip())
+    return f'<span class="tl-glyph" aria-hidden="true">{one_line}</span>'
 
 
 def render_model_tabs(block: str, tabs: list[dict[str, str]]) -> str:
@@ -206,5 +232,8 @@ def on_page_markdown(markdown: str, *, config: Any, **_: Any) -> str:
     if "locus_diagram" in rendered:
         docs_dir = Path(config["docs_dir"])
         rendered = _DIAGRAM_TOKEN.sub(lambda m: render_diagram(m.group(1), docs_dir), rendered)
+    if "locus_glyph" in rendered:
+        docs_dir = Path(config["docs_dir"])
+        rendered = _GLYPH_TOKEN.sub(lambda m: render_glyph(m.group(1), docs_dir), rendered)
     checkout = extra.get("sdk_checkout")
     return pin_sdk_links(rendered, sdk_version, Path(checkout) if checkout else None)

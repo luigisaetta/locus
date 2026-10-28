@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Skills and evaluation card: SkillsPlugin puts the Skill catalogue in the
+  system prompt and loads one skill's full instructions only when the model
+  activates it through the `skills` tool (the dashed edge from the stack);
+  EvalRunner runs the Agent against each EvalCase and LLMJudge grades the
+  answer against its rubric, the Verdict coming back as the dashed return.
+  locus/skills/plugin.py: SkillsPlugin; locus/skills/models.py: Skill
+  locus/evaluation/framework.py: EvalRunner.arun, EvalCase, EvalReport;
+  locus/evaluation/judge.py: LLMJudge.score, Verdict
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>An agent between a stack of three skills, one loaded on demand, and an evaluator whose verdict returns</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="6" y="9" width="16" height="10" rx="3"/></g>
+  <g class="node"><rect x="6" y="23" width="16" height="10" rx="3"/></g>
+  <g class="node"><rect x="6" y="37" width="16" height="10" rx="3"/></g>
+  <path class="edge dashed" marker-end="url(#ah)" d="M22,42 L27,42 L27,28 L35,28"/>
+  <g class="node primary"><rect x="37" y="21" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M59,28 L66,28"/>
+  <g class="node"><rect x="68" y="21" width="22" height="14" rx="3"/></g>
+  <path class="edge dashed" marker-end="url(#ah)" d="M79,21 L79,11 L48,11 L48,19"/>
+</svg>

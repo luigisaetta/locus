@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Control card: gate_tool turns a tool call into an Action and hands it to
+  admit(); ControlPolicy decides it through approve() (the decision) and the
+  outcome carries the colour: allow runs the side effect, deny returns a
+  refusal to the model. require_human (hold) is not drawn.
+  locus/control/gate.py: gate_tool; locus/control/admission.py: admit;
+  locus/control/policy.py: ControlPolicy, approve, ApprovalOutcome
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>One action into a decision with two outcomes: allow above, deny below</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="4" y="21" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M26,28 L32.5,28"/>
+  <g class="decision"><polygon points="48,18 61,28 48,38 35,28"/></g>
+  <path class="edge allow" marker-end="url(#ah)" d="M48,18 L48,11 L68,11"/>
+  <path class="edge deny" marker-end="url(#ah)" d="M48,38 L48,45 L68,45"/>
+  <g class="node allow"><rect x="70" y="4" width="22" height="14" rx="3"/></g>
+  <g class="node deny"><rect x="70" y="38" width="22" height="14" rx="3"/></g>
+</svg>
