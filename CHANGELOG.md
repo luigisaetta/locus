@@ -10,6 +10,14 @@ policy.
 
 ### Added
 
+- **Sandbox image and OpenShell providers from `OpenShellBackend.create`.**
+  `image=` picks the container image; `providers=` attaches OpenShell
+  providers, whose credentials stay at the gateway while the sandbox sees a
+  placeholder the sandbox proxy swaps in at the provider's endpoints. The
+  live test exercises OpenShell's `oci-genai` profile: a sandboxed `curl`
+  reaches OCI Generative AI without the key. `examples/openshell-gateway/
+  provider.py` imports a profile and creates a provider where the OpenShell
+  CLI is not installed.
 - **A local NVIDIA OpenShell gateway for the coding harness.**
   `examples/openshell-gateway/` starts the gateway with `docker compose up -d`
   (loopback, Docker-outside-of-Docker, adapted from NVIDIA's reference

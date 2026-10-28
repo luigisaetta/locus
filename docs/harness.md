@@ -133,6 +133,26 @@ No gateway yet? `examples/openshell-gateway/` starts one with `docker compose up
 (loopback, Docker-outside-of-Docker) and `LOCUS_OPENSHELL_ENDPOINT=127.0.0.1:8080`
 points the harness and the live tests at it.
 
+`create()` also takes `image=`, the container image the sandbox runs, and
+`providers=`, OpenShell providers to attach. A provider keeps a credential at
+the gateway; the sandbox sees a placeholder that the sandbox proxy swaps for
+the real value only at the provider's endpoints, so a command inside the
+sandbox can call a model without ever holding the key. OpenShell's `oci-genai`
+profile does this for the OCI Generative AI OpenAI-compatible endpoint:
+
+```python
+backend = OpenShellBackend.create(
+    workspace="team-a",
+    image="docker.io/library/buildpack-deps:noble-curl",   # the default image has no curl
+    providers=["oci-genai"],
+)
+backend.exec(
+    "curl -sS https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1/chat/completions"
+    ' -H "Authorization: Bearer $OCI_GENAI_API_KEY" -H "Content-Type: application/json" --data @body.json',
+    timeout=120,
+)
+```
+
 OpenShell has no file RPC, so files move over `exec`: downloads are a `tar`
 of the one file on standard output, uploads are `cat >` with the bytes on
 standard input (so an executable keeps its mode), in chunks for large files.
