@@ -67,9 +67,9 @@
                                                               models/native/anthropic.py:290-294
   Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 492" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 512" role="img" aria-labelledby="title desc">
   <title id="title">One model call through a FallbackChain</title>
-  <desc id="desc">A model call enters FallbackChain.complete() or stream(). The tiers are tried in order, one attempt each, and every tier has a circuit breaker. Tier 0, the primary, has a closed breaker and is called; it fails with a health reason, one of rate_limit, overloaded, server_error, timeout, auth_transient, auth_permanent, billing or model_not_found as failover.classify names them, so the failure counts against its breaker and the call moves on. Tier 1's breaker is open, so it is skipped without a call. Tier 2's breaker is half-open, so it receives the one probe call. A tier that answers serves the call: its breaker closes and the response carries a ServedTier in metadata["fallback"]. If every tier fails, FallbackExhaustedError is raised with each tier's error. An error that is the request's fault, context_too_long, payload_too_large or unknown, is raised at once from the tier that hits it, with no fallback. A breaker opens after failure_threshold health failures within window_s, goes half-open after cooldown_s, and one probe then closes or re-opens it; when every breaker is open the primary is tried anyway. stream() falls back only before a tier's first chunk. Retries wrap the chain rather than a tier: when the error that leaves the chain is transient, the agent loop's call_with_retry backs off and runs the whole chain again, and ModelRetryHook re-calls it when the reply is empty.</desc>
+  <desc id="desc">A model call enters FallbackChain.complete() or stream(). The tiers are tried in order, one attempt each, and every tier has a circuit breaker. Tier 0, the primary, has a closed breaker and is called; it fails with a health reason, one of rate_limit, overloaded, server_error, timeout, auth_transient, auth_permanent, billing or model_not_found as failover.classify names them, so the failure counts against its breaker and the call moves on. Tier 1's breaker is open, so it is skipped without a call. Tier 2's breaker is half-open, so it receives the one probe call. A tier that answers serves the call: its breaker closes and the response carries a ServedTier in metadata["fallback"]. If every tier fails, FallbackExhaustedError is raised with each tier's error. Any other reason, context_too_long, payload_too_large or unknown, is raised at once from the tier that hits it, with no fallback; format_error moves the call to the next tier but does not count against the breaker. A breaker opens after failure_threshold health failures within window_s, goes half-open after cooldown_s, and one probe then closes or re-opens it; when every breaker is open the primary is tried anyway. stream() falls back only before a tier's first chunk. Retries wrap the chain rather than a tier: when the error that leaves the chain is transient, the agent loop's call_with_retry backs off and runs the whole chain again, and ModelRetryHook re-calls it when the reply is empty.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -102,8 +102,8 @@
 
   <!-- tier 0 -> raised at once -->
   <path class="edge" marker-end="url(#ah)" d="M118,198 L118,319"/>
-  <rect class="label-bg" x="72" y="280" width="92" height="20" rx="4"/>
-  <text class="label" x="118" y="290">request fault</text>
+  <rect class="label-bg" x="51" y="280" width="134" height="20" rx="4"/>
+  <text class="label" x="118" y="290">fails: other reason</text>
 
   <!-- tier 0 -> served -->
   <path class="edge" marker-end="url(#ah)" d="M178,198 V262 H432 V319"/>
@@ -159,7 +159,8 @@
   </g>
 
   <text class="note" x="462" y="408">Health reasons: rate_limit · overloaded · server_error · timeout · auth_transient · auth_permanent · billing · model_not_found.</text>
-  <text class="note" x="462" y="428">The request's fault — context_too_long, payload_too_large, unknown — is raised at once: every tier would reject it the same way.</text>
-  <text class="note" x="462" y="448">A breaker opens after failure_threshold failures within window_s and goes half-open after cooldown_s; one probe then closes or re-opens it.</text>
-  <text class="note" x="462" y="468">Retries wrap the chain, not a tier: call_with_retry runs the whole chain again after a backoff; ModelRetryHook re-calls it on an empty reply.</text>
+  <text class="note" x="462" y="428">Other reasons — context_too_long, payload_too_large, unknown — are raised at once without trying another tier.</text>
+  <text class="note" x="462" y="448">format_error moves the call to the next tier but does not count against the tier's breaker.</text>
+  <text class="note" x="462" y="468">A breaker opens after failure_threshold failures within window_s and goes half-open after cooldown_s; one probe then closes or re-opens it.</text>
+  <text class="note" x="462" y="488">Retries wrap the chain, not a tier: call_with_retry runs the whole chain again after a backoff; ModelRetryHook re-calls it on an empty reply.</text>
 </svg>

@@ -22,18 +22,25 @@ matters: you pass the **native** ones straight to `Agent`, and you
 - `MemoryCheckpointer` — in-process dict; tests / REPL
 - `FileCheckpointer` — JSON files on disk; single-machine dev
 - `HTTPCheckpointer` — talks to a remote checkpoint service you run
+- `OCIBucketBackend` — OCI Object Storage; bucket lifecycle policies for retention
+  (`oci_bucket_checkpointer(...)` is a convenience alias that returns an
+  `OCIBucketBackend`)
 - `S3Backend` — S3-compatible object storage; lifecycle policies, region replication
   (`s3_checkpointer(...)` is a convenience alias that returns an `S3Backend`)
+- `PgCheckpointer` — Postgres with per-tenant Row-Level Security; the native
+  alternative to the `postgresql_checkpointer(...)` factory
 
 **Storage-backed checkpointers** (wrap a dict-shaped storage with a
 factory):
 
+- `oracle_checkpointer(...)` — Oracle Database 26ai / Autonomous Database
+  (wraps `OracleBackend`)
 - `redis_checkpointer(...)` — Redis (self-hosted or managed)
 - `postgresql_checkpointer(...)` — Postgres (self-hosted or managed)
 - `mysql_checkpointer(...)` — MySQL (via the official Connector/Python async driver)
 - `opensearch_checkpointer(...)` — OpenSearch (self-hosted or managed)
 
-The native ones are normal classes — instantiate one, e.g. `S3Backend(...)`, and
+The native ones are normal classes — instantiate one, e.g. `OCIBucketBackend(...)`, and
 hand it to `Agent`. The storage-backed ones are the underlying
 `RedisBackend` / `PostgreSQLBackend` / `MySQLBackend` / etc. wrapped by an adapter; if
 you instantiate the backend class directly and pass it to `Agent`,
@@ -43,27 +50,33 @@ save/load will fail at runtime (the agent calls
 
 ## 2. Instantiate and pass to the Agent
 
-Native checkpointer (no wrapping):
+Native checkpointer (no wrapping); the checkpointer is independent of the
+[model provider](../concepts/models.md):
 
 {{ locus_model_tabs }}
 
 ```python
 from locus.agent import Agent
-from locus.memory.backends import S3Backend
+from locus.memory.backends import OCIBucketBackend
 
-checkpointer = S3Backend(
-    bucket="my-app-checkpoints",
-    prefix="my-namespace/",
+checkpointer = OCIBucketBackend(
+    bucket_name="my-app-checkpoints",
+    namespace="my-tenancy-namespace",
 )
 
 agent = Agent(
-    model="{{ locus_model }}",   # any model — see concepts/models.md
+    model="{{ locus_model }}",
     tools=[...],
     checkpointer=checkpointer,
 )
 ```
 
-Storage-backend with the factory:
+`S3Backend(bucket=..., prefix=...)` has the same shape for S3-compatible
+stores (S3, MinIO, R2); pointed at the OCI Object Storage S3-compatibility
+API it also needs `endpoint_url` — the
+[Checkpointers concept page](../concepts/checkpointers.md) shows that call.
+
+Storage-backed checkpointer, through its factory:
 
 ```python
 from locus.memory.backends import postgresql_checkpointer
@@ -128,11 +141,5 @@ await agent2.run("Which case are we on?", thread_id="t1").__anext__()
 # The model sees the earlier user turn.
 ```
 
-Locus's suite covers pieces of this shape, not the whole of it:
-`tests/integration/test_checkpointer_adapters.py::TestAgentWithCheckpointer::test_agent_resumes_from_checkpoint`
-checks that a run saves the thread's checkpoint and that it loads back
-with at least two messages (it does not check their content), against
-`MemoryCheckpointer` with a single `Agent`, and `tests/unit/test_memory_backends_s3.py` exercises
-`S3Backend` save/load against an in-process `moto` mock. Neither starts
-a second `Agent` on the same thread, and there is no live-bucket test
-in the SDK repo — run the snippet above against your own backend.
+Run the snippet above against your own backend; it is the check that the
+backend, not the process, holds the thread.

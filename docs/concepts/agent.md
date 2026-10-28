@@ -58,7 +58,7 @@ Each iteration has three phases:
 
 | Phase | What happens |
 |---|---|
-| **Think** | The model generates reasoning + optional tool calls. A `ThinkEvent` is emitted. |
+| **Think** | The model generates reasoning and, optionally, tool calls. A `ThinkEvent` is emitted. |
 | **Execute** | Tool calls run concurrently or sequentially depending on `tool_execution` (`"concurrent"` is the default). `ToolStartEvent` / `ToolCompleteEvent` fire per tool. |
 | **Reflect** | Optional: reflexion re-checks the result; grounding verifies factual claims against evidence. |
 
@@ -67,7 +67,8 @@ The loop terminates with one of these `stop_reason` literals on
 `max_iterations`, `tool_loop`, `no_tools`, `grounding_failed`,
 `token_budget`, `cost_budget`, `time_budget`, `context_exhausted`, `interrupted`,
 `error`, `cancelled`.
-Triggers:
+
+The loop stops when one of the following occurs:
 
 - The model produces a response with no tool calls (`complete` / `no_tools`).
 - A composable termination condition on `Agent(termination=...)` fires
@@ -89,7 +90,7 @@ from locus.agent import Agent
 from locus.agent import AgentConfig
 
 cfg = AgentConfig(
-    model="{{ locus_example_model }}",   # see concepts/models.md
+    model="{{ locus_example_model }}",
     tools=[...],
     system_prompt="...",
     max_iterations=50,
@@ -103,6 +104,7 @@ cfg = AgentConfig(
 agent = Agent(config=cfg)
 ```
 
+Model strings are described on the [Model providers](models.md) page.
 See the [API reference](../api/agent.md) for every field.
 
 ## Headline kwargs
@@ -113,7 +115,7 @@ build the config explicitly.
 
 | Kwarg | What it does |
 |---|---|
-| `output_schema=Foo` | Pydantic schema. Final assistant message is parsed into an instance of `Foo` and surfaced on `result.parsed` / `result.parsed_as(Foo)`. Provider-strict `response_format` on OpenAI; tool-use translation on Anthropic; prompted fallback elsewhere. See [structured-output](structured-output.md). |
+| `output_schema=Foo` | Pydantic schema. Final assistant message is parsed into an instance of `Foo` and surfaced on `result.parsed` / `result.parsed_as(Foo)`. Provider-strict `response_format` on OpenAI and OpenAI-compatible endpoints, which include every `oci:` model other than `cohere.*` ids and Dedicated AI Cluster endpoints; tool-use translation on Anthropic; prompted fallback elsewhere. See [Structured output](structured-output.md). |
 | `termination=cond` | Composable stop algebra: conditions combine through the `__or__` and `__and__` operators (either condition, or both), so a rule such as "ten iterations, or the text DONE together with a confidence threshold" is plain Python. Eight built-in conditions; the example below composes two. |
 | `playbook=plan` | A `locus.playbooks.Playbook`. Auto-installs `PlaybookEnforcerHook` so each tool call is validated against the current step's `expected_tools` and the plan auto-advances. Out-of-sequence calls are cancelled with a hint. |
 | `auxiliary_model=...` | Lower-cost model for secondary calls (max-iterations summary, grounding evaluation, conversation compaction). String or `ModelProtocol` instance. Falls back to `model=` when unset. |
@@ -124,6 +126,12 @@ build the config explicitly.
 from pydantic import BaseModel
 from locus.agent import Agent
 from locus.core.termination import MaxIterations, ToolCalled
+from locus.tools import tool
+
+@tool
+def issue_refund(order_id: str) -> str:
+    """Refund an order."""
+    return "refunded"
 
 class OrderList(BaseModel):
     order_ids: list[str]
@@ -133,7 +141,6 @@ agent = Agent(
     tools=[lookup_order, issue_refund],
     output_schema=OrderList,
     termination=MaxIterations(8) | ToolCalled("issue_refund"),
-    auxiliary_model="{{ locus_example_model }}",
     reflexion=True,
 )
 result = agent.run_sync("Look up the 3 orders and refund the eligible one.")

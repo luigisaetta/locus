@@ -35,9 +35,10 @@
     Your SSE endpoint    not shipped: the bus docstring names an SSE endpoint as the natural HTTP
                          wrapper around subscribe(), and StreamEvent.to_dict() is the
                          JSON shape for that wire format                  (event_bus.py:12-14, :55-63)
-    After the fact       bus._history is read directly by tests (tests/unit/test_cov_obs_routing.py:86)
-                         and by the page's own EventBusHook example; bus.stats() reports subscriber
-                         counts and the drop total                          (event_bus.py:99, :315-329)
+    After the fact       bus.stats() reports subscriber counts, retained runs and the drop total
+                         (event_bus.py:315-329); a subscribe(rid) after close_stream(rid) is pre-loaded
+                         with the run's retained history and then the end-of-stream sentinel, so a
+                         late reader replays a finished run           (event_bus.py:218-245, :265-288)
   Not drawn: Router.dispatch binds the run_id with set_run_id() instead of run_context() and calls
   close_stream(rid) when the dispatch ends (router/runtime.py:166, :191-192); router.* events are
   published with a run_id they are handed (router_events.py:59-78). locus.streaming's SSEHandler,
@@ -48,7 +49,7 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 490" role="img" aria-labelledby="title desc">
   <title id="title">The observability pipeline, from emission to consumption</title>
-  <desc id="desc">Three kinds of code emit events: the bridge on Agent.run, which turns every event the agent yields into an agent.* event; direct emit() calls in the RAG, memory and multi-agent code; and the EventBusHook. The first two go through emit(), which asks whether a run_id is bound. run_context() binds one: it mints a run_id and stores it in a ContextVar. If a run_id is bound, emit() publishes a StreamEvent on the EventBus; if not, nothing is emitted: no bus is built and no event is created. The EventBusHook publishes on the bus directly, without that gate, tagging each event with its fixed run_id, else the bound one, else the run's own id. The EventBus appends every event to a bounded history kept per run_id and delivers it to the subscribers of that run and to the global subscribers; when a subscriber's queue stays full, that event is dropped for that subscriber only and the dropped_events_total counter grows. Consumers: bus.subscribe(run_id) replays the run's history and then streams live events; bus.subscribe_global() receives live events from every run with no replay; an SSE endpoint you write wraps subscribe() and sends StreamEvent.to_dict(); and tests and diagnostics read bus._history and bus.stats() after the fact.</desc>
+  <desc id="desc">Three kinds of code emit events: the bridge on Agent.run, which turns every event the agent yields into an agent.* event; direct emit() calls in the RAG, memory and multi-agent code; and the EventBusHook. The first two go through emit(), which asks whether a run_id is bound. run_context() binds one: it mints a run_id and stores it in a ContextVar. If a run_id is bound, emit() publishes a StreamEvent on the EventBus; if not, nothing is emitted: no bus is built and no event is created. The EventBusHook publishes on the bus directly, without that gate, tagging each event with its fixed run_id, else the bound one, else the run's own id. The EventBus appends every event to a bounded history kept per run_id and delivers it to the subscribers of that run and to the global subscribers; when a subscriber's queue stays full, that event is dropped for that subscriber only and the dropped_events_total counter grows. Consumers: bus.subscribe(run_id) replays the run's history and then streams live events; bus.subscribe_global() receives live events from every run with no replay; an SSE endpoint you write wraps subscribe() and sends StreamEvent.to_dict(); and after the fact, bus.stats() reports subscriber counts and the drop total, while a subscriber that connects after close_stream(run_id) is replayed the run's retained history and then receives the end-of-stream signal.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -162,7 +163,7 @@
   <g class="node">
     <rect x="752" y="55" width="172" height="58" rx="12"/>
     <text x="838" y="74">After the fact</text>
-    <text class="sub" x="838" y="95">bus._history · stats()</text>
+    <text class="sub" x="838" y="95">stats() · late replay</text>
   </g>
   <g class="node">
     <rect x="752" y="166" width="172" height="58" rx="12"/>

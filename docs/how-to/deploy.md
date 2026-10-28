@@ -1,20 +1,22 @@
 # Deploy
 
 `AgentServer` is a FastAPI wrapper that deploys anywhere FastAPI runs. The
-runnable path below uses OpenAI consistently from application code through the
-container and Kubernetes configuration.
+runnable path below carries one provider choice from application code through
+the container and Kubernetes configuration: pick the provider in the tabs, and
+inject that provider's credential wherever the manifests below show a provider
+secret.
 
 | Field | Value |
 |---|---|
 | Status | Supported server API; deployment manifests are starting points |
 | Tested SDK | `locus-sdk` {{ locus_sdk_version }} |
 | Execution mode | Live model provider |
-| Requirements | Python 3.11+, `locus-sdk[openai,server]` |
-| Secrets | `OPENAI_API_KEY` for the provider; `LOCUS_SERVER_API_KEY` for callers |
+| Requirements | Python 3.11+, `locus-sdk[server]` plus the extra for your provider tab: `oci`, `openai` (also for Self-hosted), or `anthropic` |
+| Secrets | The provider credential for your tab (table below); `LOCUS_SERVER_API_KEY` for callers |
 
-Those two credentials serve different trust boundaries. The OpenAI key lets
-the application call its model provider. The Locus server key is the bearer
-token clients send to `/invoke`, `/stream`, and thread routes.
+Those two credentials serve different trust boundaries. The provider
+credential lets the application call its model. The Locus server key is the
+bearer token clients send to `/invoke`, `/stream`, and thread routes.
 
 ## The shape you ship
 
@@ -47,6 +49,37 @@ if __name__ == "__main__":
     server.run(host="0.0.0.0", port=8080)
 ```
 
+Each tab needs one provider credential; the table says which, and the
+deployment paths below show where to inject it.
+
+| Tab | Extra | Provider credential |
+|---|---|---|
+| OCI | `oci` | A principal on OCI infrastructure (below), or an OCI config profile at the service user's `~/.oci/config`, named by `OCI_PROFILE` |
+| OpenAI | `openai` | `OPENAI_API_KEY` |
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
+| Self-hosted | `openai` | `OLLAMA_BASE_URL`, the URL of your Ollama server; no key |
+
+On OCI compute, OKE, or OCI Functions, the OCI tab authenticates with the
+platform's principal instead of a stored credential. The `oci:` route forwards
+`model_kwargs` to the model, so pass the principal type and the compartment
+there; this snippet is OCI-specific, so it names the OCI model id directly:
+
+```python
+agent = Agent(
+    model="oci:openai.gpt-5.5",
+    model_kwargs={
+        "auth_type": "instance_principal",
+        "compartment_id": os.environ["OCI_COMPARTMENT_ID"],
+    },
+    tools=[],
+    system_prompt="Answer concisely.",
+)
+```
+
+`instance_principal` serves OCI VMs and OKE node identity;
+`resource_principal` serves OCI Functions and OKE workload identity. See
+[model support on OCI](oci-models.md#on-oci-compute-oke-functions-workload-identity).
+
 You get out of the box:
 
 - `POST /invoke` — synchronous run, returns the final `message` plus
@@ -56,9 +89,10 @@ You get out of the box:
 - `GET / DELETE /threads/{id}` — conversation persistence.
 - `GET /health` — liveness probe.
 
-Provider keys are read from the environment. Inject both secrets at runtime;
-never bake either into the image. Add a durable checkpointer before relying on
-thread continuity across restarts or replicas.
+Provider credentials are read from the environment, or supplied by the
+platform as a principal. Inject secrets at runtime; never bake one into the
+image. Add a durable checkpointer before relying on thread continuity across
+restarts or replicas.
 
 Serving `app` with uvicorn, as the container and VM examples below do, skips
 `AgentServer.run()` and with it the check that refuses a non-loopback host
@@ -74,8 +108,11 @@ The locus-sdk repo ships a multi-stage [`Dockerfile`](https://github.com/oracle/
 (non-root user, `HEALTHCHECK` on `/health`). It is the library base image:
 built from the locus-sdk repo root, it installs `locus-sdk` with the
 `openai`, `server`, and `checkpoints` extras but copies no application code,
-and its `CMD` names a placeholder `app:server.app` for you to replace. Build
-it once, then derive your own image that adds `server.py`:
+and its `CMD` names a placeholder `app:server.app` for you to replace. The
+`checkpoints` extra also pulls in the OCI SDK, so the image as built serves
+the OCI, OpenAI, and Self-hosted tabs; for the Anthropic tab, add `anthropic`
+to the extras on the `pip install` line before building. Build it once, then
+derive your own image that adds `server.py`:
 
 ```bash
 # In a locus-sdk checkout, from the repo root, at the tested release
@@ -97,28 +134,34 @@ Build, push to any registry, and run anywhere that runs containers:
 docker build -f Dockerfile.app -t registry.example.com/locus-concierge:0.1.0 .
 docker push    registry.example.com/locus-concierge:0.1.0
 
+# provider.env holds the provider credential for your tab, for example
+# OPENAI_API_KEY=sk-... or OLLAMA_BASE_URL=http://ollama.internal:11434/v1
 docker run -p 8080:8080 \
-  -e OPENAI_API_KEY=sk-... \
+  --env-file provider.env \
   -e LOCUS_SERVER_API_KEY=replace-with-a-long-random-token \
   registry.example.com/locus-concierge:0.1.0
 ```
 
-This single image drops straight into Cloud Run, ECS / Fargate, Fly.io,
-Azure Container Apps, or any other container host.
+For the OCI tab, prefer the principal route from the table above, which needs
+no mounted credential; off OCI infrastructure, mount an OCI config profile into
+the container at the service user's `~/.oci/config` and set `OCI_PROFILE` in
+`provider.env`. This single image runs unchanged on OCI Container Instances,
+OKE, or any other container host.
 
 ## Serverless — scale to zero
 
-Best for low-frequency or bursty traffic. Wrap the FastAPI app in an
-ASGI adapter for your functions platform, or deploy the container image
-directly to a scale-to-zero container runtime (OCI Container Instances,
-Cloud Run, Container Apps). The adapter wraps `server.app`; the FastAPI
-app is built on first access to it. Set the provider key and
-`LOCUS_SERVER_API_KEY` as function secrets.
+This option suits low-frequency or bursty traffic. Wrap the FastAPI app in
+an ASGI adapter for your functions platform, or deploy the container image
+directly to a scale-to-zero container runtime such as OCI Container
+Instances. The adapter wraps `server.app`; the FastAPI app is built on first
+access to it. Set the provider credential and `LOCUS_SERVER_API_KEY` as
+function secrets; on OCI Functions, the OCI tab uses `resource_principal`
+and stores no provider credential.
 
 ## Kubernetes — for production
 
-Best for multi-replica, autoscaled, multi-region production. A minimal
-deployment:
+This option suits multi-replica, autoscaled, multi-region production on OKE
+or any conformant cluster. A minimal deployment:
 
 ```yaml
 apiVersion: apps/v1
@@ -134,9 +177,10 @@ spec:
       - name: concierge
         image: registry.example.com/locus-concierge:0.1.0
         ports: [{ containerPort: 8080 }]
+        # locus-provider holds the provider credential for your tab
+        envFrom:
+        - secretRef: { name: locus-provider }
         env:
-        - name: OPENAI_API_KEY
-          valueFrom: { secretKeyRef: { name: locus-secrets, key: openai-api-key } }
         - name: LOCUS_SERVER_API_KEY
           valueFrom: { secretKeyRef: { name: locus-secrets, key: server-api-key } }
         readinessProbe:
@@ -154,17 +198,24 @@ spec:
   ports: [{ port: 80, targetPort: 8080 }]
 ```
 
+The `locus-provider` Secret carries the variable for your tab from the table
+above (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OLLAMA_BASE_URL`). For the
+OCI tab on OKE, the pod authenticates with the node's instance principal or
+with workload identity, so drop the `envFrom` entry and set
+`OCI_COMPARTMENT_ID` as a plain `env` variable instead.
+
 For SSE streaming, ensure your ingress / load balancer doesn't buffer the
 response (`X-Accel-Buffering: no` on nginx, or the buffering-off
 equivalent on your load balancer).
 
 ## Plain VM — full control
 
-Best when you need raw VM access or run the agent alongside other local
+This option suits raw VM access, or running the agent alongside other local
 services.
 
 ```bash
-pip install "locus-sdk[openai,server]"
+# The extra matches your tab: oci here, openai (also for Self-hosted), or anthropic
+pip install "locus-sdk[oci,server]"
 
 # Your own server.py — the one from the top of this page. It ends in
 # `app = server.app`, which is the ASGI callable uvicorn loads below.
@@ -193,13 +244,16 @@ sudo systemctl enable --now concierge
 ```
 
 Create `/etc/concierge.env` with permissions readable only by the service
-account and define both `OPENAI_API_KEY` and `LOCUS_SERVER_API_KEY` there.
+account and define `LOCUS_SERVER_API_KEY` and the provider credential for
+your tab there. For the OCI tab on an OCI VM, the instance principal replaces
+a stored credential: define `OCI_COMPARTMENT_ID` there instead.
 
 ## Sessions — `thread_id` for chat UIs
 
 When the underlying agent has a checkpointer, pass a `thread_id` in the
-request body for cross-request continuity. Same browser tab → same
-`thread_id` → same context. Omit it, and each request starts fresh.
+request body for cross-request continuity. Requests from the same browser
+tab should carry the same `thread_id` so they share context. Omit it, and
+each request starts fresh.
 
 ```http
 POST /invoke
@@ -233,8 +287,8 @@ agent = Agent(
 )
 ```
 
-Datadog accepts OTLP. So do Honeycomb, Tempo, Grafana Cloud, and
-every other backend that speaks the spec. See
+OCI Application Performance Monitoring accepts OTLP, as do Datadog,
+Honeycomb, Grafana Tempo, and other OTLP-compatible backends. See
 [Observability](../concepts/observability.md).
 
 ## See also

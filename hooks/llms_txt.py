@@ -26,6 +26,7 @@ is dropped.
 
 from __future__ import annotations
 
+import html
 import re
 from pathlib import Path
 from typing import Any
@@ -45,6 +46,8 @@ _SVG_TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.DOTALL)
 _MKDOCSTRINGS = re.compile(r"^:::\s+(\S+).*(?:\n[ \t]+\S.*)*", re.MULTILINE)
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _TAB_LABEL = re.compile(r'^=== "[^"\n]+"\s*$')
+#: Inline HTML code used in table cells for a pipe (``<code>a &#124; b</code>``).
+_HTML_CODE = re.compile(r"<code>(.*?)</code>", re.DOTALL)
 
 #: Collected in on_page_markdown, written in on_post_build.
 _pages: dict[str, dict[str, Any]] = {}
@@ -120,6 +123,7 @@ def _plain_markdown(markdown: str, roots: list[Path]) -> str:
     text = _FILTER.sub("\n\n", text)
     text = _HTML_COMMENT.sub("", text)
     text = _first_tab_only(text)
+    text = _HTML_CODE.sub(lambda m: "`" + html.unescape(m.group(1)) + "`", text)
     return _expand_snippets(text, roots).strip() + "\n"
 
 

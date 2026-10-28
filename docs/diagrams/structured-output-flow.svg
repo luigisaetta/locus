@@ -37,7 +37,7 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 824 480" role="img" aria-labelledby="title desc">
   <title id="title">Structured output, from output_schema to result.parsed</title>
-  <desc id="desc">You set output_schema to a Pydantic model. Locus appends a schema instruction to the system prompt. If the model declares native structured output and the call offers no tools, the request also carries response_format, strict when configured; otherwise only the prompt carries the schema. The agent loop runs until the model answers without tool calls, and that final assistant message is parsed into the schema. When it validates, the instance is result.parsed, also reachable through parsed_as. When it fails, schema repair re-prompts the model with the validation errors and parses the new reply, at most output_schema_retries times; if every retry fails, result.parsed is None and result.parse_error holds the last error.</desc>
+  <desc id="desc">You set output_schema to a Pydantic model. Locus appends a schema instruction to the system prompt. If the model declares native structured output and the call offers no tools, the request also carries response_format, strict when configured; otherwise only the prompt carries the schema. The agent loop runs until the model answers without tool calls, and that final assistant message is parsed into the schema. When it validates, the instance is result.parsed, also reachable through parsed_as. When it fails, schema repair re-prompts the model with the validation errors and parses the new reply, at most output_schema_retries times; if every retry fails, result.parsed is None and result.parse_error holds the last error. The repair exchange is metered but never written to the returned state.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -138,5 +138,5 @@
 
   <text class="note" x="412" y="426">The schema instruction rides the system prompt on both paths. response_format also needs a call with no tools:</text>
   <text class="note" x="412" y="446">constrained decoding suppresses tool calls, so a tool-using agent sees it on the repair call only.</text>
-  <text class="note" x="412" y="466">Schema repair runs at most output_schema_retries times and never enters the returned state.</text>
+  <text class="note" x="412" y="466">Schema repair runs at most output_schema_retries times; its messages are metered but never written to the returned state.</text>
 </svg>

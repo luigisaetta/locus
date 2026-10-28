@@ -86,7 +86,7 @@
   <g class="node abstain">
     <rect x="744" y="300" width="186" height="58" rx="12"/>
     <text x="837" y="319">Abstention</text>
-    <text class="sub" x="837" y="340">abstain · withheld · why</text>
+    <text class="sub" x="837" y="340">abstain · says why</text>
   </g>
 
   <text class="note" x="480" y="394">An Evidence is built only on proceed; below the threshold the finding is withheld, and the Abstention says why.</text>

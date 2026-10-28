@@ -3,7 +3,7 @@
 Build a tool once — issue a refund, roll out a deploy, enrich an
 IOC (indicator of compromise — an IP, domain, or file hash) — and let
 any agent call it. [MCP](https://modelcontextprotocol.io)
-is the wire for that: wrap a function like `lookup_order` or `issue_refund`
+is the protocol for that: wrap a function like `lookup_order` or `issue_refund`
 in an MCP server, and any MCP client (Claude Desktop, Cline, a Locus
 agent, your own tooling) invokes it without bespoke glue. The same SDK
 also *consumes* existing MCP servers — a billing service, a
@@ -12,10 +12,11 @@ tools it didn't ship.
 
 **The SDK speaks MCP both ways**. `MCPClient` turns a remote
 server's tools into SDK tools, and `LocusMCPServer` publishes every
-tool on an agent (plus `run_agent` / `run_agent_stream`) over stdio,
-HTTP, or SSE. Round-trip means a Locus-built
-agent can be either side: pull data from a billing server *and*
-serve its own refund tools back to the operator's desktop.
+tool on an agent (plus `run_agent` / `run_agent_stream`) over stdio
+or HTTP (streamable HTTP, plus the older SSE transport). Round-trip
+means a Locus-built agent can be either side: pull data from a
+billing server *and* serve its own refund tools back to the
+operator's desktop.
 
 ## When to use MCP
 
@@ -88,7 +89,7 @@ returns a string to the model. The instinct is to wrap each MCP tool
 with a per-tool `@tool` that calls `_case_log().append(...)` before
 returning.
 
-Don't. Use a single `HookProvider` instead — the `ActionQueueHook`
+Prefer a single `HookProvider` instead — the `ActionQueueHook`
 from [Hooks](hooks.md#on_after_tool_call-what-the-event-carries) mirrors
 every tool call into a host-side list, so a post-hoc review can replay
 exactly what the agent did:
@@ -97,7 +98,7 @@ exactly what the agent did:
 call_log: list[dict] = []
 agent = Agent(
     model="{{ locus_example_model }}",
-    tools=mcp_client.to_locus_tools(await mcp_client.list_tools()),  # every MCP-sourced tool, untouched
+    tools=ti.to_locus_tools(await ti.list_tools()),  # every MCP-sourced tool, untouched
     hooks=[ActionQueueHook(call_log)],
 )
 ```
@@ -136,11 +137,16 @@ server.run(transport="http")          # for HTTP MCP clients
 `run(transport="stdio")` is what Claude Desktop, Cline, and most MCP
 clients expect. `run(transport="http")` runs an HTTP MCP server
 (transport + JSON-RPC) that any HTTP MCP client can reach. The supported
-transports are `"stdio"`, `"http"`, `"sse"`, and `"streamable-http"`.
+transports are `"stdio"`, `"http"`, `"sse"`, and `"streamable-http"`;
+the last three are the HTTP family — `"http"` and `"streamable-http"`
+select the same streamable HTTP transport, and `"sse"` selects the older
+HTTP+SSE transport (see [Transports](#transports)).
 
 ### 3. Point a client at it
 
-For Claude Desktop, edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+For Claude Desktop, add the server to `claude_desktop_config.json`
+(macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`;
+Windows: `%APPDATA%\Claude\claude_desktop_config.json`):
 
 ```json
 {
@@ -160,17 +166,22 @@ appear in the model's tool list.
 
 ### Schema preservation
 
-`@tool`'s docstring + type hints become the MCP tool's name,
-description, and JSON schema — losslessly. The MCP client sees the
-same parameter types, defaults, and descriptions an SDK agent
-would.
+`@tool`'s name carries across unchanged (hyphens included); its
+docstring becomes the MCP description, with the `Args:` block becoming
+the per-parameter descriptions. The JSON schema is not copied byte for
+byte: FastMCP rebuilds it from a synthetic signature that types every
+parameter as a string and gives optional parameters a `null` default,
+so an `int` or `bool` parameter is advertised as a string. The tool
+body still receives the declared Python types — `Tool.execute` coerces
+arguments (`"10"` → `10`, `"true"` → `True`). `locus_tool_to_mcp(tool)`
+returns the SDK schema unchanged when you need it as-is.
 
-### Both transports
+### Transports
 
 | Transport | Use case |
 |---|---|
-| **stdio** — process pipes | Desktop clients (Claude Desktop, Cline). The MCP server is spawned as a subprocess. |
-| **HTTP** — JSON-RPC over POST | Networked clients. Good for a shared tool server the whole team reaches. |
+| **stdio** — process pipes (`transport="stdio"`, the default) | Desktop clients (Claude Desktop, Cline). The MCP server is spawned as a subprocess. |
+| **HTTP** — JSON-RPC over POST (`transport="http"`; `"streamable-http"` is the same streamable HTTP transport, `"sse"` the older HTTP+SSE one) | Networked clients. Good for a shared tool server the whole team reaches. |
 
 ### Idempotency is per-run, not cross-client
 
@@ -225,7 +236,7 @@ audit trail.
 |---|---|
 | `MCP server failed to start` | The MCP server subprocess crashed before establishing the session. Run the command manually to see the error. |
 | `Tool 'X' not found in MCP discovery` | The server exposes a different name than you expected. Print `[t["name"] for t in await ti.list_tools()]` to see the actual list. |
-| `Schema validation failed on call` | MCP tool returned an arg type that doesn't match its declared schema. Common with hand-written MCP servers; the standard ones are fine. |
+| `Schema validation failed on call` | MCP tool returned an arg type that doesn't match its declared schema. Common with hand-written MCP servers. |
 | Claude Desktop doesn't show your SDK tools | `claude_desktop_config.json` not picked up — check the file lives at the right path and Claude has been restarted. |
 | Hangs on `await ti.connect()` | The MCP subprocess is waiting for input on stdin (some servers expect a handshake) or never finished its init. Run the `server_command` manually to see what it prints, and wrap `connect()` in `asyncio.wait_for(..., timeout=...)`. |
 

@@ -2,7 +2,7 @@
 title: Interrupts
 ---
 
-# Interrupts & human-in-the-loop
+# Interrupts and human-in-the-loop
 
 Sometimes the agent shouldn't decide alone. A human approves the
 $4,000 refund. A release manager signs off before the deploy goes
@@ -21,9 +21,9 @@ and with `on_refusal="interrupt"` and an approval store the run itself
 pauses until a named person decides ([below](#a-hold-that-pauses-the-run)).
 
 Both pauses share one shape, drawn below for an `async def` graph node that
-calls `interrupt()`: the run unwinds and, with a checkpointer, is
-checkpointed, a person decides, and the caller resumes with the answer so the
-node runs again and carries on.
+calls `interrupt()`: the run unwinds and, with a checkpointer and a
+`thread_id`, is checkpointed, a person decides, and the caller resumes with
+the answer so the node runs again and carries on.
 
 {{ locus_diagram interrupt-resume }}
 
@@ -76,7 +76,7 @@ which the `StateGraph` catches and resumes with `Command(resume=...)`; in an
 Agent run the pause is the interrupt marker `ask_user` returns, and a gated
 tool held for approval returns the same marker ([below](#a-hold-that-pauses-the-run)).
 
-## Three ways the human responds
+## Two ways the human responds
 
 ### Synchronous — read from stdin
 
@@ -105,7 +105,7 @@ async for event in agent.resume("approved"):
 The loop threads the response into the next Think and continues
 streaming events.
 
-### Steering — a second model votes
+## Steering — a second model votes
 
 Not strictly human-in-the-loop, but lives in the same family. The
 `SteeringHook` runs an LLM-as-judge on every tool call before it
@@ -207,30 +207,27 @@ termination algebra to fire:
 1. **Hook raises to short-circuit the loop.** Any hook callback can
    raise to abort the run. Useful for budget guards.
 
-   ```python
-   class BudgetGuard(HookProvider):
-       async def on_iteration_start(self, iteration: int, state: AgentState) -> None:
-           if state.total_tokens_used > 100_000:
-               raise RuntimeError(f"token budget exceeded at {state.total_tokens_used} tokens")
-   ```
+    ```python
+    class BudgetGuard(HookProvider):
+        async def on_iteration_start(self, iteration: int, state: AgentState) -> None:
+            if state.total_tokens_used > 100_000:
+                raise RuntimeError(f"token budget exceeded at {state.total_tokens_used} tokens")
+    ```
 
 2. **Caller cancels the task.** Standard `asyncio` cancellation:
 
-   ```python
-   run = asyncio.create_task(agent.run(prompt))
-   # ... later
-   run.cancel()
-   ```
+    ```python
+    run = asyncio.create_task(agent.run(prompt))
+    # ... later
+    run.cancel()
+    ```
 
 3. **`agent.cancel()`.** Sets a flag the runner polls between nodes;
    the loop exits at the next safe point with
    `TerminateEvent(reason="cancelled")` (and `result.stop_reason ==
-   "cancelled"`). State still flushes to the checkpointer first, so the
-   conversation can resume cleanly later.
-
-In the `agent.cancel()` case the loop emits a final
-`TerminateEvent(reason="cancelled")` so your downstream observability
-gets a clean signal.
+   "cancelled"`), so downstream observability gets a clean signal. State
+   still flushes to the checkpointer first, so the conversation can resume
+   cleanly later.
 
 ## What you don't lose on cancel
 

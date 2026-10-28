@@ -1,3 +1,7 @@
+---
+table_filter: true
+---
+
 # Events
 
 Every observable step of an agent run is a typed Pydantic event. Not
@@ -16,20 +20,25 @@ from locus.core.events import (
 async for event in agent.run("Plan a trip"):
     match event:
         case ThinkEvent(reasoning=r) if r:
-            print("💭", r)
+            print("think:", r)
         case ToolStartEvent(tool_name=n, arguments=a):
-            print(f"🔧 {n}({a})")
+            print(f"tool: {n}({a})")
         case ToolCompleteEvent(tool_name=n, result=r, error=e):
-            print(f"   ↳ {e or r}")
+            print(f"   -> {e or r}")
         case TerminateEvent(reason=r, final_message=m):
             print(f"[{r}] {m}")
 ```
 
-The classes in that `match` are one of two event families. The
-drawing below sets them beside the dotted `event_type` names the
-event bus carries (`"think"` on the typed event, `agent.think` on the
-bus) and shows the bridge that turns the first family into the
-second.
+The classes in that `match` belong to the first of two event
+families. The drawing below sets them beside the dotted `event_type`
+names the event bus carries (`"think"` on the typed event,
+`agent.think` on the bus) and shows the bridge that turns the first
+family into the second. Its two typed lanes are scoped to what
+`agent.run()` yields; the multi-agent and causal classes further down
+this page are declared in the same module, but `agent.run()` never
+yields them — the specialist lifecycle reaches the bus as
+`multiagent.*` names, and the causal pair is emitted only by your own
+wiring.
 
 {{ locus_diagram event-taxonomy }}
 
@@ -184,6 +193,22 @@ The run finished.
 
 Always emitted exactly once per run.
 
+### Other events on the stream
+
+Six more classes can arrive from `agent.run()`. `CompactionEvent` is
+bridged onto the bus as `agent.context.compacted`; the other five have
+no bridge branch and stay on the stream. Each is defined in
+[`locus.core.events`](https://github.com/oracle/locus/blob/main/src/locus/core/events.py).
+
+| Event | Fired when |
+|---|---|
+| `ToolProgressEvent` | A running tool reported progress through `report_progress()`. Arrives between the tool's `ToolStartEvent` and `ToolCompleteEvent`, only for tools declared with `emits_progress=True` (every MCP tool is). Carries `progress`, `total`, `message` and the pairing `tool_call_id`. |
+| `SubagentEvent` | A delegating tool (`task_tool`, or any tool that calls `run_subagent()`) ran a child loop inside one tool call. The child's own event arrives wrapped in `event`, between the delegating call's start and complete events, so a child's `TerminateEvent` is never read as the parent finishing. |
+| `FinalAnswerVerificationEvent` | `AgentConfig.final_answer_verifier` judged a final-answer draft. `passed` is the verdict; on a rejection `feedback` is what the verifier returned and `replanning` says whether the model is called again with it. |
+| `ModelRetryEvent` | A model call failed transiently and the loop is about to retry it: `attempt`, `delay_seconds` and `reason` (`rate_limit`, `overloaded`, `server_error` or `timeout`). Live between chunks with `stream_tokens=True`; otherwise after the call finally returns. See `ModelRetryConfig`. |
+| `CompactionEvent` | The run's context was compacted to stay inside the model's window: `stage` (`prune`, `summarize` or `truncate`), `tokens_before`, `tokens_after` and `exhausted`. Everything before it in the stream is no longer verbatim in the model's context. See [Conversation management](conversation-management.md#compaction-keep-long-threads-in-budget). |
+| `CustomEvent` | An application-defined event for the UI only: a hook sends one with `event.emit(CustomEvent(name=..., data=...))` on the hook event it was handed, and the runtime yields its own (`tool_loop_warning`, `budget_nudge`). Never added to `state.messages`, never shown to the model. |
+
 ## Multi-agent events
 
 These appear when an `Orchestrator`, `Swarm`, or `StateGraph` is
@@ -207,7 +232,9 @@ from locus.observability import run_context, get_event_bus
 phase = {}  # specialist id → wall-clock ms
 
 async with run_context() as rid:
-    result = await orchestrator.execute("Order dispute on ord-4821: verify the order, reprice, refund if owed.")
+    result = await orchestrator.execute(
+        "Order dispute on ord-4821: verify the order, reprice, refund if owed."
+    )
     await get_event_bus().close_stream(rid)  # replay the recorded history, then stop
 
     async for ev in get_event_bus().subscribe(rid):
@@ -253,7 +280,7 @@ event object: `on_before_invocation(prompt, state)` and
 `BeforeInvocationEvent` / `AfterInvocationEvent` classes in
 `locus.core.events` are never emitted. See [Hooks](hooks.md).
 
-## Common gotchas
+## Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|

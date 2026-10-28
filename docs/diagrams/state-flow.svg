@@ -22,7 +22,7 @@
                         (:1858-1864): Reflector.adjust_state_confidence -> state.adjust_confidence ->
                         with_confidence (:3846, reasoning/reflexion.py:451-470, state.py:226-251);
                         guidance, when there is any, via with_message (:1885). Otherwise the state
-                        passes straight on (the unlabelled bypass).
+                        passes straight on (the bypass labelled otherwise).
     record              ReasoningStep -> with_reasoning_step (:1888-1896, state.py:51-60, :217-224)
     Checkpoint          _checkpoint_iteration: checkpointer.save(_durable(state), thread_id, id) when the
                         iteration is due one (:1900, :2517-2549; interval :2501-2515); _durable strips
@@ -96,6 +96,8 @@
 
   <!-- execute -> checkpoint, otherwise: the state passes Reflect by -->
   <path class="edge" d="M406,338 C406,376 336,360 336,398 V470 C336,488 400,488 468,488"/>
+  <rect class="label-bg" x="369" y="478" width="66" height="20" rx="4"/>
+  <text class="label" x="402" y="488">otherwise</text>
 
   <!-- reflect -> checkpoint -->
   <path class="edge" marker-end="url(#ah)" d="M468,452 V524"/>

@@ -6,12 +6,12 @@ it back for revision. The loop caps at two revisions to bound runtime.
 
 The point is the *last* step, not the loop: a report that reads well is
 not the same as a report that is grounded. Before anything ships, the
-reviewer runs the drafted finding through `ground_finding` — the GSAR
-grounding gate from `locus.control`. A finding is emitted only when its
-evidence partition clears the proceed threshold; otherwise the call
-returns an `Abstention` and nothing reaches the privacy queue. An
-unproven PII-exposure claim is a false positive *by construction* and
-never ships.
+reviewer node runs the finding's evidence partition through
+`ground_finding` — the GSAR grounding gate from `locus.control`. A
+finding is emitted only when that partition clears the proceed
+threshold; otherwise the call returns an `Abstention` and nothing
+reaches the privacy queue. An unproven PII-exposure claim is a false
+positive *by construction* and never ships.
 
 This notebook covers:
 
@@ -28,6 +28,8 @@ This notebook covers:
   for live UI updates; the terminal event carries the final state, so
   the graph runs once.
 
+The graph, as `build_review_loop_graph` wires it:
+
 {{ locus_diagram supervisor-critic-loop }}
 
 The seeded scenario: DLP scan `DLP-4471` flags an unmasked `email`
@@ -38,13 +40,14 @@ unauthorized third party — has no backing evidence, so the grounding
 gate keeps it out of the shipped finding. The drafted finding is tagged
 with standard risk-taxonomy ids (the `OwaspLLM` and `AtlasTechnique`
 enums in the code) so the artifact files straight into a privacy
-register or DPIA.
+register or data protection impact assessment (DPIA).
 
 ## Prerequisites
 
-- Basic graph.
-- Agent handoff, for an alternative shape.
-- GSAR grounded findings, for the grounding primitive in depth.
+- [Basic graph](notebook_12_basic_graph.md).
+- [Agent handoff](notebook_25_agent_handoff.md), for an alternative shape.
+- [GSAR typed grounding](notebook_55_gsar_typed_grounding.md), for the
+  grounding primitive in depth.
 
 ## Run
 
@@ -55,7 +58,9 @@ python examples/notebook_21_supervisor_critic_loop.py
 Model choice comes from `examples/config.py`: OCI Generative AI when
 `~/.oci/config` has a usable profile, otherwise the bundled mock model, so the
 example also runs offline with no credentials. Set `LOCUS_MODEL_PROVIDER`
-(`oci`, `openai`, `anthropic` or `mock`) to force one. The grounding gate is deterministic and exercises the same admit/abstain path on either.
+(`oci`, `openai`, `anthropic` or `mock`) to force one. The grounding gate is
+deterministic and exercises the same admit/abstain path with a live model or
+the mock.
 
 ## Source
 
