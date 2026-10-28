@@ -16,7 +16,8 @@ the gateway in ``docker-compose.yml``::
     python provider.py delete oci-genai
 
 ``create`` reads the secret from standard input so it never appears in a
-shell history or a process list. Profile files are the YAML the OpenShell
+shell history or a process list, and points the provider at the workspace's
+copy of the profile when ``import`` put it there. Profile files are the YAML the OpenShell
 repository ships under ``providers/``; ``oci-genai.yaml`` is its OCI
 Generative AI profile. The SDK has no public provider-management client yet,
 so this reaches for its gRPC stub and request types.
@@ -58,6 +59,17 @@ def profile_message(doc: dict[str, Any]) -> pb.ProviderProfile:
     return json_format.ParseDict(doc, pb.ProviderProfile())
 
 
+def _workspace_profile(stub: Any, scope: dm.WorkspaceSelector, profile_id: str) -> bool:
+    """Whether ``profile_id`` is a profile imported into the workspace (not a built-in)."""
+    try:
+        found = stub.GetProviderProfile(
+            pb.GetProviderProfileRequest(workspace_scope=scope, id=profile_id)
+        )
+    except openshell.errors.GatewayError:
+        return False
+    return found.profile.scope == "workspace"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("command", choices=["lint", "import", "create", "list", "delete"])
@@ -93,6 +105,10 @@ def main(argv: list[str] | None = None) -> int:
         provider = dm.Provider(
             metadata=dm.ObjectMeta(name=name), type=kind, credentials={variable: secret}
         )
+        # An imported profile is scoped to its workspace; the gateway resolves a
+        # provider's type against the built-in profiles unless told the workspace.
+        if _workspace_profile(stub, scope, kind):
+            provider.profile_workspace = opts.workspace
         response = stub.CreateProvider(
             pb.CreateProviderRequest(workspace_scope=scope, provider=provider)
         )
