@@ -8,6 +8,8 @@ policy.
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-10-28
+
 ### Removed
 
 - **Amazon Bedrock and Azure OpenAI providers.** The `bedrock:` and `azure:`
