@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Memory and RAG card: the four memory layers of an Agent, top to bottom.
+  Working memory (ConversationManager) is pruned in-process and never saved, so
+  it has no edge. The thread (the primary: a BaseCheckpointer saves and loads
+  state by thread_id), long-term memory (LLMMemoryManager over a BaseStore) and
+  knowledge (RAGRetriever over a VectorStore) each persist to the one database
+  on the right; Oracle Database 26ai holds all three (OracleStore,
+  OracleVectorStore, oracle_checkpointer).
+  locus/memory/conversation.py, checkpointer.py, manager.py, store.py,
+  store_backends/oracle.py, backends/adapters.py; locus/rag/retriever.py, stores/
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>Four memory layers; the lower three persist to one database</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="6" y="3" width="22" height="10" rx="3"/></g>
+  <g class="node primary"><rect x="6" y="16" width="22" height="10" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,21 L64,21"/>
+  <g class="node"><rect x="6" y="29" width="22" height="10" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,34 L64,34"/>
+  <g class="node"><rect x="6" y="42" width="22" height="10" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,47 L64,47"/>
+  <g class="store"><path d="M66,18 C66,14 90,14 90,18 L90,50 C90,54 66,54 66,50 Z M66,18 C66,22 90,22 90,18"/></g>
+</svg>

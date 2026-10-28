@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  26ai long-term memory card: two threads (the rows) each save what they
+  learned into one Oracle Database 26ai store at session end; the second
+  thread starts by recalling from it, so memory crosses threads.
+  locus/memory/manager.py: BaseMemoryManager.on_session_start (recall),
+  .on_session_end (extract and save), run by LLMMemoryManager over
+  locus/memory/store_backends/oracle.py: OracleStore (BaseStore);
+  locus/memory/managers/oracle_agent_memory.py: OracleAgentMemoryManager
+  implements the same two hooks over Oracle's oracleagentmemory client.
+  Cylinder caps are cubic curves, not arcs: the glyph lint reads every number
+  in d literally and an arc's 0 flags would read as an out-of-bounds point.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>Two threads saving into one store, with a return edge into the second thread</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="6" y="4" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,11 L35,11"/>
+  <g class="node"><rect x="37" y="4" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M59,11 L63,11 L63,20 L70,20"/>
+  <g class="node"><rect x="6" y="38" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,45 L35,45"/>
+  <g class="node"><rect x="37" y="38" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M59,45 L63,45 L63,36 L70,36"/>
+  <g class="store primary"><path d="M72,17 C72,13 92,13 92,17 L92,39 C92,43 72,43 72,39 Z M72,17 C72,21 92,21 92,17"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M72,28 L17,28 L17,36"/>
+</svg>

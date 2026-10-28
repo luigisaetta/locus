@@ -419,6 +419,9 @@ html {
 .md-typeset .locus-hero h1 .accent {
   color: var(--tl-red);
 }
+/* Keeps a token such as a licence id on one line where a phone-width column
+   would otherwise break it at the hyphen. */
+.md-typeset .locus-nowrap { white-space: nowrap; }
 .md-typeset .locus-hero p {
   font-size: 1.05rem;
   line-height: 1.55;
@@ -2003,6 +2006,39 @@ form.md-header__option {
    The dark mute token clears the floor on its band and is left alone. */
 [data-md-color-scheme="default"] .tl-dia .lane-title { fill: var(--tl-text-soft); }
 .tl-dia .note { font-size: 12.5px; fill: var(--tl-text-mute); text-anchor: middle; }
+
+/* Card illustrations. A feature card opens with a small drawing in the
+   diagram vocabulary (docs/diagrams/cards/, inlined by {{ locus_glyph … }}),
+   not a generic icon. The SVGs are drawn at their display size (96×56) and
+   carry no text; the classes below mirror the .tl-dia rules so a glyph themes
+   with the page. The card title carries the meaning; the span is aria-hidden. */
+.md-typeset .tl-glyph {
+  display: block;
+  width: 96px;
+  margin: 0 0 0.75rem;
+  line-height: 0;
+}
+.md-typeset .tl-glyph svg { display: block; width: 100%; height: auto; overflow: visible; }
+.tl-glyph .node rect,
+.tl-glyph .store path,
+.tl-glyph .decision polygon { fill: var(--tl-bg); stroke: var(--tl-rule-strong); stroke-width: 1.5; }
+.tl-glyph .node.primary rect,
+.tl-glyph .store.primary path { fill: var(--tl-accent-subtle); stroke: var(--tl-accent); stroke-width: 1.5; }
+.tl-glyph .node.optional rect { stroke-dasharray: 4 3; }
+.tl-glyph .node.end rect { fill: var(--tl-text); stroke: var(--tl-text); }
+.tl-glyph .node.allow rect   { fill: var(--tl-allow-bg);   stroke: var(--tl-allow-border); }
+.tl-glyph .node.hold rect    { fill: var(--tl-hold-bg);    stroke: var(--tl-hold-border); }
+.tl-glyph .node.deny rect    { fill: var(--tl-deny-bg);    stroke: var(--tl-deny-border); }
+.tl-glyph .node.abstain rect { fill: var(--tl-abstain-bg); stroke: var(--tl-abstain-border); }
+.tl-glyph .edge { fill: none; stroke: var(--tl-text-mute); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.tl-glyph .edge.dashed { stroke-dasharray: 3 3; }
+.tl-glyph .edge.allow { stroke: var(--tl-allow-fg); }
+.tl-glyph .edge.hold  { stroke: var(--tl-hold-fg); }
+.tl-glyph .edge.deny  { stroke: var(--tl-deny-fg); }
+.tl-glyph .arrowhead { fill: var(--tl-text-mute); fill: context-stroke; }
+.tl-glyph .lane rect { fill: var(--tl-lane-bg); stroke: var(--tl-rule-subtle); }
+.tl-glyph .divider { fill: none; stroke: var(--tl-rule-strong); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.tl-glyph .dot { fill: var(--tl-text-mute); }
 
 /* On a phone the column is ~330px, which would shrink a diagram's labels to
    about a third of their size. Below tablet width a diagram keeps a readable

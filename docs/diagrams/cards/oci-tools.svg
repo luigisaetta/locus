@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OCI tools card: an Agent carrying the two built-in tools reaches the OCI
+  control plane of one tenancy (the band). use_oci resolves service + client +
+  operation into a single oci.<service>.<Client>.<operation>() call (the
+  primary target); describe_oci lists the other services the same tool reaches.
+  locus/tools/oci.py: use_oci, describe_oci (re-exported from locus.tools.builtins)
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>One agent calling three services inside a tenancy; the middle call is the one in flight</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="lane"><rect x="46" y="4" width="44" height="48" rx="4"/></g>
+  <g class="node"><rect x="6" y="21" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,24 L38,24 L38,14 L55,14"/>
+  <path class="edge" marker-end="url(#ah)" d="M28,28 L55,28"/>
+  <path class="edge" marker-end="url(#ah)" d="M28,32 L38,32 L38,42 L55,42"/>
+  <g class="node"><rect x="57" y="9" width="22" height="10" rx="3"/></g>
+  <g class="node primary"><rect x="57" y="23" width="22" height="10" rx="3"/></g>
+  <g class="node"><rect x="57" y="37" width="22" height="10" rx="3"/></g>
+</svg>

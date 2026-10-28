@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Graph card: StateGraph runs START to END over fixed edges (solid, add_edge);
+  one conditional edge (dashed, add_conditional_edges) sends the state round a
+  cycle of nodes until the router returns END.
+  locus/multiagent/graph.py: StateGraph.add_edge, StateGraph.add_conditional_edges, StateGraph.compile
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>Start, two nodes in the centre, END, and a node below that closes a cycle</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="6" y="5" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,12 L35,12"/>
+  <g class="node primary"><rect x="37" y="5" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M59,12 L66,12"/>
+  <g class="node end"><rect x="68" y="5" width="22" height="14" rx="3"/></g>
+  <path class="edge dashed" marker-end="url(#ah)" d="M53,19 L53,35"/>
+  <g class="node"><rect x="37" y="37" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M37,44 L30,44"/>
+  <g class="node"><rect x="6" y="37" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M17,37 L17,28 L43,28 L43,21"/>
+</svg>

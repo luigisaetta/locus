@@ -24,7 +24,7 @@ One `Agent` class, eight ways to combine agents, Oracle Cloud underneath, and th
 pip install "locus-sdk[oci,oracledb]"
 ```
 
-Built inside Oracle · Used in production · Open source (UPL-1.0)
+Built inside Oracle · Open source (<span class="locus-nowrap">UPL-1.0</span>)
 
 </div>
 
@@ -67,78 +67,202 @@ print(result.final_output)
 
 ## Your first agent
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 
-agent = Agent(model="oci:openai.gpt-5.5")
+agent = Agent(model="{{ locus_model }}")
 print(agent.run_sync("What is the capital of France?").text)
 # → Paris
 ```
 
-Swap `oci:openai.gpt-5.5` for `openai:gpt-4o` or `anthropic:claude-sonnet-5-5`;
-the call stays the same. With an OCI profile in `~/.oci/config`, every notebook
-runs against OCI Generative AI with no further setup.
+Pick a provider above; the call does not change. With an OCI profile in
+`~/.oci/config`, every notebook runs against OCI Generative AI with no further
+setup.
 
 [The Agent →](concepts/agent.md) ·
 [Notebook 02 — Basic agent →](notebooks/notebook_02_basic_agent.md) ·
 [Notebook 03 — Agent with tools →](notebooks/notebook_03_agent_with_tools.md)
 
-## Eight shapes, one `Agent`
+## What are you building?
+
+Each tab shows one workload in a few lines and links to the notebook that
+runs the full example.
+
+=== "Support bot"
+
+    A support agent credits customer accounts to resolve tickets; `admit()`
+    runs before each write, so a credit over the policy's limit is held for a
+    human and every decision, allowed or held, lands on the audit trail,
+    whatever the prompt asked for.
+
+    ```python
+    from locus.agent import Agent
+    from locus.tools import tool
+    from locus.control import Action, AuditTrail, ControlPolicy, gate_tool
+
+    @tool
+    async def apply_credit(account: str, usd: float) -> str:
+        """Credit a customer account."""
+        return await billing.credit(account, usd)
+
+    policy = ControlPolicy(require_human_over_usd=50, require_verification_score=0)
+    gated = gate_tool(  # no finding to verify here; the amount decides
+        apply_credit, policy=policy, trail=AuditTrail(),
+        action=lambda name, a: Action(name, a["account"], cost_usd=a["usd"]))
+    agent = Agent(model="oci:openai.gpt-5.5", tools=[gated])
+    print(agent.run_sync("SUP-7782: apply a $500 retention credit.").text)
+    ```
+
+    [Notebook 73 — Support account gate →](notebooks/notebook_73_support_account_gate.md)
+
+=== "Incident response"
+
+    An on-call runbook as a `StateGraph`: triage grades the page, three
+    investigators fan out in parallel, a synthesizer names the likely cause,
+    and on a critical grade the run halts at `interrupt()`, so the mitigation
+    agent is not reached until a human resumes it with `Command(resume=...)`.
+
+    ```python
+    from locus.agent import Agent
+    from locus.core import Command, interrupt
+    from locus.multiagent.graph import StateGraph
+
+    agent = Agent(model="oci:openai.gpt-5.5", system_prompt="Propose one mitigation.")
+
+    async def page_human(state):  # critical only; a human answers yes or no
+        return {"approved": interrupt(state["hypothesis"]) == "yes"}
+
+    async def mitigate(state):
+        return {"mitigation": (await agent.arun(state["hypothesis"])).message}
+
+    def severity_gate(state):  # info and warn mitigate on their own
+        return "page_human" if state["severity"] == "critical" else "auto_mitigate"
+
+    g = StateGraph(name="incident-runbook")  # earlier nodes as in the notebook
+    g.add_node("page_human", page_human).add_node("auto_mitigate", mitigate)
+    g.add_edge("page_human", "auto_mitigate")
+    g.add_conditional_edges("synthesize", severity_gate)
+    run = await g.execute({"symptom": "checkout p99 latency 8x, 12% 503s"})
+    if run.interrupt:  # paused at page_human until a human answers
+        run = await g.execute(Command(resume="yes", update=run.final_state))
+    ```
+
+    [Notebook 77 — Incident response runbook →](notebooks/notebook_77_incident_response.md)
+
+=== "Contract review"
+
+    Reviewers read a vendor data-processing agreement, a gate rule pauses for
+    human counsel while any blocker is open and re-reviews the redline, and
+    the sign-off is a `ContractDecision`: Locus validates it against the
+    schema, feeds validation errors back to the model for repair, and
+    otherwise returns `parsed=None` with the parse error, never an
+    unvalidated record.
+
+    ```python
+    from pydantic import BaseModel, Field
+    from locus.agent import Agent
+
+    class ContractDecision(BaseModel):
+        open_blockers: list[str]
+        decision: str = Field(description="signed | rejected | abandoned")
+
+    def negotiation_gate(state: dict) -> str:  # "negotiate" pauses for counsel
+        return "negotiate" if state["open_blockers"] else "sign_off"
+
+    legal = Agent(model="oci:openai.gpt-5.5", system_prompt="List blockers.")
+    dpo = Agent(model="oci:openai.gpt-5.5", output_schema=ContractDecision)
+    findings = (await legal.arun(f"DPA clauses:\n{clauses}")).message
+    decision = (await dpo.arun(f"Findings:\n{findings}")).parsed
+    ```
+
+    [Notebook 79 — Contract review →](notebooks/notebook_79_contract_review.md)
+
+=== "SOC alert triage"
+
+    A `locus-sdk-security` analyst works each alert with the security
+    information and event management (SIEM), endpoint detection and response
+    (EDR) and threat-intelligence tools and proposes a verdict; `ground_report`
+    returns it as a typed `Evidence`, carrying the references it cited, only
+    when that evidence clears the Grounding-Stratified Adaptive Replanning
+    (GSAR) threshold, and as an `Abstention` otherwise, so an alert with
+    nothing behind it is not filed as a finding.
+
+    ```python
+    from locus_security import (
+        PostureReport, SecurityControls, create_soc_analyst, ground_report,
+        is_finding,
+    )
+
+    controls = SecurityControls(siem=True, edr=True, threat_intel=True)
+    analyst = create_soc_analyst(model="oci:openai.gpt-5.5", controls=controls)
+    result = await analyst.arun("Triage the open alerts from the last hour.")
+    for verdict in ground_report(result.parsed_as(PostureReport), controls):
+        if is_finding(verdict):  # cited evidence cleared the GSAR threshold
+            print(verdict.severity, verdict.title, verdict.evidence_refs)
+        else:  # below the threshold: withheld, nothing is filed
+            print("withheld:", verdict.candidate_title, verdict.reason)
+    ```
+
+    [Notebook 87 — SOC alert triage →](notebooks/notebook_87_soc_alert_triage.md)
+
+## One `Agent`, every shape
 
 Every shape runs the same `Agent`, emits the same events, and checkpoints to
-the same backends. Pick the shape; the agents don't change.
+the same backends. Pick the shape; the agents do not change.
 
 <div class="grid cards locus-feature-cards" markdown>
 
-- :material-arrow-right-bold-box:{ .lg .middle } **[Pipelines](concepts/multi-agent/composition.md)**
+- {{ locus_glyph pipelines }} **[Pipelines](concepts/multi-agent/composition.md)**
 
     ---
     `SequentialPipeline`, `ParallelPipeline`, `LoopAgent`: chain, fan out,
     or revise until a reviewer clears. Three lines each.
 
-- :material-sitemap:{ .lg .middle } **[Orchestrator and specialists](concepts/multi-agent/orchestrator.md)**
+- {{ locus_glyph orchestrator }} **[Orchestrator and specialists](concepts/multi-agent/orchestrator.md)**
 
     ---
     One coordinator delegates to typed specialists with their own tools,
     and merges what comes back.
 
-- :material-account-group:{ .lg .middle } **[Swarm](concepts/multi-agent/swarm.md)**
+- {{ locus_glyph swarm }} **[Swarm](concepts/multi-agent/swarm.md)**
 
     ---
     Peers that hand work to each other on their own judgement, with a
     shared scratchpad and a hard stop.
 
-- :material-swap-horizontal:{ .lg .middle } **[Handoff](concepts/multi-agent/handoff.md)**
+- {{ locus_glyph handoff }} **[Handoff](concepts/multi-agent/handoff.md)**
 
     ---
     Tiered escalation with typed context: L1 to L2 to L3, nothing lost
     in between.
 
-- :material-graph:{ .lg .middle } **[StateGraph and functional API](concepts/multi-agent/graph.md)**
+- {{ locus_glyph graph }} **[StateGraph and functional API](concepts/multi-agent/graph.md)**
 
     ---
     Nodes, edges, reducers, `Send` fan-out, interrupts for a human, and
     checkpointed state.
 
-- :material-forum:{ .lg .middle } **[Debate and critic loops](notebooks/notebook_26_debate_with_judge.md)**
+- {{ locus_glyph debate }} **[Debate and critic loops](notebooks/notebook_26_debate_with_judge.md)**
 
     ---
-    Two debaters and a judge, or a skeptical reviewer that kills unproven
+    Two debaters and a judge, or a skeptical reviewer that rejects unproven
     claims before they ship.
 
-- :material-routes:{ .lg .middle } **[Cognitive router](concepts/multi-agent.md#the-eight-shapes)**
+- {{ locus_glyph router }} **[Cognitive router](concepts/multi-agent.md#the-eight-shapes)**
 
     ---
     Describe the task; the router extracts a typed `GoalFrame`, picks one
     of eight protocols and compiles it onto real agents.
 
-- :material-lan-connect:{ .lg .middle } **[A2A protocol](concepts/multi-agent/a2a.md)**
+- {{ locus_glyph a2a }} **[Agent-to-agent (A2A) protocol](concepts/multi-agent/a2a.md)**
 
     ---
     Cross-process agents as spec-compliant peers: expose yours, call
     theirs, same tool contract.
 
-- :material-telescope:{ .lg .middle } **[DeepAgent and research workflows](concepts/deepagent.md)**
+- {{ locus_glyph deepagent }} **[DeepAgent and research workflows](concepts/deepagent.md)**
 
     ---
     Plan, explore, validate, report, with per-turn grounding and a
@@ -164,37 +288,39 @@ same `Agent`, same events, same admission gate.
 
 <div class="grid cards locus-feature-cards" markdown>
 
-- :material-cloud-check:{ .lg .middle } **[OCI Generative AI](concepts/providers/oci.md)**
+- {{ locus_glyph oci-genai }} **[OCI Generative AI](concepts/providers/oci.md)**
 
     ---
     `model="oci:…"` picks the transport from the model id: V1 for OpenAI,
-    Meta, xAI, Gemini; SDK for Cohere; Responses where the region serves it.
+    Meta, xAI, Google; SDK for Cohere; the Responses transport is opt-in
+    through `OCIResponsesModel`.
 
-- :material-server-network:{ .lg .middle } **[Dedicated AI Clusters](how-to/oci-dac.md)**
+- {{ locus_glyph dac }} **[Dedicated AI Clusters](how-to/oci-dac.md)**
 
     ---
-    `model="oci:ocid1.generativeaiendpoint…"` targets your own DAC
-    endpoint, with the compartment and auth resolved from your profile.
+    `oci:ocid1.generativeaiendpoint…` as the model string targets your own
+    Dedicated AI Cluster endpoint, with the compartment and auth resolved
+    from your profile.
 
-- :material-console:{ .lg .middle } **[OCI tools](notebooks/notebook_36_oci_tools.md)**
+- {{ locus_glyph oci-tools }} **[OCI tools](notebooks/notebook_36_oci_tools.md)**
 
     ---
     `use_oci()` and `describe_oci()` put the OCI control plane behind
     tools, so an agent can list, inspect and act on your tenancy.
 
-- :material-database-search:{ .lg .middle } **[Oracle Database 26ai RAG](notebooks/notebook_38_oracle_26ai_rag.md)**
+- {{ locus_glyph oracle-rag }} **[Oracle Database 26ai RAG](notebooks/notebook_38_oracle_26ai_rag.md)**
 
     ---
     `OracleVectorStore` on native `VECTOR` columns, hybrid search, plus
     in-database chunking and embeddings so text never leaves the database.
 
-- :material-content-save:{ .lg .middle } **[26ai checkpoints and history](notebooks/notebook_42_oracle_26ai_checkpointer.md)**
+- {{ locus_glyph oracle-checkpoints }} **[Oracle Database 26ai checkpoints and history](notebooks/notebook_42_oracle_26ai_checkpointer.md)**
 
     ---
     `oracle_checkpointer` for durable threads, `OracleCheckpointSaver` for
     versioned history and time travel, OCI Object Storage as the alternative.
 
-- :material-brain:{ .lg .middle } **[26ai long-term memory](notebooks/notebook_44_oracle_agent_memory.md)**
+- {{ locus_glyph oracle-memory }} **[Oracle Database 26ai long-term memory](notebooks/notebook_44_oracle_agent_memory.md)**
 
     ---
     `OracleStore` for cross-thread memory and `OracleAgentMemoryManager`
@@ -236,13 +362,14 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 
 <div class="grid cards locus-feature-cards" markdown>
 
-- :material-tools:{ .lg .middle } **[Tools and MCP](concepts/tools.md)**
+- {{ locus_glyph tools-mcp }} **[Tools and MCP](concepts/tools.md)**
 
     ---
     `@tool` on any function, typed arguments coerced from whatever the
-    model sends, idempotent execution, MCP servers in or out.
+    model sends, idempotent execution, Model Context Protocol (MCP) servers
+    in or out.
 
-- :material-database:{ .lg .middle } **[Memory and RAG](concepts/memory.md)**
+- {{ locus_glyph memory-rag }} **[Memory and RAG](concepts/memory.md)**
 
     ---
     Four layers: working memory, the thread (checkpoint backends from local
@@ -250,29 +377,30 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
     long-term memory across threads, and knowledge through RAG (six vector
     stores, rerankers, `retriever.as_tool()`). All four on Oracle Database 26ai.
 
-- :material-shield-lock:{ .lg .middle } **[Grounding, guardrails, admission gate](concepts/control-layer.md)**
+- {{ locus_glyph control }} **[Grounding, guardrails, admission gate](concepts/control-layer.md)**
 
     ---
-    GSAR checks every claim against evidence; guardrails and steering
-    catch the rest; `admit()` holds or denies consequential actions.
+    Grounding-Stratified Adaptive Replanning (GSAR) checks every claim
+    against evidence; guardrails and steering catch the rest; `admit()`
+    holds or denies consequential actions.
 
-- :material-eye:{ .lg .middle } **[Observability and streaming](concepts/observability.md)**
+- {{ locus_glyph observability }} **[Observability and streaming](concepts/observability.md)**
 
     ---
-    One `run_context()` streams typed events from every layer; SSE and
-    token streaming for the UI.
+    One `run_context()` streams typed events from every layer; Server-Sent
+    Events (SSE) and token streaming for the UI.
 
-- :material-server:{ .lg .middle } **[Server and deploy](concepts/server.md)**
+- {{ locus_glyph server }} **[Server and deploy](concepts/server.md)**
 
     ---
     `locus serve` puts an agent behind FastAPI with bearer auth and thread
-    persistence; a runner image ships for OKE.
+    persistence; a runner image ships for OCI Kubernetes Engine (OKE).
 
-- :material-school:{ .lg .middle } **[Skills, playbooks, evaluation](concepts/skills.md)**
+- {{ locus_glyph skills-eval }} **[Skills, playbooks, evaluation](concepts/skills.md)**
 
     ---
     Progressive-disclosure skills, enforced playbooks, and regression
-    suites with `EvalRunner` so behaviour stays put.
+    suites with `EvalRunner` so behaviour does not drift.
 
 </div>
 
@@ -304,7 +432,3 @@ pip install locus-sdk && python -m locus.rogue
 [Capabilities →](capabilities.md) ·
 [API reference →](api/index.md) ·
 [Deploy →](how-to/deploy.md)
-
----
-
-**Built inside Oracle. Used in production. Open to everyone.**

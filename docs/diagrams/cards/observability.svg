@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Observability card: an Agent run inside run_context() yields typed events
+  (the row of points); @_bus_bridge republishes each one as a StreamEvent on
+  the singleton EventBus, the sink that keeps the run's history for every
+  subscriber. The dashed edge is the same run streamed to a UI over SSE from
+  the agent's own event stream, open only while a client is listening.
+  locus/observability/context.py: run_context; event_bus.py: EventBus.publish,
+  EventBus.subscribe, StreamEvent; bus_hook.py: EventBusHook;
+  locus/agent/runtime_loop.py: _bus_bridge; locus/streaming/sse.py: SSEHandler, AsyncSSEHandler
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>An agent streaming a row of events into a sink, with a dashed edge down to a second node for the UI</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node primary"><rect x="6" y="7" width="22" height="14" rx="3"/></g>
+  <circle class="dot" cx="36" cy="14" r="1.6"/>
+  <circle class="dot" cx="44" cy="14" r="1.6"/>
+  <circle class="dot" cx="52" cy="14" r="1.6"/>
+  <circle class="dot" cx="60" cy="14" r="1.6"/>
+  <g class="node end"><rect x="68" y="7" width="22" height="14" rx="3"/></g>
+  <path class="edge dashed" marker-end="url(#ah)" d="M17,21 L17,43 L66,43"/>
+  <g class="node"><rect x="68" y="36" width="22" height="14" rx="3"/></g>
+</svg>

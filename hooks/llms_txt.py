@@ -39,6 +39,9 @@ _SNIPPET = re.compile(
     re.MULTILINE,
 )
 _FIGURE = re.compile(r'<figure class="tl-dia">.*?</figure>', re.DOTALL)
+#: A card illustration ({{ locus_glyph … }}) is aria-hidden decoration beside a card
+#: title that carries the meaning, so the twin drops it rather than describing it.
+_GLYPH = re.compile(r'<span class="tl-glyph"[^>]*>.*?</span>[ \t]*', re.DOTALL)
 _FACTS = re.compile(r'<dl class="locus-facts"[^>]*>(?P<body>.*?)</dl>', re.DOTALL)
 _FACT = re.compile(r"<dt[^>]*>(?P<label>.*?)</dt>\s*<dd[^>]*>(?P<value>.*?)</dd>", re.DOTALL)
 _FILTER = re.compile(r'\n*<div class="notebook-filter">.*?</div>\n*', re.DOTALL)
@@ -119,6 +122,7 @@ def _plain_markdown(markdown: str, roots: list[Path]) -> str:
         )
 
     text = _FIGURE.sub(figure, markdown)
+    text = _GLYPH.sub("", text)
     text = _FACTS.sub(facts, text)
     text = _FILTER.sub("\n\n", text)
     text = _HTML_COMMENT.sub("", text)
