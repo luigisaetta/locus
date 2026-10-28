@@ -9,8 +9,8 @@ It is not published to PyPI. Install it from the repository:
 
 ```bash
 pip install "git+https://github.com/oracle/locus#subdirectory=packages/locus-sdk-security"
-# + boto3 for the AWS posture tools:
-pip install "locus-sdk-security[aws] @ git+https://github.com/oracle/locus#subdirectory=packages/locus-sdk-security"
+# + the OCI SDK for the cloud-posture tools (core describe_oci / use_oci):
+pip install "locus-sdk[oci]"
 ```
 
 It is imported as `locus_security`.
@@ -26,7 +26,7 @@ Agentic Top 10), or an explicit `Abstention` saying why it was withheld.
 | AI red-teaming | `Target`, `red_team`, `assure`, `monitor`, `guardrail_coverage`, the probe library in `locus_security.redteam` |
 | Investigation facade | `SecurityContext` — logs, endpoint, identity, cloud, threat-intel sources and an admission-gated actions port |
 | SOC triage | `create_soc_analyst`, `ground_report`, `security_toolset`, curated IR playbooks |
-| Reference adapters | threat intel, SIEM, EDR, dependency / endpoint scanner, inference fingerprinting, AWS posture (read-only) |
+| Reference adapters | threat intel, SIEM, EDR, dependency / endpoint scanner, inference fingerprinting; OCI cloud posture on the core `describe_oci` / `use_oci` (read-only) |
 | Integration contract | `SecurityAdapter`, `ToolAdapter`, helper toolkit, and the conformance kit in `locus_security.testing` |
 
 The bundled adapters return deterministic, benign offline samples when no

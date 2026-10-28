@@ -33,7 +33,7 @@ agent = Agent(
     tools=security_toolset(),   # query_siem, enrich_indicator, isolate_host, ...
     checkpointer=S3Backend(
         bucket="soc-case-checkpoints",
-        endpoint_url="https://s3.amazonaws.com",
+        endpoint_url="https://<namespace>.compat.objectstorage.<region>.oraclecloud.com",
     ),
 )
 
@@ -136,7 +136,7 @@ agent = Agent(
     # S3Backend implements BaseCheckpointer directly — no adapter needed.
     checkpointer=S3Backend(
         bucket="agent-thread-checkpoints",
-        endpoint_url="https://s3.amazonaws.com",  # or a MinIO / R2 endpoint
+        endpoint_url="https://<namespace>.compat.objectstorage.<region>.oraclecloud.com",  # or a MinIO / R2 endpoint
         prefix="prod/",
     ),
 )

@@ -85,8 +85,10 @@ ctx = SecurityContext(identity=MyIdentity())
 
 Keep an offline path: resolve credentials from the environment and fall back to a
 deterministic sample when none are present, so the same code runs in CI. Cloud
-posture is the one live provider in core: `locus_security.aws`
-(`pip install locus-sdk[aws]`). [Build an integration](../how-to/build-an-integration.md)
+posture is the one live provider in the bundle: `ctx.cloud` drives the core
+`describe_oci` / `use_oci` tools (`pip install locus-sdk[oci]`) as the profile
+you give it, and reports `status: error` rather than raising when the SDK or
+the profile is missing. [Build an integration](../how-to/build-an-integration.md)
 walks through writing one.
 
 ## A full investigation — grounded, verified, gated
@@ -237,7 +239,7 @@ reference adapters** — it does not read the providers you injected into `ctx`,
 live `identity` or `logs` provider is not reachable from these tools. It is
 read-only by default and covers threat intel, SIEM, EDR, scanning and
 fingerprinting; pass `ctx.toolset(allow_containment=True)` for `isolate_host`,
-`aws=True` for the cloud-posture tools, and `extra=[...]` to merge tools you wrote
+`oci=True` for the cloud-posture tools, and `extra=[...]` to merge tools you wrote
 against your own live providers. There is no identity tool in the bundle, and
 admission (`ctx.actions`) is not a tool — to gate a side-effecting tool you hand
 the agent, wrap it with `gate_tool` or call `admit()` in your own code.

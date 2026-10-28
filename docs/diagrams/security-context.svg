@@ -8,7 +8,7 @@
                              or you inject your own per field: SecurityContext(logs=MyLogs())
     reference defaults       logs, endpoint, threat_intel return offline samples unless their env
                              vars are set; identity is always the offline sample; cloud wraps the
-                             read-only AWS tools and returns available=False when boto3 is missing
+                             core read-only OCI tools and returns status=error when the oci SDK is missing
     actions                  _RefActions(policy=ControlPolicy()):
                              execute(action, perform) -> admit() -> approve()
                                allow         -> perform() is awaited (the write fires)
@@ -19,7 +19,7 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 590" role="img" aria-labelledby="title desc">
   <title id="title">SecurityContext</title>
-  <desc id="desc">SecurityContext is one handle with a port per security domain: ctx.logs for SIEM search, ctx.endpoint for EDR host forensics, ctx.identity for the identity provider, ctx.cloud for read-only control-plane evidence, and ctx.threat_intel for IOC enrichment. Each domain port is filled by the bundled reference provider by default, which returns an offline sample, or by a provider you write and inject for that one domain, such as SecurityContext(logs=…). The last port, ctx.actions, is the admission gate on ControlPolicy: when its policy allows an action, the side effect runs, such as identity.disable; when the policy holds or denies it, execute raises AdmissionError and nothing fires. The bundled cloud default is the read-only AWS provider, which reports itself unavailable without boto3.</desc>
+  <desc id="desc">SecurityContext is one handle with a port per security domain: ctx.logs for SIEM search, ctx.endpoint for EDR host forensics, ctx.identity for the identity provider, ctx.cloud for read-only control-plane evidence, and ctx.threat_intel for IOC enrichment. Each domain port is filled by the bundled reference provider by default, which returns an offline sample, or by a provider you write and inject for that one domain, such as SecurityContext(logs=…). The last port, ctx.actions, is the admission gate on ControlPolicy: when its policy allows an action, the side effect runs, such as identity.disable; when the policy holds or denies it, execute raises AdmissionError and nothing fires. The bundled cloud default is the read-only OCI provider, which reports an error without the oci SDK.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -123,5 +123,5 @@
     <text class="sub" x="814" y="510">nothing fires</text>
   </g>
 
-  <text class="note" x="460" y="574">The bundled cloud default is the read-only AWS provider; without boto3 it reports itself unavailable.</text>
+  <text class="note" x="460" y="574">The bundled cloud default is the read-only OCI provider; without the oci SDK it reports an error.</text>
 </svg>

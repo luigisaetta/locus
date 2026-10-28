@@ -4,7 +4,7 @@
 """Notebook 51: RAG basics — a cloud Well-Architected knowledge base.
 
 Retrieval-Augmented Generation (RAG) grounds an agent's answers in your
-own documents. For a cloud-platform team that means the AWS
+own documents. For a cloud-platform team that means the cloud
 Well-Architected best-practice catalogue, mapped to your internal
 runbooks — not whatever the model half-remembers about ``REL`` or
 ``COST`` ids. This notebook builds that Index. The pipeline has four
@@ -107,13 +107,13 @@ async def using_vector_store():
     store = _get_store(dimension=embedder.config.dimension)
     print(f"Created InMemoryVectorStore dim={store.config.dimension}")
 
-    # AWS Well-Architected best-practice summaries — the operational
+    # Well-Architected best-practice summaries — the operational
     # backbone the ops agent cites. Ids follow the pillar-prefixed form.
     docs_text = [
         "REL-04 Auto Scaling: scale compute horizontally on demand metrics so "
         "capacity tracks load and unhealthy instances are replaced automatically.",
-        "REL-07 Multi-AZ Deployment: spread workloads across availability zones "
-        "so a single zone failure does not take the whole service down.",
+        "REL-07 Multi-AD Deployment: spread workloads across availability domains "
+        "so a single domain failure does not take the whole service down.",
         "COST-03 Rightsizing: match instance types to measured utilization to "
         "stop paying for idle compute and memory headroom you never use.",
         "SEC-02 Least-Privilege IAM: grant the minimum permissions a workload "

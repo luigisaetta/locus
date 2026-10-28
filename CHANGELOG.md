@@ -19,7 +19,26 @@ policy.
   LSM list). The live tests name their sandboxes within OpenShell's
   19-character limit.
 
+### Removed
+
+- **AWS cloud-posture tools.** `locus_security.aws` (`describe_aws`, `use_aws`
+  and their `@tool` wrappers), the `aws` extra on both packages and the
+  `LOCUS_AWS_*` variables are gone; Locus targets OCI first. The cloud-posture
+  capability stays, on the core OCI tools: `create_soc_analyst`,
+  `SecurityControls`, `SecurityContext().cloud`, the `cloud_posture_audit`
+  playbook and `security_toolset(oci=True)` drive `describe_oci` / `use_oci`
+  (read-only by default), and `SecurityControls` carries the OCI `profile`,
+  `auth_type`, `region` and `compartment_id` the review runs as.
+  S3-compatible object storage — `S3Backend` and the `s3` extra — is
+  unaffected: it is how OCI Object Storage is reached.
+
 ### Changed
+
+- **`CloudSource.describe` / `events` take a keyword-only `client`.** OCI
+  services expose several SDK clients (`core` alone has five), so the
+  `SecurityContext().cloud` port names one; when omitted it resolves the
+  service's only client and otherwise returns an `error` dict listing them.
+  Third-party `CloudSource` providers should accept the new keyword.
 
 - **Documentation site: diagrams instead of ASCII, and a Markdown twin of
   every page.** The sixteen diagrams the site drew as text inside code blocks
