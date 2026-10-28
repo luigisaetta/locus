@@ -159,16 +159,11 @@ class OpenAISearchPreviewProvider:
         # the class docstring), so the JSON contract lives in the prompt.
         response = await self._model.complete(messages=messages, tools=None)
         content = response.message.content or "{}"
+        # ``strict=False`` already digs the object out of surrounding prose or
+        # a markdown fence, so an unparseable reply simply means no results.
         parsed = parse_structured(content, _Hits, strict=False)
         if not parsed.success or parsed.parsed is None:
-            # The model may wrap the object in a sentence; retry on the
-            # outermost {...} before giving up.
-            start, end = content.find("{"), content.rfind("}")
-            if start == -1 or end <= start:
-                return []
-            parsed = parse_structured(content[start : end + 1], _Hits, strict=False)
-            if not parsed.success or parsed.parsed is None:
-                return []
+            return []
         typed: _Hits = parsed.parsed  # type: ignore[assignment]
         return [
             SearchResult(title=h.title, url=h.url, snippet=(h.snippet or "")[: self._cap])

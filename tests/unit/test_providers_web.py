@@ -309,6 +309,51 @@ class TestOpenAISearchPreviewProvider:
         assert [h.url for h in out] == ["https://t.example"]
 
     @pytest.mark.asyncio
+    async def test_falls_back_when_model_has_no_client(self) -> None:
+        # A model object without a client attribute (a plain stub) cannot be
+        # asked for citations; the prompt path answers instead.
+        model = MagicMock(spec=["complete", "config"])
+        model.complete = AsyncMock(
+            return_value=_build_response(
+                '{"results":[{"title":"t","url":"https://t.example","snippet":"s"}]}'
+            )
+        )
+        out = await OpenAISearchPreviewProvider(model).search("q")
+        assert [h.url for h in out] == ["https://t.example"]
+
+    @pytest.mark.asyncio
+    async def test_falls_back_when_reply_has_no_citations(self) -> None:
+        # Prose without a single url_citation yields nothing from the
+        # annotations path, so the prompt path runs.
+        message = MagicMock()
+        message.content = "Nothing to cite here."
+        message.annotations = []
+        completion = MagicMock()
+        completion.choices = [MagicMock(message=message)]
+        model = MagicMock()
+        model.config.model = "gpt-5-search-api"
+        model.client.chat.completions.create = AsyncMock(return_value=completion)
+        model.complete = AsyncMock(
+            return_value=_build_response(
+                '{"results":[{"title":"t","url":"https://t.example","snippet":"s"}]}'
+            )
+        )
+        out = await OpenAISearchPreviewProvider(model).search("q")
+        assert [h.url for h in out] == ["https://t.example"]
+        model.complete.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_object_is_not_hits(self) -> None:
+        # An object of the wrong shape inside the prose means no results,
+        # not an exception.
+        model = MagicMock()
+        model.complete = AsyncMock(
+            return_value=_build_response('Sorry, I can only say {"note": "no results"} today.')
+        )
+        out = await OpenAISearchPreviewProvider(model).search("q")
+        assert out == []
+
+    @pytest.mark.asyncio
     async def test_prefers_url_citation_annotations(self) -> None:
         # gpt-5-search-api cites its sources as annotations on the message;
         # those are the hits, deduplicated by URL and capped at max_results.
