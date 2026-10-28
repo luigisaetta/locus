@@ -41,7 +41,8 @@ def sandbox() -> Iterator[OpenShellBackend]:
         options["bearer_token"] = token
     backend = OpenShellBackend.create(
         workspace=os.environ.get("LOCUS_OPENSHELL_WORKSPACE", "default"),
-        name=f"locus-harness-{uuid.uuid4().hex[:8]}",
+        # OpenShell caps sandbox names at 19 characters.
+        name=f"lh-{uuid.uuid4().hex[:8]}",
         endpoint=ENDPOINT,
         **options,
     )

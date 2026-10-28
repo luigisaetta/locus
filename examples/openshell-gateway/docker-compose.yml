@@ -1,0 +1,69 @@
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
+#
+# A local NVIDIA OpenShell gateway for the Locus coding harness
+# (``locus.harness.OpenShellBackend``) and the live tests that drive it.
+#
+# Adapted from NVIDIA/OpenShell ``deploy/docker/docker-compose.yml``
+# (SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION &
+# AFFILIATES; SPDX-License-Identifier: Apache-2.0). Only the gateway runs here;
+# sandboxes are sibling containers the gateway creates through the host's
+# Docker socket (Docker-outside-of-Docker, no --privileged).
+#
+#   docker compose up -d                       # init writes the sandbox JWT keys, then the gateway starts
+#   curl -sf http://127.0.0.1:8081/readyz      # ready
+#   export LOCUS_OPENSHELL_ENDPOINT=127.0.0.1:8080
+#   pytest tests/integration/test_harness_openshell_live.py
+#
+# Loopback only, TLS off, user calls unauthenticated: a developer or CI box,
+# not a shared host. Supervisors still authenticate with the generated JWT keys.
+#
+# /var/lib/openshell must be bind-mounted at the SAME path on the host and in
+# the container: the gateway extracts the supervisor binary there and hands
+# that path to Docker as a bind-mount source for every sandbox.
+
+services:
+  gateway:
+    image: &gateway-image ghcr.io/nvidia/openshell/gateway:${OPENSHELL_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    # The image's default CMD pins --bind-address 0.0.0.0; clear it so gateway.toml rules.
+    command: []
+    # UID 0: writes under /var/lib/openshell and uses the Docker socket. Local use only.
+    user: '0'
+    ports:
+    - 127.0.0.1:${OPENSHELL_PORT:-8080}:8080
+    - 127.0.0.1:${OPENSHELL_HEALTH_PORT:-8081}:8081
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - type: bind
+      source: /var/lib/openshell
+      target: /var/lib/openshell
+      bind:
+        create_host_path: true
+    - type: bind
+      source: ./gateway.toml
+      target: /etc/openshell/gateway.toml
+      read_only: true
+    environment:
+      OPENSHELL_GATEWAY_CONFIG: /etc/openshell/gateway.toml
+      # The DB URL is deliberately not a TOML setting (it may carry credentials).
+      OPENSHELL_DB_URL: sqlite:/var/lib/openshell/gateway.db?mode=rwc
+      # Keep the extracted supervisor binary under the shared bind mount.
+      XDG_DATA_HOME: /var/lib/openshell
+      HOME: /var/lib/openshell
+
+  # One-shot: sandbox JWT keys (kept if already present).
+  init:
+    image: *gateway-image
+    user: '0'
+    command: [generate-certs, --output-dir, /var/lib/openshell/tls]
+    volumes:
+    - type: bind
+      source: /var/lib/openshell
+      target: /var/lib/openshell
+      bind:
+        create_host_path: true

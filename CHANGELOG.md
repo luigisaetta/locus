@@ -8,6 +8,17 @@ policy.
 
 ## [Unreleased]
 
+### Added
+
+- **A local NVIDIA OpenShell gateway for the coding harness.**
+  `examples/openshell-gateway/` starts the gateway with `docker compose up -d`
+  (loopback, Docker-outside-of-Docker, adapted from NVIDIA's reference
+  deployment) so `OpenShellBackend` and the live harness tests run on any
+  machine with Docker; `LOCUS_OPENSHELL_ENDPOINT=127.0.0.1:8080` points at it.
+  The README lists the one host requirement (Landlock in the kernel's active
+  LSM list). The live tests name their sandboxes within OpenShell's
+  19-character limit.
+
 ### Changed
 
 - **Documentation site: diagrams instead of ASCII, and a Markdown twin of
