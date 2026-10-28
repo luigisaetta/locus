@@ -42,9 +42,11 @@ START → gather → draft → review → END (ship grounded Evidence | abstain)
 Run it:
     .venv/bin/python examples/notebook_21_supervisor_critic_loop.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
-``LOCUS_MODEL_PROVIDER=mock`` for offline runs — the grounding gate is
-deterministic and exercises the same admit/abstain path either way.
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile,
+otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``,
+``openai``, ``anthropic``, ``mock``) to choose. The grounding gate is
+deterministic and exercises the same admit/abstain path with a live model or
+the mock.
 
 Prerequisites:
 - Notebook 12 (basic graph).

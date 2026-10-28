@@ -1,11 +1,12 @@
 # The agent loop
 
 Every Locus agent runs the same
-loop. Four named nodes (`Think → Execute → Reflect → Terminate`), one
-router that decides what runs next, one typed event stream, one piece of
-immutable state that flows through. This page is the architectural
-reference — what each node does, why it exists, what it emits, and how
-to extend it.
+loop. Three nodes (`Think → Execute → Reflect`), a termination check at
+the top of every iteration, an optional grounding pass on the final
+answer, one router that decides what runs next, one typed event stream,
+one piece of immutable state that flows through. This page is the
+architectural reference — what each node does, why it exists, what it
+emits, and how to extend it.
 
 {{ locus_diagram agent-loop }}
 
@@ -20,7 +21,7 @@ never used.
 
 The base pattern is **ReAct** ([Yao et al., 2022](https://arxiv.org/abs/2210.03629)) —
 *Thought → Action → Observation*, repeated until the model decides
-to stop. ReAct is now the default loop in most agentic SDKs.
+to stop.
 
 The SDK keeps the spirit and adds three things:
 
@@ -38,8 +39,9 @@ The SDK keeps the spirit and adds three things:
 Every node receives an `AgentState` and returns a new `AgentState`.
 State is **immutable** — updates produce a new instance via
 `state.with_message(...)`, `state.with_tool_execution(...)`,
-`state.with_metadata(...)`. Hooks see frozen events; nodes see
-frozen state.
+`state.with_metadata(...)`. Nodes see frozen state, and the events the
+loop streams are frozen too; hooks receive their own write-protected
+event objects (see [Hooks](#hooks)).
 
 The state value object carries:
 
@@ -77,9 +79,9 @@ behaviours make it different from a "just run the function" callback:
    Execute walks `state.tool_executions` and looks for a previous
    call with the same `(tool_name, arguments)` tuple. If found, the
    cached result is returned; the body never runs. The model can
-   retry, loop, or panic without firing the tool a second time.
+   retry the same call, or loop, without firing the tool a second time.
    Implementation:
-   [`find_matching_execution()` `tools/executor.py:21`](https://github.com/oracle/locus/blob/main/src/locus/tools/executor.py#L21) — called from `_maybe_cached_idempotent_result` in [`agent/runtime_loop.py`](https://github.com/oracle/locus/blob/main/src/locus/agent/runtime_loop.py).
+   [`find_matching_execution()` `tools/executor.py:23`](https://github.com/oracle/locus/blob/main/src/locus/tools/executor.py#L23) — called from `_maybe_cached_idempotent_result` in [`agent/runtime_loop.py`](https://github.com/oracle/locus/blob/main/src/locus/agent/runtime_loop.py).
 
 2. **Parallel dispatch.** Tool calls returned in the same model
    response fire concurrently. Execute awaits them all before the
@@ -112,7 +114,7 @@ arguments repeat across `tool_loop_threshold` (default 3) consecutive
 iterations, whether or not Reflexion is on.
 
 The Reflector itself
-([`Reflector` class — `reasoning/reflexion.py:69`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/reflexion.py#L69))
+([`Reflector` class — `reasoning/reflexion.py:70`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/reflexion.py#L70))
 scores the iteration without calling a model: it checks recent
 iterations for a repeating tool pattern, counts the iteration's
 successful and failed tool calls, and adjusts a confidence score. The
@@ -136,7 +138,7 @@ Two complementary reasoning add-ons:
   `Agent(...)` flag.
 
 Source:
-[`GroundingEvaluator.evaluate_with_llm` `reasoning/grounding.py:420`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/grounding.py#L420) ·
+[`GroundingEvaluator.evaluate_with_llm` `reasoning/grounding.py:421`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/grounding.py#L421) ·
 [`build_causal_chain` `reasoning/causal.py`](https://github.com/oracle/locus/blob/main/src/locus/reasoning/causal.py).
 
 ## Terminate
@@ -175,14 +177,14 @@ this path.) The rules:
 
 | From | To | When |
 |---|---|---|
-| iteration start | Terminate | a termination check fires (see [Terminate](#terminate)) |
-| iteration start | Think | otherwise |
+| iteration&nbsp;start | Terminate | a termination check fires (see [Terminate](#terminate)) |
+| iteration&nbsp;start | Think | otherwise |
 | Think | Execute | the model made tool calls |
 | Think | Terminate | no tool calls, in `completion_mode="auto"` — through the grounding pass first when grounding is on and the run has called tools |
-| grounding pass | next iteration | the answer fails grounding and replans remain |
+| grounding&nbsp;pass | next&nbsp;iteration | the answer fails grounding and replans remain |
 | Execute | Reflect | Reflexion is configured and the iteration number is a multiple of `evaluate_every_n_iterations` |
-| Execute | next iteration | otherwise |
-| Reflect | next iteration | always (Reflect feeds back into the next Think) |
+| Execute | next&nbsp;iteration | otherwise |
+| Reflect | next&nbsp;iteration | always (Reflect feeds back into the next Think) |
 
 Termination is checked once per iteration, at the top of the loop
 before Think, not after every node. A condition that becomes true
@@ -191,8 +193,8 @@ before the next model call.
 
 ## Events
 
-Each node emits typed, **write-protected** events that hooks can
-observe but never mutate:
+Each node emits typed, **frozen** events to the `agent.run()` stream;
+consumers can observe them but never mutate them:
 
 | Event | Emitted by |
 |---|---|
@@ -221,10 +223,15 @@ and implements the lifecycle callbacks it cares about —
 `Continue`/`Cancel`/`Retry` directive return type. Instead a hook
 steers the loop two ways:
 
-- **Mutate the event in place.** The after-model-call and
-  after-tool-call events carry a `retry` flag — set `event.retry = True`
-  and the runtime re-runs that call (this is exactly how
-  `ModelRetryHook` works).
+- **Set a writable field on the hook event.** The callbacks receive
+  their own write-protected event objects (`AfterModelCallEvent`,
+  `AfterToolCallEvent` and friends in `locus.hooks.provider`), distinct
+  from the frozen streamed events above. Only a few fields are
+  writable — `retry`, `retry_feedback` and `response` after a model
+  call; `retry` and `result` after a tool call — and assigning any
+  other field raises `AttributeError`. Set `event.retry = True` and the
+  runtime re-runs that call (this is exactly how `ModelRetryHook`
+  works).
 - **Raise to abort.** Raising from any callback short-circuits the run
   (useful for budget guards).
 
@@ -233,7 +240,7 @@ Built-in hooks:
 `TelemetryHook` (OpenTelemetry-compatible),
 `ModelRetryHook`, `GuardrailsHook` (topic policy + PII redaction),
 and `SteeringHook` (LLM-as-judge tool approval). Source:
-[`hooks/builtin/__init__.py`](https://github.com/oracle/locus/blob/main/src/locus/hooks/builtin/__init__.py) (re-exports the four most-used hooks) ·
+[`hooks/builtin/__init__.py`](https://github.com/oracle/locus/blob/main/src/locus/hooks/builtin/__init__.py) (re-exports the built-in hooks) ·
 [`hooks/builtin/steering.py`](https://github.com/oracle/locus/blob/main/src/locus/hooks/builtin/steering.py) ·
 [`hooks/builtin/retry.py`](https://github.com/oracle/locus/blob/main/src/locus/hooks/builtin/retry.py).
 
@@ -256,12 +263,13 @@ Iteration by iteration:
 | 2 | Execute | Tool is `idempotent=True`. Execute walks `state.tool_executions` for an earlier `issue_refund` call with equal arguments (`{order_id: "ord-4821", request_id: "R-42"}`). None — so the body fires. Refund receipt `RF-58291` returned. |
 | 2 | Reflect | Reflexion runs (iteration 2 is due). The iteration's one successful call raises confidence from 0.0 to 0.15. `ReflectEvent` emitted. |
 | 2 | Terminate? | Checked at the start of iteration 3: `ToolCalled("issue_refund")` ✓ but `ConfidenceMet(0.9)` ✗ (0.15), so the AND branch is false, and `MaxIterations(8)` is not hit. Continue. |
-| 3 | Think | The refund is done, so the model answers in text with no tool calls. In the default `completion_mode="auto"` the run ends with `TerminateEvent(reason="complete")`; `result.stop_reason == "complete"`. |
+| 3 | Think | The refund is done, so the model answers in text with no tool calls. In the default `completion_mode="auto"` that answer is final; because the agent has `grounding=True` and the run called tools, it goes through the grounding pass first. |
+| 3 | Ground | The judge model scores the answer's claims against the tool results and emits a `GroundingEvent`. The claims are grounded (`requires_replan=False`), so the run ends with `TerminateEvent(reason="complete")`; `result.stop_reason == "complete"`. |
 
-Total: **three iterations, two tool calls, one Reflect, one Terminate**.
+Total: **three iterations, two tool calls, one Reflect, one grounding pass, one Terminate**.
 
 If the model had hallucinated and re-emitted `issue_refund` with the
-same args on iteration 3 (it didn't, but it could), Execute would
+same args on iteration 3, Execute would
 have caught the duplicate `(name, arguments)` match, returned the cached
 `RF-58291`, and flagged that `ToolExecution` with
 `idempotent_cache_hit=True` so the trace shows the short-circuit
@@ -270,21 +278,22 @@ what idempotency guarantees.
 
 ## Stop reasons
 
-Every run ends with a `TerminateEvent` whose `reason` field names the
-satisfied condition. The named reasons you'll see:
+Every run ends with a `TerminateEvent` whose `reason` field carries the
+satisfied condition's own string. The reasons you will see, and the
+condition each comes from:
 
-| Reason | When |
-|---|---|
-| **`MaxIterations`** | the iteration counter hit the configured ceiling |
-| **`TokenLimit`** | cumulative model tokens exceeded the budget |
-| **`TimeLimit`** | wall-clock budget exceeded |
-| **`NoToolCalls`** | the model emitted text and no tool calls (the natural "I'm done" signal) |
-| **`ToolCalled`** | a specific tool fired (with `require_success=True`, only a call that did not error counts) |
-| **`ConfidenceMet`** | the Reflexion confidence score cleared the threshold |
-| **`TextMention`** | the final message contained the configured text (case-insensitive substring by default) |
-| **`CustomCondition`** | a user-supplied `fn(state, **ctx)` returned `(True, reason)` |
-| **`cancelled`** | the caller called `agent.cancel()` |
-| **`error`** | the model (or a node, or a hook inside the loop) raised; the loop emits `TerminateEvent(reason="error")` and re-raises the exception, so `arun()` / `run_sync()` raise it instead of returning a result |
+| `reason` | Condition | When |
+|---|---|---|
+| `max_iterations` | `MaxIterations` | the iteration counter hit the configured ceiling |
+| `token_budget` | `TokenLimit` | cumulative model tokens exceeded the budget |
+| `time_budget` | `TimeLimit` | wall-clock budget exceeded |
+| `no_tools` | `NoToolCalls` | the model emitted text and no tool calls (the natural "I'm done" signal) |
+| `tool_called:<name>` | `ToolCalled` | a specific tool fired (with `require_success=True`, only a call that did not error counts) |
+| `confidence_met` | `ConfidenceMet` | the Reflexion confidence score cleared the threshold |
+| `text_mention:<text>` | `TextMention` | the final message contained the configured text (case-insensitive substring by default) |
+| the string your function returns | `CustomCondition` | a user-supplied `fn(state, **ctx)` returned `(True, reason)` |
+| `cancelled` | — | the caller called `agent.cancel()` |
+| `error` | — | the model (or a node, or a hook inside the loop) raised; the loop emits `TerminateEvent(reason="error")` and re-raises the exception, so `arun()` / `run_sync()` raise it instead of returning a result |
 
 Note that `result.stop_reason` is **normalized** to a fixed set of
 literals (`complete`, `terminal_tool`, `confidence_met`,
@@ -323,7 +332,7 @@ class BudgetGuard(HookProvider):
 import asyncio
 
 run = asyncio.create_task(agent.arun(prompt))
-# … later, on a timeout, on a user click, on whatever:
+# later: on a timeout or a user action
 run.cancel()
 ```
 
@@ -393,12 +402,20 @@ distinct arguments.
 
 ## Putting it together
 
+The walkthrough's agent, configured end to end; the tabs differ only in
+the model string.
+
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent, ReflexionConfig
 from locus.tools import tool
 from locus.memory.backends import S3Backend
 from locus.core.termination import (
     MaxIterations, ToolCalled, ConfidenceMet,
+)
+from locus.core.events import (
+    ThinkEvent, ToolStartEvent, ReflectEvent, TerminateEvent,
 )
 from locus.hooks.builtin import StructuredLoggingHook
 
@@ -407,10 +424,11 @@ def issue_refund(order_id: str, request_id: str) -> dict:
     return billing.refund(order_id, request_id)
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, issue_refund],
     system_prompt="You are a customer-support agent.",
-    reflexion=ReflexionConfig(evaluate_every_n_iterations=2),  # Reflect every 2nd iteration, as in the walkthrough
+    # Reflect every second iteration, as in the walkthrough
+    reflexion=ReflexionConfig(evaluate_every_n_iterations=2),
     grounding=True,                    # claim verification
     checkpointer=S3Backend(...),
     hooks=[StructuredLoggingHook()],     # logs at INFO by default
@@ -419,13 +437,13 @@ agent = Agent(
     ) | MaxIterations(8),
 )
 
-async for event in agent.run("Process refund request R-42: verify the order, refund if eligible.",
-                             thread_id="th-q3-2026"):
+prompt = "Process refund request R-42: verify the order, refund if eligible."
+async for event in agent.run(prompt, thread_id="th-q3-2026"):
     match event:
-        case ThinkEvent(reasoning=r) if r:    print(f"💭 {r}")
-        case ToolStartEvent(tool_name=n):     print(f"🔧 {n}")
-        case ReflectEvent(guidance=g) if g:   print(f"🪞 {g}")
-        case TerminateEvent(reason=why):      print(f"✅ {why}")
+        case ThinkEvent(reasoning=r) if r:    print(f"think: {r}")
+        case ToolStartEvent(tool_name=n):     print(f"tool: {n}")
+        case ReflectEvent(guidance=g) if g:   print(f"reflect: {g}")
+        case TerminateEvent(reason=why):      print(f"done: {why}")
 ```
 
 ## What you can configure

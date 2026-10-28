@@ -8,12 +8,21 @@ description: "Every Oracle Database 26ai primitive in Locus — vector search, i
 Locus treats Oracle Database 26ai as the place where an agent's state lives:
 vectors for retrieval, threads for continuity, memories for what it has
 learned, in the same database as the data it acts on. Each primitive is a
-first-class Locus class on the `oracledb` driver, with no adapter layer in
-between, and it works with the same `Agent` as everything else.
+first-class Locus class directly on the `oracledb` driver, with no
+third-party adapter in between (`OracleAgentMemoryManager` alone sits on
+Oracle's own agent-memory client), and it works with the same `Agent` as
+everything else. The drawing groups them by what the database does for the
+agent and names the `Agent` surface each group is reached through.
+
+{{ locus_diagram oracle-26ai-primitives }}
 
 ```bash
 pip install "locus-sdk[oci,oracledb]"
 ```
+
+`OracleAgentMemoryManager` additionally needs the `agentmemory` extra
+(`pip install "locus-sdk[agentmemory]"`), which installs Oracle's
+`oracleagentmemory` client.
 
 ## What ships
 
@@ -26,19 +35,25 @@ pip install "locus-sdk[oci,oracledb]"
 | Durable conversation threads | `oracle_checkpointer()` | [42 — Oracle 26ai checkpointer](../notebooks/notebook_42_oracle_26ai_checkpointer.md) |
 | Every version of a thread, resume from any point | `OracleCheckpointSaver` | [43 — Versioned saver](../notebooks/notebook_43_oracle_versioned_saver.md) |
 | Long-term memory store (`BaseStore`) | `OracleStore` | [37 — Oracle store](../notebooks/notebook_37_oracle_store.md) |
-| Oracle's agent-memory service, in-database extraction and recall | `OracleAgentMemoryManager` | [44 — Oracle agent memory](../notebooks/notebook_44_oracle_agent_memory.md) |
+| Oracle's agent-memory client: LLM-backed extraction, in-database recall | `OracleAgentMemoryManager` | [44 — Oracle agent memory](../notebooks/notebook_44_oracle_agent_memory.md) |
 
-Every class has a synchronous twin (`OracleSyncVectorStore`,
+Six of the classes have a synchronous twin (`OracleSyncVectorStore`,
 `OracleSyncInDBEmbeddings`, `OracleSyncInDBChunker`, `OracleSyncADBLoader`,
-`OracleSyncStore`, `OracleSyncCheckpointSaver`) for code that is not async.
+`OracleSyncStore`, `OracleSyncCheckpointSaver`) for code that is not async;
+`OracleSyncBackend` is the twin of the `OracleBackend` behind
+`oracle_checkpointer()`, and `OracleAgentMemoryManager` has no twin because
+it already takes a synchronous `oracledb` pool or connection.
 
 ## Connecting
 
-All of them take the same connection arguments: `dsn`, `user`, `password`,
-and for Autonomous Database `wallet_location` and `wallet_password`; or
-`host`, `port` and `service_name` for a plain listener. The notebooks and the
-integration tests read them from `ORACLE_DSN`, `ORACLE_USER`,
-`ORACLE_PASSWORD`, `ORACLE_WALLET` and `ORACLE_WALLET_PASSWORD`.
+Everything except `OracleAgentMemoryManager` takes the same connection
+arguments: `dsn`, `user`, `password`, and for Autonomous Database
+`wallet_location` and `wallet_password`; or `host`, `port` and
+`service_name` for a plain listener. `OracleAgentMemoryManager` instead
+takes `connection=`, a ready `oracledb` pool (preferred) or connection built
+from the same values. The notebooks and the integration tests read these
+values from `ORACLE_DSN`, `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_WALLET`
+and `ORACLE_WALLET_PASSWORD`.
 
 ## Retrieval
 
@@ -70,7 +85,10 @@ When the text must not leave the database, chunk and embed inside it:
 runs an ONNX model loaded into the database, and `OracleVectorStore` keeps
 the result, so no document content goes to a hosted embedding API. The
 model is a one-time load. On Autonomous Database, Oracle's prebuilt
-all-MiniLM-L12-v2 (384 dimensions) loads straight from Object Storage:
+all-MiniLM-L12-v2 (384 dimensions) loads directly from Object Storage with
+[`DBMS_VECTOR.LOAD_ONNX_MODEL_CLOUD`](https://docs.oracle.com/en/database/oracle/oracle-database/26/arpls/dbms_vector1.html);
+the download URL is in the Oracle Machine Learning post
+[Pre-built Embedding Generation model for Oracle Database 26ai](https://blogs.oracle.com/machinelearning/post/use-our-prebuilt-onnx-model-now-available-for-embedding-generation-in-oracle-database-23ai):
 
 ```sql
 BEGIN
@@ -80,7 +98,8 @@ BEGIN
     uri        => '<URL of all_MiniLM_L12_v2.onnx from the Oracle Machine Learning blog>');
 END;
 /
-SELECT vector_dimension_count(vector_embedding(ALL_MINILM_L12_V2 USING 'hello' AS data)) FROM dual;  -- 384
+SELECT vector_dimension_count(
+  vector_embedding(ALL_MINILM_L12_V2 USING 'hello' AS data)) FROM dual;  -- 384
 ```
 
 Then `OracleInDBEmbeddings(model_name="ALL_MINILM_L12_V2", dimension=384)`

@@ -41,10 +41,12 @@ or anything that ships to an analyst, it almost always does.
 
 Self-evaluate per turn.
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[query_siem, summarise],
     reflexion=True,
 )

@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The two event families and the bridge between them, per locus/core/events.py,
+  locus/observability/emit.py and locus/observability/agent_bridge.py.
+
+  LEFT: typed LocusEvent subclasses (core/events.py) that Agent.run yields to its caller
+  (agent/runtime_loop.py). "Bridged" = bridge_locus_event has an isinstance branch for it:
+    ThinkEvent            events.py:48   yielded runtime_loop.py:1119, :2154   -> agent.think              agent_bridge.py:95-102
+    ToolStartEvent        events.py:74   yielded :1401, :2227                 -> agent.tool.started       agent_bridge.py:103-109
+    ToolCompleteEvent     events.py:83   yielded via _complete_event :1573-1831, :2265-2416
+                                                                              -> agent.tool.completed     agent_bridge.py:110-119
+    ReflectEvent          events.py:158  yielded :1871                        -> agent.reflect            agent_bridge.py:120-128
+    GroundingEvent        events.py:169  yielded :1291                        -> agent.grounding          agent_bridge.py:129-136
+    InterruptEvent        events.py:311  yielded :1704, :2323, :2360          -> agent.interrupt          agent_bridge.py:160-166
+    CompactionEvent       events.py:239  yielded :1052, :2121                 -> agent.context.compacted  agent_bridge.py:167-176
+    ModelChunkEvent       events.py:404  yielded :1081-1086, :1273, :1346, only with stream_tokens=True (events.py:407-411)
+                                                                              -> agent.model.chunk        agent_bridge.py:137-143   (dashed)
+    ModelCompleteEvent    events.py:442  no yield site in Agent.run           -> agent.model.completed + agent.tokens.used
+                                                                                 agent_bridge.py:144-159   (dashed: branch exists, never reached from the loop)
+    TerminateEvent        events.py:266  yielded :857-1909, :2038-2433        -> agent.terminate          agent_bridge.py:177-185
+  "Stream only" = yielded to the async-for consumer, no branch in bridge_locus_event, never on the bus:
+    ToolProgressEvent     events.py:110  built tools/context.py:150, merged through the progress sink runtime_loop.py:242-253, yielded :1562, :2294
+    SubagentEvent         events.py:128  built agent/subagent.py:463, forwarded the same way, yielded :1562, :2294
+    FinalAnswerVerificationEvent  events.py:179  yielded :1324, :1340, :2194, :2209
+    ModelRetryEvent       events.py:213  yielded :1081 (streaming), :1095-1098, :2139-2142
+    CustomEvent           events.py:331  yielded from rc.drain() :1100, :1411, :1835, :2144, :2242, :2418; loop warning :909, :2084; budget nudge :1028, :2105
+
+  BRIDGE: @_bus_bridge decorates Agent.run and _run_from_state (runtime_loop.py:721, :1962). The wrapper awaits
+  bridge_locus_event(event) for every yielded event and then yields the same event to the caller (:282-339).
+  bridge_locus_event maps the class to its EV_AGENT_* name and calls emit() with previews (agent_bridge.py:64-185).
+  emit() returns at once when current_run_id() is None (emit.py:150-163, context.py:73); otherwise it awaits
+  bus.publish(StreamEvent(run_id, event_type, data)) (emit.py:168-182, event_bus.py:41-53). emit_sync() is the
+  sync-site twin (emit.py:185-229).
+
+  RIGHT: the canonical event_type prefixes, one lane per first segment of the EV_* constants (emit.py:47-147), with
+  representative names that have an emit site:
+    agent.*        agent.think, agent.tool.started, agent.terminate  (the bridge, above); also agent.model.retry
+                   hooks/builtin/retry.py:121, agent.steering.applied steering.py:239-250, agent.guardrail.triggered
+                   guardrails.py:264-269, and EventBusHook's literal agent.* names (observability/bus_hook.py:124-211)
+    tool.*         tool.sandbox.started tools/decorator.py:238, :310; tool.sandbox.completed :249, :317; tool.sandbox.denied tools/sandbox.py:704
+    model.*        model.fallback, model.fallback.breaker  models/fallback.py:636
+    memory.*       memory.checkpoint.saved runtime_loop.py:2482, :2556 (also multiagent/graph.py:1117, :1278); memory.compactor.completed memory/conversation.py:407
+    composition.*  composition.stage.started agent/composition.py:80, :99; composition.fanout.started :176
+    multiagent.*   multiagent.specialist.started multiagent/specialist.py:224; multiagent.handoff.initiated multiagent/handoff.py:500
+    a2a.*          a2a.task.received a2a/protocol.py:787; a2a.task.completed :854, :863; a2a.client.send :1092
+    rag.*          rag.query.started rag/retriever.py:479; rag.query.completed :509
+    research.*     research.execute.started deepagent/workflow.py:148; research.causal.built :271; research.replan :482
+    deepagent.*    deepagent.subagent.spawned deepagent/subagent.py:118; deepagent.fs.read deepagent/tools/filesystem.py:78; deepagent.todo.added deepagent/todos.py:112
+    harness.*      harness.exec harness/evidence.py:87 (emit_sync)
+    skills.*       skills.activated skills/plugin.py:418 (emit_sync)
+  Not drawn: EV_* constants with no emit site at the time of drawing (multiagent.graph.node.routed, rag.embedding.generated,
+  rag.store.upsert, rag.store.search, memory.conversation.added, memory.manager.injected, memory.manager.extracted,
+  research.completed); router.* names, published by the goal router as literal StreamEvents outside the EV_ table
+  (observability/router_events.py:64-231); the SpecialistStart/Complete, OrchestratorDecision, CausalNode/Edge and
+  hook event classes core/events.py also declares (:457-557), which Agent.run never yields.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 704" role="img" aria-labelledby="title desc">
+  <title id="title">Typed events, bus event types and the bridge between them</title>
+  <desc id="desc">Two families side by side. On the left, the typed LocusEvent objects that Agent.run() yields to its caller. Ten are bridged onto the event bus: ThinkEvent, ToolStartEvent, ToolCompleteEvent, ReflectEvent, GroundingEvent, InterruptEvent, CompactionEvent, ModelChunkEvent (yielded only with stream_tokens=True), ModelCompleteEvent (the bridge handles it, but Agent.run never yields it) and TerminateEvent. Five stay on the stream only and never reach the bus: ToolProgressEvent, SubagentEvent, FinalAnswerVerificationEvent, ModelRetryEvent and CustomEvent. At the top, the bus bridge, bridge_locus_event(), wraps Agent.run: it maps each bridged class to a canonical agent.* name and publishes it through emit(). On the right, the canonical bus event_type names grouped by prefix, each lane showing representative names: agent.* (agent.think, agent.tool.started, agent.terminate), tool.* (tool.sandbox.started, tool.sandbox.completed, tool.sandbox.denied), model.* (model.fallback, model.fallback.breaker), memory.* (memory.checkpoint.saved, memory.compactor.completed), composition.* (composition.stage.started, composition.fanout.started), multiagent.* (multiagent.specialist.started, multiagent.handoff.initiated), a2a.* (a2a.task.received, a2a.task.completed, a2a.client.send), rag.* (rag.query.started, rag.query.completed), research.* (research.execute.started, research.causal.built, research.replan), deepagent.* (deepagent.subagent.spawned, deepagent.fs.read, deepagent.todo.added), harness.* (harness.exec) and skills.* (skills.activated). Only the agent.* lane is fed by the bridge; every other lane is published by its own subsystem straight through emit() or emit_sync(), and built-in hooks also publish under agent.*. When no run id is bound, emit() returns at once and nothing is published.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the bridge: @_bus_bridge on Agent.run hands every yielded event to bridge_locus_event -->
+  <g class="node primary">
+    <rect x="290" y="16" width="176" height="58" rx="12"/>
+    <text x="378" y="35">Bus bridge</text>
+    <text class="sub" x="378" y="56">bridge_locus_event()</text>
+  </g>
+
+  <!-- bridged lane -> bridge -->
+  <path class="edge" marker-end="url(#ah)" d="M252,45 L288,45"/>
+
+  <!-- bridge -> agent.* lane: emit(EV_AGENT_*) publishes a StreamEvent -->
+  <path class="edge" marker-end="url(#ah)" d="M378,74 L378,103"/>
+  <rect class="label-bg" x="388" y="78" width="116" height="20" rx="4"/>
+  <text class="label" x="446" y="88">emit(EV_AGENT_*)</text>
+
+  <text class="note" x="720" y="90">bus event_type names, grouped by prefix</text>
+
+  <!-- LEFT, lane A: typed events the bridge republishes -->
+  <g class="lane">
+    <rect x="16" y="16" width="236" height="387" rx="12"/>
+    <text class="lane-title" x="28" y="38">Typed events · bridged</text>
+  </g>
+  <g class="node"><rect x="28" y="52" width="212" height="26" rx="8"/><text class="sub" x="134" y="65">ThinkEvent</text></g>
+  <g class="node"><rect x="28" y="87" width="212" height="26" rx="8"/><text class="sub" x="134" y="100">ToolStartEvent</text></g>
+  <g class="node"><rect x="28" y="122" width="212" height="26" rx="8"/><text class="sub" x="134" y="135">ToolCompleteEvent</text></g>
+  <g class="node"><rect x="28" y="157" width="212" height="26" rx="8"/><text class="sub" x="134" y="170">ReflectEvent</text></g>
+  <g class="node"><rect x="28" y="192" width="212" height="26" rx="8"/><text class="sub" x="134" y="205">GroundingEvent</text></g>
+  <g class="node"><rect x="28" y="227" width="212" height="26" rx="8"/><text class="sub" x="134" y="240">InterruptEvent</text></g>
+  <g class="node"><rect x="28" y="262" width="212" height="26" rx="8"/><text class="sub" x="134" y="275">CompactionEvent</text></g>
+  <g class="node optional"><rect x="28" y="297" width="212" height="26" rx="8"/><text class="sub" x="134" y="310">ModelChunkEvent</text></g>
+  <g class="node optional"><rect x="28" y="332" width="212" height="26" rx="8"/><text class="sub" x="134" y="345">ModelCompleteEvent</text></g>
+  <g class="node"><rect x="28" y="367" width="212" height="26" rx="8"/><text class="sub" x="134" y="380">TerminateEvent</text></g>
+
+  <!-- LEFT, lane B: typed events that stay on the async-for stream -->
+  <g class="lane">
+    <rect x="16" y="415" width="236" height="212" rx="12"/>
+    <text class="lane-title" x="28" y="437">Typed events · stream only</text>
+  </g>
+  <g class="node"><rect x="28" y="451" width="212" height="26" rx="8"/><text class="sub" x="134" y="464">ToolProgressEvent</text></g>
+  <g class="node"><rect x="28" y="486" width="212" height="26" rx="8"/><text class="sub" x="134" y="499">SubagentEvent</text></g>
+  <g class="node"><rect x="28" y="521" width="212" height="26" rx="8"/><text class="sub" x="134" y="534">FinalAnswerVerificationEvent</text></g>
+  <g class="node"><rect x="28" y="556" width="212" height="26" rx="8"/><text class="sub" x="134" y="569">ModelRetryEvent</text></g>
+  <g class="node"><rect x="28" y="591" width="212" height="26" rx="8"/><text class="sub" x="134" y="604">CustomEvent</text></g>
+
+  <!-- RIGHT: one lane per canonical prefix -->
+  <g class="lane">
+    <rect x="290" y="104" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="128">agent.*</text>
+  </g>
+  <g class="node"><rect x="406" y="111" width="94" height="26" rx="8"/><text class="sub" x="453" y="124">agent.think</text></g>
+  <g class="node"><rect x="508" y="111" width="142" height="26" rx="8"/><text class="sub" x="579" y="124">agent.tool.started</text></g>
+  <g class="node"><rect x="658" y="111" width="122" height="26" rx="8"/><text class="sub" x="719" y="124">agent.terminate</text></g>
+
+  <g class="lane">
+    <rect x="290" y="148" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="172">tool.*</text>
+  </g>
+  <g class="node"><rect x="406" y="155" width="156" height="26" rx="8"/><text class="sub" x="484" y="168">tool.sandbox.started</text></g>
+  <g class="node"><rect x="570" y="155" width="170" height="26" rx="8"/><text class="sub" x="655" y="168">tool.sandbox.completed</text></g>
+  <g class="node"><rect x="748" y="155" width="150" height="26" rx="8"/><text class="sub" x="823" y="168">tool.sandbox.denied</text></g>
+
+  <g class="lane">
+    <rect x="290" y="192" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="216">model.*</text>
+  </g>
+  <g class="node"><rect x="406" y="199" width="114" height="26" rx="8"/><text class="sub" x="463" y="212">model.fallback</text></g>
+  <g class="node"><rect x="528" y="199" width="170" height="26" rx="8"/><text class="sub" x="613" y="212">model.fallback.breaker</text></g>
+
+  <g class="lane">
+    <rect x="290" y="236" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="260">memory.*</text>
+  </g>
+  <g class="node"><rect x="406" y="243" width="178" height="26" rx="8"/><text class="sub" x="495" y="256">memory.checkpoint.saved</text></g>
+  <g class="node"><rect x="592" y="243" width="206" height="26" rx="8"/><text class="sub" x="695" y="256">memory.compactor.completed</text></g>
+
+  <g class="lane">
+    <rect x="290" y="280" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="304">composition.*</text>
+  </g>
+  <g class="node"><rect x="406" y="287" width="192" height="26" rx="8"/><text class="sub" x="502" y="300">composition.stage.started</text></g>
+  <g class="node"><rect x="606" y="287" width="198" height="26" rx="8"/><text class="sub" x="705" y="300">composition.fanout.started</text></g>
+
+  <g class="lane">
+    <rect x="290" y="324" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="348">multiagent.*</text>
+  </g>
+  <g class="node"><rect x="406" y="331" width="220" height="26" rx="8"/><text class="sub" x="516" y="344">multiagent.specialist.started</text></g>
+  <g class="node"><rect x="634" y="331" width="212" height="26" rx="8"/><text class="sub" x="740" y="344">multiagent.handoff.initiated</text></g>
+
+  <g class="lane">
+    <rect x="290" y="368" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="392">a2a.*</text>
+  </g>
+  <g class="node"><rect x="406" y="375" width="136" height="26" rx="8"/><text class="sub" x="474" y="388">a2a.task.received</text></g>
+  <g class="node"><rect x="550" y="375" width="142" height="26" rx="8"/><text class="sub" x="621" y="388">a2a.task.completed</text></g>
+  <g class="node"><rect x="700" y="375" width="122" height="26" rx="8"/><text class="sub" x="761" y="388">a2a.client.send</text></g>
+
+  <g class="lane">
+    <rect x="290" y="412" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="436">rag.*</text>
+  </g>
+  <g class="node"><rect x="406" y="419" width="136" height="26" rx="8"/><text class="sub" x="474" y="432">rag.query.started</text></g>
+  <g class="node"><rect x="550" y="419" width="150" height="26" rx="8"/><text class="sub" x="625" y="432">rag.query.completed</text></g>
+
+  <g class="lane">
+    <rect x="290" y="456" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="480">research.*</text>
+  </g>
+  <g class="node"><rect x="406" y="463" width="184" height="26" rx="8"/><text class="sub" x="498" y="476">research.execute.started</text></g>
+  <g class="node"><rect x="598" y="463" width="164" height="26" rx="8"/><text class="sub" x="680" y="476">research.causal.built</text></g>
+  <g class="node"><rect x="770" y="463" width="122" height="26" rx="8"/><text class="sub" x="831" y="476">research.replan</text></g>
+
+  <g class="lane">
+    <rect x="290" y="500" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="524">deepagent.*</text>
+  </g>
+  <g class="node"><rect x="406" y="507" width="198" height="26" rx="8"/><text class="sub" x="505" y="520">deepagent.subagent.spawned</text></g>
+  <g class="node"><rect x="612" y="507" width="136" height="26" rx="8"/><text class="sub" x="680" y="520">deepagent.fs.read</text></g>
+  <g class="node"><rect x="756" y="507" width="156" height="26" rx="8"/><text class="sub" x="834" y="520">deepagent.todo.added</text></g>
+
+  <g class="lane">
+    <rect x="290" y="544" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="568">harness.*</text>
+  </g>
+  <g class="node"><rect x="406" y="551" width="100" height="26" rx="8"/><text class="sub" x="456" y="564">harness.exec</text></g>
+
+  <g class="lane">
+    <rect x="290" y="588" width="634" height="40" rx="10"/>
+    <text class="lane-title" x="302" y="612">skills.*</text>
+  </g>
+  <g class="node"><rect x="406" y="595" width="128" height="26" rx="8"/><text class="sub" x="470" y="608">skills.activated</text></g>
+
+  <text class="note" x="470" y="652">Dashed: ModelChunkEvent only with stream_tokens=True; ModelCompleteEvent is bridged but never yielded by Agent.run.</text>
+  <text class="note" x="470" y="670">Each lane shows representative names. Below agent.*, the subsystems publish straight through emit() or emit_sync().</text>
+  <text class="note" x="470" y="688">Built-in hooks also publish under agent.*. With no run id bound, emit() returns at once and nothing is published.</text>
+</svg>

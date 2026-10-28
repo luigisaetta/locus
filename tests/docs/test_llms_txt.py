@@ -147,3 +147,24 @@ def test_facts_tiles_become_a_list_and_the_filter_box_is_dropped(repo: Path) -> 
     assert llms_txt._plain_markdown(markdown, [repo]) == (
         "Intro.\n\n- **Python:** 3.11–3.14\n- **Tested SDK:** `locus-sdk` 3.0.1\n\n## Start here\n"
     )
+
+
+def test_tab_sets_keep_only_the_first_tab(repo: Path) -> None:
+    markdown = (
+        "Before.\n\n"
+        '=== "OCI"\n\n    ```python\n    m = "oci:a"\n    ```\n\n'
+        '=== "OpenAI"\n\n    ```python\n    m = "openai:b"\n    ```\n\n'
+        "After.\n"
+    )
+    assert (
+        llms_txt._plain_markdown(markdown, [repo])
+        == 'Before.\n\n```python\nm = "oci:a"\n```\n\nAfter.\n'
+    )
+
+
+def test_html_code_cells_become_code_spans(repo: Path) -> None:
+    markdown = "| Field | Type |\n|---|---|\n| a | <code>str &#124; None</code> |\n"
+    assert (
+        llms_txt._plain_markdown(markdown, [repo])
+        == "| Field | Type |\n|---|---|\n| a | `str | None` |\n"
+    )

@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  What streams where, per locus/streaming and the agent loop (locus-sdk 4.0.0):
+    Agent.run(prompt, *, thread_id, metadata, model_kwargs, stream_tokens=False)
+                         -> AsyncGenerator[LocusEvent, None]; Agent inherits it from
+                         AgentRuntimeMixin                            agent/runtime_loop.py:721-731, agent/agent.py:113
+    loop events          yielded without any flag: a TerminateEvent closes every run that is not paused by an
+                         InterruptEvent (:857-1055, :1351, :1909; the ask_user path yields InterruptEvent and
+                         returns without one, :1704-1711); a ThinkEvent per model turn (:1119); ToolStartEvent (:1401)
+                         and ToolCompleteEvent via _complete_event (:1573-1831) per tool call; ReflectEvent and
+                         GroundingEvent as configured (:3829-3907); the LoopEvent alias   core/events.py:564-576
+    ModelChunkEvent      dashed: yielded only inside `if stream_tokens:` (:729, :1066-1086). _complete_streaming
+                         forwards every chunk model.stream() yields (:3082-3083), so one event per streamed chunk:
+                         text, a reasoning-only delta (_is_reasoning_only :397-404), or the terminal done=True chunk
+                         carrying usage / stop_reason / cost_usd when the provider reports them   core/events.py:404-439
+                         With a final_answer_verifier and hold_final_answer_tokens, content chunks are held until
+                         the verdict: released if it passes, dropped and replaced by one ModelChunkEvent(content=replacement)
+                         if it fails (:1083-1085, :1344-1348), and dropped when an after-model hook retries the call (:1076-1078)
+    every event          a frozen Pydantic model with event_type, timestamp, agent_name   core/events.py:20-41
+    handlers             StreamHandler protocol: on_event(event), on_complete(), on_error(error)
+                                                                             streaming/handler.py:15-44, BaseStreamHandler :47-78
+                         nothing in Agent calls a handler: the consumer's own async for loop awaits
+                         handler.on_event(event) per event, then handler.on_complete()
+                                                                             examples/notebook_64_sse_streaming.py:134-136
+    ConsoleHandler       writes to output or sys.stdout (:106); dispatches _handle_{event_type} (:165-169);
+                         model_chunk content is written without a newline, the done chunk ends the line (:309-314);
+                         on_complete prints "Execution complete" (:171-178)   streaming/console.py
+    MinimalConsoleHandler  only ToolStartEvent, ToolCompleteEvent with error, TerminateEvent   console.py:355-365
+    SSEHandler           on_event: event.model_dump() -> SSEMessage, buffered (:225-235); on_complete appends a
+                         "done" frame (:237-247); on_error an "error" frame with a generic payload (:249-260, :25-63);
+                         get_messages / pop_messages / format_all (:262-296)   streaming/sse.py
+    SSEMessage           event, data, id, retry; format() emits "event:", "id:", "retry:", "data:" lines
+                         and a blank line                                     sse.py:66-106
+    AsyncSSEHandler      asyncio.Queue (:343); on_event puts a frame (:370-378); on_complete puts "done" then a
+                         None sentinel (:380-388); stream() yields message.format() (:402-412),
+                         stream_messages() the SSEMessage objects (:414-424); create_sse_response_headers (:432-443)
+    BufferingHandler     a list, oldest dropped at max_size (:156-175); get_events() (:189-195)   streaming/handler.py
+    FilteringHandler     delegate + event_types / exclude_types / filter_fn (:227-245); _should_forward (:247-263);
+                         on_event forwards only events that pass (:265-272), hence the dashed edge; on_complete and
+                         on_error always reach the delegate (:274-284)        streaming/handler.py
+    CompositeHandler     handlers list (:96-102); on_event awaits each child in order (:120-127);
+                         on_complete and on_error likewise (:129-141)         streaming/handler.py
+    StructuredStream     wraps the iterator: StructuredStream(agent.run(...), schema) (:47-74). _handle parses only
+                         on ModelChunkEvent: it appends .content to a buffer and calls parse_partial on it (:106-110),
+                         so partials exist only when the run was started with stream_tokens=True; without the flag
+                         the async for body never runs and nothing raises (docs/concepts/structured-output.md:110-117),
+                         hence the dashed partial edge. Yields each new partial (:86-94); a TerminateEvent sets
+                         final_message (:111-113); after the loop, final is parse_structured(final_message) when it
+                         parses, else the last partial, else None (:77-79, :96-104); parse_partial is None until
+                         every required field is present              streaming/structured.py, core/structured.py:471-493
+    AgentServer          /stream writes its own "data: {json}" frames and "data: [DONE]"; it does not import
+                         locus.streaming                                     server/app.py:388-389, :423
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 512" role="img" aria-labelledby="title desc">
+  <title id="title">What streams where</title>
+  <desc id="desc">Agent.run(prompt) is an async iterator. Every run yields loop events without any flag: a TerminateEvent when the run ends (a run paused by an InterruptEvent ends without one until it is resumed), a ThinkEvent per model turn, ToolStartEvent and ToolCompleteEvent whenever a tool is called, ReflectEvent and the rest as configured. With stream_tokens=True it also yields one ModelChunkEvent per streamed chunk: text, a reasoning delta, or the terminal done chunk carrying usage and stop_reason when the provider reports them. Nothing is attached to the agent: your async for loop hands each event to a stream handler by awaiting handler.on_event(event), then on_complete(), or on_error(exc) if the run raised. ConsoleHandler and MinimalConsoleHandler write formatted text to sys.stdout or the stream you pass. SSEHandler and AsyncSSEHandler turn each event into an SSEMessage, one frame per event, whose format() is the wire text a browser's SSE client reads. BufferingHandler keeps the events in a list you read with get_events(). FilteringHandler forwards only the events that pass its event_types, exclude_types or filter_fn to a delegate handler. CompositeHandler passes the same event to each of its child handlers in order, for example a ConsoleHandler and an SSEHandler. Separately, StructuredStream wraps a run started with stream_tokens=True: it accumulates ModelChunkEvent content, parses the buffer against your schema after every chunk and yields each new partial object; without the flag no chunk arrives, so no partial is yielded and nothing raises. After the TerminateEvent, stream.final holds the validated instance, or the last partial, or None, if the final message never parsed. AgentServer's /stream route writes its own data: frames and does not use these handlers.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the handler lane: one row per handler family, read left to right -->
+  <g class="lane">
+    <rect x="330" y="16" width="594" height="398" rx="12"/>
+    <text class="lane-title" x="350" y="38">Stream handlers</text>
+  </g>
+  <text class="note" x="770" y="38">your loop calls on_event(event)</text>
+
+  <!-- iterator -> bus: the loop events always, ModelChunkEvent only with stream_tokens=True -->
+  <path class="edge" d="M204,103 H352"/>
+  <rect class="label-bg" x="227" y="72" width="80" height="20" rx="4"/>
+  <text class="label" x="267" y="82">loop events</text>
+  <path class="edge dashed" d="M204,131 H352"/>
+  <rect class="label-bg" x="211" y="142" width="112" height="20" rx="4"/>
+  <text class="label" x="267" y="152">ModelChunkEvent</text>
+
+  <!-- the bus inside the lane and one branch per handler -->
+  <path class="edge" d="M352,81 V369"/>
+  <path class="edge" marker-end="url(#ah)" d="M352,81 H370"/>
+  <path class="edge" marker-end="url(#ah)" d="M352,153 H370"/>
+  <path class="edge" marker-end="url(#ah)" d="M352,225 H370"/>
+  <path class="edge" marker-end="url(#ah)" d="M352,297 H370"/>
+  <path class="edge" marker-end="url(#ah)" d="M352,369 H370"/>
+
+  <!-- console -> terminal -->
+  <path class="edge" marker-end="url(#ah)" d="M558,81 H806"/>
+  <rect class="label-bg on-lane" x="632" y="71" width="100" height="20" rx="4"/>
+  <text class="label" x="682" y="81">formatted text</text>
+
+  <!-- sse -> SSEMessage -> browser -->
+  <path class="edge" marker-end="url(#ah)" d="M558,153 H600"/>
+  <path class="edge" marker-end="url(#ah)" d="M778,153 H806"/>
+
+  <!-- buffering -> events list -->
+  <path class="edge" marker-end="url(#ah)" d="M558,225 H600"/>
+
+  <!-- filtering -> delegate, dashed: only the events that pass -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M558,297 H600"/>
+
+  <!-- composite -> each child handler, in order -->
+  <path class="edge" d="M558,369 H580 M580,353 V385"/>
+  <path class="edge" marker-end="url(#ah)" d="M580,353 H600"/>
+  <path class="edge" marker-end="url(#ah)" d="M580,385 H600"/>
+
+  <!-- the iterator -> StructuredStream (wrapping is unconditional) -> partial objects (dashed: only with stream_tokens=True) -->
+  <path class="edge" marker-end="url(#ah)" d="M109,146 V194"/>
+  <rect class="label-bg" x="45" y="160" width="128" height="20" rx="4"/>
+  <text class="label" x="109" y="170">wraps the iterator</text>
+  <path class="edge dashed" marker-end="url(#ah)" d="M109,254 V338"/>
+  <rect class="label-bg" x="49" y="286" width="120" height="20" rx="4"/>
+  <text class="label" x="109" y="296">async for partial</text>
+
+  <!-- the iterator the diagram is about -->
+  <g class="node primary">
+    <rect x="14" y="88" width="190" height="58" rx="12"/>
+    <text x="109" y="107">Agent.run(prompt)</text>
+    <text class="sub" x="109" y="128">async for event in …</text>
+  </g>
+  <g class="node">
+    <rect x="14" y="196" width="190" height="58" rx="12"/>
+    <text x="109" y="215">StructuredStream</text>
+    <text class="sub" x="109" y="236">partials: stream_tokens</text>
+  </g>
+  <g class="node end">
+    <rect x="14" y="340" width="190" height="58" rx="29"/>
+    <text x="109" y="359">Partial objects</text>
+    <text class="sub" x="109" y="380">then stream.final</text>
+  </g>
+
+  <!-- handlers -->
+  <g class="node">
+    <rect x="372" y="52" width="186" height="58" rx="12"/>
+    <text x="465" y="71">ConsoleHandler</text>
+    <text class="sub" x="465" y="92">MinimalConsoleHandler</text>
+  </g>
+  <g class="node">
+    <rect x="372" y="124" width="186" height="58" rx="12"/>
+    <text x="465" y="143">SSEHandler</text>
+    <text class="sub" x="465" y="164">AsyncSSEHandler</text>
+  </g>
+  <g class="node">
+    <rect x="372" y="196" width="186" height="58" rx="12"/>
+    <text x="465" y="215">BufferingHandler</text>
+    <text class="sub" x="465" y="236">max_size, get_events()</text>
+  </g>
+  <g class="node">
+    <rect x="372" y="268" width="186" height="58" rx="12"/>
+    <text x="465" y="287">FilteringHandler</text>
+    <text class="sub" x="465" y="308">event_types · filter_fn</text>
+  </g>
+  <g class="node">
+    <rect x="372" y="340" width="186" height="58" rx="12"/>
+    <text x="465" y="359">CompositeHandler</text>
+    <text class="sub" x="465" y="380">fans out, in order</text>
+  </g>
+
+  <!-- what the handlers produce -->
+  <g class="node">
+    <rect x="602" y="124" width="176" height="58" rx="12"/>
+    <text x="690" y="143">SSEMessage</text>
+    <text class="sub" x="690" y="164">one frame per event</text>
+  </g>
+  <g class="node">
+    <rect x="602" y="196" width="176" height="58" rx="12"/>
+    <text x="690" y="215">Events list</text>
+    <text class="sub" x="690" y="236">get_events()</text>
+  </g>
+  <g class="node optional">
+    <rect x="602" y="268" width="176" height="58" rx="12"/>
+    <text x="690" y="287">Delegate handler</text>
+    <text class="sub" x="690" y="308">events that pass</text>
+  </g>
+  <g class="node"><rect x="602" y="340" width="176" height="26" rx="8"/><text class="sub" x="690" y="353">ConsoleHandler</text></g>
+  <g class="node"><rect x="602" y="372" width="176" height="26" rx="8"/><text class="sub" x="690" y="385">SSEHandler, …</text></g>
+
+  <!-- where the stream ends up -->
+  <g class="node end">
+    <rect x="808" y="52" width="104" height="58" rx="29"/>
+    <text x="860" y="71">Terminal</text>
+    <text class="sub" x="860" y="92">sys.stdout</text>
+  </g>
+  <g class="node end">
+    <rect x="808" y="124" width="104" height="58" rx="29"/>
+    <text x="860" y="143">Browser</text>
+    <text class="sub" x="860" y="164">SSE client</text>
+  </g>
+
+  <text class="note" x="470" y="440">Dashed edges are conditional: ModelChunkEvent, and so StructuredStream's partials, arrive only with agent.run(…, stream_tokens=True);</text>
+  <text class="note" x="470" y="458">the delegate receives only the events that pass the filter. Loop events (ThinkEvent, ToolStartEvent, TerminateEvent, …) need no flag.</text>
+  <text class="note" x="470" y="476">Your loop awaits handler.on_event(event) for each event, then on_complete(); on an exception, on_error(exc).</text>
+  <text class="note" x="470" y="494">AgentServer's /stream route writes its own data: frames; SSEHandler and AsyncSSEHandler are for a server of your own.</text>
+</svg>

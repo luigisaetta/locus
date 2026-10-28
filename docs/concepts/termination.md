@@ -18,16 +18,23 @@ termination = (
 )
 ```
 
-Read it left to right: *stop when the refund is issued and we're
-confident in the call, **or** the model flagged it for human review
-("ESCALATE"), **or** we hit ten iterations* — the last branch caps
-runaway tool calls on a live account. A containment flow reads the
-same way — `ToolCalled("isolate_host") & ConfidenceMet(0.9)` — the
-algebra doesn't care which domain the tools come from.
+Read it left to right: *stop when the refund is issued and the
+confidence threshold is met, **or** the model flagged it for human
+review ("ESCALATE"), **or** the loop reaches ten iterations* — the
+last branch caps runaway tool calls on a live account. A containment
+flow reads the same way — `ToolCalled("isolate_host") & ConfidenceMet(0.9)` —
+the algebra does not depend on which domain the tools come from.
 
-This is one of the SDK's signature primitives. Every stop condition is
-inspectable, unit-testable, and serialisable — no hand-rolled `if`
-ladders sprinkled through the response loop.
+Every stop condition is a small Python object with a `check()` method,
+so it can be unit-tested in isolation and composed declaratively, with
+no `if` ladders spread through the response loop.
+
+Each `&` or `|` builds one two-child node, so a composed condition is a
+tree. Here is `(ToolCalled("issue_refund") & ConfidenceMet(0.9)) | MaxIterations(10)`
+as the tree it builds, and the point in the loop where its root is
+evaluated — the start of every iteration, before Think:
+
+{{ locus_diagram termination-algebra }}
 
 ## When to pick which condition
 
@@ -44,20 +51,22 @@ ladders sprinkled through the response loop.
 
 ### 1. Pick one condition
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 from locus.core.termination import MaxIterations
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, issue_refund],
     termination=MaxIterations(8),
 )
 ```
 
-A single condition is a perfectly fine starting point. `MaxIterations`
-is the safety net every production agent should have — it stops the
-loop from grinding your APIs forever on a request it can't resolve.
+A single condition is a sound starting point. `MaxIterations` is the
+safety net every production agent should have: it keeps the loop from
+calling your APIs indefinitely on a request it cannot resolve.
 
 ### 2. Combine with `&` and `|`
 
@@ -102,8 +111,8 @@ and control flow on the normalized `result.stop_reason`.
 | Condition | Triggers when |
 |---|---|
 | `MaxIterations(n)` | The ReAct loop has run `n` turns. |
-| `TokenLimit(n)` | Cumulative model tokens exceed `n`. |
-| `TimeLimit(seconds)` | Wall-clock budget exceeded. |
+| `TokenLimit(n)` | Cumulative model tokens reach `n`. |
+| `TimeLimit(seconds)` | Wall-clock budget reached. |
 | `NoToolCalls()` | The most recent turn produced a summary and zero tool calls. |
 | `ToolCalled(name, *, require_success=False)` | A specific tool was called — e.g. `ToolCalled("issue_refund")`. With `require_success=True`, a call that raised doesn't count; a call a before-tool hook cancelled is recorded without an error, so it still counts. |
 | `ConfidenceMet(threshold)` | Reflexion confidence ≥ threshold. |
@@ -112,8 +121,8 @@ and control flow on the normalized `result.stop_reason`.
 
 Every condition takes `AgentState` and its `check()` returns a
 `(stop: bool, reason: str | None)` tuple. The loop evaluates the
-algebra once per iteration, at the start, before Think; the first one
-that stops wins.
+algebra once per iteration, at the start, before Think; under `|` the
+first child that stops wins, and under `&` every child must stop.
 
 ## Custom conditions
 
@@ -151,7 +160,7 @@ and `|` work across the whole hierarchy.
 | Symptom | Likely cause |
 |---|---|
 | Agent always stops at `MaxIterations` | The "done" condition never fires — model isn't calling `issue_refund`, or confidence never reaches the threshold. Lower the threshold or check the tool name. |
-| `&` / `\|` precedence surprises | Python's normal precedence applies: `&` binds tighter than `\|`. Add parentheses when in doubt — `(A & B) \| C` reads cleaner anyway. |
+| `&` / <code>&#124;</code> precedence surprises | Python's normal precedence applies: `&` binds tighter than <code>&#124;</code>. Add parentheses when in doubt; <code>(A &amp; B) &#124; C</code> states the intent explicitly. |
 | `ConfidenceMet` never trips | `reflexion=True` is required — without it, confidence stays at the default, so the agent never early-stops on a high-confidence resolution. |
 | `ToolCalled("issue_refund")` fires before the refund settles | It checks the *call*, not the *result* — `require_success=True` additionally skips a call that raised, so a terminal tool can reject a submission by raising and the loop continues. For a check on the returned content, pair with `ConfidenceMet` or a `CustomCondition` that inspects `tool_executions`. |
 

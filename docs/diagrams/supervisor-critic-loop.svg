@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  The supervisor + critic loop, as wired by build_supervisor_graph in
+  The supervisor + critic loop, as wired by build_review_loop_graph in
   examples/notebook_21_supervisor_critic_loop.py on locus.multiagent.graph.StateGraph:
     START  -> gather
     gather -> draft                (the analyst agent writes state["notes"])
@@ -54,9 +54,9 @@
   <text class="label" x="684" y="216">APPROVE, or 2 revisions done</text>
 
   <!-- END -> what ships -->
-  <path class="edge" marker-end="url(#ah)" d="M513,278 L396,278"/>
-  <rect class="label-bg" x="420" y="289" width="67" height="20" rx="4"/>
-  <text class="label" x="453.5" y="299">Evidence</text>
+  <path class="edge" marker-end="url(#ah)" d="M513,278 L408,278"/>
+  <rect class="label-bg" x="427" y="289" width="67" height="20" rx="4"/>
+  <text class="label" x="460.5" y="299">Evidence</text>
 
   <path class="edge" marker-end="url(#ah)" d="M637,278 L754,278"/>
   <rect class="label-bg" x="658" y="289" width="77" height="20" rx="4"/>
@@ -89,9 +89,9 @@
     <text class="sub" x="575" y="289">final state</text>
   </g>
   <g class="node allow">
-    <rect x="254" y="249" width="140" height="58" rx="12"/>
+    <rect x="242" y="249" width="164" height="58" rx="12"/>
     <text x="324" y="268">Ships</text>
-    <text class="sub" x="324" y="289">privacy queue</text>
+    <text class="sub" x="324" y="289">allow · privacy queue</text>
   </g>
   <g class="node abstain">
     <rect x="756" y="249" width="134" height="58" rx="12"/>

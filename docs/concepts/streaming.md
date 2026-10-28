@@ -21,6 +21,16 @@ tool-call indicators, and reasoning bubbles; the surface telemetry hooks
 observe; and the surface `AgentServer` re-emits over Server-Sent Events
 for browsers.
 
+The drawing below follows one run from the `agent.run(...)` iterator
+through the stream handlers in `locus.streaming` — which render it in a
+terminal, frame it as SSE for a server of your own, buffer it, filter it
+or fan it out to several handlers — and through `StructuredStream`,
+which yields partially parsed typed output as the tokens arrive.
+`AgentServer`'s `/stream` route (below) is a separate path that does not
+use these handlers.
+
+{{ locus_diagram streaming-paths }}
+
 ## When to consume the event stream
 
 | You want… | Use… |

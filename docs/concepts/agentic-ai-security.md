@@ -116,10 +116,12 @@ GSAR grounding, guardrails (PII / injection / a dangerous-tool denylist;
 allowlist is opt-in), and a tamper-evident audit trail — and returns it
 alongside that trail.
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.control import governed_agent
 
-secured = governed_agent(model="{{ locus_example_model }}", tools=[...])
+secured = governed_agent(model="{{ locus_model }}", tools=[...])
 result = secured.run_sync("...")
 assert secured.audit_trail.verify()   # the chain is intact (tamper-evident)
 ```

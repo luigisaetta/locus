@@ -25,10 +25,10 @@
   </defs>
 
   <!-- row 1: target -> job -> grounding -> abstention -->
-  <path class="edge" marker-end="url(#ah)" d="M162,59 L230,59"/>
-  <path class="edge" marker-end="url(#ah)" d="M386,59 L508,59"/>
-  <rect class="label-bg" x="407" y="70" width="80" height="20" rx="4"/>
-  <text class="label" x="447" y="80">each result</text>
+  <path class="edge" marker-end="url(#ah)" d="M162,59 L224,59"/>
+  <path class="edge" marker-end="url(#ah)" d="M392,59 L508,59"/>
+  <rect class="label-bg" x="410" y="70" width="80" height="20" rx="4"/>
+  <text class="label" x="450" y="80">each result</text>
   <path class="edge" marker-end="url(#ah)" d="M660,59 L782,59"/>
   <rect class="label-bg" x="668" y="70" width="108" height="20" rx="4"/>
   <text class="label" x="722" y="80">below threshold</text>
@@ -39,10 +39,10 @@
   <text class="label" x="338" y="150">proceed</text>
 
   <!-- row 2: evidence -> verification -> admission gate -->
-  <path class="edge" marker-end="url(#ah)" d="M162,250 L230,250"/>
-  <path class="edge" marker-end="url(#ah)" d="M386,250 L508,250"/>
-  <rect class="label-bg" x="392" y="261" width="110" height="20" rx="4"/>
-  <text class="label" x="447" y="271">finding + verdict</text>
+  <path class="edge" marker-end="url(#ah)" d="M162,250 L224,250"/>
+  <path class="edge" marker-end="url(#ah)" d="M392,250 L508,250"/>
+  <rect class="label-bg" x="398" y="261" width="104" height="20" rx="4"/>
+  <text class="label" x="450" y="271">finding + verdict</text>
 
   <!-- admission gate -> the three outcomes -->
   <path class="edge allow" marker-end="url(#ah)" d="M660,235 C722,235 722,162 782,162"/>
@@ -60,7 +60,7 @@
     <text class="sub" x="91" y="70">the AI under test</text>
   </g>
   <g class="node">
-    <rect x="232" y="30" width="154" height="58" rx="12"/>
+    <rect x="226" y="30" width="166" height="58" rx="12"/>
     <text x="309" y="49">red_team · assure</text>
     <text class="sub" x="309" y="70">attack · assess</text>
   </g>
@@ -72,7 +72,7 @@
   <g class="node abstain">
     <rect x="784" y="30" width="156" height="58" rx="12"/>
     <text x="862" y="49">Abstention</text>
-    <text class="sub" x="862" y="70">withheld · no claim</text>
+    <text class="sub" x="862" y="70">abstain · no claim</text>
   </g>
 
   <g class="node">
@@ -81,7 +81,7 @@
     <text class="sub" x="91" y="261">grounded finding</text>
   </g>
   <g class="node">
-    <rect x="232" y="221" width="154" height="58" rx="12"/>
+    <rect x="226" y="221" width="166" height="58" rx="12"/>
     <text x="309" y="240">Verification</text>
     <text class="sub" x="309" y="261">verify()</text>
   </g>

@@ -93,7 +93,7 @@ html {
      step above the figure surface, which --tl-bg-soft equals there. */
   --tl-lane-bg:        #F4F4F5;
   --tl-text-soft:      #52525B;
-  --tl-text-mute:      #71717A;
+  --tl-text-mute:      #67676F;   /* 5.2:1 on the soft background, so lane titles and notes clear AA */
   --tl-text-inverse:   #FFFFFF;
   --tl-on-accent:      #FFFFFF;
   --tl-rule-subtle:    #F4F4F7;
@@ -1998,6 +1998,10 @@ form.md-header__option {
   font-family: var(--locus-mono); font-size: 11px; font-weight: 500;
   letter-spacing: 0.08em; text-transform: uppercase; fill: var(--tl-text-mute);
 }
+/* 11px uppercase on the lane band: the light mute token measures 4.4:1 there,
+   under the 4.5:1 floor for small text, so light uses the soft token (7:1).
+   The dark mute token clears the floor on its band and is left alone. */
+[data-md-color-scheme="default"] .tl-dia .lane-title { fill: var(--tl-text-soft); }
 .tl-dia .note { font-size: 12.5px; fill: var(--tl-text-mute); text-anchor: middle; }
 
 /* On a phone the column is ~330px, which would shrink a diagram's labels to
@@ -2521,9 +2525,14 @@ form.md-header__option {
 
 /* Identifiers in table cells never break mid-token. Material's code spans use
    word-break: break-word, which turned `SlidingWindowManager` into four
-   fragments in a narrow column; a table that needs the width scrolls inside
-   Material's scroll wrapper instead. */
-.md-typeset table:not([class]) code { white-space: nowrap; }
+   fragments in a narrow column. Breaking only at spaces keeps every token
+   whole while a multi-word snippet can still wrap, so a table only scrolls
+   when a single token is wider than its column. */
+.md-typeset table:not([class]) code {
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: normal;
+}
 
 /* The landing page is a marketing page: no edit/view-source icons over the hero. */
 .md-content__inner:has(> .locus-hero) > .md-content__button,
@@ -2622,3 +2631,44 @@ form.md-header__option {
    still takes a slot at the end of the title line; on a title that fills the
    column it wraps alone onto a second, empty-looking line. Drop it on H1 only. */
 .md-typeset h1 .headerlink { display: none; }
+
+/* ===================================================================
+   Table filter — docs/javascripts/table-filter.js adds a search box above
+   any article table with fifteen or more rows (event catalogues, environment
+   variables, backend comparisons). Same field styling as the Examples filter.
+   =================================================================== */
+.md-typeset .locus-table-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-sm);
+  margin: var(--tl-space-md) 0 var(--tl-space-xs);
+}
+.md-typeset .locus-table-filter__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--tl-text);
+  background: var(--tl-surface);
+  border: 1px solid var(--tl-rule);
+  border-radius: var(--tl-radius-md);
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.md-typeset .locus-table-filter__input:focus {
+  outline: none;
+  border-color: var(--tl-accent);
+  box-shadow: 0 0 0 3px var(--tl-accent-subtle);
+}
+.md-typeset .locus-table-filter__count {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  color: var(--tl-text-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Catalogue filter: rows and sections it hides, and a legible placeholder in
+   both schemes (the browser default is too faint on the dark surface). */
+.locus-filter-hidden { display: none !important; }
+.md-typeset .locus-table-filter__input::placeholder,
+.notebook-filter__input::placeholder { color: var(--tl-text-mute); opacity: 1; }

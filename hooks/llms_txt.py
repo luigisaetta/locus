@@ -26,6 +26,7 @@ is dropped.
 
 from __future__ import annotations
 
+import html
 import re
 from pathlib import Path
 from typing import Any
@@ -44,6 +45,9 @@ _FILTER = re.compile(r'\n*<div class="notebook-filter">.*?</div>\n*', re.DOTALL)
 _SVG_TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.DOTALL)
 _MKDOCSTRINGS = re.compile(r"^:::\s+(\S+).*(?:\n[ \t]+\S.*)*", re.MULTILINE)
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+_TAB_LABEL = re.compile(r'^=== "[^"\n]+"\s*$')
+#: Inline HTML code used in table cells for a pipe (``<code>a &#124; b</code>``).
+_HTML_CODE = re.compile(r"<code>(.*?)</code>", re.DOTALL)
 
 #: Collected in on_page_markdown, written in on_post_build.
 _pages: dict[str, dict[str, Any]] = {}
@@ -74,6 +78,35 @@ def _expand_snippets(markdown: str, roots: list[Path]) -> str:
     return _SNIPPET.sub(expand, markdown)
 
 
+def _first_tab_only(markdown: str) -> str:
+    """Collapse each pymdownx tab set to its first tab's content, dedented.
+
+    The provider tab sets show one code block once per provider; a reader of
+    the Markdown twin wants the example once, not four times.
+    """
+    lines = markdown.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        if not _TAB_LABEL.match(lines[i]):
+            out.append(lines[i])
+            i += 1
+            continue
+        first = True
+        while i < len(lines) and _TAB_LABEL.match(lines[i]):
+            i += 1
+            block: list[str] = []
+            while i < len(lines) and (lines[i].startswith("    ") or lines[i] == ""):
+                block.append(lines[i])
+                i += 1
+            if first:
+                while block and block[0] == "":
+                    block.pop(0)
+                out.extend(line.removeprefix("    ") for line in block)
+                first = False
+    return "\n".join(out)
+
+
 def _plain_markdown(markdown: str, roots: list[Path]) -> str:
     def figure(match: re.Match[str]) -> str:
         title = _SVG_TITLE.search(match.group(0))
@@ -89,6 +122,8 @@ def _plain_markdown(markdown: str, roots: list[Path]) -> str:
     text = _FACTS.sub(facts, text)
     text = _FILTER.sub("\n\n", text)
     text = _HTML_COMMENT.sub("", text)
+    text = _first_tab_only(text)
+    text = _HTML_CODE.sub(lambda m: "`" + html.unescape(m.group(1)) + "`", text)
     return _expand_snippets(text, roots).strip() + "\n"
 
 

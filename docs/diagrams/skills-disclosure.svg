@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Progressive disclosure as locus.skills implements it. Drawn from src/locus; line numbers
+  as of this commit.
+    the skill folder     SKILL.md = YAML front matter + Markdown body       skills/models.py:11-22
+                         front matter: name, description (required, :189-197), allowed-tools (:200-205),
+                         compatibility (:251); the body becomes Skill.instructions (:243)
+                         resource folders scripts/, references/, assets/   skills/models.py:42
+    Skill.from_file()    reads SKILL.md and keeps the folder as Skill.path  skills/models.py:141-171, :174-252
+                         SkillsPlugin(skills=[…]) accepts Skill objects, one skill folder (from_file) or a
+                         parent folder (from_directory)                     skills/plugin.py:177-187
+    SkillsPlugin         AgentConfig(skills=[…]) builds SkillsPlugin(skills=…), appends PluginAdapter(plugin)
+                         to the agent's hooks and registers get_activation_tool()   agent/initializer.py:112-118
+                         catalog is on by default (no active=, no router=)  skills/plugin.py:197
+    L1 catalog           on_before_model_call hook                          skills/plugin.py:311-337
+                         <available_skills> with <name> and <description> per skill; <location> only when
+                         the skill has a path (Skill.from_file sets it; a Skill(…) built in code has none)
+                         and show_paths is on (default True)                skills/plugin.py:246-265, :260-261, :112
+                         Message.system(catalog_preamble + catalog) inserted after the first system message
+                         into event.messages                                skills/plugin.py:326-337
+                         the orchestrator returns that list and the loop sends it to the model; the state and
+                         its checkpoints never hold it                      skills/plugin.py:313-317,
+                         agent/hook_orchestrator.py:94-110, agent/runtime_loop.py:3218, :3250
+    L2 instructions      the model calls the `skills` tool with skill_name  skills/plugin.py:102, :381-428
+                         the tool returns skill.instructions, then a footer: Allowed tools (when allowed_tools),
+                         Compatibility (when set), Location (when path and show_paths)   skills/plugin.py:267-287
+                         unknown name -> "Unknown skill: … Available: …"    skills/plugin.py:403-406
+                         the returned string is a tool result appended to the state as Message.tool(result)
+                                                                            agent/runtime_loop.py:1843-1844
+    L3 resources         the same response ends with "Resource files:" and the relative paths from scripts/,
+                         references/, assets/ (show_paths only)             skills/plugin.py:289-295,
+                         skills/models.py:282-304
+                         the plugin's only tool is `skills`; it registers no file reader   skills/plugin.py:373-379,
+                         agent/initializer.py:118. A file's contents enter only as the result of a read tool
+                         the host registers.
+    host-picked skills   SkillsPlugin(active=…) or router=: the active skills' instructions go in as a
+                         system message before every model call; catalog and `skills` tool off by default,
+                         both back on with catalog=True                     skills/plugin.py:11-16, :121-132,
+                                                                            :197, :217-244, :322-325, :373-379
+  Paint order: the three level lanes are drawn before any edge, label or node that sits on them,
+  because .lane rect has an opaque fill (docs/stylesheets/locus.css, .tl-dia .lane rect).
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 600" role="img" aria-labelledby="title desc">
+  <title id="title">Progressive disclosure of skills</title>
+  <desc id="desc">On disk a skill is a folder: a SKILL.md whose YAML front matter gives the name, description, allowed-tools and compatibility and whose Markdown body holds the instructions, next to optional scripts, references and assets folders. Skill.from_file() parses the folder for SkillsPlugin, which AgentConfig(skills=[...]) installs; its on_before_model_call hook and its skills(skill_name) tool do the disclosure in three levels. L1, the catalog, is in every request: before every model call the hook inserts a system message after your system prompt with an available_skills block naming the name and description of every skill, plus the location of a skill loaded from disk (show_paths, on by default); it lives in the request only and is never written to the state. L2, the instructions, arrive after activation: when the model calls the skills tool with a skill name, the tool returns the SKILL.md body plus a footer with Allowed tools, Compatibility and Location when present, and that tool result stays in the conversation. L3, the resources, are listed, not loaded: the same tool result ends with the paths of the files in scripts, references and assets. The plugin registers no file reader, so a listed file is read only when the model calls a file read tool you register, whose result brings the file in. Each row of the skill folder sits level with the level it feeds: name and description with L1, the Markdown body, allowed-tools and compatibility with L2, the three folders with L3. With SkillsPlugin(active=...) or router= the host picks the skills instead: their instructions go in as a system message, with no catalog and no skills tool unless catalog=True.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the skill folder on disk; each row sits level with the lane it feeds -->
+  <g class="lane">
+    <rect x="16" y="16" width="192" height="526" rx="12"/>
+    <text class="lane-title" x="32" y="38">Skill folder</text>
+  </g>
+  <g class="node">
+    <rect x="28" y="52" width="160" height="50" rx="12"/>
+    <text x="108" y="67">SKILL.md</text>
+    <text class="sub" x="108" y="88">front matter + body</text>
+  </g>
+  <text class="note" x="108" y="168">shown at L1</text>
+  <g class="node"><rect x="50" y="186" width="116" height="26" rx="8"/><text class="sub" x="108" y="199">name</text></g>
+  <g class="node"><rect x="50" y="220" width="116" height="26" rx="8"/><text class="sub" x="108" y="233">description</text></g>
+  <text class="note" x="108" y="300">shown at L2</text>
+  <g class="node"><rect x="50" y="310" width="116" height="26" rx="8"/><text class="sub" x="108" y="323">Markdown body</text></g>
+  <g class="node"><rect x="50" y="340" width="116" height="26" rx="8"/><text class="sub" x="108" y="353">allowed-tools</text></g>
+  <g class="node"><rect x="50" y="370" width="116" height="26" rx="8"/><text class="sub" x="108" y="383">compatibility</text></g>
+  <text class="note" x="108" y="432">listed at L3</text>
+  <g class="node"><rect x="50" y="446" width="116" height="26" rx="8"/><text class="sub" x="108" y="459">scripts/</text></g>
+  <g class="node"><rect x="50" y="474" width="116" height="26" rx="8"/><text class="sub" x="108" y="487">references/</text></g>
+  <g class="node"><rect x="50" y="502" width="116" height="26" rx="8"/><text class="sub" x="108" y="515">assets/</text></g>
+
+  <!-- SKILL.md -> plugin -->
+  <path class="edge" marker-end="url(#ah)" d="M188,77 L350,77"/>
+  <rect class="label-bg" x="217" y="67" width="124" height="20" rx="4"/>
+  <text class="label" x="279" y="77">Skill.from_file()</text>
+
+  <!-- the plugin -->
+  <g class="node primary">
+    <rect x="352" y="48" width="224" height="58" rx="12"/>
+    <text x="464" y="67">SkillsPlugin</text>
+    <text class="sub" x="464" y="88">AgentConfig(skills=[…])</text>
+  </g>
+  <text class="note" x="755" y="70">hook: on_before_model_call</text>
+  <text class="note" x="755" y="90">tool: skills(skill_name)</text>
+
+  <!-- the three level lanes, drawn first: their fill is opaque, so every edge, label
+       and node that sits on them comes after them in the file -->
+  <g class="lane">
+    <rect x="292" y="146" width="632" height="120" rx="12"/>
+    <text class="lane-title" x="308" y="168">L1 · Catalog</text>
+  </g>
+  <g class="lane">
+    <rect x="292" y="278" width="632" height="120" rx="12"/>
+    <text class="lane-title" x="308" y="300">L2 · Instructions</text>
+  </g>
+  <g class="lane">
+    <rect x="292" y="410" width="632" height="132" rx="12"/>
+    <text class="lane-title" x="308" y="432">L3 · Resources</text>
+  </g>
+
+  <!-- plugin -> L1 -->
+  <path class="edge" marker-end="url(#ah)" d="M464,106 L464,184"/>
+  <rect class="label-bg" x="380" y="116" width="168" height="20" rx="4"/>
+  <text class="label" x="464" y="126">before every model call</text>
+
+  <!-- L1: the catalog -->
+  <text class="note" x="848" y="168">in every request</text>
+  <g class="node">
+    <rect x="352" y="186" width="224" height="58" rx="12"/>
+    <text x="464" y="205">Catalog</text>
+    <text class="sub" x="464" y="226">&lt;available_skills&gt;</text>
+  </g>
+  <text class="note" x="752" y="198">name and description; location for a skill on disk</text>
+  <text class="note" x="752" y="218">a system message after your system prompt</text>
+  <text class="note" x="752" y="238">in the request only, never in the state</text>
+
+  <!-- L1 -> L2: only if the model activates a skill -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M464,244 L464,316"/>
+  <rect class="label-bg on-lane" x="476" y="290" width="224" height="20" rx="4"/>
+  <text class="label" x="588" y="300">the model calls skills(skill_name)</text>
+
+  <!-- L2: the instructions -->
+  <text class="note" x="848" y="300">after activation</text>
+  <g class="node">
+    <rect x="352" y="318" width="224" height="58" rx="12"/>
+    <text x="464" y="337">Instructions</text>
+    <text class="sub" x="464" y="358">returned by skills()</text>
+  </g>
+  <g class="node optional"><rect x="592" y="318" width="112" height="26" rx="8"/><text class="sub" x="648" y="331">Allowed tools</text></g>
+  <g class="node optional"><rect x="712" y="318" width="112" height="26" rx="8"/><text class="sub" x="768" y="331">Compatibility</text></g>
+  <g class="node optional"><rect x="832" y="318" width="76" height="26" rx="8"/><text class="sub" x="870" y="331">Location</text></g>
+  <text class="note" x="752" y="362">the SKILL.md body, plus this footer when present</text>
+  <text class="note" x="752" y="382">a tool result: it stays in the conversation</text>
+
+  <!-- L2 -> L3: the same response -->
+  <path class="edge" marker-end="url(#ah)" d="M464,376 L464,448"/>
+  <rect class="label-bg on-lane" x="476" y="422" width="152" height="20" rx="4"/>
+  <text class="label" x="552" y="432">in the same tool result</text>
+
+  <!-- L3: the resources -->
+  <text class="note" x="848" y="432">listed, not loaded</text>
+  <g class="node">
+    <rect x="352" y="450" width="224" height="58" rx="12"/>
+    <text x="464" y="469">Resource listing</text>
+    <text class="sub" x="464" y="490">scripts/ references/ assets/</text>
+  </g>
+  <path class="edge dashed" marker-end="url(#ah)" d="M576,479 L738,479"/>
+  <rect class="label-bg on-lane" x="591" y="469" width="132" height="20" rx="4"/>
+  <text class="label" x="657" y="479">reads a listed file</text>
+  <g class="node optional">
+    <rect x="740" y="450" width="168" height="58" rx="12"/>
+    <text x="824" y="469">File read tool</text>
+    <text class="sub" x="824" y="490">one you register</text>
+  </g>
+  <text class="note" x="464" y="528">paths only: the plugin registers no file reader</text>
+  <text class="note" x="824" y="528">its result brings the file in</text>
+
+  <text class="note" x="470" y="566">Dashed: the model decides whether to call skills(); a listed file is read only by a tool you register, which the plugin does not ship.</text>
+  <text class="note" x="470" y="586">With SkillsPlugin(active=…) or router= the host picks the skills: their instructions go in as a system message, with no catalog and no skills tool by default.</text>
+</svg>

@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The tool pipeline: from a Python function to the observation the model reads. Drawn from
+  src/locus; line numbers as of this commit.
+    DEFINE, once, before the run: @tool runs when the module is imported, registration when the
+    Agent is built; only the schemas edge runs again, at every model call.
+    function -> @tool        tool() (tools/decorator.py:347-436) calls generate_schema(func, description)
+                             (:416; tools/schema.py:86-149): inspect.signature + get_type_hints (:97-98),
+                             description from the docstring unless overridden (:101-102), per-parameter
+                             descriptions parsed from an Args: section (:105, :167-206), each hint mapped to a
+                             JSON Schema type by python_type_to_json_type (:124, :19-78), a default makes the
+                             parameter optional, no default puts it in required (:131-134). Parameters named
+                             ctx/context or typed ToolContext are left out of the schema (:113, :120).
+    @tool -> Tool            Tool(name=name or fn.__name__, description, parameters, fn, idempotent, labels,
+                             sandbox, deferred, emits_progress) (tools/decorator.py:419-429; class :45-105).
+    Tool -> ToolRegistry     Agent(tools=[...]) is registered Tool by Tool into a ToolRegistry when the Agent
+                             is built (agent/agent.py:282 -> initialize_agent, agent/initializer.py:74-79;
+                             ToolRegistry.register tools/registry.py:34-39).
+    ToolRegistry -> model    to_openai_schemas() (tools/registry.py:67-79; Tool.to_openai_schema :280-296)
+                             is read at every model call inside _get_model_response and sent as tools=
+                             (agent/runtime_loop.py:3215, :3249-3252). A deferred tool is listed only once
+                             activated (registry.py:78, activate :85-94), so it shows up on the next call.
+    CALL, every tool call
+    model -> executor        response.message.tool_calls (agent/runtime_loop.py:1398); each ToolCall carries
+                             name and arguments (core/messages.py:26-40). The executor is ConcurrentExecutor
+                             or SequentialExecutor per tool_execution (agent/initializer.py:85-89; config.py:560);
+                             the loop streams the batch through it with a ToolContextFactory (runtime_loop.py:1535-1549).
+                             Arguments that were not valid JSON return an error result without running
+                             (executor.py:226-237, :395-396).
+    executor -> Tool         registry.get(tool_call.name), unknown name -> error result (tools/executor.py:399-406);
+                             _bound_context builds the ToolContext from the factory (:240-249, :275-286) and
+                             tool.execute(ctx=ctx, **tool_call.arguments) runs inside bind_tool_context (:410-414).
+    Tool -> function         Tool.execute (tools/decorator.py:115-181): _coerce_arguments validates each argument
+                             against the parameter's annotation with pydantic in lax mode, retries a failing string
+                             as JSON, stringifies numbers for str parameters and passes through what still fails
+                             (:127, :183-232); sig.bind() rejects missing arguments with a message naming them
+                             (:145-162); ctx is injected only when the signature has a ctx or context parameter
+                             (:133-138); an async function is awaited, a sync one runs in the default thread pool
+                             with the contextvars copied (:165-179). A sandboxed tool ships its source to the
+                             sandbox instead (:129-130, :234-258); not drawn.
+    ToolContext              tool_call_id, tool_name, agent_id, run_id, iteration, state, invocation_metadata,
+                             ephemeral_metadata, tool_config (tools/context.py:19-59); current_tool_context()
+                             reaches it without a parameter (:112-124); report_progress (:162-184).
+    function -> ToolResult   Tool.execute ends with _format_result: None -> "Success (no output)", str as is,
+                             BaseModel -> model_dump_json(), dict/list -> json.dumps, else str()
+                             (tools/decorator.py:181, :260-278). The executor then wraps that str with
+                             tool_result_from_output into the ToolResult: content, duration_ms, and a
+                             ToolOutput's structured_content / content_blocks, is_error -> error
+                             (tools/executor.py:189-223, called :418; ToolOutput tools/output.py:63-89).
+                             A raising tool -> ToolResult(error="Type: sanitized first line") (:420-430, :183-186).
+    ToolResult -> size cap   in the loop, only when content is longer than max_tool_result_length
+                             (agent/runtime_loop.py:1724-1727; config.py:598). With a tool_result_store
+                             configured, ToolResultStore.maybe_offload stores it and inlines
+                             "[TOOL RESULT STORED externally] ... key=" plus a preview (:1736-1741;
+                             tools/result_storage.py:112-139, marker :69); without one and with ObservationPack
+                             on, _intake_large_output passes it whole up to the pack's inline limit and above
+                             that archives it whole and cuts it around a pointer (:1729-1735, :3438-3461);
+                             else truncate_tool_output keeps head and tail around a marker (:1745-1752;
+                             :416-438, tool_result_head_fraction config.py:611).
+    size cap -> observation  after-tool hooks may replace or retry the result (:1770-1810); then
+                             state.with_message(Message.tool(result)) (:1844): content, or "Error: " + error
+                             when the result has an error and no content (core/messages.py:142-158).
+                             The next model call reads it with the rest of the messages.
+    Not drawn: before-tool hooks (:1407), hook cancel (:1413-1446), the idempotent cache (:1461-1480),
+    sandboxed execution, interrupts from ask_user (:1687-1713).
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 516" role="img" aria-labelledby="title desc">
+  <title id="title">The tool pipeline: from a Python function to an observation</title>
+  <desc id="desc">Two lanes. Define, once, before the run: your Python function, with its type hints and docstring, goes through the @tool decorator when its module is imported; generate_schema() turns the hints into JSON Schema and the result is a Tool holding the name, description, parameters and the function itself. Agent(tools=[...]) registers it in the ToolRegistry when the Agent is built, and on every model call to_openai_schemas() gives the model the schemas it may call, so a deferred tool that was activated is offered from the next call on. Call, every tool call: the model returns a ToolCall with a name and arguments; the executor, concurrent or sequential per tool_execution, looks the Tool up with registry.get(name) and calls execute(), which coerces the arguments to the parameter types and binds them to the signature before running your function, awaited when async and in a thread pool when sync, with a ToolContext carrying run_id, iteration, state and metadata when the function has a ctx or context parameter. execute() ends by shaping the return value with _format_result(), and the executor wraps that with tool_result_from_output() into a ToolResult with content and error; a returned ToolOutput keeps its structured_content and its is_error flag becomes the error. A result over max_tool_result_length is stored whole by a ToolResultStore, which inlines a reference key; without a store, an ObservationPack that is on keeps it up to its own inline limit and above that archives it whole behind a pointer; otherwise it is cut to its head and tail. Message.tool() turns the result, or Error: followed by the error, into the observation the model reads on its next call.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- lane 1: define, what @tool (at import) and Agent(tools=[...]) (when the Agent is built) do once;
+       the schemas edge is the exception and says so -->
+  <g class="lane">
+    <rect x="16" y="16" width="908" height="124" rx="12"/>
+    <text class="lane-title" x="32" y="38">Define · once, before the run</text>
+  </g>
+
+  <!-- lane 2: call, what happens for every tool call -->
+  <g class="lane">
+    <rect x="16" y="154" width="908" height="248" rx="12"/>
+    <text class="lane-title" x="32" y="176">Call · every tool call</text>
+  </g>
+
+  <!-- define row: function -> @tool -> Tool -> ToolRegistry -> model; the schemas are re-read every model call -->
+  <path class="edge" marker-end="url(#ah)" d="M184,90 L208,90"/>
+  <path class="edge" marker-end="url(#ah)" d="M366,90 L390,90"/>
+  <path class="edge" marker-end="url(#ah)" d="M548,90 L572,90"/>
+  <path class="edge" marker-end="url(#ah)" d="M730,90 L820,90"/>
+  <rect class="label-bg on-lane" x="742" y="64" width="68" height="20" rx="4"/>
+  <text class="label" x="776" y="74">every call</text>
+  <rect class="label-bg on-lane" x="744" y="96" width="64" height="20" rx="4"/>
+  <text class="label" x="776" y="106">schemas</text>
+
+  <!-- call row: the model's ToolCall comes back through the executor to the Tool, which runs the function -->
+  <path class="edge" marker-end="url(#ah)" d="M822,228 L732,228"/>
+  <rect class="label-bg on-lane" x="745" y="234" width="62" height="20" rx="4"/>
+  <text class="label" x="776" y="244">ToolCall</text>
+  <path class="edge" marker-end="url(#ah)" d="M574,228 L550,228"/>
+  <path class="edge" marker-end="url(#ah)" d="M392,228 L368,228"/>
+  <path class="edge dashed" marker-end="url(#ah)" d="M184,228 L208,228"/>
+
+  <!-- the return value drops into the result row -->
+  <path class="edge" marker-end="url(#ah)" d="M288,266 L288,312"/>
+  <rect class="label-bg on-lane" x="244" y="279" width="88" height="20" rx="4"/>
+  <text class="label" x="288" y="289">return value</text>
+
+  <!-- result row: ToolResult -> size cap -> observation -> model -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M184,352 L208,352"/>
+  <path class="edge" marker-end="url(#ah)" d="M366,352 L390,352"/>
+  <path class="edge" marker-end="url(#ah)" d="M548,352 L572,352"/>
+  <path class="edge" marker-end="url(#ah)" d="M730,352 L820,352"/>
+  <rect class="label-bg on-lane" x="736" y="358" width="80" height="20" rx="4"/>
+  <text class="label" x="776" y="368">observation</text>
+
+  <!-- define nodes -->
+  <g class="node">
+    <rect x="28" y="52" width="156" height="76" rx="12"/>
+    <text x="106" y="73">Python function</text>
+    <text class="sub" x="106" y="93">def lookup_order(…)</text>
+    <text class="sub" x="106" y="111">hints · docstring</text>
+  </g>
+  <g class="node">
+    <rect x="210" y="52" width="156" height="76" rx="12"/>
+    <text x="288" y="73">@tool</text>
+    <text class="sub" x="288" y="93">generate_schema()</text>
+    <text class="sub" x="288" y="111">hints → JSON Schema</text>
+  </g>
+  <g class="node">
+    <rect x="574" y="52" width="156" height="76" rx="12"/>
+    <text x="652" y="73">ToolRegistry</text>
+    <text class="sub" x="652" y="93">Agent(tools=[…])</text>
+    <text class="sub" x="652" y="111">to_openai_schemas()</text>
+  </g>
+
+  <!-- the Tool: built once, executed on every call; execute() coerces, binds, runs, then shapes the return value -->
+  <g class="node primary">
+    <rect x="392" y="52" width="156" height="214" rx="12"/>
+    <text class="sub" x="470" y="81">name · description</text>
+    <text class="sub" x="470" y="99">parameters · fn</text>
+    <text x="470" y="159">Tool</text>
+    <text class="sub" x="470" y="213">execute(**kwargs)</text>
+    <text class="sub" x="470" y="231">coerce · sig.bind()</text>
+    <text class="sub" x="470" y="249">_format_result()</text>
+  </g>
+
+  <!-- call nodes -->
+  <g class="node optional">
+    <rect x="28" y="190" width="156" height="76" rx="12"/>
+    <text x="106" y="211">ToolContext</text>
+    <text class="sub" x="106" y="231">run_id · iteration</text>
+    <text class="sub" x="106" y="249">state · metadata</text>
+  </g>
+  <g class="node">
+    <rect x="210" y="190" width="156" height="76" rx="12"/>
+    <text x="288" y="211">Your function</text>
+    <text class="sub" x="288" y="231">async: awaited</text>
+    <text class="sub" x="288" y="249">sync: thread pool</text>
+  </g>
+  <g class="node">
+    <rect x="574" y="190" width="156" height="76" rx="12"/>
+    <text x="652" y="211">Executor</text>
+    <text class="sub" x="652" y="231">registry.get(name)</text>
+    <text class="sub" x="652" y="249">tool_execution=…</text>
+  </g>
+
+  <!-- result nodes -->
+  <g class="node optional">
+    <rect x="28" y="314" width="156" height="76" rx="12"/>
+    <text x="106" y="335">ToolOutput</text>
+    <text class="sub" x="106" y="355">structured_content</text>
+    <text class="sub" x="106" y="373">is_error</text>
+  </g>
+  <g class="node">
+    <rect x="210" y="314" width="156" height="76" rx="12"/>
+    <text x="288" y="335">ToolResult</text>
+    <text class="sub" x="288" y="355">built by Executor</text>
+    <text class="sub" x="288" y="373">content · error</text>
+  </g>
+  <g class="node optional">
+    <rect x="392" y="314" width="156" height="76" rx="12"/>
+    <text x="470" y="335">Size cap</text>
+    <text class="sub" x="470" y="355">cut to head + tail</text>
+    <text class="sub" x="470" y="373">or ToolResultStore</text>
+  </g>
+  <g class="node">
+    <rect x="574" y="314" width="156" height="76" rx="12"/>
+    <text x="652" y="335">Observation</text>
+    <text class="sub" x="652" y="355">Message.tool()</text>
+    <text class="sub" x="652" y="373">content or Error: …</text>
+  </g>
+
+  <!-- the model: offered the schemas, returns the call, reads the observation -->
+  <g class="node">
+    <rect x="822" y="52" width="90" height="338" rx="12"/>
+    <text x="867" y="211">Model</text>
+    <text class="sub" x="867" y="232">decides</text>
+  </g>
+
+  <text class="note" x="470" y="428">to_openai_schemas() is read on every model call, so a deferred tool that was activated is offered from the next call on.</text>
+  <text class="note" x="470" y="446">ToolContext is injected only when the function has a ctx or context parameter; that parameter is left out of the schema.</text>
+  <text class="note" x="470" y="464">ToolOutput is a str: _format_result() passes it through; tool_result_from_output() keeps its structured_content and makes is_error the error.</text>
+  <text class="note" x="470" y="482">Over max_tool_result_length a ToolResultStore stores it, key inline, else an ObservationPack archives it whole, else it keeps head and tail.</text>
+  <text class="note" x="470" y="500">A tool that raises becomes a ToolResult whose error the model reads as Error: …; tool hooks and the idempotent cache wrap the executor.</text>
+</svg>

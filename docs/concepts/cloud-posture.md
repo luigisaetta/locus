@@ -68,6 +68,8 @@ controls, neither trusting the model.
 system prompt, a structured `PostureReport` output schema, and
 reflexion + grounding.
 
+{{ locus_model_tabs }}
+
 ```python
 from locus_security import create_soc_analyst, SecurityControls
 
@@ -79,7 +81,7 @@ controls = SecurityControls(
     compartment_id="ocid1.tenancy.oc1..xxx",      # the tenancy or compartment under review
 )
 analyst = create_soc_analyst(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     controls=controls,
     scope="Focus on IAM: MFA for console users and API keys on administrators.",
 )

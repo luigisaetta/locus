@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  One iteration of Agent.run (locus/agent/runtime_loop.py), seen from the state's side.
+  AgentState is a frozen Pydantic model: every with_* is model_copy(update=…) and returns a
+  new instance; the instance it was called on is unchanged (core/state.py:63-68, :156).
+    loaded or fresh     _create_initial_state (runtime_loop.py:2659): checkpointer.load(thread_id)
+                        starts a new turn on the thread's state (:2689-2690, :2730-2758), otherwise a
+                        fresh state with the system and user messages (:2707-2708)
+    hooks first         on_iteration_end for the previous iteration, on_iteration_start for this one;
+                        both receive (iteration, state) and return nothing (:848-850,
+                        hook_orchestrator.py:78-90)
+    termination checks  state.should_terminate (:912, state.py:466-511), before Think
+    -> Think            state.next_iteration() is with_iteration(iteration + 1) (:987, state.py:180-191)
+    Think               with_message(response.message) (:3306); with_response_usage, which is
+                        with_token_usage (:1104, state.py:317-342, :271-315); on_before_model_call and
+                        on_after_model_call get a write-protected event (:3218, :3283,
+                        hook_orchestrator.py:94-133)
+    Execute             per tool call: on_before_tool_call / on_after_tool_call events (:1407, :1767);
+                        ToolExecution -> with_tool_execution (:1811-1819); Message.tool(result) ->
+                        with_message (:1844)
+    Reflect             when reflexion is configured and iteration % evaluate_every_n_iterations == 0
+                        (:1858-1864): Reflector.adjust_state_confidence -> state.adjust_confidence ->
+                        with_confidence (:3846, reasoning/reflexion.py:451-470, state.py:226-251);
+                        guidance, when there is any, via with_message (:1885). Otherwise the state
+                        passes straight on (the bypass labelled otherwise).
+    record              ReasoningStep -> with_reasoning_step (:1888-1896, state.py:51-60, :217-224)
+    Checkpoint          _checkpoint_iteration: checkpointer.save(_durable(state), thread_id, id) when the
+                        iteration is due one (:1900, :2517-2549; interval :2501-2515); _durable strips
+                        memory blocks, turn-only messages and ephemeral metadata (:442-460)
+    run ends            _checkpoint_final: checkpointer.save(_durable(state), thread_id) (:1957, :2461-2475)
+    checkpointer API    BaseCheckpointer.save(state, thread_id, checkpoint_id, metadata) and load(thread_id)
+                        (memory/checkpointer.py:58-98); backends serialise with to_checkpoint /
+                        from_checkpoint (state.py:528-535)
+    hooks never write   iteration hooks hold the frozen state; model and tool hooks hold a ProtectedEvent
+                        whose only writable fields are signals the loop folds into what it records
+                        (hooks/provider.py:28-105, :216, :268; runtime_loop.py:145-163).
+                        on_before_invocation, once before the loop, may return a replacement state
+                        (:814, hook_orchestrator.py:49-61); not drawn.
+  Also not drawn: with_provider_state for server-stateful transports (:3317), the planning, budget and
+  verification system messages (:991-1016, :1849-1856), context compaction (:1050), and the frozen
+  LocusEvents the run yields to its caller (core/events.py:40).
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 656" role="img" aria-labelledby="title desc">
+  <title id="title">Immutable state flowing through one iteration of the agent loop</title>
+  <desc id="desc">One iteration of the agent loop, drawn from the state's side. The frozen AgentState enters at the top: loaded by the checkpointer when a turn starts on an existing thread_id, otherwise built fresh. Hooks see it first through on_iteration_start, then the termination checks run. next_iteration, which is with_iteration, returns a new instance for Think; Think adds the model's reply with with_message and its usage with with_token_usage; Execute records each tool call with with_tool_execution and its result with with_message; when reflection is configured and due, Reflect adjusts the score with with_confidence, otherwise the state passes straight on; with_reasoning_step records the iteration, and the checkpointer saves the state object when a checkpoint is due and again when the run ends. The next iteration starts from the newest instance. Hooks read the state they are given (on_iteration_start, on_iteration_end) or a write-protected event (on_before_model_call, on_after_model_call, on_before_tool_call, on_after_tool_call); none of them writes the state, which only the loop builds, one copy at a time. An instance already handed to a node, a hook or the checkpointer never changes.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- hooks: observers, one row per step they are called at -->
+  <g class="lane">
+    <rect x="16" y="30" width="300" height="554" rx="12"/>
+    <text class="lane-title" x="30" y="52">Hooks</text>
+  </g>
+  <g class="node"><rect x="28" y="72" width="276" height="26" rx="8"/><text class="sub" x="166" y="85">on_iteration_start(iteration, state)</text></g>
+  <g class="node"><rect x="28" y="166" width="276" height="26" rx="8"/><text class="sub" x="166" y="179">on_before_model_call(event)</text></g>
+  <g class="node"><rect x="28" y="198" width="276" height="26" rx="8"/><text class="sub" x="166" y="211">on_after_model_call(event)</text></g>
+  <g class="node"><rect x="28" y="280" width="276" height="26" rx="8"/><text class="sub" x="166" y="293">on_before_tool_call(event)</text></g>
+  <g class="node"><rect x="28" y="312" width="276" height="26" rx="8"/><text class="sub" x="166" y="325">on_after_tool_call(event)</text></g>
+  <text class="note" x="166" y="418">a hook reads the state it is given;</text>
+  <text class="note" x="166" y="436">only the loop builds the next one</text>
+  <g class="node"><rect x="28" y="540" width="276" height="26" rx="8"/><text class="sub" x="166" y="553">on_iteration_end(iteration, state)</text></g>
+
+  <!-- the state handed to hooks -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M378,85 H317"/>
+  <path class="edge dashed" marker-end="url(#ah)" d="M378,195 H317"/>
+  <path class="edge dashed" marker-end="url(#ah)" d="M378,309 H317"/>
+  <path class="edge dashed" marker-end="url(#ah)" d="M378,553 H317"/>
+
+  <!-- next iteration: the newest instance goes back to the top -->
+  <path class="edge" marker-end="url(#ah)" d="M468,582 V588 Q468,600 480,600 H922 Q934,600 934,588 V32 Q934,20 922,20 H480 Q468,20 468,32 V56"/>
+  <rect class="label-bg" x="647" y="10" width="106" height="20" rx="4"/>
+  <text class="label" x="700" y="20">next iteration</text>
+
+  <!-- state -> think: next_iteration() -->
+  <path class="edge" marker-end="url(#ah)" d="M468,114 V166"/>
+  <rect class="label-bg" x="480" y="130" width="243" height="20" rx="4"/>
+  <text class="label" x="602" y="140">next_iteration() → with_iteration</text>
+
+  <!-- think -> execute -->
+  <path class="edge" marker-end="url(#ah)" d="M468,224 V280"/>
+  <rect class="label-bg" x="480" y="230" width="96" height="20" rx="4"/>
+  <text class="label" x="528" y="240">with_message</text>
+  <rect class="label-bg" x="480" y="254" width="124" height="20" rx="4"/>
+  <text class="label" x="542" y="264">with_token_usage</text>
+
+  <!-- execute -> reflect, when reflection is due -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M468,338 V394"/>
+  <rect class="label-bg" x="480" y="344" width="145" height="20" rx="4"/>
+  <text class="label" x="553" y="354">with_tool_execution</text>
+  <rect class="label-bg" x="480" y="368" width="96" height="20" rx="4"/>
+  <text class="label" x="528" y="378">with_message</text>
+
+  <!-- execute -> checkpoint, otherwise: the state passes Reflect by -->
+  <path class="edge" d="M406,338 C406,376 336,360 336,398 V470 C336,488 400,488 468,488"/>
+  <rect class="label-bg" x="369" y="478" width="66" height="20" rx="4"/>
+  <text class="label" x="402" y="488">otherwise</text>
+
+  <!-- reflect -> checkpoint -->
+  <path class="edge" marker-end="url(#ah)" d="M468,452 V524"/>
+  <rect class="label-bg" x="480" y="455" width="117" height="20" rx="4"/>
+  <text class="label" x="539" y="465">with_confidence</text>
+  <rect class="label-bg" x="480" y="501" width="145" height="20" rx="4"/>
+  <text class="label" x="553" y="511">with_reasoning_step</text>
+
+  <!-- checkpointer: load at the start of a turn, save when due, save when the run ends -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M880,241 V73 H559"/>
+  <rect class="label-bg" x="599" y="49" width="182" height="20" rx="4"/>
+  <text class="label" x="690" y="59">load(thread_id) · new turn</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M558,97 H786 V243"/>
+  <rect class="label-bg" x="752" y="140" width="68" height="20" rx="4"/>
+  <text class="label" x="786" y="150">run ends</text>
+  <rect class="label-bg" x="703" y="166" width="166" height="20" rx="4"/>
+  <text class="label" x="786" y="176">save(state, thread_id)</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M558,553 H841 V400"/>
+  <rect class="label-bg" x="583" y="531" width="166" height="20" rx="4"/>
+  <text class="label" x="666" y="541">save(state, thread_id)</text>
+
+  <g class="store">
+    <path d="M766,249 A75,9 0 0 1 916,249 V391 A75,9 0 0 1 766,391 Z M766,249 A75,9 0 0 0 916,249"/>
+    <g class="node">
+      <text x="841" y="310">Checkpointer</text>
+      <text class="sub" x="841" y="331">BaseCheckpointer</text>
+    </g>
+  </g>
+
+  <!-- the spine: the state object, then the nodes that each return a new one -->
+  <g class="node primary">
+    <rect x="378" y="56" width="180" height="58" rx="12"/>
+    <text x="468" y="75">AgentState</text>
+    <text class="sub" x="468" y="96">frozen Pydantic model</text>
+  </g>
+  <g class="node">
+    <rect x="378" y="166" width="180" height="58" rx="12"/>
+    <text x="468" y="185">Think</text>
+    <text class="sub" x="468" y="206">model decides</text>
+  </g>
+  <g class="node">
+    <rect x="378" y="280" width="180" height="58" rx="12"/>
+    <text x="468" y="299">Execute</text>
+    <text class="sub" x="468" y="320">runs tool calls</text>
+  </g>
+  <g class="node optional">
+    <rect x="378" y="394" width="180" height="58" rx="12"/>
+    <text x="468" y="413">Reflect</text>
+    <text class="sub" x="468" y="434">if configured and due</text>
+  </g>
+  <g class="node optional">
+    <rect x="378" y="524" width="180" height="58" rx="12"/>
+    <text x="468" y="543">Checkpoint</text>
+    <text class="sub" x="468" y="564">when due</text>
+  </g>
+
+  <text class="note" x="470" y="626">with_* is model_copy(update=…) on a frozen model: the instance a node or hook was handed never changes; a new one succeeds it.</text>
+  <text class="note" x="470" y="644">Every iteration starts with the termination checks (state.should_terminate), which can end the run before Think.</text>
+</svg>

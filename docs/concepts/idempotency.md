@@ -4,14 +4,14 @@
 
 The model may retry. With `idempotent=True`, an identical call later in the
 same `agent.run()` reuses the recorded result instead of invoking the tool body
-again. When `agent.run(..., thread_id=...)` reloads a checkpointed thread, that
-recorded result can also prevent a replay. A run continued with
+again. When `agent.run(..., thread_id=...)` reloads a checkpointed thread, the
+new turn starts with an empty record, so an earlier turn's result does not
+prevent a replay. A run continued with
 `agent.resume()` does not check for a prior match; see
 [How it works](#how-it-works).
 
-If you ever plan to run an agent that **refunds**, **deploys**,
-**pages**, **emails**, or **writes**, this is the most important
-single page on the docs site.
+Read this page before running an agent whose tools refund, deploy, page,
+email, or write.
 
 ## When to use `idempotent=True`
 
@@ -25,22 +25,29 @@ single page on the docs site.
 
 ## How it works
 
-Inside a single agent run, the SDK hashes the tool's
-`(name, arguments)` tuple as the model emits each call. **The first
-call with a given key hits the function body** and the result is
-recorded. **A later call with the same key in the `run()` loop
+Inside a single agent run, for a tool declared `idempotent=True`, the SDK
+takes the tool's `(name, arguments)` tuple as the key for each call the
+model emits. **The first call with a given key hits the function body** and
+the result is recorded. **A later call with the same key in the `run()` loop
 short-circuits to the cached response** without invoking the body
-(exceptions below).
+(exceptions below). The drawing follows one call through the loop's Execute
+step: the key, the check against the run's record, and the result's way back
+to the model.
+
+{{ locus_diagram idempotent-execution }}
+
+Declaring the tool:
 
 ```python
 from locus.tools import tool
+
 @tool(idempotent=True)
 def issue_refund(order_id: str, amount: float) -> dict:
     """Refund an order. Re-fires within a run return the cached receipt."""
     return billing.refund(order_id, amount)
 ```
 
-The argument hash is the trust boundary:
+The argument match is the trust boundary:
 
 - **Same call**: the model re-emits `issue_refund("ord-4821", 120.0)` after
   seeing the receipt → cache hit, body skipped.
@@ -49,38 +56,46 @@ The argument hash is the trust boundary:
 
 Dedup compares the arguments **as they reach the tool** — the dict the
 model emitted, after any [`on_before_tool_call`](hooks.md) hooks have run.
-A call from an earlier turn is matched with a plain `dict == dict` equality
-on `(tool_name, arguments)`; a duplicate inside the same model response is
-matched on a sorted-key JSON serialisation of the arguments. The two agree
-for ordinary arguments, but not on number type: `120` and `120.0` match
-across turns, not within one response. Both checks run in the `run()` loop,
-including a run that reloads a checkpointed thread with `thread_id`. They do
-not run after `agent.resume()` answers an interrupt: the continued run
-executes each tool call without looking for a prior match, so an identical
-idempotent call runs the body again. A held call that
-`resume(perform_dangling=True)` runs is not recorded in `tool_executions` at
-all, so no later call can match it. Both sides of the comparison are
-normally post-hook: each call the loop runs, or serves from the cache, is
-recorded with the hook-modified arguments, so a before-hook that normalises
-arguments (for example, upper-casing an order id) makes a new call and its
-earlier twin agree. A call a hook cancels is recorded with the arguments the
-model emitted, so for an idempotent tool a later identical call can match
-that cancelled record and return its cancel message without running the
-body. A hook only affects calls made after it is installed; it does not
-retroactively match executions already recorded with un-normalised
-arguments. Without such a hook there is **no schema normalization**:
-defaults are *not* filled in before the comparison, so
-a call that omits an optional argument and a call that passes that
-argument's default value are treated as **different keys** and both fire
-the body. (Dict equality is itself order-independent, so key order alone
-won't break a match.)
+The rules, one at a time:
+
+- **Across iterations of one run.** A call from an earlier iteration of the
+  same run is matched with a plain `dict == dict` equality on
+  `(tool_name, arguments)`.
+- **Within one model response.** A duplicate inside the same model response
+  is matched on a sorted-key JSON serialisation of the arguments, before
+  either call is recorded. The two checks agree for ordinary arguments, but
+  not on number type: `120` and `120.0` match across iterations of one run,
+  not within one response.
+- **A new turn starts empty.** Both checks run in the `run()` loop and see
+  only the current turn. A run that reloads a checkpointed thread with
+  `thread_id` starts a new turn with an empty record, so a call from an
+  earlier turn is never matched.
+- **`resume()` does not check.** Neither check runs after `agent.resume()`
+  answers an interrupt: the continued run executes each tool call without
+  looking for a prior match, so an identical idempotent call runs the body
+  again. A held call that `resume(perform_dangling=True)` runs is not
+  recorded in `tool_executions` at all, so no later call can match it.
+- **Both sides are post-hook.** Each call the loop runs, or serves from the
+  cache, is recorded with the hook-modified arguments, so a before-hook that
+  normalises arguments (for example, upper-casing an order id) makes a new
+  call and its earlier twin agree. A call a hook cancels is recorded with the
+  arguments the model emitted, so for an idempotent tool a later identical
+  call can match that cancelled record and return its cancel message without
+  running the body. A hook only affects calls made after it is installed; it
+  does not retroactively match executions already recorded with
+  un-normalised arguments.
+- **No schema normalization.** Without such a hook, defaults are *not*
+  filled in before the comparison, so a call that omits an optional argument
+  and a call that passes that argument's default value are treated as
+  **different keys** and both fire the body. (Dict equality is itself
+  order-independent, so key order alone will not break a match.)
 
 ## Why this matters
 
 ### Actions with real-world cost
 
-The model that calls `issue_refund` twice in one run is more common
-than you think. Sometimes it sees an ambiguous tool result and tries
+A model that calls `issue_refund` twice in one run is a common failure
+mode. Sometimes it sees an ambiguous tool result and tries
 again "to be sure". Sometimes the network glitches and the model
 believes the call failed. Without idempotency, the customer is refunded
 twice and finance opens a ticket for the duplicate.
@@ -92,7 +107,8 @@ and the security-operations variant (`isolate_host`).
 ### Outbound side-effects
 
 `page_oncall`, `open_case`, `slack_alert`, `block_indicator` — anything
-that touches a human or a downstream system. **One and done**.
+that touches a human or a downstream system. With `idempotent=True`, an
+identical call fires once within the run.
 
 ### Database writes you can't roll back
 
@@ -100,27 +116,26 @@ Insert into an audit table, append to a Kafka topic, sign a JWT —
 operations where retrying isn't free. Idempotent tools reduce duplicate calls
 inside the agent runtime; they do not create distributed exactly-once delivery.
 
-### Replays after checkpoint resume
-
-When `agent.run(..., thread_id=...)` reloads a checkpointed thread, the model may decide to
-re-issue tool calls it's already seen. Idempotent tools see the
-cache pre-populated from the checkpoint and skip the side effect on
-replay. (This requires `tool_executions` to be restored from the
-checkpoint; the SDK's [native checkpointers](checkpointers.md) handle
-it.)
-
 ## What it is *not*
 
 | Concept | Idempotency is… | Idempotency is *not*… |
 |---|---|---|
-| Scope | within a single agent run | cross-run — restart and the cache is gone (use a [checkpointer](checkpointers.md)) |
+| Scope | within a single agent run | cross-run — a new run starts with an empty record, even on a checkpointed thread |
 | Failure | one fire per identical call in the `run()` loop | retry — if the body raises, the exception propagates as the cached "result" |
 | Boundary | per-agent | network — two different agents both calling `issue_refund(o, a)` each fire once |
 
-If you need cross-run idempotency, configure a checkpointer and an idempotent
-server-side endpoint. Generate a stable operation key from the business
+If you need cross-run idempotency, use an idempotent server-side endpoint.
+Generate a stable operation key from the business
 operation (for example, `refund:ORD-4821:v1`) and send it to that endpoint on
 every attempt.
+
+### Replays after a checkpoint reload
+
+When `agent.run(..., thread_id=...)` reloads a checkpointed thread, the model
+may decide to re-issue tool calls it has already seen. The new turn starts
+with an empty `tool_executions` record, so an idempotent tool fires again.
+Across turns, only a stable idempotency key sent to the downstream system
+keeps the side effect from repeating.
 
 ## The external-success crash window
 
@@ -138,8 +153,8 @@ agent-loop deduplication and downstream keys as distributed-operation safety.
 
 ## Practical recipe — refund approval
 
-A canonical multi-agent idempotency shape: an agent (or three of
-them, debating) loops over a refund decision, then writes once.
+A canonical multi-agent idempotency shape: an agent, or several agents
+debating, loops over a refund decision, then writes once.
 
 ```python
 @tool(idempotent=True)
@@ -160,19 +175,19 @@ idempotency key to the provider.
 
 | Symptom | Likely cause |
 |---|---|
-| Tool re-fires despite `idempotent=True` | Argument changed between calls. Check that the model isn't mutating order ids / amounts between turns. |
-| Idempotent cache survives across runs unexpectedly | It shouldn't — only the checkpointer persists state. If you're seeing this, you're loading state from a checkpoint and don't want to. |
+| Tool re-fires despite `idempotent=True` | Argument changed between calls. Check that the model isn't mutating order ids / amounts between iterations. |
+| Idempotent cache survives across runs unexpectedly | It cannot — the record is the run's own `state.tool_executions`, and a new turn starts it empty even on a checkpointed thread. |
 | Body raised first time, cache returns the exception | This is by design — the failure is part of the "result" of the first call. The model sees the failure and can react. To re-attempt, the model must change an argument. |
 | Read-only lookup tagged `idempotent=True` | Harmless but wasteful — the cache hit savings are negligible vs the read itself. Leave it off. |
 
 ## Source and notebook
 
 - [`@tool` decorator with idempotency hook](https://github.com/oracle/locus/blob/main/src/locus/tools/decorator.py)
-- [`find_matching_execution`](https://github.com/oracle/locus/blob/main/src/locus/tools/executor.py#L21) — the argument match itself.
-- [`_maybe_cached_idempotent_result`](https://github.com/oracle/locus/blob/main/src/locus/agent/runtime_loop.py#L2163) — where the `Agent` runtime checks for a prior matching call before invoking the tool body.
-- [`notebook_03_agent_with_tools.py`](https://github.com/oracle/locus/blob/main/examples/notebook_03_agent_with_tools.py) — walks through the `@tool` decorator end-to-end (idempotency covered in the agent-loop walkthrough).
+- [`find_matching_execution`](https://github.com/oracle/locus/blob/main/src/locus/tools/executor.py) — the argument match itself.
+- [`_maybe_cached_idempotent_result`](https://github.com/oracle/locus/blob/main/src/locus/agent/runtime_loop.py) — where the `Agent` runtime checks for a prior matching call before invoking the tool body.
+- [`notebook_03_agent_with_tools.py`](https://github.com/oracle/locus/blob/main/examples/notebook_03_agent_with_tools.py) — walks through the `@tool` decorator end-to-end (typed arguments, the tool loop, the start/complete event pair per call); it does not set `idempotent=True`.
 
 ## See also
 
 - [Tools](tools.md) — the full `@tool` decorator surface.
-- [Checkpointers](checkpointers.md) — durable runs where idempotency interacts with replay.
+- [Checkpointers](checkpointers.md) — reloading a thread by `thread_id`; the new turn starts with an empty record, so idempotency does not carry across it.

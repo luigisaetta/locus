@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Threat coverage, as encoded by locus.control.taxonomy and examples/scenarios (v2.16.0):
+  Threat coverage, as encoded by locus.control.taxonomy and packages/locus-sdk-security/examples/scenarios:
     OwaspLLM (LLM01-LLM10), OwaspASI (ASI01-ASI10) and AtlasTechnique (a representative
     subset of MITRE ATLAS)   -> every ID is covered by at least one scenario gist
     a gist                   -> states one threat and the IDs it covers, shows the unsafe
@@ -17,7 +17,7 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 454" role="img" aria-labelledby="title desc">
   <title id="title">Threat coverage</title>
-  <desc id="desc">Three threat catalogues are encoded as enums: the OWASP Top 10 for LLM Applications, the OWASP Top 10 for Agentic Applications, and a representative subset of MITRE ATLAS. Every ID in them leads to at least one scenario gist that runs offline with no credentials. A gist states one threat and the IDs it covers, shows an agent making the unsafe attempt, and shows the Locus defense stopping it, using a built-in primitive, an allowlist or audit pattern, or both. run_all.py runs every gist and passes only if all of them pass. To record a result, pass it through ground_finding: if its score clears the threshold, the decision is proceed and it ships as an Evidence, which can be tagged with the same IDs; below the threshold it is withheld as an Abstention.</desc>
+  <desc id="desc">Three threat catalogues are encoded as enums: the OWASP Top 10 for LLM Applications, the OWASP Top 10 for Agentic Applications, and a representative subset of MITRE ATLAS. Every ID in them leads to at least one scenario gist that runs offline with no credentials. A gist states one threat and the IDs it covers, shows an agent making the unsafe attempt, and shows the Locus defense stopping it, using a built-in primitive, an allowlist or audit pattern, or both. run_all.py runs every gist and passes only if all of them pass. To record a result, pass it through ground_finding: if its score clears the threshold, the decision is proceed and it ships as an Evidence, which can be tagged with the same IDs; below the threshold it is withheld as an Abstention that says why.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -50,14 +50,14 @@
   <text class="label" x="692" y="199">to record it</text>
 
   <!-- ground_finding -> Evidence -->
-  <path class="edge" marker-end="url(#ah)" d="M651,283 L740,283"/>
-  <rect class="label-bg" x="664" y="294" width="64" height="20" rx="4"/>
-  <text class="label" x="696" y="304">proceed</text>
+  <path class="edge" marker-end="url(#ah)" d="M651,283 L734,283"/>
+  <rect class="label-bg" x="660" y="294" width="64" height="20" rx="4"/>
+  <text class="label" x="692" y="304">proceed</text>
 
   <!-- ground_finding -> Abstention -->
-  <path class="edge" marker-end="url(#ah)" d="M571,312 L571,349 C571,363 581,371 595,371 L740,371"/>
-  <rect class="label-bg" x="610" y="382" width="116" height="20" rx="4"/>
-  <text class="label" x="668" y="392">below threshold</text>
+  <path class="edge" marker-end="url(#ah)" d="M571,312 L571,349 C571,363 581,371 595,371 L734,371"/>
+  <rect class="label-bg" x="606" y="382" width="116" height="20" rx="4"/>
+  <text class="label" x="664" y="392">below threshold</text>
 
   <g class="node">
     <rect x="20" y="20" width="200" height="58" rx="12"/>
@@ -102,14 +102,14 @@
     <text class="sub" x="571" y="294">score ≥ threshold?</text>
   </g>
   <g class="node allow">
-    <rect x="742" y="254" width="180" height="58" rx="12"/>
-    <text x="832" y="273">Evidence</text>
-    <text class="sub" x="832" y="294">ships · can carry IDs</text>
+    <rect x="736" y="254" width="186" height="58" rx="12"/>
+    <text x="829" y="273">Evidence ships</text>
+    <text class="sub" x="829" y="294">allow · can carry IDs</text>
   </g>
   <g class="node abstain">
-    <rect x="742" y="342" width="180" height="58" rx="12"/>
-    <text x="832" y="361">Abstention</text>
-    <text class="sub" x="832" y="382">withheld · says why</text>
+    <rect x="736" y="342" width="186" height="58" rx="12"/>
+    <text x="829" y="361">Abstention</text>
+    <text class="sub" x="829" y="382">abstain · says why</text>
   </g>
 
   <text class="note" x="480" y="438">Every taxonomy ID has at least one gist, and an Evidence you record can carry those same IDs.</text>

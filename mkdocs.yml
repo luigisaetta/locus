@@ -77,6 +77,7 @@ extra_javascript:
 - javascripts/header-home.js
 - javascripts/copy-page.js
 - javascripts/diagram-zoom.js
+- javascripts/table-filter.js
 - javascripts/notebook-filter.js
 - javascripts/sidebar-filter.js
 
@@ -86,7 +87,18 @@ extra:
   homepage: https://locusagents.ai/
   # The model every generic example uses; the build hook expands
   # {{ locus_example_model }} everywhere, so change it here, not on the pages.
-  example_model: openai:gpt-4o-mini
+  example_model: oci:openai.gpt-5.5
+  # Provider tab sets ({{ locus_model_tabs }}): one example model id per
+  # provider, shown as linked tabs so a reader picks a provider once.
+  model_tabs:
+  - label: OCI
+    model: oci:openai.gpt-5.5
+  - label: OpenAI
+    model: openai:gpt-4o
+  - label: Anthropic
+    model: anthropic:claude-sonnet-5-5
+  - label: Self-hosted
+    model: ollama:qwen3
   social:
   - icon: fontawesome/brands/github
     link: https://github.com/oracle/locus

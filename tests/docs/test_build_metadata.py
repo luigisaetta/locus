@@ -236,3 +236,39 @@ def test_pages_without_diagrams_never_touch_the_disk(monkeypatch) -> None:
     assert (
         build_metadata.on_page_markdown("text", config={"extra": {"sdk_version": "dev"}}) == "text"
     )
+
+
+def test_model_tabs_render_the_block_once_per_provider() -> None:
+    markdown = (
+        "Intro.\n\n{{ locus_model_tabs }}\n\n```python\n"
+        'agent = Agent(model="{{ locus_model }}")\n\nprint(agent)\n```\n\nAfter.\n'
+    )
+    tabs = [{"label": "OCI", "model": "oci:a.b"}, {"label": "OpenAI", "model": "openai:c"}]
+
+    rendered = build_metadata.on_page_markdown(
+        markdown, config={"extra": {"sdk_version": "1.0.0", "model_tabs": tabs}}
+    )
+
+    assert rendered == (
+        "Intro.\n\n"
+        '=== "OCI"\n\n    ```python\n    agent = Agent(model="oci:a.b")\n\n    print(agent)\n    ```\n\n'
+        '=== "OpenAI"\n\n    ```python\n    agent = Agent(model="openai:c")\n\n    print(agent)\n    ```\n'
+        "\n\nAfter.\n"
+    )
+
+
+def test_model_tabs_block_without_the_model_token_is_an_error() -> None:
+    markdown = "{{ locus_model_tabs }}\n```python\nx = 1\n```\n"
+    with pytest.raises(RuntimeError, match="locus_model"):
+        build_metadata.on_page_markdown(
+            markdown,
+            config={
+                "extra": {"sdk_version": "1.0.0", "model_tabs": [{"label": "A", "model": "a:b"}]}
+            },
+        )
+
+
+def test_model_tabs_without_config_is_an_error() -> None:
+    markdown = '{{ locus_model_tabs }}\n```python\nm = "{{ locus_model }}"\n```\n'
+    with pytest.raises(RuntimeError, match="extra.model_tabs"):
+        build_metadata.on_page_markdown(markdown, config={"extra": {"sdk_version": "1.0.0"}})

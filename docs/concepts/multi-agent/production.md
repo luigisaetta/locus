@@ -1,15 +1,18 @@
 # Production-readiness
 
-The boring stuff that turns a multi-agent demo into something you'd
-deploy. Every primitive on this page works inside any of the eight
-[workflow shapes](../multi-agent.md) — you don't pick "shape" or
-"production-ready", you get both.
+The primitives that take a multi-agent workflow from a demonstration to
+a deployable system. Every primitive on this page works inside any of
+the eight [workflow shapes](../multi-agent.md); choosing a shape does
+not trade off production-readiness.
 
 ## Typed terminal artifacts
+
+{{ locus_model_tabs }}
 
 ```python
 from pydantic import BaseModel
 from locus.agent import Agent, AgentConfig
+
 class Postmortem(BaseModel):
     severity: str
     root_cause: str
@@ -17,7 +20,7 @@ class Postmortem(BaseModel):
     action_items: list[str]
 
 writer = Agent(config=AgentConfig(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     output_schema=Postmortem,
 ))
 result = writer.run_sync("Write a postmortem for incident #4421")
@@ -38,6 +41,7 @@ Used by notebooks [26 (debate)][t44], [77 (incident)][t46],
 
 ```python
 from locus.tools import tool
+
 @tool(idempotent=True)
 def isolate_host(host_id: str, case_id: str) -> dict:
     return edr.quarantine(host_id, case_id)
@@ -54,17 +58,18 @@ receipt is durably recorded.
 
 ```python
 from locus.agent import Agent, AgentConfig
-from locus.memory.backends import S3Backend
+from locus.memory.backends import OCIBucketBackend
 
 agent = Agent(config=AgentConfig(
     model="{{ locus_example_model }}",
-    checkpointer=S3Backend(bucket="locus-state", prefix="..."),
+    checkpointer=OCIBucketBackend(bucket_name="locus-state", namespace="..."),
 ))
 ```
 
-One `BaseCheckpointer` contract across every backend — S3, file, HTTP
-and in-memory natively; Postgres, MySQL, Redis, OpenSearch and Oracle
-through their `*_checkpointer()` factories (see the
+One `BaseCheckpointer` contract across every backend — OCI Object
+Storage (`OCIBucketBackend`), S3, file, HTTP and in-memory natively;
+Postgres, MySQL, Redis, OpenSearch and Oracle through their
+`*_checkpointer()` factories (see the
 [Checkpointers](../checkpointers.md) table). The graph snapshots state at every `interrupt()` boundary; you can pause
 for a human Friday afternoon and resume Monday morning from a
 different process, region, or runtime.
@@ -78,8 +83,8 @@ agent = Agent(config=AgentConfig(model="{{ locus_example_model }}", reflexion=Tr
 ```
 
 `reflexion=True` self-evaluates every turn and feeds the next Think a
-sharper plan. When a critic loop is overkill or you want intra-agent
-self-correction, flip the flag.
+sharper plan. When a critic loop is more than the task needs, or you
+want intra-agent self-correction, enable the flag.
 
 → See [Reasoning](../reasoning.md).
 
@@ -150,8 +155,8 @@ agent = Agent(config=AgentConfig(
 ```
 
 Input validation, PII redaction, topic policies, and tool restrictions
-ride on the same hook system, so nothing is bolted-on. Stack them
-freely. One caveat: hooks attach per-agent, so in orchestrated shapes
+ride on the same hook system, so nothing is added as an afterthought.
+Stack them freely. One caveat: hooks attach per-agent, so in orchestrated shapes
 gate the side-effecting tool itself with
 [`admit()`](../security-context.md) — the gate travels with the tool,
 and no orchestration path bypasses it.
@@ -195,10 +200,9 @@ graph = StateGraph(config=GraphConfig(
 # idempotent tools for paging, hooks for OTel spans.
 ```
 
-Pick a [shape](../multi-agent.md) directly, or let
-the loop reach for a shape tool and build the
-right one from a typed intent. Then wire the primitives above through
-it and ship it.
+Pick a [shape](../multi-agent.md#pick-a-shape) with the three questions
+on the workflows page, then wire the primitives above through it and
+deploy it.
 
 [t44]: https://github.com/oracle/locus/blob/main/examples/notebook_26_debate_with_judge.py
 [t46]: https://github.com/oracle/locus/blob/main/examples/notebook_77_incident_response.py

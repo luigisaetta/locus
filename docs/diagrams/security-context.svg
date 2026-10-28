@@ -50,18 +50,16 @@
   <path class="edge" d="M454,287 L486,287"/>
   <path class="edge" d="M454,219 L522,219"/>
   <path class="edge" marker-end="url(#ah)" d="M522,219 C584,219 580,151 642,151"/>
-  <rect class="label-bg" x="555" y="175" width="56" height="20" rx="4"/>
+  <rect class="label-bg on-lane" x="555" y="175" width="56" height="20" rx="4"/>
   <text class="label" x="583" y="185">default</text>
   <path class="edge dashed" marker-end="url(#ah)" d="M522,219 C584,219 580,287 642,287"/>
-  <rect class="label-bg" x="551" y="243" width="64" height="20" rx="4"/>
+  <rect class="label-bg on-lane" x="551" y="243" width="64" height="20" rx="4"/>
   <text class="label" x="583" y="253">injected</text>
 
   <!-- actions: allow -> the side effect; hold or deny -> AdmissionError -->
-  <path class="edge allow" marker-end="url(#ah)" d="M454,499 L524,499"/>
-  <rect class="label-bg" x="466" y="510" width="46" height="20" rx="4"/>
-  <text class="label" x="489" y="520">allow</text>
-  <path class="edge" marker-end="url(#ah)" d="M420,468 C420,420 814,420 814,466"/>
-  <rect class="label-bg" x="570" y="422" width="92" height="20" rx="4"/>
+  <path class="edge allow" marker-end="url(#ah)" d="M454,499 L492,499"/>
+  <path class="edge" marker-end="url(#ah)" d="M420,468 C420,420 818,420 818,466"/>
+  <rect class="label-bg on-lane" x="570" y="422" width="92" height="20" rx="4"/>
   <text class="label" x="616" y="432">hold or deny</text>
 
   <g class="node primary">
@@ -113,14 +111,14 @@
     <text class="sub" x="352" y="510">ControlPolicy() gate</text>
   </g>
   <g class="node allow">
-    <rect x="526" y="470" width="176" height="58" rx="12"/>
-    <text x="614" y="489">Side effect fires</text>
-    <text class="sub" x="614" y="510">e.g. identity.disable</text>
+    <rect x="494" y="470" width="220" height="58" rx="12"/>
+    <text x="604" y="489">Side effect fires</text>
+    <text class="sub" x="604" y="510">allow · e.g. identity.disable</text>
   </g>
   <g class="node">
-    <rect x="744" y="470" width="140" height="58" rx="12"/>
-    <text x="814" y="489">AdmissionError</text>
-    <text class="sub" x="814" y="510">nothing fires</text>
+    <rect x="748" y="470" width="140" height="58" rx="12"/>
+    <text x="818" y="489">AdmissionError</text>
+    <text class="sub" x="818" y="510">nothing fires</text>
   </g>
 
   <text class="note" x="460" y="574">The bundled cloud default is the read-only OCI provider; without the oci SDK it reports an error.</text>

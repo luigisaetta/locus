@@ -68,6 +68,26 @@ policy.
   print today, and the cloud-resource gate page now describes all three
   attempts its example runs.
 
+- **Documentation site: a diagram on every concept page, provider tabs, and
+  searchable catalogues.** Nineteen concept pages gained a diagram drawn from
+  the SDK source and reviewed against it: the hook lifecycle, the event
+  taxonomy, the observability pipeline, state flow, checkpointer shapes,
+  streaming paths, the termination algebra, the server request flow,
+  interrupt and resume, the RAG pipeline, context strategies, idempotent
+  execution, the fallback chain, structured output, Oracle Database 26ai
+  primitives, the tool pipeline, skills disclosure, playbook enforcement and
+  the evaluation flow; the older drawings now carry their status words and
+  pass the same lint. The first generic code block on 31 pages renders as
+  linked provider tabs (OCI, OpenAI, Anthropic, self-hosted) written once with
+  `{{ locus_model_tabs }}`, and the generic example model is an OCI id. The
+  event catalogues and the environment-variable reference have a filter box
+  that hides rows and empty sections as you type. Several facts the reviews
+  surfaced are corrected: the hook lifecycle has nine points, not eight, and
+  `on_before_compaction` is in the table; `HookRegistry` orders providers and
+  the agent's `HookOrchestrator` runs them; three rerankers ship, including
+  `OCICohereReranker`; the `/resume` route's behaviour is described as the
+  code implements it.
+
 ## [4.0.0] - 2026-10-28
 
 ### Removed

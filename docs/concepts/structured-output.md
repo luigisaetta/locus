@@ -1,12 +1,16 @@
 # Structured output
 
-Sometimes you want the model to *fill a shape*, not write prose. Set
-`output_schema=` to a Pydantic model and Locus parses the agent's final answer into a typed
-instance for you.
+When you need a typed object rather than free text, set `output_schema=`
+to a Pydantic model and Locus parses the agent's final answer into a
+typed instance.
+
+{{ locus_model_tabs }}
 
 ```python
 from pydantic import BaseModel, Field
 from locus.agent import Agent
+from locus.tools import tool
+
 class TicketTriage(BaseModel):
     ticket_id: str = Field(description="The ticket id (e.g. t-8804)")
     confidence: float = Field(ge=0.0, le=1.0)
@@ -16,8 +20,13 @@ class TicketTriage(BaseModel):
 class TriageList(BaseModel):
     tickets: list[TicketTriage]
 
+@tool
+def lookup_ticket(ticket_id: str) -> str:
+    """Return one ticket's subject, age and customer notes."""
+    return "results"
+
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_ticket],
     output_schema=TriageList,
     system_prompt="Triage the top three tickets from this queue.",
@@ -32,17 +41,22 @@ for t in picks.tickets:
 
 `output_schema` must be a `pydantic.BaseModel` subclass — including
 nested models, lists, optionals, discriminated unions, and any
-`@field_validator` / `@model_validator` you attach. The schema flows to
-the provider as a strict `response_format` when supported (OpenAI,
-OpenAI-compatible); otherwise the SDK falls back to prompted JSON +
-extraction + validation.
+`@field_validator` / `@model_validator` you attach. The schema always
+rides the system prompt as a JSON instruction; on providers with native
+structured output (OpenAI, and OpenAI-compatible transports such as
+OCI's `/openai/v1`) a model call that offers no tools also carries it as
+a strict `response_format`, and either way the final answer is
+extracted and validated client-side. The drawing below follows the
+schema from `output_schema=` to `result.parsed`, repair included.
+
+{{ locus_diagram structured-output-flow }}
 
 ## What ends up on `AgentResult`
 
 | Attribute | Type | Meaning |
 |---|---|---|
-| `result.parsed` | `BaseModel \| None` | The parsed instance. `None` if every retry failed. |
-| `result.parse_error` | `str \| None` | Last Pydantic validation error, when `parsed is None`. |
+| `result.parsed` | <code>BaseModel &#124; None</code> | The parsed instance. `None` if every retry failed. |
+| `result.parse_error` | <code>str &#124; None</code> | Last Pydantic validation error, when `parsed is None`. |
 | `result.message` | `str` | The canonical JSON dump of `parsed` (when set), otherwise the raw final assistant message. |
 
 ### Typed access
@@ -61,10 +75,15 @@ for t in picks.tickets:
 
 If the model's first answer fails validation, the SDK re-prompts up to
 `output_schema_retries` times (default 2) with the Pydantic
-`ValidationError` details inlined so the model can fix the response. On
-supporting providers the repair call also ships
-`response_format={"type": "json_schema", "strict": True}` for
-constrained decoding.
+`ValidationError` details inlined so the model can fix the response. The
+repair call offers no tools and carries the full response format,
+`{"type": "json_schema", "json_schema": {"name": …, "schema": …,
+"strict": True}}` (`strict` follows `output_schema_strict`), so a
+provider that constrains decoding does so here even for a tool-using
+agent; a model whose `complete()` does not accept the keyword is called
+again without it. The repair exchange is metered — its token usage is
+counted in the run's totals — but its messages are never written to the
+returned conversation state.
 
 ```python
 agent = Agent(
@@ -80,14 +99,28 @@ When `output_schema_retries=0`, the first response is the final attempt.
 
 ## Provider compatibility
 
-| Provider | Native mode | Mechanism | Prompted fallback | Tested |
-|---|---|---|---|---|
-| `openai:` (gpt-4o, gpt-4.1, gpt-5*, o-series) | ✓ strict | `response_format={"type":"json_schema","strict":true}` | ✓ | yes |
-| `anthropic:claude-*` | ✓ tool-use | synthetic `respond_with_schema` tool + pinned `tool_choice` | ✓ | unit-mocked |
+| Provider | Native mode | Mechanism | Prompted fallback |
+|---|---|---|---|
+| `oci:` | strict, on the `/openai/v1` transport | `response_format` (`json_schema`, strict) | yes |
+| `openai:` | strict | `response_format` (`json_schema`, strict) | yes |
+| `anthropic:` | repair call only (tool-use) | forced `respond_with_schema` tool | yes |
 
-For Anthropic, the SDK translates `response_format` into the idiomatic
-tool-use pattern: a single `respond_with_schema` tool whose
-`input_schema` is your Pydantic schema, with `tool_choice` pinned to it.
+`oci:` ids run on the `/openai/v1` transport (`OCIChatCompletionsModel`),
+which inherits OpenAI's native mode, so the model in the examples above
+receives the strict `response_format`. The exceptions are `cohere.*` ids
+and dedicated AI cluster endpoint OCIDs (`ocid1.generativeaiendpoint…`):
+Locus serves those through the OCI SDK transport (`OCIModel`), which
+declares no native mode, so they get the prompted schema and the
+client-side repair loop only. See
+[OCI Generative AI models](../how-to/oci-models.md) and
+[Dedicated AI Clusters](../how-to/oci-dac.md) for the transport each id
+takes.
+
+Anthropic models do not declare native mode, so the loop sends them the
+prompted schema only; when the repair call carries `response_format`,
+the SDK translates it into the idiomatic tool-use pattern: a single
+`respond_with_schema` tool whose `input_schema` is your Pydantic schema,
+with `tool_choice` pinned to it.
 Anthropic's API guarantees the tool's arguments match the schema, and
 the SDK surfaces those arguments as the message content for downstream
 parsing — **the synthetic tool never reaches your agent's tool list**.
@@ -167,7 +200,7 @@ agent = Agent(
 `src/locus/core/structured.py` — parser, JSON extractor, response-format
 builder, validation-error formatter.
 
-`src/locus/agent/agent.py:_structure_output` — repair-on-failure loop.
+`src/locus/agent/runtime_loop.py:_structure_output` — repair-on-failure loop.
 
 ## Notebooks
 

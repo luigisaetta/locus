@@ -5,13 +5,18 @@ service — drop in an `Agent` (a refund bot, a deploy operator, an
 access-grant approver, or a SOC triage agent), and get a FastAPI app
 with `/invoke`, `/stream`, and per-thread management out of the box. It
 re-emits the same event stream the Python API exposes as Server-Sent
-Events, gated by optional bearer-token auth.
+Events, gated by optional bearer-token auth. Most requests take the path
+below — the bearer check, one of the routes, the agent with its thread
+store, and a JSON or SSE reply; `/health` skips the check and the
+`/threads` routes read the store directly.
+
+{{ locus_diagram server-request-flow }}
 
 !!! note "Single shared key — single principal"
     `AgentServer` takes **one** `api_key`. Every authenticated request
     presents that same token, so all callers hash to the **same**
     principal and share one thread namespace. The bearer check (a 401 on
-    `/invoke`, `/stream` and `/threads/{tid}`) is what stops a caller
+    `/invoke`, `/stream`, `/resume` and `/threads/{tid}`) is what stops a caller
     without the key; the principal prefix on thread IDs only keeps
     thread IDs from colliding between deployments with different keys
     that share a checkpointer — it does **not** give you per-analyst or
@@ -44,6 +49,8 @@ if __name__ == "__main__":
 
 ### 1. Wrap the refund bot
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 from locus.core.termination import ToolCalled, ConfidenceMet, MaxIterations
@@ -51,7 +58,7 @@ from locus.memory.backends.file import FileCheckpointer
 from locus.server import AgentServer
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, check_refund_policy, issue_refund],
     system_prompt="You are a refund agent. Cite order evidence; escalate without it.",
     reflexion=True,
@@ -76,8 +83,10 @@ curl -sS -X POST http://localhost:8080/invoke \
   -d '{"prompt": "Refund the duplicate charge on ord-4821.", "thread_id": "ord-4821"}'
 ```
 
-Returns the full `AgentResult` JSON in one response. Use this for
-scheduled jobs, workflow-engine steps, and anything that doesn't render
+Returns an `InvokeResponse` JSON (`message`, `success`, `stop_reason`,
+`iterations`, `tool_calls`, `duration_ms`) in one response — the run
+reduced to its result, not the event stream. Use this for scheduled
+jobs, workflow-engine steps, and anything that doesn't render
 incrementally.
 
 ### 3. Call `/stream` (Server-Sent Events)
@@ -87,9 +96,12 @@ and the token from the `Authorization` header. The browser `EventSource`
 API only issues GET requests, so it can't drive this route — use
 `fetch()` + a `ReadableStream` reader and parse the `data:` frames
 yourself. Each frame is `data: {json}\n\n`; the JSON carries a `type`
-field (`think`, `tool_start`, `tool_complete`, `done`, `error`), and the
-stream ends with a literal `data: [DONE]` frame. The route does **not**
-emit named SSE events.
+field — `think`, `tool_start`, `tool_complete`, `done` and `error` keep
+their historical shapes, `model_chunk` is a token delta (on by default;
+`stream_tokens=False` on the server turns it off), `interrupt` is a
+pause, and every other event is its `model_dump` under its `type` — and
+the stream ends with a literal `data: [DONE]` frame. The route does
+**not** emit named SSE events.
 
 ```javascript
 const res = await fetch("/stream", {
@@ -98,7 +110,10 @@ const res = await fetch("/stream", {
     "Content-Type": "application/json",
     "Authorization": "Bearer " + token,
   },
-  body: JSON.stringify({ prompt: "Refund the duplicate charge on ord-4821.", thread_id: "ord-4821" }),
+  body: JSON.stringify({
+    prompt: "Refund the duplicate charge on ord-4821.",
+    thread_id: "ord-4821",
+  }),
 });
 
 const reader = res.body.getReader();
@@ -162,10 +177,12 @@ The request's `prompt` lands in the graph's initial state under
 `output_key`, the whole final state is stringified). `thread_id` and
 `metadata` are accepted but not passed to the graph, so the
 [case persistence](#case-persistence) flow and the `/threads/{tid}`
-routes don't apply: those routes read `agent.config.checkpointer`, and
+routes do not apply: those routes read `agent.config.checkpointer`, and
 `GraphRunnable` has no `config`, so they fail with a 500 rather than the
-no-checkpointer 404. The
-same adapter slots into `locus.a2a.A2AServer`.
+no-checkpointer 404. `/resume` answers 404 as well — `GraphRunnable` has
+no `resume()`, so the [human-in-the-loop](#human-in-the-loop) flow below
+applies to `Agent` only. The same adapter slots into
+`locus.a2a.A2AServer`.
 
 ## Endpoints
 
@@ -173,13 +190,16 @@ same adapter slots into `locus.a2a.A2AServer`.
 |---|---|---|---|
 | `/invoke` | POST | `{"prompt": "...", "thread_id": "..."}` | `InvokeResponse` JSON (`message`, `success`, `stop_reason`, `iterations`, `tool_calls`, `duration_ms`) |
 | `/stream` | POST | same | `text/event-stream` SSE of `data: {json}` frames |
+| `/resume` | POST | `{"thread_id": "...", "response": "..."}` and an optional `decision` | `text/event-stream` SSE of the continued thread; 409 and 404 cases below |
 | `/health` | GET | — | liveness probe (200 OK) |
 | `/threads/{tid}` | GET | — | thread state (requires checkpointer) |
 | `/threads/{tid}` | DELETE | — | drop a thread |
 
-There is no `/resume` route on the reference `AgentServer` — see
-[Human-in-the-loop](#human-in-the-loop) below for how the in-process
-interrupt/resume flow actually works.
+`/resume` continues one thread, strictly by `thread_id`: the run this
+process paused, or otherwise the thread rehydrated from its checkpoint.
+It answers 409 while a held approval is still undecided, and 404 for an
+unknown thread — no paused run in this process and no checkpoint under
+that id — see [Human-in-the-loop](#human-in-the-loop) below.
 
 `/docs`, `/redoc`, and `/openapi.json` are only mounted when
 `debug=True` in your settings — production deployments don't expose
@@ -244,33 +264,47 @@ def request_human_approval(reason: str, action: str) -> str:
     return interrupt({"reason": reason, "action": action})
 ```
 
-!!! warning "AgentServer does not expose this over HTTP yet"
-    There is **no `PendingApproval` exception** in the SDK and **no
-    `/resume` endpoint** on the reference `AgentServer`. The
-    interrupt/resume flow above runs in-process. Over `/stream`, an
-    unexpected tool exception is caught and returned as a sanitized
-    `{"type": "error", "error": "internal error", "correlation_id": ...}`
-    frame (details land in the server log under that id) — it does **not**
-    park a resumable case. To drive human-in-the-loop over HTTP today,
-    handle `InterruptEvent` in your own wrapper around `Agent.run` /
-    `Agent.resume` and add your own resume route.
+!!! note "Over HTTP: `/stream` pauses, `/resume` continues"
+    Over `/stream`, the pause arrives as a `{"type": "interrupt", ...}`
+    frame; with a checkpointer and a `thread_id`, the agent saves the
+    thread before yielding it. `POST /resume` with `{"thread_id": ...,
+    "response": ...}` (plus an optional `decision` payload, recorded by
+    the server's `decision_handler`) continues that one thread as a new
+    SSE stream: 409 `approval_pending` while a held approval is still
+    undecided, 404 for an unknown thread — no run paused in this process
+    and no checkpoint under that id (so, without a checkpointer, any
+    thread that is not paused). A thread whose run already finished but
+    still has a checkpoint is **not** refused: the agent reloads it,
+    appends the response as a `[User Response]` system message when no
+    tool call is left unanswered, and runs the loop again as a new
+    segment. An unexpected exception on either stream is returned as a
+    sanitized `{"type": "error", "error": "internal error",
+    "correlation_id": ...}` frame, with details in the server log under
+    that id.
 
 ## Case persistence
 
 If the underlying `Agent` has a checkpointer, the server honours
-`thread_id` in the request body for cross-request continuity. Same key +
-same `thread_id` → same thread, same accumulated state.
+`thread_id` in the request body for cross-request continuity. The same
+key and the same `thread_id` address the same thread and its accumulated
+state.
 
 ```bash
 # Day 1
-curl -X POST .../invoke -d '{"prompt":"Open a case for the duplicate charge on ord-4821", "thread_id":"ord-4821"}'
+curl -sS -X POST http://localhost:8080/invoke \
+  -H "Authorization: Bearer $LOCUS_SERVER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Open a case for the duplicate charge on ord-4821", "thread_id": "ord-4821"}'
 # Day 2 — same thread_id, the case continues
-curl -X POST .../invoke -d '{"prompt":"What did we establish so far?", "thread_id":"ord-4821"}'
+curl -sS -X POST http://localhost:8080/invoke \
+  -H "Authorization: Bearer $LOCUS_SERVER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What did we establish so far?", "thread_id": "ord-4821"}'
 ```
 
 For multi-worker deployments, swap the checkpointer to one the workers
 share so a thread written on one worker can be loaded on any other —
-`S3Backend(bucket=..., prefix=...)` is the zero-friction path (it
+`S3Backend(bucket=..., prefix=...)` is the simplest path (it
 implements `BaseCheckpointer` directly, so pass it straight to the
 agent); the `redis_checkpointer(...)` and `postgresql_checkpointer(...)`
 factories work too. See [Checkpointers](checkpointers.md).
@@ -284,7 +318,7 @@ The server is plain FastAPI — deploy it however you deploy FastAPI.
 | **Kubernetes / container services** | `docker build` and ship; gunicorn-uvicorn workers in front |
 | **serverless functions** | Mangum-style adapter wrapping `server.app` (the FastAPI app is built on first access) |
 | **Compute / VM** | `uvicorn myapp:app --workers 4 --port 8080`, where `myapp.py` sets `app = AgentServer(agent=agent, api_key=...).app` at module scope |
-| **Anywhere else FastAPI runs** | …yes |
+| **Anywhere else FastAPI runs** | serve `server.app` the same way |
 
 Each of these serves `server.app` directly rather than calling
 `server.run()`, so the loopback check in `AgentServer.run()` never runs.
@@ -301,9 +335,9 @@ your platform expects.
 | Symptom | Likely cause |
 |---|---|
 | `RuntimeError: Refusing to bind AgentServer to '0.0.0.0'…` | No `api_key` and no `allow_unauthenticated=True`. Pick one. |
-| Console SSE drops mid-run (~30s) | Reverse-proxy idle timeout. Bump `proxy_read_timeout` in nginx / `idle_timeout` on the LB, or have the agent send heartbeats every ~25s. A long-running tool call is the usual trigger. |
+| Console SSE connection drops mid-run | Reverse-proxy idle timeout. The stream is silent while a long tool call runs, and a proxy or load balancer closes a connection it considers idle. Raise `proxy_read_timeout` in nginx or the idle timeout on the load balancer so it exceeds your longest tool call; the server does not send heartbeat frames of its own. |
 | Threads don't persist across restarts | `FileCheckpointer` writes to disk in the working directory — ephemeral container filesystems lose state on restart. Mount a volume or move to `S3Backend`. |
-| `/threads/{tid}` 404s for the right tid | Thread IDs are prefixed with the principal — `<principal>:<tid>` is what's stored. The path you pass is *your* tid; the server prefixes. A thread written under a different key (the key was rotated, or another deployment sharing the checkpointer wrote it), or written in-process by `agent.run(..., thread_id=...)` without the prefix, won't be found. A request with a wrong or missing key gets a 401, not a 404. |
+| `/threads/{tid}` returns 404 for a tid you know exists | Thread IDs are prefixed with the principal — `<principal>:<tid>` is what is stored. The path you pass is *your* tid; the server prefixes. A thread written under a different key (the key was rotated, or another deployment sharing the checkpointer wrote it), or written in-process by `agent.run(..., thread_id=...)` without the prefix, will not be found. A request with a wrong or missing key gets a 401, not a 404. |
 
 ## Source and notebook
 

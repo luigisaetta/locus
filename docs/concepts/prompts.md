@@ -16,9 +16,11 @@ You don't usually configure 2 and 3 directly. You configure 1.
 
 ## A first system prompt
 
+{{ locus_model_tabs }}
+
 ```python
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, issue_refund],
     system_prompt=(
         "You are a support agent. "
