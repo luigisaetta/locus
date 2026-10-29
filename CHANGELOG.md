@@ -46,6 +46,16 @@ policy.
   security package next to `locus-sdk`, so `pip install locus-sdk-security`
   replaces the install-from-repository line; the two stay in lockstep.
 
+### Fixed
+
+- **`locus.testing.tool_call` could not script the harness `write` tool.**
+  The helper reserved `content` for the assistant's text, so a tool argument
+  of that name (`write(path, content)`) was silently dropped and the tool
+  failed with a missing-argument error. `tool_call(name, arguments={...})`
+  now takes the arguments as a mapping, for any tool whose argument is named
+  like one of the helper's own parameters; keywords still work and win on a
+  repeated key.
+
 ## [5.0.0] - 2026-10-29
 
 ### Added

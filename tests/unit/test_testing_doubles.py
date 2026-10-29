@@ -45,6 +45,23 @@ def test_tool_call_passes_arguments_as_keywords() -> None:
     assert call.arguments == {"order_id": "ord-4821", "amount": 49.0}
 
 
+def test_tool_call_takes_a_mapping_for_arguments_named_like_its_own() -> None:
+    """The harness ``write`` tool's argument is ``content``, which the helper reserves."""
+    response = tool_call("write", arguments={"path": "app.py", "content": "print(1)\n"})
+    call = response.tool_calls[0]
+    assert call.name == "write"
+    assert call.arguments == {"path": "app.py", "content": "print(1)\n"}
+    assert response.content is None
+
+
+def test_tool_call_keywords_add_to_and_override_the_mapping() -> None:
+    response = tool_call(
+        "edit", content="Fixing it.", arguments={"path": "a.py", "old": "1"}, old="2", new="3"
+    )
+    assert response.content == "Fixing it."
+    assert response.tool_calls[0].arguments == {"path": "a.py", "old": "2", "new": "3"}
+
+
 def test_tool_call_id_is_stable() -> None:
     """Assertions must not depend on a random id."""
     assert tool_call("x").tool_calls[0].id == tool_call("x").tool_calls[0].id
