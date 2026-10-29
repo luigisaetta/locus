@@ -43,9 +43,10 @@ Run it:
 
     python examples/notebook_39_oracle_adb_loader.py
 
-If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` / ``ORACLE_WALLET`` aren't set
-the notebook prints the wiring snippet and exits cleanly — no
-traceback, no half-initialised state.
+If any of ``ORACLE_DSN``, ``ORACLE_USER``, ``ORACLE_PASSWORD`` or
+``ORACLE_WALLET`` is unset the notebook prints the missing names and
+the wiring snippet, then exits cleanly — no traceback, no
+half-initialised state.
 
 Difficulty: Intermediate. Self-contained — no prior notebook required.
 """

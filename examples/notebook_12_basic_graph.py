@@ -4,28 +4,32 @@
 """
 Notebook 12: Data-subject-request triage pipeline as a graph.
 
-A StateGraph is a directed graph where each node is an async function
-that takes the current state in and returns updates to merge back. Use
-it when one Agent isn't enough — here we build a privacy-request triage
-pipeline (parse → enrich → verdict) plus the fan-out and streaming
-shapes a data-protection workflow needs. Scenario: data subject access
-request (DSAR) intake under GDPR Article 15.
+A StateGraph is a directed graph where each node is a function (async
+here) that takes the current state in and returns updates to merge
+back. Use it when one Agent isn't enough — here we build a
+privacy-request triage pipeline (parse → enrich → verdict) plus the
+fan-out and streaming shapes a data-protection workflow needs.
+Scenario: data subject access request (DSAR) intake under GDPR
+Article 15.
 
 Key ideas:
 - Nodes and edges: nodes do triage work, edges describe order.
 - START and END: the two sentinel node ids that frame execution.
-- Sequential, parallel, and conditional flow on the same primitives.
+- Sequential and parallel flow on the same primitives; conditional routing
+  follows in Notebook 13.
 - GraphResult: final state plus per-node status, timing, and ordering.
 - Streaming: emit progress events from inside a node with emit_custom.
 
 Run it:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_12_basic_graph.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose.
-Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
-LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
-(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
-provider: ollama, vllm, groq, together, openrouter, ...).
+The default provider is OCI Generative AI when ``~/.oci/config`` holds a
+usable profile, otherwise the bundled mock model; set
+``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to
+choose. Pick a live provider with LOCUS_MODEL_PROVIDER=openai
+LOCUS_MODEL_ID=gpt-4o (or LOCUS_MODEL_PROVIDER=anthropic, or any
+OpenAI-compatible provider the model registry knows: ollama, vllm, groq,
+together, openrouter, ...).
 """
 
 import asyncio
@@ -127,7 +131,9 @@ async def example_sequence():
             "mention special-category personal data.",
         )
         return {
-            "verdict": f"{tc} tokens, special_category={inputs.get('mentions_special_category')} — {ai}",
+            "verdict": (
+                f"{tc} tokens, special_category={inputs.get('mentions_special_category')} — {ai}"
+            ),
         }
 
     graph.add_node("parse", parse)
@@ -146,7 +152,8 @@ async def example_sequence():
     print("Input:    request = '  please export my health record and contact details  '")
     print(f"Parsed:   has_content = {result.final_state.get('has_content')}")
     print(
-        f"Enriched: mentions_special_category = {result.final_state.get('mentions_special_category')}"
+        "Enriched: mentions_special_category = "
+        f"{result.final_state.get('mentions_special_category')}"
     )
     print(f"Verdict:  {result.final_state.get('verdict')}")
     print()

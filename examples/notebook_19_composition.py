@@ -7,13 +7,15 @@ Notebook 19: Composing data-privacy agents into pipelines.
 When privacy work decomposes cleanly into agent-shaped pieces — a
 PII-discovery summary feeding a privacy-impact write-up, two reviewers
 working the same processing activity in parallel — you don't need a full
-StateGraph. The three pipeline classes here are batteries-included
-composition primitives that take a list of Agent instances and
-orchestrate them for you. Scenario: a Data Protection Impact Assessment
-(DPIA) over a new customer-analytics dataset.
+StateGraph. The three classes here are ready-made composition
+primitives: SequentialPipeline and ParallelPipeline take a list of Agent
+instances, LoopAgent takes one, and each orchestrates the agents for
+you. Scenario: a Data Protection Impact Assessment (DPIA) over a new
+customer-analytics dataset.
 
 Key ideas:
-- SequentialPipeline — each agent's output becomes the next agent's input.
+- SequentialPipeline — each agent after the first receives the previous agent's
+  output together with the original task.
 - ParallelPipeline — run agents concurrently, then merge their results.
 - LoopAgent — run one agent repeatedly until a stop condition fires.
 - Helpers sequential() / parallel() / loop() build the same three classes in one line each.
@@ -21,7 +23,9 @@ Key ideas:
 Run it:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_19_composition.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose.
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile,
+otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``,
+``anthropic``, ``mock``) to choose.
 Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
 LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
 (or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
@@ -101,7 +105,9 @@ async def example_parallel():
 
     risk_assessor = Agent(
         config=AgentConfig(
-            system_prompt="List 2 privacy risks this processing creates for data subjects. Be concise.",
+            system_prompt=(
+                "List 2 privacy risks this processing creates for data subjects. Be concise."
+            ),
             max_iterations=3,
             model=model,
         )

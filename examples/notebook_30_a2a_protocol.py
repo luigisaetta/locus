@@ -7,14 +7,14 @@ Notebook 30: A2A — cross-org payment-intel sharing between spec-compliant peer
 A2A (Agent-to-Agent) is the public cross-framework protocol at
 https://a2aproject.github.io/A2A/. Locus implements the server and
 client sides on the A2A **v1.0** wire format; this notebook publishes one
-payment network's risk agent behind ``A2AServer``, drives every v1.0
-method from a partner bank's ``A2AClient``, and inspects the typed
+payment network's risk agent behind ``A2AServer``, drives the five v1.0
+methods a partner bank's ``A2AClient`` exposes, and inspects the typed
 task lifecycle — the plumbing of a cross-org payment-risk mesh.
 
 Trust note: a cross-org payment mesh spans organizational boundaries,
 so treat every inbound message as untrusted input. The wire here is
-authenticated with a bearer token and the partner agent's reach is
-bounded by its published ``AgentSkill`` set, but a partner's response
+authenticated with a bearer token and the partner agent's scope is
+declared by its published ``AgentSkill`` set, but a partner's response
 can still carry indirect prompt injection the same way any other tool
 output can. Ground what a peer asserts about a merchant or a card BIN;
 do not promote it to a decline or a chargeback unverified.
@@ -35,14 +35,17 @@ Key ideas:
 - ``A2AClient.invoke`` is the backwards-compatible flat shape for peers
   that haven't picked up the spec yet.
 - ``A2AClient.as_tool(...)`` wraps a remote agent as a Locus ``@tool``.
-  The generated tool is synchronous and calls ``asyncio.run`` internally,
-  so it can only be invoked from sync code — not from inside a running
-  event loop such as this notebook's ``main``.
+  The generated tool is synchronous and calls ``asyncio.run`` internally
+  over the flat ``invoke`` path, so it can only be invoked from sync
+  code — not from inside a running event loop such as this notebook's
+  ``main``.
 
 Run it:
     .venv/bin/python examples/notebook_30_a2a_protocol.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable
+profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER``
+(``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
 ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
@@ -286,7 +289,8 @@ async def main() -> None:
 
     print("\n" + "=" * 60)
     print(
-        "Next: Notebook 31 — DeepAgent — scoped service-fleet reliability review grounded in prior notes"
+        "Next: Notebook 31 — DeepAgent — scoped service-fleet reliability review "
+        "grounded in prior notes"
     )
     print("=" * 60)
 

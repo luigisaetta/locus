@@ -9,32 +9,37 @@ orchestrator routes a privacy request (a data-subject access/erasure
 request) to a chosen set of specialist agents, runs them in parallel
 under a semaphore, then correlates their outputs into a single privacy
 assessment. Compared with a swarm (Notebook 24), the decision of who
-investigates what is centralised in the privacy officer instead of
+investigates what is centralized in the privacy officer instead of
 emerging from capability tags — which means the routing step is a
 single, auditable choke point. That matters for compliance: a central
-router constrains which systems each specialist may touch and makes
-over-collection or unauthorized access far easier to evidence than the
-same fleet self-organizing — exactly the accountability and
-data-minimization posture GDPR and CCPA expect you to demonstrate.
+router records which specialist was asked what, so over-collection or
+unauthorized access is easier to evidence than with the same fleet
+self-organizing — the accountability and data-minimization posture GDPR
+and CCPA expect you to demonstrate. The tools attached to each
+specialist, not the router, set what that specialist may ask for.
 
 Key ideas:
 - ``Specialist`` is a domain-focused agent with tools, a system prompt,
   and a confidence threshold. Locus ships pre-built ones for logs,
   metrics, traces, and code — all useful evidence sources when tracing
-  where personal data flows.
-- ``Orchestrator`` registers specialists, emits ``RoutingDecision``
+  where personal data flows. ``Specialist.execute`` is a single model
+  turn: the tool schemas go to the model, but a tool call it returns is
+  not run.
+- ``Orchestrator`` registers specialists, records ``RoutingDecision``
   objects, and runs the chosen specialists concurrently behind
   ``max_parallel_specialists`` (an asyncio.Semaphore).
-- ``RoutingDecision`` is the typed object the orchestrator's planner
-  returns — which specialists, which sub-task per specialist, and the
-  reasoning.
-- The final ``OrchestrationResult`` carries each specialist's output,
+- ``RoutingDecision`` is the typed object the orchestrator's routing
+  step returns — which specialists, which sub-task per specialist, and
+  the reasoning.
+- The final ``OrchestratorResult`` carries each specialist's output,
   the decisions trail, and a correlated summary.
 
 Run it:
     .venv/bin/python examples/notebook_22_orchestrator_pattern.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable
+profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER``
+(``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
 ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
@@ -105,14 +110,20 @@ async def main():
         description="Query the data catalog for stores holding a subject's records",
     )
     async def query_data_catalog() -> str:
-        return "Catalog: 3 stores hold records for subject S-8842, latest: crm.customers with email, phone, home address"
+        return (
+            "Catalog: 3 stores hold records for subject S-8842, latest: "
+            "crm.customers with email, phone, home address"
+        )
 
     @tool(
         name="check_consent_ledger",
         description="Check the consent ledger for a subject's current permissions",
     )
     async def check_consent_ledger() -> str:
-        return "Consent ledger: marketing consent withdrawn 2026-03-12 for S-8842; 2 systems still receiving feeds"
+        return (
+            "Consent ledger: marketing consent withdrawn 2026-03-12 for S-8842; "
+            "2 systems still receiving feeds"
+        )
 
     inventory_specialist = Specialist(
         name="Data Inventory Specialist",
@@ -173,8 +184,10 @@ When analyzing, look for processing without a lawful basis, stale retention, and
     print("\n=== Part 5: Orchestrator Configuration ===\n")
 
     # max_parallel_specialists caps the asyncio.Semaphore that bounds
-    # fan-out. Drop to 1 to serialise (useful when debugging a flaky
-    # specialist).
+    # fan-out. Drop to 1 to serialize (useful when debugging a flaky
+    # specialist). correlation_threshold is a declared field that this
+    # release of Orchestrator stores but never reads; it is printed below
+    # as configuration only.
     orchestrator.max_parallel_specialists = 3
     orchestrator.correlation_threshold = 0.7
 

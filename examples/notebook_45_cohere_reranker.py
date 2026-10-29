@@ -4,7 +4,7 @@
 
 """Notebook 45: retrieve-then-rerank on Oracle 26ai with Cohere Reranker V4.
 
-Embedding-only retrieval often isn't enough for production RAG. The
+Embedding-only retrieval is often not enough for production RAG. The
 embedding model sees query and document independently and can mis-rank
 candidates whose surface form scores high but whose semantic relevance
 is lower. A cross-encoder reranker scores the query against each
@@ -24,9 +24,9 @@ Key concepts:
   rerank_candidate_pool=N)`` is the one wiring change — the retriever
   fetches ``N`` candidates from the store, reranks them, then returns
   ``limit`` to the caller.
-- The lift is visible: the canonical hepcidin passage typically ranks
-  low on raw embedding similarity and first after reranking; the run
-  prints both positions.
+- The run prints where the canonical hepcidin passage lands in each
+  pass (``None`` when it falls outside the four baseline hits), so any
+  lift from reranking shows as a change of rank.
 
 Run it:
     export OCI_PROFILE=DEFAULT       # or your locus_app-typed profile
@@ -190,7 +190,8 @@ async def main() -> None:
             None,
         )
         print(
-            f"\nCanonical hepcidin passage rank: baseline = {baseline_rank}, reranked = {reranked_rank}"
+            f"\nCanonical hepcidin passage rank: baseline = {baseline_rank}, "
+            f"reranked = {reranked_rank}"
         )
         if reranked_rank == 1 and baseline_rank != 1:
             print(

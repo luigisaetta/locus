@@ -3,17 +3,19 @@
 # https://oss.oracle.com/licenses/upl/
 """Notebook 55: GSAR grounded findings — a finding ships, or the agent abstains.
 
-This is the file that earns the SDK its claim: a security finding an
-agent emits is only as trustworthy as the evidence behind every
-sentence in it. An ungrounded vulnerability claim is a false positive
-*by construction* — so Locus will not let you produce one.
+A security finding an agent emits is only as trustworthy as the evidence
+behind every sentence in it. An ungrounded vulnerability claim is a false
+positive *by construction*, so :func:`locus.control.ground_finding` will not
+return one.
 
 The primitive is :func:`locus.control.ground_finding`. You hand it a
 candidate finding plus a GSAR partition of its claims; it scores the
 partition, and either returns a typed :class:`~locus.control.Evidence`
 (the finding ships) or an :class:`~locus.control.Abstention` (the
-finding is withheld, with an audit record of why). There is no public
-path that constructs a ``Evidence`` without clearing the grounding bar.
+finding is withheld, with an audit record of why). ``Evidence`` itself is
+an ordinary Pydantic model: code that constructs one directly, as Part 5
+does once the loop proceeds, bypasses that check, so ``ground_finding`` is
+the path that enforces the grounding bar.
 
 GSAR — Grounding-Stratified Adaptive Replanning (``locus.reasoning.gsar``,
 from `arXiv:2604.23366 (2026) <https://arxiv.org/abs/2604.23366>`_) — is
@@ -21,17 +23,17 @@ the scoring layer underneath. Every claim is partitioned into grounded /
 ungrounded / contradicted / complementary buckets and weighted by
 provenance: a scanner row (``tool_match``) outranks a typed step output
 (``specific_data``), which outranks a model-internal inference, which
-outranks a domain prior. That ordering is the same discipline a SOC lead
-applies to a junior analyst's write-up — "show me the log line" — encoded
-as a typed, auditable function.
+outranks a domain prior. That ordering is the same discipline a security
+operations centre (SOC) lead applies to a junior analyst's write-up — "show
+me the log line" — encoded as a typed, auditable function.
 
 Key ideas:
 - ``ground_finding(...)`` returns ``Evidence | Abstention``. A finding
   backed by scanner rows ships; an "it's probably exploitable" hunch with
   no evidence abstains. ``is_finding(result)`` narrows the union.
 - The four-way partition (Eq. 1) and the evidence-typed grounding score
-  ``S`` (Eq. 2): tool output beats inference beats domain knowledge, so
-  the evidence hierarchy is explicit, not vibes.
+  ``S`` (Eq. 2): tool output outranks inference, which outranks domain
+  knowledge, so the evidence hierarchy is explicit rather than implied.
 - The three-tier ``{proceed, regenerate, replan}`` decision (Eq. 3) with
   the Appendix-B reference thresholds (``τ_proceed=0.80``,
   ``τ_regenerate=0.65``). Below proceed, no finding is emitted.
@@ -45,17 +47,20 @@ without a translation layer.
 
 Run it:
     # Default: OCI GenAI if ~/.oci/config has a usable profile, else the bundled mock model
-    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_55_gsar_typed_grounding.py
+    python examples/notebook_55_gsar_typed_grounding.py
 
     # Offline:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_55_gsar_typed_grounding.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
-  ``openai`` / ``anthropic`` / ``mock``.
+- An OCI profile in ``~/.oci/config`` (picked up automatically), or
+  ``LOCUS_MODEL_PROVIDER`` set to ``openai`` / ``anthropic`` / ``mock`` with
+  the matching key.
 - Part 5 (Algorithm 1) needs a model that supports constrained JSON
-  decoding for the structured-output judge; under mock it abstains
-  deterministically, which is itself a correct GSAR outcome.
+  decoding for the structured-output judge. Under mock the judge falls back
+  to its safe default and abstains deterministically, so the loop spends its
+  replan budget and returns a degraded result rather than an ungrounded
+  finding.
 
 Provider notes:
 - ``ground_finding`` and the GSAR scoring layer are pure Python: the
@@ -342,8 +347,8 @@ async def example_outer_loop() -> None:
 
     # Recovery hooks. On a live judge that proceeds on iteration 0 these are
     # never called; under mock the judge abstains, so replan_fn fires up to
-    # K_max and the loop returns degraded-but-honest — itself a correct GSAR
-    # outcome (it refuses to fabricate grounding it can't get).
+    # K_max and the loop returns a result flagged degraded rather than an
+    # ungrounded report (the degraded-but-honest contract on GSARResult).
     async def regenerate(synthesis: str, judge_output: JudgeOutput) -> str:
         return synthesis
 

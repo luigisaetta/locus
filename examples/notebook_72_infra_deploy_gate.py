@@ -6,10 +6,11 @@
 
 A deploy agent watches CI, and when a build is green it proposes the next
 action: roll the new image onto staging, or promote / roll back production.
-Letting it act freely is how a 3 a.m. agent takes the checkout API down.
-Blocking everything for a human is how you stop shipping. The middle path
-is a gate: cheap, reversible staging changes go through automatically; any
-change to the production environment stops and waits for a named human.
+Left to act on its own, the agent can take the checkout API down overnight
+with nobody watching; requiring a human for every change stops releases
+altogether. The middle path is a gate: cheap, reversible staging changes go
+through automatically; any change to the production environment stops and
+waits for a human.
 
     Build is green
        │
@@ -33,8 +34,8 @@ log — the held production rollback is on the trail next to the staging
 deploy that actually ran.
 
 `perform` here is a local stub: it appends to an in-memory list instead of
-calling kubectl, so the script runs offline with no cluster, no creds, no
-network. Swap that one function for a real `kubectl rollout` call and the
+calling kubectl, so the script runs offline with no cluster, no credentials,
+no network. Swap that one function for a real `kubectl rollout` call and the
 gate is unchanged.
 
 Run it:

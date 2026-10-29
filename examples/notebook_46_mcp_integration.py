@@ -9,7 +9,7 @@ support desk wires its order system, help center, and billing services
 into an agent without bundling them. Locus speaks both sides of it.
 
 - Publish a Locus support agent as an MCP server — tools and the
-  agent's own ``run_agent`` become MCP methods.
+  agent's own ``run_agent`` become MCP tools.
 - Convert tool schemas in both directions
   (``locus_tool_to_mcp`` / ``mcp_tool_to_locus``) and call the
   round-tripped tool.
@@ -38,8 +38,9 @@ Run it:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_46_mcp_integration.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
-  ``openai`` / ``anthropic`` / ``mock``.
+- An OCI profile in ``~/.oci/config`` (picked up automatically), or
+  ``LOCUS_MODEL_PROVIDER`` set to ``oci`` / ``openai`` / ``anthropic``
+  with the matching credentials, or ``mock`` for no credentials.
 - Optional: ``pip install fastmcp`` to exercise live request handling.
 
 See https://modelcontextprotocol.io for the MCP specification.
@@ -81,7 +82,7 @@ def _has_fastmcp() -> bool:
 
 
 # =============================================================================
-# Part 1: Three ordinary Locus support tools. Nothing MCP-specific yet.
+# Part 1: Four ordinary Locus support tools. Nothing MCP-specific yet.
 #         All data is mock — invented order ids, canned articles.
 # =============================================================================
 
@@ -225,8 +226,8 @@ async def example_tool_conversion():
 
 
 # =============================================================================
-# Part 3: Publish an agent as an MCP server. Tools + run_agent become
-#         callable methods over stdio or SSE.
+# Part 3: Publish an agent as an MCP server. Tools + run_agent are registered
+#         as MCP tools, served over stdio or HTTP.
 # =============================================================================
 
 
@@ -261,7 +262,8 @@ def example_mcp_server() -> LocusMCPServer:
 
     print("The server exposes:")
     print(
-        "  - All agent tools (order_status, search_help_articles, calculate, check_refund_eligibility)"
+        "  - All agent tools (order_status, search_help_articles, calculate, "
+        "check_refund_eligibility)"
     )
     print("  - run_agent(prompt) - Run the full agent")
     print("  - run_agent_stream(prompt) - Run with streaming")

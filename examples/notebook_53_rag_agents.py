@@ -17,11 +17,12 @@ alongside any other ``@tool`` you define.
   for rollout math.
 - Streaming events from the agent while it searches and answers.
 - An **answer-grounding gate**: before ATLAS ships remediation advice,
-  the GSAR scorer partitions its claims into grounded vs. ungrounded and
-  ``decide()`` says whether to proceed. When the answer is anchored in a
-  retrieved runbook chunk, it proceeds; when it is speculation, the same
-  call replans rather than guess — a hallucinated fix by construction
-  withheld.
+  the drafted answer's claims are placed in a GSAR ``Partition`` by the
+  evidence behind them, ``gsar_score()`` scores the partition and
+  ``decide()`` returns proceed, regenerate or replan. A fix anchored in
+  a retrieved runbook chunk proceeds; a claim with no retrieved evidence
+  makes the gate replan rather than let the agent guess — a hallucinated
+  fix is withheld by construction.
 
 Chunk-size, prompt-design, and metadata-filter notes for ops corpora are
 in ``docs/concepts/rag.md``.
@@ -79,9 +80,11 @@ async def rag_as_tool():
 
     # Internal runbook one-liners. All runbook ids and services are fictitious.
     knowledge = [
-        "RB-014 covers the checkout-api p99 latency regression after the 2.4.1 deploy; roll back via Argo.",
+        "RB-014 covers the checkout-api p99 latency regression after the 2.4.1 deploy; "
+        "roll back via Argo.",
         "RB-015 documents orders-db connection-pool exhaustion under peak load.",
-        "RB-016: the nightly billing batch OOMs when the dataset exceeds 8 GB; raise the memory limit.",
+        "RB-016: the nightly billing batch OOMs when the dataset exceeds 8 GB; "
+        "raise the memory limit.",
         "RB-017: gateway ingress 502s trace to a misconfigured readiness probe.",
         "RB-018: rotate the registry pull-secret after the expired-credential incident.",
     ]
@@ -154,7 +157,10 @@ async def simple_rag_agent():
 
     search_tool = retriever.as_tool(
         name="search_runbook_docs",
-        description="Search internal runbook documentation for affected versions, remediation, detection guidance, and rollout cohorts.",
+        description=(
+            "Search internal runbook documentation for affected versions, remediation, "
+            "detection guidance, and rollout cohorts."
+        ),
     )
 
     agent = Agent(
@@ -226,7 +232,10 @@ async def multi_tool_rag_agent():
 
     search_tool = retriever.as_tool(
         name="search_rollout_data",
-        description="Search rollout data for runbook RB-014 including pod counts, canary progress, and mitigations.",
+        description=(
+            "Search rollout data for runbook RB-014 including pod counts, canary progress, "
+            "and mitigations."
+        ),
     )
 
     agent = Agent(
@@ -305,11 +314,12 @@ async def rag_with_streaming():
 
 # =============================================================================
 # Step 5: Answer-grounding gate — before ATLAS ships a remediation answer,
-#         the GSAR scorer partitions its claims into grounded vs. ungrounded
-#         and decide() picks proceed / regenerate / replan. A fix anchored
-#         in a retrieved runbook chunk proceeds; a hunch with no retrieved
-#         text replans rather than guess. Pure-Python — no embeddings or
-#         model needed, so it runs offline.
+#         its claims are placed in a GSAR Partition by the evidence behind
+#         them, gsar_score() scores the partition and decide() picks
+#         proceed / regenerate / replan. A fix anchored in a retrieved
+#         runbook chunk proceeds; a claim with no retrieved text replans
+#         rather than guess. Pure-Python — no embeddings or model needed,
+#         so it runs offline.
 # =============================================================================
 
 

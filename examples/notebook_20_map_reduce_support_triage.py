@@ -18,13 +18,18 @@ Key ideas:
   system prompt — the graph orchestrates them, not a hand-rolled loop.
 - The synthesizer reads each Send's output back from merged state and
   emits a single Markdown triage summary.
-- The whole pipeline is one ``StateGraph.execute`` call. Streaming,
-  cancellation, checkpointing, and GSAR judgment attach for free.
+- The whole pipeline is one ``StateGraph.execute`` call. The same graph
+  streams through ``StateGraph.stream`` and checkpoints through
+  ``GraphConfig`` with no change to the nodes; each analyst is an ordinary
+  ``Agent``, so agent-level options such as GSAR typed grounding apply to
+  it unchanged.
 
 Run it:
     .venv/bin/python examples/notebook_20_map_reduce_support_triage.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable
+profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER``
+(``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
 ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:

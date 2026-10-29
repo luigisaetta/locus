@@ -6,14 +6,14 @@
     agent    -> speak     speech.speak(reply, response_format="mp3")  (:127). OpenAISpeechProvider.speak() calls
                           client.audio.speech.create(model, voice, input=text, response_format)  (src/locus/providers/speech.py:131-137),
                           the OpenAI /v1/audio/speech endpoint, and returns SynthesizedAudio(audio_bytes=...)  (speech.py:139-144)
-    speak    -> mp3 file  OUT_PATH.write_bytes(synthesized.audio_bytes)  (:128-129)
+    speak    -> MP3 file  OUT_PATH.write_bytes(synthesized.audio_bytes)  (:128-129)
     agent    -> offline   _speech_provider() returns None when OPENAI_API_KEY is unset  (:85-87); the notebook then prints
                           the OpenAISpeechProvider(...).speak() call it would make and returns without writing a file  (:117-124)
   Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 254" role="img" aria-labelledby="title desc">
   <title id="title">Voice output: a spoken advisory</title>
-  <desc id="desc">An advisory request goes to a Locus Agent backed by a chat model, which replies with the advisory text. The text is passed to the speech provider's speak(), which calls the /v1/audio/speech endpoint and returns mp3 bytes; the notebook writes them to an mp3 file, the spoken advisory. With the mock or an OCI chat model and no OPENAI_API_KEY the agent still drafts the text, but the notebook prints the speak() call it would make instead of calling the endpoint, and writes no file.</desc>
+  <desc id="desc">An advisory request goes to a Locus Agent backed by a chat model, which replies with the advisory text. The text is passed to the speech provider's speak(), which calls the /v1/audio/speech endpoint and returns MP3 bytes; the notebook writes them to an MP3 file, the spoken advisory. With the mock or an OCI chat model and no OPENAI_API_KEY the agent still drafts the text, but the notebook prints the speak() call it would make instead of calling the endpoint, and writes no file.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -28,10 +28,10 @@
   <rect class="label-bg" x="364" y="64" width="96" height="20" rx="4"/>
   <text class="label" x="412" y="74">advisory text</text>
 
-  <!-- speech provider -> mp3 file -->
+  <!-- speech provider -> MP3 file -->
   <path class="edge" marker-end="url(#ah)" d="M628,53 L728,53"/>
   <rect class="label-bg" x="643" y="64" width="72" height="20" rx="4"/>
-  <text class="label" x="679" y="74">mp3 bytes</text>
+  <text class="label" x="679" y="74">MP3 bytes</text>
 
   <!-- agent -> offline: without a key the synthesis call is printed, not made -->
   <path class="edge dashed" marker-end="url(#ah)" d="M292,82 L292,140"/>
@@ -64,5 +64,5 @@
     <text class="sub" x="292" y="182">prints the speak() call</text>
   </g>
 
-  <text class="note" x="450" y="234">With the mock or an OCI chat model and no OPENAI_API_KEY the agent still drafts the advisory; the notebook writes no mp3 file.</text>
+  <text class="note" x="450" y="234">With the mock or an OCI chat model and no OPENAI_API_KEY the agent still drafts the advisory; the notebook writes no MP3 file.</text>
 </svg>

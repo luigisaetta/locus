@@ -13,9 +13,10 @@ step of an on-call rotation, bounded to the services a deploy window actually
 touches. The result is a plain ``locus.Agent`` — every hook, checkpointer,
 and observability primitive in the SDK attaches normally.
 
-- Typed termination: ``(ToolCalled('submit') & ConfidenceMet(0.85))
-  | TokenLimit(N) | MaxIterations(M)`` — composable and testable
-  without running a model.
+- Typed termination: ``(ToolCalled('submit_review', require_success=True)
+  & ConfidenceMet(0.85)) | MaxIterations(12)`` for Part 1; ``TokenLimit``
+  joins the chain only when ``total_token_budget`` is set. Composable and
+  testable without running a model.
 - Filesystem-as-memory: opt in to ``write_file`` / ``read_file`` for
   scratchpad notes that persist across iterations without bloating
   context.
@@ -33,7 +34,9 @@ and observability primitive in the SDK attaches normally.
 Run it:
     python examples/notebook_31_deepagent.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable
+profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER``
+(``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
 ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:

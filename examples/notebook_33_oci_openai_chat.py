@@ -1,7 +1,7 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Notebook 33: call any non-R-series OCI GenAI model with ``OCIChatCompletionsModel``.
+"""Notebook 33: call OCI GenAI's OpenAI-compatible endpoint with ``OCIChatCompletionsModel``.
 
 This walks through the default Oracle Cloud Infrastructure (OCI)
 Generative AI client class. ``OCIChatCompletionsModel`` targets the
@@ -10,8 +10,9 @@ the right choice for almost every agent you'll build on OCI.
 
 Key concepts:
 
-- One class covers OpenAI, Meta, Mistral, xAI, Gemini, and non-R-series
-  Cohere — change ``model="..."`` and nothing else.
+- One class covers OpenAI, Meta, Mistral, xAI, and Google Gemini — change
+  ``model="..."`` and nothing else. OCI does not expose Cohere (Command R
+  and Command A) on this endpoint; those go through ``OCIModel``.
 - Stateless on the wire: Locus owns the conversation history, hooks,
   tool calls, and memory. No Project OCID, no continuation tokens.
 - Streaming arrives as ``ModelChunkEvent``\\s through ``model.stream(...)``.
@@ -20,7 +21,7 @@ Key concepts:
 - New models OCI ships on this endpoint work without a Locus update.
 
 For Responses-only models or server-side conversation state, see
-``notebook_34_oci_responses``. For Cohere R-series, see
+``notebook_34_oci_responses``. For Cohere models, see
 ``notebook_01_oci_transports``.
 
 Run it:
@@ -148,8 +149,8 @@ class Weather(BaseModel):
 
 
 def part4_structured_output() -> None:
-    """Bind the model output to a Pydantic schema. OCI forwards the JSON
-    schema to the model's constrained-decoding mode and ``result.parsed``
+    """Bind the model output to a Pydantic schema. The runtime sends the
+    schema as a native JSON-schema ``response_format`` and ``result.parsed``
     is a typed ``Weather`` instance — no manual JSON parsing."""
     from locus.agent import AgentConfig
 
@@ -174,7 +175,11 @@ def part4_structured_output() -> None:
 
 
 def part5_model_swap() -> None:
-    """Same class against four different OCI model families — change one string."""
+    """Same class against four OCI model ids — change one string.
+
+    The first three families are served on ``/openai/v1``; the Cohere id is
+    not, so it exercises the ``except`` branch.
+    """
     print("=== Part 5: same class, swap families ===\n")
     families = [
         "openai.gpt-5",

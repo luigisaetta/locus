@@ -15,28 +15,30 @@ behind a ``create_deepagent`` core. The agent proposes findings;
 ``Evidence`` only if its cited evidence clears the GSAR threshold, otherwise it
 abstains. The model gathers and proposes; Python decides what ships.
 
-This is the differentiator. A commodity "cloud agent" will confidently narrate
-misconfigurations it never actually observed. Here, an ungrounded claim cannot
-become an ``Evidence`` — it abstains — so the report is trustworthy by construction.
+An agent without grounding can narrate misconfigurations it never observed.
+Here an ungrounded claim cannot become an ``Evidence`` — it abstains — and the
+abstention is kept for audit.
 
-Maps to OWASP ASI: Identity & Privilege Abuse (the API-key-on-an-administrator
-class of finding); the read-only-by-default tooling is the control that keeps
-the auditor itself from becoming a liability.
+The finding class maps to OWASP ASI03, Identity & Privilege Abuse (the
+API-key-on-an-administrator finding); the read-only-by-default tooling is the
+control that keeps the auditor itself from becoming a liability.
 
 Run it:
     python packages/locus-sdk-security/examples/notebook_81_cloud_posture_agent.py
 
 Part 1 (the grounding decision) runs fully offline and deterministically — no
 model, no tenancy. Part 2 builds the live agent; it runs against a real
-tenancy only when BOTH a real model (``get_model()`` auto-detects OCI GenAI
-from your OCI profile, or set ``LOCUS_MODEL_PROVIDER``) and a usable
-``~/.oci/config`` profile (``LOCUS_OCI_PROFILE`` / ``OCI_PROFILE``, e.g.
-``<your-profile>``; ``DEFAULT`` otherwise) are present. With neither, it prints
-the bring-your-own-credentials note and exits cleanly.
+tenancy only when BOTH a live model and a usable ``~/.oci/config`` profile are
+present. The model comes from this package's ``config.py``: set
+``LOCUS_MODEL_PROVIDER`` to ``openai`` or ``anthropic`` with the matching API
+key; that harness has no OCI Generative AI branch, so an OCI profile does not
+select a model. The profile (``LOCUS_OCI_PROFILE`` / ``OCI_PROFILE``;
+``DEFAULT`` otherwise) selects the audited tenancy. With either missing, Part 2
+prints the bring-your-own-credentials note and returns.
 
 Prerequisites:
 - Notebook 31 (DeepAgent) — the core this factory wraps.
-- For the live Part 2 only: a structured-output-capable provider + the ``oci``
+- For the live Part 2 only: a structured-output-capable provider and the ``oci``
   SDK (``pip install 'locus-sdk[oci]'``) with a profile whose IAM group grants
   only inspect / read verbs. The agent is read-only by default; ``use_oci``
   refuses mutating operations.
@@ -94,7 +96,9 @@ def _sample_report() -> PostureReport:
                 taxonomy=[OwaspASI.IDENTITY_AND_PRIVILEGE_ABUSE],
                 evidence=[
                     PostureEvidence(
-                        statement="list_api_keys for user admin returns 1 key, timeCreated 2024-01-09",
+                        statement=(
+                            "list_api_keys for user admin returns 1 key, timeCreated 2024-01-09"
+                        ),
                         ref="oci:identity:list_api_keys:timeCreated",
                         grounded=True,
                     )
@@ -202,8 +206,9 @@ async def part2_live_agent() -> None:
     print(f"analyst tools: {tool_names}")
     print("read-only by default: use_oci refuses any operation that is not a list/get-style read.")
 
-    # get_model() already auto-detected OCI (or honoured LOCUS_MODEL_PROVIDER);
-    # only the bundled mock means there is no real model to drive the audit.
+    # get_model() honours LOCUS_MODEL_PROVIDER (openai / anthropic) and otherwise
+    # returns the bundled mock; the harness has no OCI model branch, so the OCI
+    # profile only selects the audited tenancy. The live run needs both.
     if isinstance(model, MockModel) or target is None:
         print(
             "\nLive run skipped (bring-your-own-credentials).\n"
@@ -229,7 +234,8 @@ async def part2_live_agent() -> None:
     for grounded in ground_report(report, controls):
         if is_finding(grounded):
             print(
-                f"  SHIP    [{grounded.severity:<8}] {grounded.title} (gsar={grounded.gsar_score:.2f})"
+                f"  SHIP    [{grounded.severity:<8}] {grounded.title} "
+                f"(gsar={grounded.gsar_score:.2f})"
             )
         else:
             print(f"  ABSTAIN  {grounded.reason[:80]}")

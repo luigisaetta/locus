@@ -22,7 +22,7 @@ Key ideas:
   happen — the agent shows its work instead of handing back an opaque
   answer.
 - ``AgentResult`` carries the final message, success flag, stop reason,
-  and per-run metrics.
+  confidence and per-run metrics.
 - The same agent triages many transactions in a row.
 
 The sample transactions map to patterns a payments team actually sees:
@@ -34,7 +34,9 @@ BINs, and made-up transaction ids.
 Run it:
     .venv/bin/python examples/notebook_02_basic_agent.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose.
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile,
+otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``,
+``openai``, ``anthropic``, ``mock``) to choose.
 """
 
 import asyncio
@@ -213,7 +215,7 @@ def example_a_triage_queue() -> None:
 
     Each call is independent: LEDGER does not remember txn_8841 while
     looking at txn_8842. That is the default on purpose — carrying context
-    between unrelated transactions is how one flagged card starts colouring
+    between unrelated transactions is how one flagged card starts coloring
     the judgement on the next. Notebook 05 adds memory when you want it.
     """
     print("=== Part 5: A Triage Queue ===\n")

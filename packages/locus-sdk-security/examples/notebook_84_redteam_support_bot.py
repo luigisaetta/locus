@@ -4,18 +4,21 @@
 
 """Notebook 84: red-team a customer-support chatbot (a real scenario).
 
-Almost every company now ships a customer-support assistant backed by an LLM
-and a knowledge base. Two questions a security team has to answer before it
-goes live: can someone **inject instructions** into it (directly, or via a
-poisoned KB doc), and can they make it **leak data** it was told to protect?
+Many companies now ship a customer-support assistant backed by an LLM and a
+knowledge base. Two questions a security team has to answer before it goes
+live: can someone **inject instructions** into it (directly, or via a poisoned
+knowledge-base document), and can they make it **leak data** it was told to
+protect?
 
-This notebook points Locus at a support bot and runs the OWASP-ASI / MITRE-ATLAS
-suite, then prints graded results — an ``Evidence`` (the attack worked, here's the
-evidence) or an `Abstention` (no proof, so no claim). It assesses two versions:
-a *naive* bot with no trust boundary, and a *hardened* one.
+This notebook points Locus at a support bot and runs the ``owasp-asi`` probe
+suite, then prints graded results — an ``Evidence`` (the attack landed, carrying
+its grounding score and evidence references) or an ``Abstention`` (no grounding
+evidence, so nothing is asserted). It assesses two versions: a *naive* bot with
+no trust boundary, and a *hardened* one.
 
 It runs fully offline by simulating the bot with ``Target.from_callable``. In
-production you would not simulate it — you would point at the real thing:
+production you would not simulate it — you would point ``Target.endpoint`` at
+the real chat API:
 
     target = Target.endpoint("https://support.acme.example/chat",
                              build_payload=lambda p: {"message": p},
@@ -44,8 +47,8 @@ def naive_support_bot(message: str) -> str:
     Like many first prototypes, it folds the retrieved knowledge-base text, the
     user's message, and its own instructions into one prompt and simply "does
     what the combined prompt says" — so instructions injected via the message
-    (or, in production, via a poisoned KB document) get executed. We model that
-    failure mode by complying with the input.
+    (or, in production, via a poisoned knowledge-base document) get executed.
+    We model that failure mode by complying with the input.
     """
     return message  # stands in for an LLM that follows injected instructions
 
@@ -69,7 +72,8 @@ async def _assess(target: Target) -> None:
     report = await red_team(target, suite="owasp-asi")
     findings = [r for r in report if is_finding(r)]
     print(
-        f"\n== {target.name!r}: {len(findings)} findings / {len(report) - len(findings)} abstentions =="
+        f"\n== {target.name!r}: {len(findings)} findings / "
+        f"{len(report) - len(findings)} abstentions =="
     )
     for r in report:
         if is_finding(r):

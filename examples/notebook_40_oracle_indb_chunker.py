@@ -6,7 +6,7 @@
 
 Oracle 23ai / 26ai ships a server-side chunking primitive,
 ``DBMS_VECTOR_CHAIN.UTL_TO_CHUNKS``. It tokenises and segments text
-without ever shipping the content back to Python — perfect for the
+without ever shipping the content back to Python — suited to the
 first stage of an ingest pipeline where the source CLOBs already live
 in the database. Locus wraps it as
 :class:`locus.rag.chunkers.OracleInDBChunker`, but the protagonist of
@@ -21,9 +21,9 @@ The agent gets two tools:
   counts. This is how an ingest agent inspects a corpus that already
   lives in ADB without pulling every CLOB back over the wire.
 
-The agent picks which tool to call from the user's prompt, sees the
-``ToolStartEvent`` / ``ToolCompleteEvent`` pair, and grounds its
-summary in the chunk stats the database returned.
+The agent picks which tool to call from the user's prompt, emits a
+``ToolStartEvent`` / ``ToolCompleteEvent`` pair around the call, and
+grounds its summary in the chunk stats the database returned.
 
 Prerequisite (one-time, out-of-band)::
 
@@ -38,9 +38,9 @@ Run it:
 
     python examples/notebook_40_oracle_indb_chunker.py
 
-If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` / ``ORACLE_WALLET`` aren't set
-the notebook prints the wiring snippet and exits cleanly — no
-traceback, no half-initialised state.
+If any of ``ORACLE_DSN``, ``ORACLE_USER``, ``ORACLE_PASSWORD`` or
+``ORACLE_WALLET`` is unset the notebook prints the wiring snippet and
+exits cleanly — no traceback, no half-initialised state.
 
 Difficulty: Intermediate. Self-contained — no prior notebook required.
 """
@@ -259,10 +259,10 @@ async def main() -> None:
     async def chunk_paragraph(text: str) -> dict:
         """Tokenise and segment a single passage inside the database.
 
-        Wraps DBMS_VECTOR_CHAIN.UTL_TO_CHUNKS. The text is bound to a
-        PL/SQL local and chunked server-side at the chunker's configured
-        max_tokens / overlap. Returns the chunk count, the total char
-        length, and a preview of the first chunk.
+        Wraps DBMS_VECTOR_CHAIN.UTL_TO_CHUNKS. The text is passed as a bind
+        variable to one SELECT over the function and chunked server-side at
+        the chunker's configured max_tokens / overlap. Returns the chunk
+        count, the total char length, and a preview of the first chunk.
 
         Args:
             text: The passage to chunk. Pass the user's full string.
@@ -283,10 +283,10 @@ async def main() -> None:
         """Stream chunks from every row in the demo CLOB table.
 
         Wraps OracleInDBChunker.chunk_column over the demo CLOB table
-        (``_TABLE``). The source CLOBs never leave
-        the database — only the chunk records come back. Useful for
-        an ingest agent that wants to know "how big is this corpus, in
-        chunks" before committing to write to a vector store.
+        (``_TABLE``). The source CLOBs never leave the database — only
+        the chunk records come back. Useful for an ingest agent that
+        wants to know "how big is this corpus, in chunks" before
+        committing to write to a vector store.
 
         Args:
             limit: Cap on rows to inspect (default 100). Set higher for
@@ -333,11 +333,10 @@ async def main() -> None:
             await _drive_agent(agent, query)
 
         print(
-            "\nThe agent picked the right primitive for each request — "
-            "single-string vs. column-streaming — and every chunk was "
-            "produced by UTL_TO_CHUNKS inside Oracle 26ai. Pair with "
-            "OracleInDBEmbeddings (notebook 41) for a fully in-database "
-            "ingest pipeline."
+            "\nEvery chunk above was produced by UTL_TO_CHUNKS inside Oracle "
+            "Database 26ai; the two tools expose its single-string and "
+            "column-streaming forms. Pair with OracleInDBEmbeddings "
+            "(notebook 41) for a fully in-database ingest pipeline."
         )
     finally:
         await chunker.close()

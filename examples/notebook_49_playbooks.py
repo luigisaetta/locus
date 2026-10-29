@@ -28,14 +28,14 @@ are in ``docs/concepts/playbooks.md``.
 
 Run it:
     # Default: OCI GenAI if ~/.oci/config has a usable profile, else the bundled mock model
-    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_49_playbooks.py
+    python examples/notebook_49_playbooks.py
 
     # Offline:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_49_playbooks.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
-  ``openai`` / ``anthropic`` / ``mock``.
+- An OCI profile in ``~/.oci/config``, or ``LOCUS_MODEL_PROVIDER`` set to
+  ``openai`` / ``anthropic`` (with the matching key) or ``mock``.
 """
 
 import asyncio
@@ -346,7 +346,8 @@ async def part9_live_agent() -> None:
     dt = time.perf_counter() - t0
     print(
         f"  [model call: {dt:.2f}s · "
-        f"{triage_result.metrics.prompt_tokens}→{triage_result.metrics.completion_tokens} tokens · "
+        f"{triage_result.metrics.prompt_tokens}→"
+        f"{triage_result.metrics.completion_tokens} tokens · "
         f"iters={triage_result.metrics.iterations}]"
     )
     print(f"  Tools called: {[te.tool_name for te in triage_result.tool_executions]}")

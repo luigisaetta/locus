@@ -3,20 +3,19 @@
 # https://oss.oracle.com/licenses/upl/
 """Notebook 11: Model providers — one cloud-ops agent, swap models with a string.
 
-The Gateway is the seam every AI request in the org flows through: one
-cloud-operations agent codebase, any backing model. Locus supports OCI
+One cloud-operations agent codebase, any backing model. Locus supports OCI
 Generative AI, OpenAI and Anthropic as first-class providers, and the same
-agent code runs against any of them — only the model object changes, so a platform team can
-re-platform a provider (for cost, latency, data residency, or an outage
-failover) without rewriting a single runbook. The provider abstraction is
-also a control point: routing, rate limits, and audit live at the Gateway,
-not in each agent.
+agent code runs against any of them — only the model object changes, so a
+platform team can re-platform a provider (for cost, latency, data residency,
+or an outage failover) without rewriting a single runbook. The model object
+is also a control point: fleet-wide concerns such as routing, rate limits and
+audit belong at an AI gateway in front of the providers, not in each agent.
 
 Provider matrix:
 
   OCI       — oci:<vendor>.<model>: the OCI Generative AI catalog, auto-routed.
-  OpenAI    — GPT-4o, o3, gpt-5.x against the direct API.
-  Anthropic — Claude models (fable / opus / sonnet / haiku).
+  OpenAI    — openai:<model-id> against the OpenAI API (OPENAI_API_KEY).
+  Anthropic — anthropic:<model-id> against the Anthropic API (ANTHROPIC_API_KEY).
   Registry  — get_model("provider:model_name") returns the right client.
 
 Run it:
@@ -124,9 +123,9 @@ async def example_direct():
     print("=== Part 2: Direct provider usage ===\n")
 
     # Constructing a client does not call the provider, so this runs
-    # offline. A missing SDK extra or an unusable OCI profile surfaces here
-    # as the class's own error; a missing API key surfaces on the first
-    # request, so "ready" below means "built", not "authenticated".
+    # offline. Neither an unusable OCI profile nor a missing API key is
+    # detected until the first request, so "ready" below means "built",
+    # not "authenticated".
     attempts = [
         ("OCI GenAI — OCIChatCompletionsModel (profile from OCI_PROFILE)", _build_oci),
         ("OpenAI — OpenAIModel (OPENAI_API_KEY read at call time)", _build_openai),

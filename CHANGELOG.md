@@ -88,6 +88,17 @@ policy.
   `OCICohereReranker`; the `/resume` route's behaviour is described as the
   code implements it.
 
+- **Documentation site: one template for the 89 notebook pages.** Each page
+  shows, in the same order, what the example builds, the diagram of its
+  shape, the functions that carry the point, how to run it, what it prints
+  where that is worth reading, and the full source collapsed at the end. A
+  new build macro, `{{ locus_source <file>::<symbol> }}`, quotes a function
+  or class by name so the excerpt follows the code and a renamed symbol
+  fails the build; `tests/docs/test_notebook_pages.py` enforces the template;
+  `scripts/notebook_output.py` captures the printed trail of every notebook
+  whose offline run is deterministic and worth reading. Run blocks are fenced
+  commands with the provider sentence that is true for each notebook.
+
 ## [4.0.0] - 2026-10-28
 
 ### Removed

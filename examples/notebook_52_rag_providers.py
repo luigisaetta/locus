@@ -8,11 +8,15 @@ chargeback procedures, refund SLAs — outlives any single backend choice.
 Production RAG is two pluggable pieces, both behind one Locus interface:
 
 - **Embeddings** — ``OpenAIEmbeddings`` (``text-embedding-3-small`` /
-  ``-3-large``) or ``CohereEmbeddings`` (Cohere's direct API).
+  ``-3-large``), ``CohereEmbeddings`` (Cohere's direct API),
+  ``OCIEmbeddings`` (Cohere embedding models served by OCI Generative AI)
+  or ``OracleInDBEmbeddings`` (ONNX models running inside Oracle Database
+  26ai).
 - **Vector store** — ``InMemoryVectorStore`` for demos and tests, or a
   durable backend: ``PgVectorStore``, ``OpenSearchVectorStore``,
-  ``QdrantVectorStore``, ``ChromaVectorStore``. Swapping is a one-line
-  change; the retrieve/add API is identical.
+  ``QdrantVectorStore``, ``ChromaVectorStore`` or ``OracleVectorStore``
+  (Oracle Database 26ai). Swapping is a one-line change; the retrieve/add
+  API is identical.
 
 Choice of embedding model and distance metric is an operations
 decision, not just a tuning knob: it sets retrieval precision, and weak
@@ -21,12 +25,13 @@ answer to a merchant. What each part covers (all against the same
 runbook corpus):
 
 - Part 1 — embedding-model selection (small vs large dimensions).
-- Part 2 — distance metric choices (COSINE / DOT / EUCLIDEAN).
-- Part 3 — Qdrant in-memory store as a drop-in for InMemoryVectorStore.
+- Part 2 — three ``distance_metric`` strings (COSINE / DOT / EUCLIDEAN) and
+  what the store does with them.
+- Part 3 — Qdrant in-memory store as a drop-in for ``InMemoryVectorStore``.
 - Part 4 — batch ingest, ``count()``, ``clear()``.
 
 Run it:
-    # Embeddings need an OpenAI api key; without it the notebook prints
+    # Embeddings need an OpenAI API key; without it the notebook prints
     # what's missing and exits cleanly.
     export OPENAI_API_KEY=sk-...
     python examples/notebook_52_rag_providers.py
@@ -99,8 +104,11 @@ async def part1_embedding_models():
 
 
 # =============================================================================
-# Part 2: Distance metric variants — COSINE is the default; DOT and
-#         EUCLIDEAN are alternative shapes the store supports.
+# Part 2: Distance metric variants — the metric is a property of the store.
+#         InMemoryVectorStore matches "cosine" and "euclidean" exactly and
+#         scores any other name, including the upper-case ones below, as a
+#         dot product; OracleVectorStore is the backend that spells the
+#         metrics COSINE / DOT / EUCLIDEAN.
 # =============================================================================
 
 

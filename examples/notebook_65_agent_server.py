@@ -4,24 +4,27 @@
 """Notebook 65: Agent server — deploy an on-call incident triage copilot as an HTTP API.
 
 AgentServer wraps any Locus Agent in a FastAPI app: synchronous invoke,
-streaming SSE, persisted incident threads scoped to the bearer principal
-so two on-call engineers' API keys sharing one server can't read each
-other's incidents. Principal-scoped threads are an identity-and-privilege
-control: the bearer token decides which incidents a caller can read, and
-the persisted thread is the auditable record left for each one.
+streaming SSE, and persisted incident threads. Authentication is one
+shared bearer API key (api_key= or LOCUS_SERVER_API_KEY); the checkpoint
+namespace is derived from the presented key, so two keyed deployments
+sharing one checkpointer store the same client-supplied thread_id under
+different principals. One server holds one key: any other token is
+answered with a 401, and every caller who presents the key shares one
+principal. The persisted thread is the auditable record left for each
+incident.
 
 Endpoints:
 
-- POST /invoke         — synchronous invocation.
-- POST /stream         — SSE streaming.
-- GET  /threads/{tid}  — load a persisted incident thread.
-- DELETE /threads/{tid}— drop a persisted incident thread.
-- GET  /health         — health check.
+- POST   /invoke               — synchronous invocation.
+- POST   /stream               — SSE streaming.
+- GET    /threads/{thread_id}  — load a persisted incident thread.
+- DELETE /threads/{thread_id}  — drop a persisted incident thread.
+- GET    /health               — health check.
 
 When to use AgentServer vs A2AServer:
 
-- AgentServer: first-party HTTP API. Persisted threads, principal
-  scoping, bearer auth. Use when Locus is the system of record and
+- AgentServer: first-party HTTP API. Persisted threads, bearer auth,
+  key-namespaced checkpoints. Use when Locus is the system of record and
   clients are yours (PagerDuty webhook, deploy dashboard).
 - A2AServer: cross-framework interop with the A2A message spec. Use
   when an agent built on another framework needs to call your Locus agent.
@@ -83,7 +86,7 @@ def _build_server() -> AgentServer:
             system_prompt=_TRIAGE_PROMPT,
             max_iterations=5,
             model=get_model(),
-            # Redis checkpointer so /threads/{id} survives restarts —
+            # Redis checkpointer so /threads/{thread_id} survives restarts —
             # an incident outlives any one server process.
             checkpointer=_build_checkpointer(),
         )
@@ -172,7 +175,8 @@ def boot_live_server() -> None:
     print("Try: curl -X POST http://127.0.0.1:8000/invoke \\")
     print("          -H 'Content-Type: application/json' \\")
     print(
-        '          -d \'{"prompt":"Page on-call? CrashLoopBackOff on payments-worker, 12 restarts."}\''
+        '          -d \'{"prompt":"Page on-call? CrashLoopBackOff on payments-worker, '
+        "12 restarts.\"}'"
     )
     server.run(host="127.0.0.1", port=8000)
 

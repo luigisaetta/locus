@@ -4,13 +4,14 @@
 
 """Notebook 43: versioned agent history on Oracle Database 26ai.
 
-Notebook 42's ``oracle_checkpointer`` keeps **one row per thread** —
-``MERGE`` on save means the latest write wins and history is
-destructive. That's the right shape for most agent threads. But when
-you need a *history-preserving* saver — one row per
-``(thread_id, checkpoint_ns, checkpoint_id)`` plus a sibling table for
-intra-step pending writes — reach for
-:class:`OracleCheckpointSaver`.
+Notebook 42's ``oracle_checkpointer`` returns a ``StorageBackendAdapter``
+over ``OracleBackend``: the agent loop drives it, generating the
+checkpoint ids itself and ``MERGE``-upserting one row per
+``thread_id:checkpoint_id`` key. That is the right shape for live thread
+continuity. When you need a lineage your own code shapes — one row per
+``(thread_id, checkpoint_ns, checkpoint_id)`` with explicit parent links
+and metadata, plus a sibling table for intra-step pending writes — reach
+for :class:`OracleCheckpointSaver`.
 
 This notebook puts a Locus ``Agent`` on top of it. After every
 turn the agent's :meth:`AgentState.to_checkpoint` snapshot is
@@ -21,7 +22,7 @@ demonstrate ``list_checkpoints`` (lineage), ``get(checkpoint_id=v1)``
 operation driven by the agent's actual state, not synthetic blobs.
 
 The same Autonomous Database wallet drives both this saver and the
-single-row ``oracle_checkpointer`` side-by-side, so you can mix and
+loop-driven ``oracle_checkpointer`` side by side, so you can mix and
 match per workload.
 
 Key concepts:
@@ -30,9 +31,9 @@ Key concepts:
   ``(thread_id, checkpoint_ns, checkpoint_id)`` with
   ``parent_checkpoint_id`` walking the lineage) and ``<table>_writes``
   (pending intra-step writes keyed by ``task_id`` + monotonic ``idx``).
-- ``put(...)`` inserts; never upserts. Re-saving a different
-  ``checkpoint_id`` for the same thread *appends* — that's the whole
-  point of the versioned shape.
+- ``put(...)`` inserts; never upserts. Saving a different
+  ``checkpoint_id`` for the same thread *appends* a row, which is what
+  makes the shape versioned.
 - ``get(thread_id=...)`` with no ``checkpoint_id`` returns the newest
   row; ``list_checkpoints(...)`` enumerates the lineage newest-first.
 - ``put_writes(...)`` is idempotent: it replaces any prior writes for
@@ -267,7 +268,7 @@ async def main() -> None:
     print("Opening pool against Oracle 26ai…")
     saver = _build_saver()
 
-    # Live thread continuity comes from the single-row checkpointer
+    # Live thread continuity comes from the loop-driven checkpointer
     # (notebook 42's primitive); the versioned saver adds an audit
     # trail on top. Both ride the same Autonomous Database wallet.
     live_cp = oracle_checkpointer(
@@ -306,7 +307,7 @@ async def main() -> None:
     finally:
         print("\n--- Cleanup: drop the demo tables ---")
         await _drop_tables(saver)
-        # Also delete the live thread row from the single-row checkpointer.
+        # Also delete the live thread's rows from the loop-driven checkpointer.
         try:
             await live_cp.delete(THREAD_ID)
         except Exception as exc:  # pragma: no cover — best-effort

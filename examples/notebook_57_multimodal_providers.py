@@ -22,7 +22,7 @@ Run it:
     # Default: OCI GenAI if ~/.oci/config has a usable profile, else the bundled mock model
     python examples/notebook_57_multimodal_providers.py
 
-    # Offline / no credentials:
+    # Mock model, no model credentials (Part 3 still fetches example.com):
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_57_multimodal_providers.py
 
 Optional: set OPENAI_API_KEY to exercise the OpenAI-backed providers.
@@ -99,7 +99,9 @@ def example_auto_register():
     agent = Agent(
         config=AgentConfig(
             model=get_model(),
-            system_prompt="Use web_fetch to retrieve a merchant's order URL for dispute review when asked.",
+            system_prompt=(
+                "Use web_fetch to retrieve a merchant's order URL for dispute review when asked."
+            ),
             max_iterations=4,
             web_fetch=fetcher,
         )
@@ -157,7 +159,9 @@ def example_byo_backend():
     agent = Agent(
         config=AgentConfig(
             model=get_model(),
-            system_prompt="Use web_search to query the transaction ledger when asked about a charge.",
+            system_prompt=(
+                "Use web_search to query the transaction ledger when asked about a charge."
+            ),
             web_search=StaticLedgerSearch(),
         )
     )

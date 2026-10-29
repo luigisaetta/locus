@@ -8,13 +8,13 @@ locus.router compiles a natural-language operations request onto existing
 Locus primitives. The LLM never picks topology — it fills a typed
 GoalFrame; the router selects a protocol deterministically, and the
 compiler emits a real Agent / SequentialPipeline / ParallelPipeline /
-LoopAgent from a curated registry. PolicyGate is the star, and it is the
-control that keeps an autonomous router from over-reaching: the frame's
-risk band, not the model's confidence, decides whether an action runs. A
-LOW-risk "summarize this runbook" runs straight through to a direct
-answer; a HIGH-risk "drain a prod node and restart the payments
-deployment" compiles behind an approval interrupt and does not execute
-until a human says so.
+LoopAgent from a curated registry. PolicyGate is the control that keeps
+an autonomous router from over-reaching: the frame's risk band, checked
+against the protocol's risk_max and the gate's thresholds, decides
+whether an action runs. A LOW-risk "summarize this runbook" runs straight
+through to a direct answer; a HIGH-risk "drain a prod node and restart
+the payments deployment" compiles behind an approval callback, and the
+default callback denies, so it never executes.
 
 Key ideas:
 - Define a small infra/devops capability set as annotated tools.

@@ -2,36 +2,42 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 """
-Notebook 24: Outage war room — mitigation, diagnostics, and comms agents in a swarm.
+Notebook 24: Outage war room — mitigation, diagnostics and comms agents in a swarm.
 
 A swarm is a pool of agents that pull tasks from a shared queue based on
-declared capabilities. No commander decides who does what — each task
-finds the responder whose tags fit best, and the swarm runs them in
-parallel where it can. Here the swarm *is* PILOT, the outage war room:
-mitigation, diagnostics, and comms agents claiming work off the same board
-during a production outage.
+declared capabilities. No commander decides who does what: each agent
+claims the first pending task it is eligible for, and ``Swarm.execute``
+runs the agents one after another, so each one reads what earlier agents
+recorded on the shared context before it works. Here the swarm *is* PILOT,
+the outage war room: mitigation, diagnostics and comms agents claiming
+work from the same board during a production outage.
 
-Contrast this with Notebook 22: there, STEWARD routes work centrally and
-can be audited at the routing step. A swarm trades that for emergent
-parallelism — useful, but worth noting that a self-organizing agent pool
-is also where agentic failure modes concentrate: a mis-tagged or buggy
+Contrast this with Notebook 22: there an orchestrator routes work centrally
+and can be audited at the routing step. A swarm trades that for
+self-organization — useful, but worth noting that a self-organizing agent
+pool is also where agentic failure modes concentrate: a mis-tagged or buggy
 responder can claim work it should not, and one bad rollback can cascade
 across services. Keep capability tags tight and the blackboard auditable.
 
 Key ideas:
 - Each agent advertises ``capabilities`` (free-form string tags).
-- Tasks carry ``required_tags`` (hard filter) and ``preferred_tags``
-  (priority boost). Tagless tasks fall back to substring matching against
-  the description so older swarms keep working.
+- Tasks carry ``required_tags`` (hard filter) and ``preferred_tags``, which
+  only raise ``SwarmAgent.priority_for_task``, an advisory fit score;
+  claiming is first-eligible, so preferred tags do not change who gets a
+  task. Tagless tasks fall back to substring matching of capability names
+  against the description so older swarms keep working.
 - A ``SharedContext`` (findings, blackboard messages, task results) lets
   responders leave notes for each other without a central coordinator.
-- ``Swarm.execute`` decomposes the initial incident into capability-matched
-  subtasks and runs them.
+- ``Swarm.execute`` asks the swarm's model to split the initial incident
+  into untagged subtasks, which any eligible agent can claim, and runs them.
 
 Run it:
     .venv/bin/python examples/notebook_24_swarm_multiagent.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile,
+otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``,
+``openai``, ``anthropic``, ``mock``) to choose. Set ``LOCUS_MODEL_PROVIDER=mock``
+for offline runs.
 
 Prerequisites:
 - Notebook 02 (Agent basics).
@@ -204,7 +210,10 @@ async def example_full_swarm():
             create_swarm_agent(
                 name="Diagnostics",
                 capabilities=["investigate", "analyze", "examine"],
-                system_prompt="You are a diagnostics responder. Investigate services and collect logs and metrics.",
+                system_prompt=(
+                    "You are a diagnostics responder. "
+                    "Investigate services and collect logs and metrics."
+                ),
             ),
             create_swarm_agent(
                 name="Mitigation",
@@ -270,8 +279,11 @@ async def example_swarm_patterns():
     print("=== Part 6: Swarm Patterns ===\n")
 
     # The shape is entirely in the capability tags: disjoint tags give each
-    # task one expert, identical tags fan a backlog out, and a chain of
-    # tags turns the board into a pipeline.
+    # task one expert; identical tags make every peer eligible for the same
+    # backlog (``Swarm.execute`` still lets the first eligible agent work
+    # through what it can claim before the next one runs); and a chain of
+    # tags, with the agents listed in stage order, hands each stage's
+    # results to the next through the shared context.
     shapes = [
         (
             "Distinct, non-overlapping capabilities; each task goes to its expert.",

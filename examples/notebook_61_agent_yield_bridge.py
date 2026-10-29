@@ -5,16 +5,17 @@
 """Notebook 61: Privacy-review telemetry — the agent yield bridge.
 
 A data-privacy agent's tool calls are the part DPOs and auditors care
-about most. Every Agent.run is decorated with @_bus_bridge so the nine
-typed events it yields (ThinkEvent, ToolStartEvent, ToolCompleteEvent,
-ReflectEvent, GroundingEvent, ModelChunkEvent, ModelCompleteEvent,
-InterruptEvent, TerminateEvent) get republished on the bus as agent.*
-events when a run_context is open — every dataset the reviewer inspects
-is visible in the run stream. ModelCompleteEvent additionally fires
-agent.tokens.used so cost dashboards subscribe without parsing the
-completion payload.
+about most. Agent.run is decorated with @_bus_bridge, so each yielded
+event the bridge recognises (ThinkEvent, ToolStartEvent,
+ToolCompleteEvent, ReflectEvent, GroundingEvent, ModelChunkEvent,
+ModelCompleteEvent, InterruptEvent, CompactionEvent, TerminateEvent) is
+republished on the bus as an agent.* event when a run_context is open —
+each inspection the reviewer performs is visible in the run stream as a
+tool span. The bridge also maps ModelCompleteEvent to agent.tokens.used,
+but Agent.run never yields that event, so token counts come from
+result.metrics.
 
-- How nine yielded LocusEvent types map to agent.* bus events.
+- How the ten bridged LocusEvent classes map to agent.* bus events.
 - Tool-call telemetry with span_id pairing (agent.tool.started and
   agent.tool.completed share an id) — start/finish of each review step.
 - Token usage from result.metrics — the canonical source for cost
@@ -100,10 +101,10 @@ async def part1_full_lifecycle() -> None:
         await bus.close_stream(rid)
 
 
-# Part 2: token usage as a cost meter. result.metrics is authoritative;
-# agent.tokens.used SSE events are for streaming consumers that want
-# per-call deltas instead of the final total. Always-on privacy-review
-# automation needs both: budget enforcement and live burn-rate dashboards.
+# Part 2: token usage as a cost meter. result.metrics is authoritative:
+# the bridge maps ModelCompleteEvent to agent.tokens.used, but Agent.run
+# never yields that event, so the bus carries no per-call token deltas.
+# Always-on privacy-review automation meters its spend from the result.
 
 
 async def part2_token_meter() -> None:

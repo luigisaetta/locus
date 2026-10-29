@@ -272,3 +272,36 @@ def test_model_tabs_without_config_is_an_error() -> None:
     markdown = '{{ locus_model_tabs }}\n```python\nm = "{{ locus_model }}"\n```\n'
     with pytest.raises(RuntimeError, match="extra.model_tabs"):
         build_metadata.on_page_markdown(markdown, config={"extra": {"sdk_version": "1.0.0"}})
+
+
+def test_source_macro_quotes_a_symbol_by_name(tmp_path) -> None:
+    (tmp_path / "examples").mkdir()
+    (tmp_path / "examples" / "demo.py").write_text(
+        'import os\n\n\n@tool\ndef lookup(order_id: str) -> str:\n    """Look up."""\n    return order_id\n\n\n'
+        "class Flow:\n    def build(self):\n        return 1\n\n    def run(self):\n        return 2\n"
+    )
+    roots = [tmp_path]
+    assert build_metadata.render_source("examples/demo.py", "lookup", roots) == (
+        '```python\n@tool\ndef lookup(order_id: str) -> str:\n    """Look up."""\n    return order_id\n```'
+    )
+    assert build_metadata.render_source("examples/demo.py", "Flow.run", roots) == (
+        "```python\ndef run(self):\n    return 2\n```"
+    )
+    with pytest.raises(RuntimeError, match="no function or class named missing"):
+        build_metadata.render_source("examples/demo.py", "missing", roots)
+    with pytest.raises(RuntimeError, match="does not exist"):
+        build_metadata.render_source("examples/nope.py", "lookup", roots)
+
+
+def test_source_macro_expands_on_a_page(tmp_path) -> None:
+    (tmp_path / "mkdocs.yml").write_text("site_name: x\n")
+    (tmp_path / "examples").mkdir()
+    (tmp_path / "examples" / "demo.py").write_text("def main():\n    return 1\n")
+    rendered = build_metadata.on_page_markdown(
+        "Before.\n\n{{ locus_source examples/demo.py::main }}\n\nAfter.\n",
+        config={
+            "extra": {"sdk_version": "1.0.0"},
+            "config_file_path": str(tmp_path / "mkdocs.yml"),
+        },
+    )
+    assert rendered == "Before.\n\n```python\ndef main():\n    return 1\n```\n\nAfter.\n"

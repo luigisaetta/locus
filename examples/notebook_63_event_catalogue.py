@@ -6,16 +6,19 @@
 
 When a PCI DSS assessor asks "what can your payment agents do, and how
 would you know they did it?" — the question behind a payments-operations
-monitoring control — the answer is the event catalogue. Every component
-in Locus emits typed events under one stable prefix: agent.*,
-multiagent.*, composition.*, router.*, rag.*, memory.*, a2a.*, skills.*,
-deepagent.*. The EV_* constants in locus.observability.emit are the
-canonical registry — change one place, propagates everywhere — so the
-artifact you hand an assessor is generated from the code itself, not a
-spreadsheet that drifts out of date the day after it's signed.
+monitoring control — the answer is the event catalogue. Locus components
+emit typed events under a stable prefix per subsystem: agent.*,
+multiagent.*, composition.*, rag.*, memory.*, a2a.*, skills.*,
+deepagent.*, research.*, model.*, tool.* and harness.* (the router.*
+events are published as string literals outside the registry). The EV_*
+constants in locus.observability.emit are the canonical registry: change
+a constant and every emission site that imports it follows, so the
+artifact you hand an assessor is generated from the code itself rather
+than from a spreadsheet that drifts out of date.
 
-- List every EV_* constant and its category prefix (always in sync with
-  the codebase because it's read at import time — no stale spreadsheet).
+- List every EV_* constant and its category prefix (read from the
+  installed module when the script runs, so the list cannot drift from
+  the code).
 - Drive a two-stage dispute-triage SequentialPipeline that surfaces
   composition.* events end-to-end.
 

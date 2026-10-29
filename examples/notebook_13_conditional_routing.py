@@ -21,11 +21,9 @@ Key ideas:
 Run it:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_13_conditional_routing.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose.
-Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
-LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
-(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
-provider: ollama, vllm, groq, together, openrouter, ...).
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile,
+otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``,
+``openai``, ``anthropic``, ``mock``) to choose.
 """
 
 import asyncio

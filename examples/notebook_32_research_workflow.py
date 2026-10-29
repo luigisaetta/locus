@@ -11,8 +11,9 @@ inference that proposes a root-cause hypothesis before the summary,
 LLM-as-judge grounding evaluation that scores whether the reply is
 actually backed by that evidence, and a two-level recovery loop — an
 ungrounded support claim is a hallucinated answer, so it gets
-regenerated or re-planned instead of sent to the customer. No claim
-reaches the reply without evidence behind it.
+regenerated or re-planned instead of sent to the customer. When both
+budgets are spent the run ends, and the final state carries the last
+grounding score next to the summary.
 
 Recovery strategy::
 
@@ -182,7 +183,7 @@ async def part1_factory_with_sse() -> None:
     print(f"\n  research.* events fired: {research_events}")
 
 
-# Part 2: build a minimal graph manually — recon + summarise, no causal step.
+# Part 2: build a minimal graph manually — recon + summarize, no causal step.
 
 
 async def part2_custom_graph() -> None:
@@ -208,8 +209,9 @@ async def part2_custom_graph() -> None:
     graph.add_edge("execute", "summarize")
     graph.add_edge("summarize", "grounding_eval")
     # With max_replans=0 and max_regenerations=0 the router only ever returns
-    # END; "regenerate" / "replan" are mapped to END so compile() sees every
-    # label the router is able to emit.
+    # END; "regenerate" / "replan" are mapped to END as well so every label the
+    # router can return resolves to a target (compile() does not check the map;
+    # an unmapped label is used as a node id at run time).
     graph.add_conditional_edges(
         "grounding_eval",
         router,

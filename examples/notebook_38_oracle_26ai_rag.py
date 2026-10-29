@@ -42,15 +42,18 @@ Run it:
 
     python examples/notebook_38_oracle_26ai_rag.py
 
-If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` / ``OCI_COMPARTMENT`` aren't set
-the notebook prints the wiring snippet and exits cleanly — no
-traceback, no half-initialised state.
+If any of ``ORACLE_DSN``, ``ORACLE_USER``, ``ORACLE_PASSWORD``,
+``ORACLE_WALLET`` or ``OCI_COMPARTMENT`` is unset the notebook prints the
+wiring snippet and exits cleanly — no traceback, no half-initialised
+state.
 
 **Schema hygiene.** This notebook uses ``auto_create_table=True`` so the
-demo provisions the table on first run. For production, create the
-table out-of-band as a least-privileged app schema owner and set
-``auto_create_table=False`` — see ``docs/concepts/rag.md`` for the
-``CREATE USER locus_app`` and ``CREATE VECTOR INDEX`` DDL.
+demo provisions the table and its HNSW vector index on first run. For
+production, create the table out-of-band as a least-privileged app
+schema owner and set ``auto_create_table=False`` — the
+``OracleVectorStore`` class docstring (rendered on the RAG page of the
+API reference) carries the ``CREATE USER locus_app`` and
+``CREATE VECTOR INDEX`` DDL.
 
 Difficulty: Intermediate. Self-contained — no prior notebook required.
 """

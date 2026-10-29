@@ -17,7 +17,8 @@ it traces to the tool-output row that carried it.
 
 - GuardrailsHook with a typed GuardrailConfig (tool blocklist, length
   caps, default action).
-- PII detection and redaction on untrusted input before the model sees it.
+- PII detection on untrusted input before the model sees it; a REDACT override
+  admits the text and records the violation on the agent state.
 - Injection-pattern blocking on text arriving via tickets and tool output.
 - Indirect-injection detection in tool output, surfaced as a grounded
   Evidence tagged LLM01 / LLM02 / AML.T0051.
@@ -174,7 +175,7 @@ async def main():
     # dangerous channel is not the analyst's prompt — it is the *output*
     # of a tool the agent called. A threat-intel lookup returns advisory
     # text whose body has been seeded with an instruction or a destructive
-    # payload aimed at the agent. on_after_tool_call caps length and scans
+    # payload aimed at the agent. on_after_tool_call checks length and scans
     # the returned text for PII; here we additionally re-feed the tool
     # output through on_before_invocation to show what a re-injection check
     # would catch — that is where the command/SQL/path signatures fire.
@@ -322,8 +323,9 @@ async def main():
     )
     print(f"AI contrast: {contrast}")
 
-    # Part 7: per-rule actions. REDACT replaces the match in-place,
-    # WARN logs but allows, BLOCK rejects the call.
+    # Part 7: per-rule actions. REDACT rewrites PII in string tool arguments
+    # in place (on the prompt it admits the text and records the violation),
+    # WARN records but allows, BLOCK rejects the call.
     print("\n=== Part 7: Action types ===\n")
     for action in GuardrailAction:
         print(f"  {action.value}")
@@ -373,8 +375,9 @@ async def main():
     except Exception as e:  # noqa: BLE001
         print(f"  (filter blocked the input as expected: {type(e).__name__})")
 
-    # Part 9: stack multiple hooks — defense in depth. HookRegistry runs
-    # them in priority order; the first BLOCK wins.
+    # Part 9: stack multiple hooks — defense in depth. HookRegistry.providers
+    # hands them over in priority order and the agent runs them in that order;
+    # the first hook to raise stops the call.
     print("\n=== Part 9: Stacking guardrail hooks ===\n")
     registry = HookRegistry()
     registry.add_provider(
@@ -392,8 +395,9 @@ async def main():
     )
     print(f"Stacked-hooks answer: {stacked}")
 
-    # Part 10: prod vs dev policy presets. Dev is permissive (WARN);
-    # prod blocks irreversible operations and redacts PII.
+    # Part 10: prod vs dev policy presets. Dev is permissive (WARN); prod
+    # blocks irreversible operations, blocks SSNs and card numbers in the
+    # prompt and redacts e-mail addresses in tool arguments.
     print("\n=== Part 10: Custom security policies ===\n")
 
     def production_config() -> GuardrailConfig:

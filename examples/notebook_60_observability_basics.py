@@ -7,11 +7,12 @@
 When a support agent handles a customer ticket, you want to see — later,
 on a QA review or when a customer disputes an outcome — exactly what it
 did. Locus ships an in-process pub/sub EventBus that publishes typed
-StreamEvents for every meaningful step of execution: agent thinking, tool
-calls, model completions, token usage, multi-agent fan-outs, checkpoints
-— all under one canonical event_type per component. That stream is the
-Timeline: the support desk's typed, ordered, replayable record of every
-action an agent took on a ticket.
+StreamEvents for the meaningful steps of execution: agent thinking, tool
+calls, multi-agent fan-outs, checkpoints — each under a canonical
+event_type whose prefix names the component (agent.*, multiagent.*,
+composition.*, memory.*). That stream is the timeline: the support desk's
+typed, ordered, replayable record of every action an agent took on a
+ticket.
 
 A complete action timeline is what lets a supervisor reconstruct, after
 the fact, whether the bot followed policy before it refunded an order or
@@ -22,10 +23,12 @@ ContextVar.get() per emission site — no bus, no events, no
 allocations.
 
 - Run an Agent with no telemetry: the SDK-default path.
-- Wrap the same ticket reply in run_context() and subscribe to the bus.
+- Reply on the same ticket inside run_context(), this time with a lookup
+  tool attached, and subscribe to the bus.
 - The canonical events on the agent path: agent.think,
   agent.tool.started/completed, agent.terminate. agent.tokens.used is
-  emitted only when a ModelCompleteEvent that carries usage is bridged.
+  mapped from a ModelCompleteEvent that carries usage, but Agent.run never
+  yields that event, so the agent path does not record it.
 - Read the per-run history buffer after the fact (replay semantics for
   late subscribers — i.e. reconstruct the ticket timeline after the run).
 
@@ -103,8 +106,8 @@ async def part2_subscribe() -> None:
         await asyncio.sleep(0)  # let the subscriber register
 
         # The contextvar set by run_context() means the @_bus_bridge
-        # decorator on Agent.run forwards every yielded LocusEvent to
-        # the bus automatically — nothing the agent does goes unrecorded.
+        # decorator on Agent.run republishes each yielded LocusEvent the
+        # bridge maps — every think, tool and terminate step of this run.
         result = await agent.arun("Look up order CS-1042 and reply with its status in one line.")
         print("agent reply:", result.message[:120])
 

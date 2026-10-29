@@ -8,31 +8,34 @@ HELPDESK is the support automation: incoming tickets flow through a
 graph that classifies them, fans work out across many tickets and many
 classifiers, validates payloads with a reusable sub-pipeline, and
 remembers customers across runs. The pipeline uses the graph building
-blocks you reach for once basic graphs stop being enough: dynamic
+blocks that apply once a fixed topology is no longer enough: dynamic
 routing from inside a node, fan-out to many handlers, reusable
 subgraphs, and cross-conversation key/value storage.
 
 The triage branch closes the loop with a confidence check: a ticket
-that several independent classifiers agree on is auto-resolved, while a
-ticket only one weak signal flagged is escalated to a human agent — so
-an uncertain automation decision never ships to the customer on its own.
+that both strong classifiers agree on is auto-resolved, while a ticket
+only the weak length heuristic flagged is escalated to a human agent —
+so an uncertain automation decision never reaches the customer on its
+own.
 
 Key ideas:
 - Command(update=..., goto=...) — write state and pick the next node in one return value.
 - goto() / end() — short helpers for common Command shapes.
-- scatter() — fan a list of tickets out to copies of a worker node.
+- scatter() — run a worker node once per ticket, in parallel.
 - broadcast() — fan one ticket out to several classifier nodes.
 - Subgraph-as-node — call one StateGraph from inside another.
-- InMemoryStore — durable key/value space that outlives a single run.
+- InMemoryStore — in-process key/value space shared across runs in one process.
 
 Run it:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_16_advanced_patterns.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose.
-Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
-LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
-(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
-provider: ollama, vllm, groq, together, openrouter, ...).
+The default provider is OCI Generative AI when ``~/.oci/config`` holds a
+usable profile, otherwise the bundled mock model, so the example also runs
+offline with no credentials. Set ``LOCUS_MODEL_PROVIDER`` (``oci``,
+``openai``, ``anthropic`` or ``mock``) to force one and ``LOCUS_MODEL_ID`` to
+pick the model; any other provider the model registry knows (``ollama``,
+``vllm``, ``groq``, ``together``, ``openrouter``, ...) works the same way
+with ``LOCUS_MODEL_ID`` set.
 """
 
 import asyncio
@@ -142,7 +145,7 @@ async def example_goto_helpers():
 
 
 # =============================================================================
-# Part 2: scatter — fan one list out to many worker copies
+# Part 2: scatter — run one worker node once per item, in parallel
 # =============================================================================
 
 
@@ -274,13 +277,15 @@ async def example_broadcast():
     # A confident ticket: both the intent and the knowledge-base tag match.
     confident = await graph.execute(
         {
-            "ticket": "Hi, I need to reset my password please [kb:password-reset] — locked out since today"
+            "ticket": "Hi, I need to reset my password please [kb:password-reset] "
+            "— locked out since today"
         }
     )
     # A merely-suspected ticket: long, but no classifier matched.
     suspected = await graph.execute(
         {
-            "ticket": "I have a long winded question about something vaguely related to my account here"
+            "ticket": "I have a long winded question about something vaguely related "
+            "to my account here"
         }
     )
 
@@ -326,8 +331,9 @@ async def example_subgraph():
         return {"ticket": inputs}
 
     main_graph.add_node("prepare", prepare_ticket)
-    # The subgraph plugs in like any other node — its START/END become
-    # entry/exit hooks inside the parent.
+    # The subgraph plugs in like any other node: it receives the parent's
+    # current state, runs to completion, and its final state is merged back
+    # into the parent as this node's output.
     main_graph.add_node("validate", validation_graph)
 
     async def process_result(inputs):
@@ -451,7 +457,8 @@ async def example_combined():
     graph.add_edge("light_handling", "finalize")
     graph.add_edge("finalize", END)
 
-    await store.put(("customers", "vip_acme"), "vip", True)  # noqa: FBT003 — store.put signature is (namespace, key, value)
+    # store.put(namespace, key, value): the VIP flag is the stored value.
+    await store.put(("customers", "vip_acme"), "vip", True)  # noqa: FBT003
 
     result = await graph.execute({"customer_id": "std_user", "urgency": 20})
     print(f"Standard customer, urgency 20: {result.final_state.get('handling')} handling")
@@ -491,7 +498,8 @@ async def example_command_with_llm():
         result = await triage_agent.arun(update)
         dt = time.perf_counter() - t0
         print(
-            f"  [model call: {dt:.2f}s · {result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]"
+            f"  [model call: {dt:.2f}s · "
+            f"{result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]"
         )
         label = result.message.strip().lower()
         # Clamp anything unexpected so goto= always lands on a real node.
