@@ -33,6 +33,12 @@
   {% if page and page.meta and page.meta.table_filter %}
   <meta name="locus:table-filter" content="page">
   {% endif %}
+  {# Mobile browser chrome takes the header colour of the active scheme, and
+     a home-screen bookmark gets the mark on a plain tile (iOS ignores SVG
+     favicons for this and fills a transparent PNG with black). #}
+  <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111318" media="(prefers-color-scheme: dark)">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ 'img/apple-touch-icon.png' | url }}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Oracle Generative AI Agentic Harness">
   <meta property="og:title" content="{{ page_title }}">
