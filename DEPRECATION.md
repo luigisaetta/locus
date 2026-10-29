@@ -13,7 +13,7 @@ deprecations work.
 - **Minor** version bumps can add deprecations but not remove API.
 - **Patch** version bumps are bug fixes only.
 
-Consumers should pin a major (`locus-sdk>=3,<4`) and read the
+Consumers should pin a major (`locus-sdk>=5,<6`) and read the
 CHANGELOG before bumping across majors.
 
 A deprecated API will:

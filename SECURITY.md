@@ -21,15 +21,16 @@ Security fixes land on the **latest released minor of the current major**.
 Older minors are not backported — upgrade within the major instead, which
 [`DEPRECATION.md`](DEPRECATION.md) guarantees is non-breaking.
 
-| Version                       | Supported          |
-| ----------------------------- | ------------------ |
-| Latest `4.x` minor            | :white_check_mark: |
-| Earlier `4.x` minors          | :x: — upgrade to the latest `4.x` |
-| `3.x`                         | :x: — upgrade to `4.x` (the 4.0 changes are listed in the CHANGELOG) |
-| `2.x` (published as `tulip-agents`) | :x: — retired; upgrade to `locus-sdk` `4.x` |
-| `< 2.0`                       | :x:                |
+| Version                             | Supported                                                            |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| Latest `5.x` minor                  | :white_check_mark:                                                   |
+| Earlier `5.x` minors                | :x: — upgrade to the latest `5.x`                                    |
+| `4.x`                               | :x: — upgrade to `5.x` (the 5.0 changes are listed in the CHANGELOG) |
+| `3.x`                               | :x: — upgrade to `5.x`                                               |
+| `2.x` (published as `tulip-agents`) | :x: — retired; upgrade to `locus-sdk` `5.x`                          |
+| `< 2.0`                             | :x:                                                                  |
 
-Pin a major, as in `locus-sdk>=3,<4`, and take the newest minor within it.
+Pin a major, as in `locus-sdk>=5,<6`, and take the newest minor within it.
 Minors ship often, so an enumerated list of supported minors would be stale
 faster than it could be maintained; this table is written to stay correct
 without edits.

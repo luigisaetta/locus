@@ -8,6 +8,8 @@ policy.
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-10-29
+
 ### Added
 
 - **Sandbox image and OpenShell providers from `OpenShellBackend.create`.**
@@ -26,19 +28,6 @@ policy.
   The README lists the one host requirement (Landlock in the kernel's active
   LSM list). The live tests name their sandboxes within OpenShell's
   19-character limit.
-
-### Removed
-
-- **AWS cloud-posture tools.** `locus_security.aws` (`describe_aws`, `use_aws`
-  and their `@tool` wrappers), the `aws` extra on both packages and the
-  `LOCUS_AWS_*` variables are gone; Locus targets OCI first. The cloud-posture
-  capability stays, on the core OCI tools: `create_soc_analyst`,
-  `SecurityControls`, `SecurityContext().cloud`, the `cloud_posture_audit`
-  playbook and `security_toolset(oci=True)` drive `describe_oci` / `use_oci`
-  (read-only by default), and `SecurityControls` carries the OCI `profile`,
-  `auth_type`, `region` and `compartment_id` the review runs as.
-  S3-compatible object storage — `S3Backend` and the `s3` extra — is
-  unaffected: it is how OCI Object Storage is reached.
 
 ### Changed
 
@@ -98,6 +87,31 @@ policy.
   `scripts/notebook_output.py` captures the printed trail of every notebook
   whose offline run is deterministic and worth reading. Run blocks are fenced
   commands with the provider sentence that is true for each notebook.
+
+- **Documentation site: home page.** The three card grids (shapes, Oracle
+  Cloud, harness) open with a small drawing of the pattern each card is about
+  instead of a generic icon; a "What are you building?" section offers four
+  tabs (support bot, incident response, contract review, SOC alert triage),
+  each a short snippet linked to the notebook that runs it in full; "Your
+  first agent" switches providers with the site's tabs while the hero keeps
+  one literal OCI call; the notebook sidebar nests its topic groups so a
+  notebook page fits the viewport; and the Markdown twins drop the glyph
+  markup. Page copy is corrected where it had drifted from the code: the
+  Responses transport is opt-in through `OCIResponsesModel`, not chosen by
+  region, and product names are written in full.
+
+### Removed
+
+- **AWS cloud-posture tools.** `locus_security.aws` (`describe_aws`, `use_aws`
+  and their `@tool` wrappers), the `aws` extra on both packages and the
+  `LOCUS_AWS_*` variables are gone; Locus targets OCI first. The cloud-posture
+  capability stays, on the core OCI tools: `create_soc_analyst`,
+  `SecurityControls`, `SecurityContext().cloud`, the `cloud_posture_audit`
+  playbook and `security_toolset(oci=True)` drive `describe_oci` / `use_oci`
+  (read-only by default), and `SecurityControls` carries the OCI `profile`,
+  `auth_type`, `region` and `compartment_id` the review runs as.
+  S3-compatible object storage — `S3Backend` and the `s3` extra — is
+  unaffected: it is how OCI Object Storage is reached.
 
 ## [4.0.0] - 2026-10-28
 
