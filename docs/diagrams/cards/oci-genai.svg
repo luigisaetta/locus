@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OCI GenAI card: an Agent's `oci:<model id>` call goes to the OCI Generative
+  AI service (the band) and names one model of its catalogue, the primary node.
+  locus/models/registry.py: _make_oci picks the transport per model family:
+  OCIModel (SDK chat API, cohere.*) or OCIChatCompletionsModel (/openai/v1,
+  every other family). locus/models/providers/oci/__init__.py: OCIModel;
+  locus/models/providers/oci/models/{cohere,generic}.py: CohereProvider,
+  GenericProvider; locus/models/providers/oci/openai_compat.py:
+  OCIChatCompletionsModel
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>One agent with an edge into a band of three models, the middle one in use</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="6" y="21" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,28 L66,28"/>
+  <g class="lane"><rect x="64" y="5" width="26" height="46" rx="4"/></g>
+  <g class="node"><rect x="68" y="9" width="18" height="10" rx="3"/></g>
+  <g class="node primary"><rect x="68" y="23" width="18" height="10" rx="3"/></g>
+  <g class="node"><rect x="68" y="37" width="18" height="10" rx="3"/></g>
+</svg>

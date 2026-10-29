@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  DAC card: an oci:ocid1.generativeaiendpoint… id routes to OCIModel, and
+  OCIClient.get_serving_mode makes it DedicatedServingMode(endpoint_id=…): the
+  call lands on the one endpoint inside the cluster; the shared on-demand
+  catalogue (dashed) is not used.
+  locus/models/registry.py: _make_oci; locus/models/providers/oci/__init__.py:
+  OCIModel; locus/models/providers/oci/client.py: OCIClient.get_serving_mode
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>One call into the endpoint inside its dedicated cluster; the shared catalogue below, unused</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="lane"><rect x="46" y="7" width="44" height="24" rx="4"/></g>
+  <g class="node"><rect x="6" y="12" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,19 L55,19"/>
+  <g class="node primary"><rect x="57" y="12" width="22" height="14" rx="3"/></g>
+  <g class="node optional"><rect x="57" y="36" width="22" height="14" rx="3"/></g>
+</svg>

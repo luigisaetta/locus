@@ -69,6 +69,14 @@ def test_inlined_diagram_becomes_its_title(repo: Path) -> None:
     )
 
 
+def test_card_glyphs_are_dropped_from_the_twin(repo: Path) -> None:
+    markdown = (
+        '- <span class="tl-glyph" aria-hidden="true"><svg viewBox="0 0 96 56"> <title>A chain</title> '
+        "<rect/></svg></span> **[Pipelines](x.md)**\n"
+    )
+    assert llms_txt._plain_markdown(markdown, [repo]) == "- **[Pipelines](x.md)**\n"
+
+
 def test_post_build_writes_twins_index_and_full_file(repo: Path) -> None:
     config = _config(
         repo,

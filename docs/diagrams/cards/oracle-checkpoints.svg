@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Oracle checkpoints card: three turns of one thread (the row), each saved as
+  its own version into one Oracle Database store beneath, the subject; a save
+  never overwrites the one before it.
+  locus/memory/backends/oracle_versioned.py: OracleCheckpointSaver.put, .get,
+  .list_checkpoints (one row per thread_id, checkpoint_ns, checkpoint_id)
+  locus/memory/backends/adapters.py: oracle_checkpointer, StorageBackendAdapter
+  over locus/memory/backends/oracle.py: OracleBackend (key {thread_id}:{checkpoint_id})
+  Cylinder caps are cubic curves, not arcs: the glyph lint reads every number
+  in d literally and an arc's 0 flags would read as an out-of-bounds point.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>Three turns in a row, each with an edge down into the one wide store beneath</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="6" y="7" width="22" height="14" rx="3"/></g>
+  <g class="node"><rect x="37" y="7" width="22" height="14" rx="3"/></g>
+  <g class="node"><rect x="68" y="7" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M17,21 L17,29"/>
+  <path class="edge" marker-end="url(#ah)" d="M48,21 L48,28"/>
+  <path class="edge" marker-end="url(#ah)" d="M79,21 L79,29"/>
+  <g class="store primary"><path d="M6,33 C6,29 90,29 90,33 L90,47 C90,51 6,51 6,47 Z M6,33 C6,37 90,37 90,33"/></g>
+</svg>

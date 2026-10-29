@@ -305,3 +305,47 @@ def test_source_macro_expands_on_a_page(tmp_path) -> None:
         },
     )
     assert rendered == "Before.\n\n```python\ndef main():\n    return 1\n```\n\nAfter.\n"
+
+
+_GLYPH = (
+    '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">\n'
+    "<title>Three stages</title>\n<!-- authoring note -->\n"
+    '<defs><marker id="ah"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>\n'
+    '<g class="node"><rect x="6" y="21" width="22" height="14" rx="3"/></g>\n'
+    '<path class="edge" marker-end="url(#ah)" d="M28,28 L35,28"/>\n</svg>\n'
+)
+
+
+def _glyph_dir(tmp_path, name: str = "pipe"):
+    cards = tmp_path / "diagrams" / "cards"
+    cards.mkdir(parents=True, exist_ok=True)
+    (cards / f"{name}.svg").write_text(_GLYPH)
+    return tmp_path
+
+
+def test_a_card_glyph_is_inlined_on_one_line_and_hidden_from_assistive_tech(tmp_path) -> None:
+    out = build_metadata.render_glyph("pipe", _glyph_dir(tmp_path))
+    assert out.startswith('<span class="tl-glyph" aria-hidden="true"><svg')
+    assert out.endswith("</svg></span>")
+    assert "\n" not in out, "the span sits inside a list item's paragraph"
+    assert "<?xml" not in out and "authoring note" not in out
+
+
+def test_card_glyph_ids_are_namespaced(tmp_path) -> None:
+    out = build_metadata.render_glyph("pipe", _glyph_dir(tmp_path))
+    assert 'id="card-pipe--ah"' in out and "url(#card-pipe--ah)" in out
+
+
+def test_a_card_glyph_token_expands_inside_a_list_item(tmp_path) -> None:
+    docs = _glyph_dir(tmp_path)
+    rendered = build_metadata.on_page_markdown(
+        "- {{ locus_glyph pipe }} **[Pipelines](x.md)**\n",
+        config={"extra": {"sdk_version": "dev"}, "docs_dir": str(docs)},
+    )
+    assert rendered.startswith('- <span class="tl-glyph" aria-hidden="true"><svg')
+    assert rendered.rstrip().endswith("</svg></span> **[Pipelines](x.md)**")
+
+
+def test_a_missing_card_glyph_fails_the_build(tmp_path) -> None:
+    with pytest.raises(RuntimeError, match="does not exist"):
+        build_metadata.render_glyph("nope", tmp_path)

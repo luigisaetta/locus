@@ -107,10 +107,13 @@ backend = OpenShellBackend.create(
 )
 ```
 
-The live test for this path runs with:
+The live test for this path runs with the region the key belongs to
+(default `us-chicago-1`) and, optionally, `LOCUS_OPENSHELL_OCI_MODEL`
+(default `meta.llama-3.3-70b-instruct`):
 
 ```bash
 LOCUS_OPENSHELL_PROVIDER=oci-genai \
+LOCUS_OPENSHELL_OCI_REGION=eu-frankfurt-1 \
 LOCUS_OPENSHELL_IMAGE=docker.io/library/buildpack-deps:noble-curl \
 pytest tests/integration/test_harness_openshell_live.py -k provider
 ```

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Oracle RAG card: OracleVectorStore (a VECTOR column in Oracle Database 26ai)
+  is the subject. RAGRetriever.add_documents embeds chunks and writes them in
+  (top-left, store.add_batch); RAGRetriever.retrieve searches neighbours out to
+  the Agent's tool (right, store.search).
+  locus/rag/stores/oracle.py: OracleVectorStore.add_batch, OracleVectorStore.search
+  locus/rag/retriever.py: RAGRetriever.add_documents, RAGRetriever.retrieve
+  Cylinder caps are cubic curves, not arcs: the glyph lint reads every number
+  in d literally and an arc's 0 flags would read as an out-of-bounds point.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>Documents from the top-left into a datastore; retrieval out to the right</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="6" y="10" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M17,24 L17,32 L35,32"/>
+  <g class="store primary"><path d="M37,22 C37,18 59,18 59,22 L59,42 C59,46 37,46 37,42 Z M59,22 C59,26 37,26 37,22"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M59,32 L66,32"/>
+  <g class="node"><rect x="68" y="25" width="22" height="14" rx="3"/></g>
+</svg>
