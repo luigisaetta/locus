@@ -8,6 +8,40 @@ policy.
 
 ## [Unreleased]
 
+### Added
+
+- **OCI GenAI Sandboxes as a coding-harness workspace.**
+  `locus.harness.OCISandboxBackend` runs the harness tools in an OCI
+  Enterprise AI sandbox (`pip install "locus-sdk[oci-sandbox]"`, `oci`
+  2.189.0+). `create(project_id, ...)` makes a sandbox and deletes it on
+  `close()`; `connect(sandbox_id, ...)` attaches to one; `extend()` adds
+  lifetime. Commands stream with their output order kept, run under an
+  in-sandbox deadline, and return at most 900 kB of output, because the
+  service loses larger output. Background state lives in
+  `/workspace/.locus-harness` (`/tmp` is read-only there), now in
+  `SKIP_DIRS`.
+
+## [5.1.0] - 2026-10-29
+
+### Added
+
+- **Intent meanings in the goal frame.** `GoalFrame.primary_goal` carries one
+  line per `TaskType` (`TASK_TYPE_GUIDE`), so an extractor model sees what
+  separates `plan` from `build` or `research` from `diagnose` instead of
+  thirteen bare names.
+- **`locus-sdk-security` on PyPI.** The release workflow publishes the
+  security package next to `locus-sdk`, so `pip install locus-sdk-security`
+  replaces the install-from-repository line; the two stay in lockstep.
+- **Build it with Codex.** `codex/SPEC.md` and `codex/PROMPT.md` drive a
+  coding agent through the Quickstart and the first controlled action from a
+  clone: a fresh environment, a first agent with a typed tool against the
+  provider the operator names, the admission gate allowing, holding and
+  denying, and the rogue-agent challenge, each step with its checkpoint.
+  `AGENTS.md` at the repository root carries the rules a coding agent follows
+  here. The site gains the how-to page and the README a section;
+  `tests/docs/test_codex_spec.py` keeps the files the specification quotes
+  identical to the guide pages.
+
 ### Changed
 
 - **Cognitive router: a request too risky for its shape is held, not
@@ -35,27 +69,6 @@ policy.
   Command A beats the free-form baseline, Llama 3.3 70B does not). The
   assertions are the structural ones: selections stay in the registered set,
   including under prompt injection.
-
-### Added
-
-- **OCI GenAI Sandboxes as a coding-harness workspace.**
-  `locus.harness.OCISandboxBackend` runs the harness tools in an OCI
-  Enterprise AI sandbox (`pip install "locus-sdk[oci-sandbox]"`, `oci`
-  2.189.0+). `create(project_id, ...)` makes a sandbox and deletes it on
-  `close()`; `connect(sandbox_id, ...)` attaches to one; `extend()` adds
-  lifetime. Commands stream with their output order kept, run under an
-  in-sandbox deadline, and return at most 900 kB of output, because the
-  service loses larger output. Background state lives in
-  `/workspace/.locus-harness` (`/tmp` is read-only there), now in
-  `SKIP_DIRS`.
-
-- **Intent meanings in the goal frame.** `GoalFrame.primary_goal` carries one
-  line per `TaskType` (`TASK_TYPE_GUIDE`), so an extractor model sees what
-  separates `plan` from `build` or `research` from `diagnose` instead of
-  thirteen bare names.
-- **`locus-sdk-security` on PyPI.** The release workflow publishes the
-  security package next to `locus-sdk`, so `pip install locus-sdk-security`
-  replaces the install-from-repository line; the two stay in lockstep.
 
 ### Fixed
 
