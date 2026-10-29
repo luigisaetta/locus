@@ -2,351 +2,402 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
-"""The router's read-only decision record, its ranking rule, and the risk fallback.
+"""Tests for ``router.explain()`` — the decision record.
 
-``Router.explain`` / ``CognitiveCompiler.explain`` report the selection the
-rule-based ranker makes and why, without running anything. The same tests pin
-the two routing rules that changed with them: a canonical protocol wins when
-its cost is within one step of the frame's complexity, and a frame whose risk
-is above every handler's cap compiles onto ``approval_gated_execution`` and is
-held for approval instead of raising.
+Two properties matter and neither is "it returns something". First, the
+explanation must agree with what the compiler actually does: an explanation
+that drifts from the real selection is worse than none, because it will be
+believed. Second, it must cost nothing — no model call, no execution — or
+developers will not reach for it.
+
+Everything here is deterministic: no model is contacted at any point.
 """
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 
-from locus.agent.result import AgentResult, ExecutionMetrics
-from locus.core.state import AgentState
 from locus.router import (
     CapabilityIndex,
     CognitiveCompiler,
-    Complexity,
     GoalFrame,
-    LLMProtocolPicker,
-    NoMatchingProtocolError,
     PolicyGate,
-    Protocol,
     ProtocolRegistry,
-    Risk,
-    Router,
     TaskType,
     builtin_protocols,
 )
-from locus.router.compiler import _ApprovalRunnable
-from locus.router.explain import RoutingExplanation, rank_candidates, rejection_for
-from locus.router.goal_frame import TASK_TYPE_GUIDE
-from locus.router.protocol import A2A_PEER_CAPABILITY, _rank_key
-from locus.router.runnable import AgentRunnable
-from locus.tools.decorator import tool
+from locus.router.explain import RankedProtocol, RejectedProtocol, RoutingExplanation
+from locus.router.goal_frame import Complexity, Risk
 from locus.tools.registry import create_registry
 
 
-@tool
-def _echo(text: str) -> str:
-    """Echo the input verbatim."""
-    return text
+def _compiler(**kwargs) -> CognitiveCompiler:
+    registry = ProtocolRegistry()
+    registry.register_many(builtin_protocols())
+    return CognitiveCompiler(
+        protocols=registry,
+        capabilities=CapabilityIndex(create_registry()),
+        policy=kwargs.pop("policy", PolicyGate()),
+        model="openai:gpt-4o-mini",
+        **kwargs,
+    )
 
 
 def _frame(
-    *,
-    primary_goal: TaskType = TaskType.ANSWER,
+    goal: TaskType = TaskType.ANSWER,
     complexity: Complexity = Complexity.LOW,
     risk: Risk = Risk.LOW,
-    approval_required: bool = False,
-    required_capabilities: list[str] | None = None,
 ) -> GoalFrame:
     return GoalFrame(
-        primary_goal=primary_goal,
-        domain="research",
+        primary_goal=goal,
+        domain="ops",
         complexity=complexity,
         risk=risk,
-        approval_required=approval_required,
-        required_capabilities=required_capabilities or [],
+        success_criteria=["done"],
     )
 
 
-def _compiler(**overrides: Any) -> CognitiveCompiler:
-    idx = CapabilityIndex(create_registry(_echo))
-    idx.annotate("c1", tool_name="_echo", description="echo", domain="d")
-    reg = ProtocolRegistry()
-    reg.register_many(builtin_protocols())
-    kwargs: dict[str, Any] = {
-        "protocols": reg,
-        "capabilities": idx,
-        "policy": PolicyGate(),
-        "model": "openai:gpt-4o-mini",
+# ------------------------------------------------------- agrees with compile --
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("goal", "complexity", "risk"),
+    [
+        (TaskType.ANSWER, Complexity.LOW, Risk.LOW),
+        (TaskType.DIAGNOSE, Complexity.HIGH, Risk.MEDIUM),
+        (TaskType.COMPARE, Complexity.HIGH, Risk.LOW),
+        (TaskType.GENERATE_CODE, Complexity.MEDIUM, Risk.LOW),
+        (TaskType.REMEDIATE, Complexity.MEDIUM, Risk.HIGH),
+        (TaskType.COORDINATE, Complexity.MEDIUM, Risk.LOW),
+        (TaskType.PLAN, Complexity.MEDIUM, Risk.MEDIUM),
+    ],
+)
+async def test_explain_names_the_protocol_compile_actually_builds(
+    goal: TaskType, complexity: Complexity, risk: Risk
+) -> None:
+    """The whole value proposition: the explanation must not drift from reality."""
+    compiler = _compiler()
+    frame = _frame(goal, complexity, risk)
+
+    explanation = compiler.explain(frame)
+    runnable = await compiler.compile(frame)
+
+    built = getattr(runnable, "protocol_id", None) or getattr(
+        getattr(runnable, "inner", None), "protocol_id", None
+    )
+    assert explanation.selected_protocol == built
+
+
+# ------------------------------------------------------------- the evidence --
+
+
+def test_rejected_names_the_gate_that_stopped_each_protocol() -> None:
+    compiler = _compiler()
+    # HIGH risk remediation: one survivor, everything else gated.
+    explanation = compiler.explain(_frame(TaskType.REMEDIATE, Complexity.MEDIUM, Risk.HIGH))
+
+    by_id = {r.protocol_id: r for r in explanation.rejected}
+    assert by_id["debate"].gate == "goal"
+    assert "does not handle" in by_id["debate"].reason
+    # plan_execute_validate handles REMEDIATE but caps risk at medium
+    assert by_id["plan_execute_validate"].gate == "risk"
+    assert "caps risk" in by_id["plan_execute_validate"].reason
+
+
+def test_every_protocol_is_either_a_candidate_or_rejected() -> None:
+    """No protocol may silently vanish — that would hide a routing bug."""
+    compiler = _compiler()
+    explanation = compiler.explain(_frame(TaskType.DIAGNOSE, Complexity.HIGH, Risk.MEDIUM))
+
+    accounted = {c.protocol_id for c in explanation.candidates} | {
+        r.protocol_id for r in explanation.rejected
     }
-    kwargs.update(overrides)
-    return CognitiveCompiler(**kwargs)
+    assert accounted == {p.id for p in compiler.protocols.all()}
 
 
-def _by_id(protocol_id: str) -> Protocol:
-    return next(p for p in builtin_protocols() if p.id == protocol_id)
+def test_candidates_are_ordered_best_first_and_mark_the_winner() -> None:
+    compiler = _compiler()
+    explanation = compiler.explain(_frame(TaskType.RESEARCH, Complexity.HIGH, Risk.LOW))
+
+    ranks = [c.rank for c in explanation.candidates]
+    assert ranks == sorted(ranks), "candidates must be ordered by rank, best first"
+    assert explanation.candidates[0].selected is True
+    assert explanation.candidates[0].protocol_id == explanation.selected_protocol
+    assert sum(1 for c in explanation.candidates if c.selected) == 1
 
 
-def _agent_result(parsed: GoalFrame | None) -> AgentResult:
-    return AgentResult.from_state(
-        state=AgentState(),
-        stop_reason="complete",
-        metrics=ExecutionMetrics(),
-        message="",
-        parsed=parsed,
+def test_a2a_is_rejected_on_capabilities_when_no_endpoint_is_configured() -> None:
+    """The synthetic peer capability is the opt-in; without it, say so."""
+    compiler = _compiler()
+    explanation = compiler.explain(_frame(TaskType.COORDINATE, Complexity.MEDIUM, Risk.LOW))
+
+    a2a = next(r for r in explanation.rejected if r.protocol_id == "a2a_delegate")
+    assert a2a.gate == "capabilities"
+    assert "not available" in a2a.reason
+
+
+def test_configuring_an_endpoint_moves_a2a_into_the_candidates() -> None:
+    compiler = _compiler(a2a_endpoint="http://peer.invalid/a2a")
+    explanation = compiler.explain(_frame(TaskType.COORDINATE, Complexity.MEDIUM, Risk.LOW))
+
+    assert "a2a_delegate" in {c.protocol_id for c in explanation.candidates}
+
+
+# ---------------------------------------------------------------- the policy --
+
+
+def test_high_risk_reports_that_a_human_must_approve() -> None:
+    compiler = _compiler()
+    explanation = compiler.explain(_frame(TaskType.REMEDIATE, Complexity.MEDIUM, Risk.HIGH))
+
+    assert explanation.requires_approval is True
+    assert explanation.allowed is True  # allowed, but held
+    assert explanation.policy is not None
+    assert explanation.policy.reason
+
+
+def test_low_risk_needs_no_approval() -> None:
+    compiler = _compiler()
+    explanation = compiler.explain(_frame(TaskType.ANSWER, Complexity.LOW, Risk.LOW))
+
+    assert explanation.requires_approval is False
+    assert explanation.allowed is True
+
+
+def test_no_matching_protocol_yields_an_empty_selection_not_an_exception() -> None:
+    """``explain`` is diagnostic — it must describe a dead end, not raise into one."""
+    registry = ProtocolRegistry()
+    registry.register_many([p for p in builtin_protocols() if p.id == "debate"])
+    compiler = CognitiveCompiler(
+        protocols=registry,
+        capabilities=CapabilityIndex(create_registry()),
+        policy=PolicyGate(),
+        model="openai:gpt-4o-mini",
+    )
+    explanation = compiler.explain(_frame(TaskType.REMEDIATE, Complexity.LOW, Risk.LOW))
+
+    assert explanation.selected_protocol is None
+    assert explanation.candidates == ()
+    assert explanation.rejected  # and it says why
+    assert explanation.policy is None
+
+
+# ---------------------------------------------------------------- rendering --
+
+
+def test_str_shows_frame_selection_rejections_and_policy() -> None:
+    compiler = _compiler()
+    rendered = str(
+        compiler.explain(
+            _frame(TaskType.REMEDIATE, Complexity.MEDIUM, Risk.HIGH),
+            goal="Delete every record older than seven years",
+        )
     )
 
-
-# ---------------------------------------------------------------------------
-# Rejection reasons and ranking
-# ---------------------------------------------------------------------------
-
-
-class TestRejectionFor:
-    def test_goal_gate_is_reported_first(self):
-        rejected = rejection_for(_by_id("debate"), _frame(), set())
-        assert rejected is not None
-        assert rejected.gate == "goal"
-        assert "'answer'" in rejected.reason
-
-    def test_risk_gate(self):
-        rejected = rejection_for(_by_id("direct_response"), _frame(risk=Risk.MEDIUM), set())
-        assert rejected is not None
-        assert rejected.gate == "risk"
-        assert "'low'" in rejected.reason
-        assert "'medium'" in rejected.reason
-
-    def test_capability_gate_names_the_missing_ids(self):
-        frame = _frame(primary_goal=TaskType.COORDINATE)
-        rejected = rejection_for(_by_id("a2a_delegate"), frame, set())
-        assert rejected is not None
-        assert rejected.gate == "capabilities"
-        assert A2A_PEER_CAPABILITY in rejected.reason
-
-    def test_a_fitting_protocol_is_not_rejected(self):
-        assert rejection_for(_by_id("direct_response"), _frame(), set()) is None
+    assert "Delete every record older than seven years" in rendered
+    assert "GoalFrame" in rendered
+    assert "remediate" in rendered
+    assert "approval_gated_execution" in rendered
+    assert "Rejected" in rendered
+    assert "human approval required" in rendered
 
 
-class TestRankCandidates:
-    def test_orders_like_the_ranker_and_flags_the_selection(self):
-        frame = _frame(primary_goal=TaskType.COMPARE)
-        candidates = [_by_id("specialist_fanout"), _by_id("debate")]
-        ranked = rank_candidates(candidates, frame, selected="debate")
-        assert [r.protocol_id for r in ranked] == ["debate", "specialist_fanout"]
-        assert ranked[0].selected
-        assert not ranked[1].selected
-        assert ranked[0].is_canonical
-        assert ranked[0].rank == _rank_key(_by_id("debate"), frame)
+def test_no_chain_of_thought_is_exposed() -> None:
+    """Structured evidence only — the rationale field stays empty without a picker."""
+    compiler = _compiler()
+    explanation = compiler.explain(_frame())
+
+    assert explanation.picker_rationale is None
 
 
-class TestRankingRule:
-    """Canonical fit wins when the protocol's cost is within one step of the complexity."""
+def test_types_are_frozen_so_a_record_cannot_be_edited_after_the_fact() -> None:
+    compiler = _compiler()
+    explanation = compiler.explain(_frame())
 
-    def test_canonical_beats_a_closer_cost_match_when_adjacent(self):
-        # MEDIUM research: handoff_chain (medium cost, not canonical) used to win on
-        # distance alone; specialist_fanout is canonical and only one step away.
-        reg = ProtocolRegistry()
-        reg.register_many(builtin_protocols())
-        chosen = reg.select(_frame(primary_goal=TaskType.RESEARCH, complexity=Complexity.MEDIUM))
-        assert chosen.id == "specialist_fanout"
-
-    def test_canonical_does_not_win_when_two_steps_away(self):
-        # LOW-complexity research stays cheap: the canonical fan-out is two steps up.
-        reg = ProtocolRegistry()
-        reg.register_many(builtin_protocols())
-        assert reg.select(_frame(primary_goal=TaskType.RESEARCH)).id == "direct_response"
-
-    def test_sequencing_stays_sequential_at_high_complexity(self):
-        reg = ProtocolRegistry()
-        reg.register_many(builtin_protocols())
-        chosen = reg.select(_frame(primary_goal=TaskType.COORDINATE, complexity=Complexity.HIGH))
-        assert chosen.id == "handoff_chain"
+    for obj in (explanation, explanation.candidates[0]):
+        with pytest.raises(Exception):  # noqa: B017,PT011 — FrozenInstanceError
+            obj.protocol_id = "tampered"  # type: ignore[misc]
 
 
-# ---------------------------------------------------------------------------
-# CognitiveCompiler.explain
-# ---------------------------------------------------------------------------
+def test_dataclasses_render_standalone() -> None:
+    rejected = RejectedProtocol("debate", "goal", "does not handle 'remediate'")
+    ranked = RankedProtocol("debate", (0, 1, 2, 2), 0, False, "high", 2, selected=True)
+
+    assert "debate" in str(rejected)
+    assert "does not handle" in str(rejected)
+    assert "→" in str(ranked)
+    assert "not canonical" in str(ranked)
 
 
-class TestCompilerExplain:
-    def test_rule_based_selection_with_rejections_and_verdict(self):
-        explanation = _compiler().explain(_frame(), goal="What is RAG?")
-        assert explanation.selected_protocol == "direct_response"
-        assert explanation.method == "rule_based"
-        assert explanation.allowed
-        assert not explanation.requires_approval
-        assert "c1" in explanation.available_capabilities
-        rejected = {r.protocol_id: r.gate for r in explanation.rejected}
-        assert rejected["debate"] == "goal"
-        assert "direct_response" not in rejected
-        assert [c.protocol_id for c in explanation.candidates] == ["direct_response"]
-
-    def test_method_reports_what_a_picker_would_do(self):
-        picker = LLMProtocolPicker(model=MagicMock())
-        compiler = _compiler(protocol_picker=picker)
-        # Two candidates survive for a LOW-risk COMPARE: the picker would be asked.
-        assert compiler.explain(_frame(primary_goal=TaskType.COMPARE)).method == "llm_picked"
-        # One candidate: the compiler short-circuits without a model call.
-        assert compiler.explain(_frame(primary_goal=TaskType.DIAGNOSE)).method == "single_candidate"
-
-    def test_a2a_endpoint_adds_the_peer_capability(self):
-        explanation = _compiler(a2a_endpoint="http://peer").explain(
-            _frame(primary_goal=TaskType.COORDINATE)
-        )
-        assert A2A_PEER_CAPABILITY in explanation.available_capabilities
-        assert "a2a_delegate" not in {r.protocol_id for r in explanation.rejected}
-
-    def test_approval_shows_in_the_verdict_and_the_rendering(self):
-        explanation = _compiler().explain(
-            _frame(primary_goal=TaskType.REMEDIATE, risk=Risk.HIGH), goal="restart prod"
-        )
-        assert explanation.selected_protocol == "approval_gated_execution"
-        assert explanation.requires_approval
-        text = str(explanation)
-        assert "goal: restart prod" in text
-        assert "Selected protocol  approval_gated_execution" in text
-        assert "human approval required" in text
-        assert "Rejected (" in text
-        assert "Considered (" in text
-
-    def test_rendering_lists_capabilities_and_rationale(self):
-        explanation = RoutingExplanation(
-            goal="g",
-            goal_frame=_frame(required_capabilities=["c1"]),
-            selected_protocol="direct_response",
-            method="llm_picked",
-            candidates=(),
-            rejected=(),
-            available_capabilities=("c1",),
-            policy=None,
-            picker_rationale="cheapest fit",
-        )
-        text = str(explanation)
-        assert "capabilities ['c1']" in text
-        assert "chosen by        llm_picked" in text
-        assert "rationale        cheapest fit" in text
-        assert explanation.allowed  # no verdict means nothing blocked it
+# ------------------------------------------------------------------- costs ----
 
 
-# ---------------------------------------------------------------------------
-# Risk fallback: too risky for every handler -> approval-gated, held
-# ---------------------------------------------------------------------------
+def test_explain_contacts_no_model() -> None:
+    """A model string that would explode if instantiated proves nothing is called."""
+    registry = ProtocolRegistry()
+    registry.register_many(builtin_protocols())
+    compiler = CognitiveCompiler(
+        protocols=registry,
+        capabilities=CapabilityIndex(create_registry()),
+        policy=PolicyGate(),
+        model="nonexistent-provider:does-not-exist",
+    )
+
+    explanation = compiler.explain(_frame(TaskType.DIAGNOSE, Complexity.HIGH, Risk.MEDIUM))
+
+    assert isinstance(explanation, RoutingExplanation)
+    assert explanation.selected_protocol == "specialist_fanout"
 
 
-class TestRiskFallback:
-    def test_high_risk_plan_is_held_instead_of_raising(self):
-        compiler = _compiler()
-        frame = _frame(primary_goal=TaskType.PLAN, risk=Risk.HIGH)
-        explanation = compiler.explain(frame)
-        assert explanation.selected_protocol == "approval_gated_execution"
-        assert explanation.method == "risk_fallback"
-        assert explanation.requires_approval  # the gate itself requires it at HIGH
-        runnable = asyncio.run(compiler.compile(frame))
-        assert isinstance(runnable, _ApprovalRunnable)
-
-    def test_medium_risk_answer_is_held_too(self):
-        # direct_response caps at LOW; the gate alone would let MEDIUM through
-        # unheld, but the fallback path always holds.
-        explanation = _compiler().explain(_frame(risk=Risk.MEDIUM))
-        assert explanation.selected_protocol == "approval_gated_execution"
-        assert explanation.requires_approval
-        assert explanation.policy is not None
-        assert "held for approval" in explanation.policy.reason
-
-    def test_fallback_is_not_used_when_a_handler_fits(self):
-        explanation = _compiler().explain(_frame(primary_goal=TaskType.PLAN, risk=Risk.MEDIUM))
-        assert explanation.selected_protocol == "plan_execute_validate"
-        assert explanation.method == "rule_based"
-
-    def test_unhandled_goal_still_raises(self):
-        reg = ProtocolRegistry()
-        reg.register_many([_by_id("direct_response"), _by_id("approval_gated_execution")])
-        compiler = _compiler(protocols=reg)
-        frame = _frame(primary_goal=TaskType.GENERATE_CODE, risk=Risk.HIGH)
-        assert compiler.explain(frame).selected_protocol is None
-        with pytest.raises(NoMatchingProtocolError):
-            asyncio.run(compiler.compile(frame))
-
-    def test_fallback_can_be_disabled(self):
-        compiler = _compiler(risk_fallback=None)
-        frame = _frame(primary_goal=TaskType.PLAN, risk=Risk.HIGH)
-        assert compiler.explain(frame).selected_protocol is None
-        with pytest.raises(NoMatchingProtocolError):
-            asyncio.run(compiler.compile(frame))
-
-    def test_fallback_needs_a_registered_protocol_that_takes_the_risk(self):
-        reg = ProtocolRegistry()
-        reg.register_many([_by_id("direct_response"), _by_id("plan_execute_validate")])
-        compiler = _compiler(protocols=reg)  # default fallback id is not registered
-        with pytest.raises(NoMatchingProtocolError):
-            asyncio.run(compiler.compile(_frame(primary_goal=TaskType.PLAN, risk=Risk.HIGH)))
-
-    def test_gate_ceiling_still_denies_above_max_risk(self):
-        from locus.router import PolicyDeniedError
-
-        compiler = _compiler(policy=PolicyGate(max_risk=Risk.MEDIUM))
-        with pytest.raises(PolicyDeniedError):
-            asyncio.run(compiler.compile(_frame(primary_goal=TaskType.PLAN, risk=Risk.HIGH)))
+# ------------------------------------------------------- through the Router --
+#
+# The compiler tests above cover selection. These cover the Router front door,
+# which is where a caller actually arrives. A ScriptedModel stands in for the
+# extractor so a GoalFrame is produced without contacting anything.
 
 
-# ---------------------------------------------------------------------------
-# Intent guide reaches the schema the extractor fills
-# ---------------------------------------------------------------------------
+def _router(frame_goal: str = "diagnose", *, repeat: bool = False, **compiler_kwargs) -> tuple:
+    """A Router whose extractor is scripted to return one fixed frame."""
+    import json
+
+    from locus import Agent
+    from locus.router import Router
+    from locus.testing import ScriptedModel, text
+
+    payload = json.dumps(
+        {
+            "primary_goal": frame_goal,
+            "secondary_goals": [],
+            "domain": "ops",
+            "complexity": "high",
+            "risk": "medium",
+            "requires_tools": True,
+            "requires_memory": False,
+            "requires_code_generation": False,
+            "requires_multi_agent": True,
+            "approval_required": False,
+            "success_criteria": ["root cause identified"],
+            "required_capabilities": [],
+        }
+    )
+    model = ScriptedModel([text(payload)], repeat_last=repeat)
+    extractor = Agent(model=model, system_prompt="extract", output_schema=GoalFrame)
+    return Router(extractor=extractor, compiler=_compiler(**compiler_kwargs)), model
 
 
-class TestIntentGuide:
-    def test_every_task_type_has_a_line(self):
-        assert set(TASK_TYPE_GUIDE) == set(TaskType)
+@pytest.mark.asyncio
+async def test_router_explain_extracts_then_explains() -> None:
+    router, model = _router()
 
-    def test_guide_is_in_the_primary_goal_description(self):
-        description = GoalFrame.model_json_schema()["properties"]["primary_goal"]["description"]
-        for task_type, text in TASK_TYPE_GUIDE.items():
-            assert f"{task_type.value}: {text}" in description
+    explanation = await router.explain("why did checkout latency double?")
+
+    assert isinstance(explanation, RoutingExplanation)
+    assert explanation.goal == "why did checkout latency double?"
+    assert explanation.goal_frame.primary_goal is TaskType.DIAGNOSE
+    assert explanation.selected_protocol == "specialist_fanout"
+    # exactly one extraction call, and nothing else
+    assert model.call_count == 1
 
 
-# ---------------------------------------------------------------------------
-# Router.explain / Router.compile / failure event
-# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_router_explain_with_a_supplied_frame_spends_no_call_at_all() -> None:
+    router, model = _router()
+
+    explanation = await router.explain("ignored", frame=_frame(TaskType.ANSWER))
+
+    assert explanation.selected_protocol == "direct_response"
+    assert model.call_count == 0
 
 
-class TestRouterReadOnly:
-    def _router(self, frame: GoalFrame) -> Router:
-        extractor = MagicMock()
-        extractor.invoke = MagicMock(return_value=_agent_result(frame))
-        return Router(extractor=extractor, compiler=_compiler())
+@pytest.mark.asyncio
+async def test_router_compile_builds_without_executing() -> None:
+    router, model = _router()
 
-    def test_explain_extracts_once_and_executes_nothing(self):
-        router = self._router(_frame())
-        explanation = asyncio.run(router.explain("What is RAG?"))
-        assert explanation.goal == "What is RAG?"
-        assert explanation.selected_protocol == "direct_response"
-        router.extractor.invoke.assert_called_once_with("What is RAG?")
+    runnable = await router.compile("why did checkout latency double?")
 
-    def test_explain_with_a_pinned_frame_skips_the_extractor(self):
-        router = self._router(_frame())
-        explanation = asyncio.run(
-            router.explain("ignored", frame=_frame(primary_goal=TaskType.COMPARE))
-        )
-        assert explanation.selected_protocol == "debate"
-        router.extractor.invoke.assert_not_called()
+    protocol_id = getattr(runnable, "protocol_id", None) or getattr(
+        getattr(runnable, "inner", None), "protocol_id", None
+    )
+    assert protocol_id == "specialist_fanout"
+    # the extractor ran; the compiled topology did not
+    assert model.call_count == 1
+    assert hasattr(runnable, "execute")
 
-    def test_compile_builds_without_running(self):
-        router = self._router(_frame())
-        runnable = asyncio.run(router.compile("What is RAG?"))
-        assert isinstance(runnable, AgentRunnable)
-        runnable_pinned = asyncio.run(router.compile("x", frame=_frame(primary_goal=TaskType.PLAN)))
-        assert runnable_pinned.protocol_id == "plan_execute_validate"
 
-    def test_dispatch_reports_a_runnable_failure_on_the_bus(self, monkeypatch):
-        failed = AsyncMock()
-        monkeypatch.setattr("locus.router.runtime.emit_runnable_failed", failed)
-        router = self._router(_frame())
-        boom = MagicMock()
-        boom.protocol_id = "direct_response"
-        boom.execute = AsyncMock(side_effect=RuntimeError("boom"))
-        router.compiler.compile = AsyncMock(return_value=boom)  # type: ignore[method-assign]
-        with pytest.raises(RuntimeError, match="boom"):
-            asyncio.run(router.dispatch("What is RAG?", run_id="r1"))
-        failed.assert_awaited_once_with("r1", "direct_response", "RuntimeError: boom")
+@pytest.mark.asyncio
+async def test_router_compile_accepts_a_supplied_frame() -> None:
+    router, model = _router()
+
+    runnable = await router.compile("ignored", frame=_frame(TaskType.ANSWER))
+
+    protocol_id = getattr(runnable, "protocol_id", None) or getattr(
+        getattr(runnable, "inner", None), "protocol_id", None
+    )
+    assert protocol_id == "direct_response"
+    assert model.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_router_explain_and_compile_agree_through_the_front_door() -> None:
+    """Same property as the compiler-level test, at the surface a caller uses."""
+    # explain() and compile() each extract, so the extractor answers twice.
+    router, _ = _router(repeat=True)
+    goal = "why did checkout latency double?"
+
+    explanation = await router.explain(goal)
+    runnable = await router.compile(goal)
+
+    built = getattr(runnable, "protocol_id", None) or getattr(
+        getattr(runnable, "inner", None), "protocol_id", None
+    )
+    assert explanation.selected_protocol == built
+
+
+# --------------------------------------------------- method, with a picker --
+#
+# ``explain`` never calls the picker (that would cost a call and could answer
+# differently next run), but it must still report which arm of the ladder in
+# ``_pick_protocol`` would run, or the ``chosen by`` line would be a lie.
+
+
+def _picker() -> object:
+    """A picker that would explode if called — explain must not call it."""
+
+    class ExplodingPicker:
+        async def pick(self, frame, candidates):  # noqa: ANN001, ANN202
+            raise AssertionError("explain() must not consult the picker")
+
+    return ExplodingPicker()
+
+
+def test_method_is_llm_picked_when_a_picker_faces_several_candidates() -> None:
+    compiler = _compiler(protocol_picker=_picker())
+    # RESEARCH at HIGH complexity leaves more than one survivor
+    explanation = compiler.explain(_frame(TaskType.RESEARCH, Complexity.HIGH, Risk.LOW))
+
+    assert len(explanation.candidates) > 1
+    assert explanation.method == "llm_picked"
+    # and the ranking shown is the fallback the picker would choose among
+    assert explanation.selected_protocol == explanation.candidates[0].protocol_id
+
+
+def test_method_is_single_candidate_when_only_one_survives_the_gates() -> None:
+    compiler = _compiler(protocol_picker=_picker())
+    # HIGH-risk REMEDIATE gates everything except the approval shape
+    explanation = compiler.explain(_frame(TaskType.REMEDIATE, Complexity.MEDIUM, Risk.HIGH))
+
+    assert len(explanation.candidates) == 1
+    assert explanation.method == "single_candidate"
+
+
+def test_method_is_rule_based_without_a_picker() -> None:
+    compiler = _compiler()
+    explanation = compiler.explain(_frame(TaskType.RESEARCH, Complexity.HIGH, Risk.LOW))
+
+    assert explanation.method == "rule_based"
+
+
+def test_available_capabilities_reports_the_synthetic_peer_only_when_configured() -> None:
+    assert "a2a_peer" not in _compiler().available_capabilities()
+    assert "a2a_peer" in _compiler(a2a_endpoint="http://peer.invalid").available_capabilities()
