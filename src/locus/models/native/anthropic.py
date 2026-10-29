@@ -6,16 +6,18 @@
 
 from __future__ import annotations
 
+import inspect
 import os
 import re
 from collections.abc import AsyncIterator
+from functools import cache
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
 from locus.core.events import ModelChunkEvent
-from locus.core.loop_bound import loop_bound
+from locus.core.loop_bound import loop_bound, own_loop_http_client
 from locus.core.media import (
     EARLIER_IMAGE_OMITTED,
     has_images,
@@ -151,6 +153,20 @@ def _rejects_temperature(model_id: str) -> bool:
     return any(model_id.startswith(p) for p in _TEMPERATURE_DEPRECATED_PREFIXES)
 
 
+@cache
+def _sdk_declares_temperature() -> bool:
+    """Whether the installed SDK's ``messages.create()`` takes ``temperature``.
+
+    anthropic 2.x pins API version 2026-10-21, which removed ``temperature``
+    for every model: the SDK raises ``TypeError`` on the keyword and the API
+    answers ``temperature: Extra inputs are not permitted`` if it is smuggled
+    in through ``extra_body``. Against that SDK it is never sent.
+    """
+    from anthropic.resources.messages import AsyncMessages  # noqa: PLC0415
+
+    return "temperature" in inspect.signature(AsyncMessages.create).parameters
+
+
 def _with_cache_breakpoint(message: dict[str, Any]) -> dict[str, Any]:
     """``message`` with ``cache_control`` on its last content block.
 
@@ -222,7 +238,7 @@ def _usage_dict(usage: Any) -> dict[str, int]:
 class AnthropicConfig(ModelConfig):
     """Configuration for Anthropic models."""
 
-    model: str = "claude-sonnet-4-6"
+    model: str = "claude-sonnet-5-5"
     max_tokens: int = 4096
     temperature: float = 0.7
     top_p: float = 0.9
@@ -286,10 +302,11 @@ class AnthropicConfig(ModelConfig):
 class AnthropicModel(BaseModel):
     """Anthropic model provider.
 
-    Supports Claude 4.6, 4.5, 3.5 models with streaming and tool calling.
+    Supports the Claude 5 family (Fable 5.1, Opus / Sonnet / Haiku 5.5) and
+    earlier Claude models, with streaming and tool calling.
 
     Example:
-        >>> model = AnthropicModel(model="claude-sonnet-4-6")
+        >>> model = AnthropicModel(model="claude-sonnet-5-5")
         >>> response = await model.complete([Message.user("Hello!")])
     """
 
@@ -309,7 +326,7 @@ class AnthropicModel(BaseModel):
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-6",
+        model: str = "claude-sonnet-5-5",
         api_key: str | None = None,
         base_url: str | None = None,
         max_tokens: int = 4096,
@@ -350,6 +367,7 @@ class AnthropicModel(BaseModel):
                 "base_url": self.base_url,
                 "max_retries": self.config.max_retries,
                 "timeout": self.config.request_timeout,
+                "http_client": own_loop_http_client(anthropic),
             }
             if token is None:
                 return anthropic.AsyncAnthropic(
@@ -615,7 +633,7 @@ class AnthropicModel(BaseModel):
         # every Agent(model="claude-opus-4-7") on the first turn. The
         # wrapper's job here is to keep the agent loop running; callers who
         # need the parameter back can pin to a model that accepts it.
-        if not _rejects_temperature(self.config.model):
+        if _sdk_declares_temperature() and not _rejects_temperature(self.config.model):
             temperature = kwargs.get("temperature", self.config.temperature)
             # ``None`` means the caller wants the server's default (see
             # ModelConfig.temperature) — send nothing rather than a value.

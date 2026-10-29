@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The two checkpointer shapes an Agent can be given, and when the loop saves, per
+  locus/agent/runtime_loop.py, locus/memory/checkpointer.py and locus/memory/backends.
+    Agent(checkpointer=…)               agent/config.py:706
+    run_sync(prompt, thread_id=…)       agent/agent.py:483-487
+    load before the first model call    run() builds the start state (runtime_loop.py:775) and
+                                        _create_initial_state calls checkpointer.load(thread_id),
+                                        the newest checkpoint, then starts a new turn on it
+                                        (runtime_loop.py:2688-2702); resume rehydrates the same way
+                                        (agent/agent.py:880), as does continue_turn (agent.py:970)
+    the loop saves at
+      after every N iterations          _checkpoint_iteration after the iteration's tool results are
+                                        in the state (runtime_loop.py:1900, :2422, :2517-2561);
+                                        N = checkpoint_every_n_iterations (agent/config.py:718-732);
+                                        unset, N is 1 on a thread whose checkpointer can delete a
+                                        single save (runtime_loop.py:2501-2515, checkpointer.py:141-152)
+      before pausing on an interrupt    save before the InterruptEvent is yielded
+                                        (runtime_loop.py:1702-1703, :2313-2314, :2358-2359)
+      when the run ends                 _checkpoint_final in the run's finally (runtime_loop.py:1921,
+                                        :1960, :2459, :2461-2499): save, then delete the turn's
+                                        iteration saves unless keep_iteration_checkpoints
+                                        (agent/config.py:734-742)
+      every save stores _durable(state) runtime_loop.py:443-460
+    BaseCheckpointer                    memory/checkpointer.py:19; save(state, thread_id, checkpoint_id=None,
+                                        metadata=None) -> checkpoint_id (:59-79); load(thread_id,
+                                        checkpoint_id=None) is the newest when no id (:82-98);
+                                        list_checkpoints newest first (:101-116); delete (:122-138)
+    history over the contract           agent.get_state_history lists (checkpoint_id, state) pairs
+                                        (agent/agent.py:1222-1231); agent.fork saves a checkpoint under a
+                                        new thread (agent.py:1263-1287)
+    shape A: native checkpointer        subclasses BaseCheckpointer; a new record per save, load()
+                                        reads the newest:
+                                        MemoryCheckpointer  memory/backends/memory.py:30 (:95, :128-134)
+                                        FileCheckpointer    memory/backends/file.py:61 ({thread}/{checkpoint_id}.json :122-125, :262-266)
+                                        HTTPCheckpointer    memory/backends/http.py:40 (:137-157, :179-184)
+                                        S3Backend           memory/backends/s3.py:46 ({id}.json + _latest pointer :15-17, :272-275)
+                                        OCIBucketBackend    memory/backends/oci_bucket.py:57 (:12-14, :378-384)
+                                        PgCheckpointer      memory/backends/pg_checkpointer.py:95 (row per checkpoint :270-275, :332-334)
+    shape B: storage backend + adapter  StorageBackendAdapter memory/backends/adapters.py:33 implements
+                                        BaseCheckpointer over a backend's save(key, data) / load(key)
+                                        (:37-42); each save writes key {thread_id}:{checkpoint_id}
+                                        (:136, :147-149), a {thread_id}:latest copy (:152) and the
+                                        {thread_id}:_checkpoints index (:155, :159-200); load reads
+                                        :latest or the named id (:202-226); list_checkpoints reads
+                                        the index (:228-241). The backend itself keeps one record per
+                                        key, upserted: postgresql.py:251 ON CONFLICT (thread_id),
+                                        mysql.py:415 ON DUPLICATE KEY, oracle.py:227-238 MERGE,
+                                        redis.py:102 SET. Factories: redis_checkpointer (adapters.py:466),
+                                        postgresql_checkpointer (:497), mysql_checkpointer (:546),
+                                        opensearch_checkpointer (:595), oracle_checkpointer (:694).
+    OracleCheckpointSaver               memory/backends/oracle_versioned.py:87 is a pydantic BaseModel, not a
+                                        BaseCheckpointer: put/get/list_checkpoints (:403, :454, :526); nothing
+                                        in src/locus outside memory/backends calls it; application code
+                                        drives it after each run (docs/notebooks/notebook_43_oracle_versioned_saver.md:19-23)
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 592" role="img" aria-labelledby="title desc">
+  <title id="title">The two checkpointer shapes and when the loop saves</title>
+  <desc id="desc">An Agent built with Agent(checkpointer=…) runs a thread with run_sync(prompt, thread_id=…). Before the first model call it loads the thread's newest checkpoint, and the loop then saves the state at three points: after every N iterations, before pausing on an interrupt, and when the run ends. Every save and load goes through the BaseCheckpointer contract: save(state, thread_id) returns a checkpoint id, load(thread_id) returns the newest state or a named checkpoint, and list_checkpoints lists them. Two shapes implement that contract. Shape A, a native checkpointer, subclasses BaseCheckpointer and writes a new record per save; MemoryCheckpointer, FileCheckpointer, HTTPCheckpointer, S3Backend, OCIBucketBackend and PgCheckpointer are this shape and are passed straight in. Shape B is a storage backend behind StorageBackendAdapter, which is what the redis_checkpointer, postgresql_checkpointer, mysql_checkpointer, opensearch_checkpointer and oracle_checkpointer factories return: the backend keeps one record per key, upserted, and the adapter keys each save as thread_id:checkpoint_id, so every save is kept there too. N is checkpoint_every_n_iterations; unset, the loop saves every iteration on a thread whose checkpointer can delete a single save, and the final save deletes those iteration saves unless keep_iteration_checkpoints is set; agent.get_state_history lists the saves that stay. OracleCheckpointSaver is a separate, versioned saver that your code drives with put(); the agent loop never saves into it.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the run: the loop and its three save points -->
+  <g class="lane">
+    <rect x="490" y="16" width="426" height="136" rx="12"/>
+    <text class="lane-title" x="506" y="38">The run · the loop saves at</text>
+  </g>
+  <g class="node">
+    <rect x="502" y="66" width="160" height="58" rx="12"/>
+    <text x="582" y="85">The loop</text>
+    <text class="sub" x="582" y="106">think · execute</text>
+  </g>
+  <g class="node"><rect x="674" y="50" width="184" height="26" rx="8"/><text class="sub" x="766" y="63">after every N iterations</text></g>
+  <g class="node"><rect x="674" y="82" width="228" height="26" rx="8"/><text class="sub" x="788" y="95">before pausing on an interrupt</text></g>
+  <g class="node"><rect x="674" y="114" width="136" height="26" rx="8"/><text class="sub" x="742" y="127">when the run ends</text></g>
+
+  <!-- agent -> the run -->
+  <path class="edge" marker-end="url(#ah)" d="M244,95 L488,95"/>
+  <rect class="label-bg" x="263" y="101" width="206" height="20" rx="4"/>
+  <text class="label" x="366" y="111">run_sync(prompt, thread_id=…)</text>
+
+  <!-- contract -> agent: the thread's newest checkpoint is loaded before the first model call -->
+  <path class="edge" marker-end="url(#ah)" d="M200,192 L200,126"/>
+  <rect class="label-bg" x="212" y="136" width="236" height="20" rx="4"/>
+  <text class="label" x="330" y="146">load(thread_id) → newest checkpoint</text>
+  <rect class="label-bg" x="212" y="160" width="190" height="20" rx="4"/>
+  <text class="label" x="307" y="170">before the first model call</text>
+
+  <!-- the run -> contract -->
+  <path class="edge" marker-end="url(#ah)" d="M703,152 L703,190"/>
+  <rect class="label-bg" x="433" y="161" width="260" height="20" rx="4"/>
+  <text class="label" x="563" y="171">save(state, thread_id) → checkpoint_id</text>
+
+  <!-- contract -> shape A -->
+  <path class="edge" marker-end="url(#ah)" d="M137,250 L137,294"/>
+  <rect class="label-bg" x="149" y="263" width="158" height="20" rx="4"/>
+  <text class="label" x="228" y="273">implements it directly</text>
+
+  <!-- contract -> shape B -->
+  <path class="edge" marker-end="url(#ah)" d="M592,250 L592,294"/>
+  <rect class="label-bg" x="604" y="263" width="266" height="20" rx="4"/>
+  <text class="label" x="737" y="273">wrapped by its *_checkpointer() factory</text>
+
+  <g class="node">
+    <rect x="24" y="66" width="220" height="58" rx="12"/>
+    <text x="134" y="85">Agent</text>
+    <text class="sub" x="134" y="106">Agent(checkpointer=…)</text>
+  </g>
+
+  <!-- the contract both shapes implement -->
+  <g class="node primary">
+    <rect x="120" y="192" width="700" height="58" rx="12"/>
+    <text x="470" y="211">BaseCheckpointer</text>
+    <text class="sub" x="470" y="232">save(state, thread_id) → checkpoint_id · load(thread_id, checkpoint_id=None) · list_checkpoints</text>
+  </g>
+
+  <!-- shape A: native checkpointer -->
+  <g class="lane">
+    <rect x="20" y="296" width="440" height="216" rx="12"/>
+    <text class="lane-title" x="36" y="318">Shape A · native checkpointer</text>
+  </g>
+  <g class="node">
+    <rect x="32" y="332" width="210" height="58" rx="12"/>
+    <text x="137" y="351">Native checkpointer</text>
+    <text class="sub" x="137" y="372">subclasses BaseCheckpointer</text>
+  </g>
+  <g class="store">
+    <path d="M258,341 A95,9 0 0 1 448,341 V389 A95,9 0 0 1 258,389 Z M258,341 A95,9 0 0 0 448,341"/>
+    <g class="node">
+      <text x="353" y="357">New record per save</text>
+      <text class="sub" x="353" y="376">load() → the newest</text>
+    </g>
+  </g>
+  <g class="node"><rect x="32" y="410" width="142" height="26" rx="8"/><text class="sub" x="103" y="423">MemoryCheckpointer</text></g>
+  <g class="node"><rect x="182" y="410" width="128" height="26" rx="8"/><text class="sub" x="246" y="423">FileCheckpointer</text></g>
+  <g class="node"><rect x="32" y="442" width="128" height="26" rx="8"/><text class="sub" x="96" y="455">HTTPCheckpointer</text></g>
+  <g class="node"><rect x="168" y="442" width="80" height="26" rx="8"/><text class="sub" x="208" y="455">S3Backend</text></g>
+  <g class="node"><rect x="32" y="474" width="128" height="26" rx="8"/><text class="sub" x="96" y="487">OCIBucketBackend</text></g>
+  <g class="node"><rect x="168" y="474" width="114" height="26" rx="8"/><text class="sub" x="225" y="487">PgCheckpointer</text></g>
+
+  <!-- shape B: storage backend behind the adapter -->
+  <g class="lane">
+    <rect x="480" y="296" width="440" height="216" rx="12"/>
+    <text class="lane-title" x="496" y="318">Shape B · storage backend behind an adapter</text>
+  </g>
+  <g class="node">
+    <rect x="492" y="332" width="200" height="58" rx="12"/>
+    <text x="592" y="351">StorageBackendAdapter</text>
+    <text class="sub" x="592" y="372">over save(key, data)</text>
+  </g>
+  <g class="store">
+    <path d="M708,341 A100,9 0 0 1 908,341 V389 A100,9 0 0 1 708,389 Z M708,341 A100,9 0 0 0 908,341"/>
+    <g class="node">
+      <text x="808" y="357">One record per key</text>
+      <text class="sub" x="808" y="376">thread_id:checkpoint_id</text>
+    </g>
+  </g>
+  <g class="node"><rect x="492" y="410" width="156" height="26" rx="8"/><text class="sub" x="570" y="423">redis_checkpointer()</text></g>
+  <g class="node"><rect x="656" y="410" width="192" height="26" rx="8"/><text class="sub" x="752" y="423">postgresql_checkpointer()</text></g>
+  <g class="node"><rect x="492" y="442" width="156" height="26" rx="8"/><text class="sub" x="570" y="455">mysql_checkpointer()</text></g>
+  <g class="node"><rect x="656" y="442" width="192" height="26" rx="8"/><text class="sub" x="752" y="455">opensearch_checkpointer()</text></g>
+  <g class="node"><rect x="492" y="474" width="164" height="26" rx="8"/><text class="sub" x="574" y="487">oracle_checkpointer()</text></g>
+
+  <text class="note" x="470" y="536">N is checkpoint_every_n_iterations; unset, the loop saves every iteration on a thread whose checkpointer can delete a single save.</text>
+  <text class="note" x="470" y="556">The final save deletes those iteration saves unless keep_iteration_checkpoints is set; agent.get_state_history(thread_id) lists the saves that stay.</text>
+  <text class="note" x="470" y="576">OracleCheckpointSaver is a separate, versioned saver your code drives with put(); the agent loop never saves into it.</text>
+</svg>

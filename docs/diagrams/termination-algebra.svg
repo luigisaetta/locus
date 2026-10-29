@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The termination algebra: what a composed TerminationCondition is, and when the agent
+  loop evaluates it. Drawn from src/locus/core/termination.py and src/locus/agent/runtime_loop.py.
+    a | b  builds OrCondition(a, b)      termination.py:66-68   (TerminationCondition.__or__)
+    a & b  builds AndCondition(a, b)     termination.py:70-72   (TerminationCondition.__and__)
+    so (ToolCalled("issue_refund") & ConfidenceMet(0.9)) | MaxIterations(10) is
+      OrCondition(AndCondition(ToolCalled, ConfidenceMet), MaxIterations), children in that order
+    OrCondition.check   stops on the first child that stops, returns that child's reason   termination.py:81-86
+    AndCondition.check  stops only when every child stops; their reasons joined with " AND "  termination.py:99-107
+    leaves, each check(state, **context) -> (stop, reason):
+      MaxIterations    state.iteration >= n              -> "max_iterations"        termination.py:125-128
+      TokenLimit       state.total_tokens_used >= n      -> "token_budget"          termination.py:137-140
+      TimeLimit        wall clock since its first check  -> "time_budget"           termination.py:150-158
+      TextMention      text in context last_message, else the last assistant message with content;
+                       case-insensitive unless case_sensitive=True -> "text_mention:<text>"  termination.py:168-186
+      ToolCalled       a tool_execution with that tool_name (require_success skips errored ones)
+                                                         -> "tool_called:<name>"    termination.py:203-209
+      ConfidenceMet    state.confidence >= threshold     -> "confidence_met"        termination.py:218-221
+      NoToolCalls      context no_tool_calls             -> "no_tools"              termination.py:227-231
+      CustomCondition  fn(state, **context)              -> whatever fn returns     termination.py:246-247
+  The loop (runtime_loop.py):
+    the run holds its own deep copy of config.termination, reset() at run start   run_context.py:107-123, :163-165; runtime_loop.py:587, :807-810
+    every iteration starts with termination.check(state, last_message=..., no_tool_calls=...)   runtime_loop.py:883-891
+      after the time-budget and cancellation checks (:853-881) and before state.should_terminate,
+      the built-in max_iterations / token_budget / cost_budget / terminal_tool checks (:911-984)
+    stop  -> TerminateEvent(reason=user_reason or "complete"), the loop breaks   runtime_loop.py:892-903
+             result.stop_reason = normalize_stop_reason(event.reason)             agent.py:372, result.py:86-110
+    go on -> state.next_iteration() (:987), Think = the model call, ThinkEvent (:1119),
+             Execute = the tool calls (:1363-), then back to the top of the while loop (:838)
+    last_message / no_tool_calls come from the previous model reply   runtime_loop.py:1107-1110
+    a resumed run performs the same check   runtime_loop.py:2063-2079
+    The loop has other exits too (a reply with no tool calls in auto completion mode, the
+    built-in limits, cancellation); this drawing shows the composed condition's path only.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 536" role="img" aria-labelledby="title desc">
+  <title id="title">The termination algebra</title>
+  <desc id="desc">A composed termination condition is a tree. The expression (ToolCalled("issue_refund") &amp; ConfidenceMet(0.9)) | MaxIterations(10) builds an OrCondition whose children are an AndCondition over ToolCalled and ConfidenceMet, and a MaxIterations leaf: the | operator builds an OrCondition, the &amp; operator an AndCondition. The agent loop evaluates the root at the start of every iteration, before Think and before the built-in iteration, token and cost limits. The root answers (stop, reason): an OrCondition stops on the first child that stops, an AndCondition only when all its children stop, joining their reasons with AND. If stop is true the run ends with a TerminateEvent carrying the reason, which result.stop_reason reports in normalized form; otherwise the iteration continues into Think, the model call, then Execute, the tool calls, and the next iteration begins with the check again. Any of the leaf conditions MaxIterations, TokenLimit, TimeLimit, TextMention, ToolCalled, ConfidenceMet, NoToolCalls and CustomCondition can sit at a leaf; each returns (stop, reason).</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the expression, and the tree it builds -->
+  <g class="node">
+    <rect x="73" y="16" width="504" height="28" rx="8"/>
+    <text class="sub" x="325" y="30">(ToolCalled("issue_refund") &amp; ConfidenceMet(0.9)) | MaxIterations(10)</text>
+  </g>
+  <path class="edge" marker-end="url(#ah)" d="M380,44 V120"/>
+  <rect class="label-bg" x="352" y="72" width="56" height="20" rx="4"/>
+  <text class="label" x="380" y="82">builds</text>
+
+  <!-- root -> its two children -->
+  <path class="edge" marker-end="url(#ah)" d="M380,179 V199 H230 V218"/>
+  <path class="edge" marker-end="url(#ah)" d="M380,179 V199 H530 V218"/>
+  <!-- and -> its two children -->
+  <path class="edge" marker-end="url(#ah)" d="M230,277 V297 H120 V316"/>
+  <path class="edge" marker-end="url(#ah)" d="M230,277 V297 H340 V316"/>
+
+  <!-- root -> the loop's check -->
+  <path class="edge" marker-end="url(#ah)" d="M472,150 L643,150"/>
+  <rect class="label-bg" x="501" y="140" width="110" height="20" rx="4"/>
+  <text class="label" x="556" y="150">(stop, reason)</text>
+
+  <g class="node primary">
+    <rect x="288" y="121" width="184" height="58" rx="12"/>
+    <text x="380" y="140">OrCondition</text>
+    <text class="sub" x="380" y="161">a | b · any child stops</text>
+  </g>
+  <g class="node">
+    <rect x="130" y="219" width="200" height="58" rx="12"/>
+    <text x="230" y="238">AndCondition</text>
+    <text class="sub" x="230" y="259">a &amp; b · all children stop</text>
+  </g>
+  <g class="node">
+    <rect x="440" y="219" width="180" height="58" rx="12"/>
+    <text x="530" y="238">MaxIterations</text>
+    <text class="sub" x="530" y="259">state.iteration >= 10</text>
+  </g>
+  <g class="node">
+    <rect x="28" y="317" width="184" height="58" rx="12"/>
+    <text x="120" y="336">ToolCalled</text>
+    <text class="sub" x="120" y="357">issue_refund was called</text>
+  </g>
+  <g class="node">
+    <rect x="248" y="317" width="184" height="58" rx="12"/>
+    <text x="340" y="336">ConfidenceMet</text>
+    <text class="sub" x="340" y="357">state.confidence >= 0.9</text>
+  </g>
+
+  <!-- the loop: the check at the start of every iteration -->
+  <path class="edge" marker-end="url(#ah)" d="M740,111 V75"/>
+  <rect class="label-bg" x="750" y="83" width="40" height="20" rx="4"/>
+  <text class="label" x="770" y="93">yes</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M740,189 V218"/>
+  <rect class="label-bg" x="750" y="192" width="32" height="20" rx="4"/>
+  <text class="label" x="766" y="202">no</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M740,277 V316"/>
+  <rect class="label-bg" x="750" y="286" width="76" height="20" rx="4"/>
+  <text class="label" x="788" y="296">tool calls</text>
+
+  <path class="edge" marker-end="url(#ah)" d="M815,346 H880 V150 H837"/>
+  <rect class="label-bg" x="830" y="238" width="100" height="20" rx="4"/>
+  <text class="label" x="880" y="248">next iteration</text>
+
+  <g class="decision node">
+    <polygon points="740,112 836,150 740,188 644,150"/>
+    <text x="740" y="140">Stop?</text>
+    <text class="sub" x="740" y="161">each iteration</text>
+  </g>
+  <g class="node end">
+    <rect x="652" y="16" width="176" height="58" rx="29"/>
+    <text x="740" y="37">Run ends</text>
+    <text class="sub" x="740" y="58">TerminateEvent(reason)</text>
+  </g>
+  <g class="node">
+    <rect x="665" y="219" width="150" height="58" rx="12"/>
+    <text x="740" y="239">Think</text>
+    <text class="sub" x="740" y="260">model decides</text>
+  </g>
+  <g class="node">
+    <rect x="665" y="317" width="150" height="58" rx="12"/>
+    <text x="740" y="337">Execute</text>
+    <text class="sub" x="740" y="358">runs tool calls</text>
+  </g>
+
+  <!-- the leaves any tree can be built from -->
+  <g class="lane">
+    <rect x="16" y="404" width="908" height="74" rx="12"/>
+    <text class="lane-title" x="32" y="426">Leaf conditions</text>
+  </g>
+  <text class="note" x="740" y="426">any of these can sit at a leaf · each returns (stop, reason)</text>
+  <g class="node"><rect x="26" y="440" width="114" height="26" rx="8"/><text class="sub" x="83" y="453">MaxIterations</text></g>
+  <g class="node"><rect x="148" y="440" width="94" height="26" rx="8"/><text class="sub" x="195" y="453">TokenLimit</text></g>
+  <g class="node"><rect x="250" y="440" width="88" height="26" rx="8"/><text class="sub" x="294" y="453">TimeLimit</text></g>
+  <g class="node"><rect x="346" y="440" width="100" height="26" rx="8"/><text class="sub" x="396" y="453">TextMention</text></g>
+  <g class="node"><rect x="454" y="440" width="94" height="26" rx="8"/><text class="sub" x="501" y="453">ToolCalled</text></g>
+  <g class="node"><rect x="556" y="440" width="114" height="26" rx="8"/><text class="sub" x="613" y="453">ConfidenceMet</text></g>
+  <g class="node"><rect x="678" y="440" width="100" height="26" rx="8"/><text class="sub" x="728" y="453">NoToolCalls</text></g>
+  <g class="node"><rect x="786" y="440" width="128" height="26" rx="8"/><text class="sub" x="850" y="453">CustomCondition</text></g>
+
+  <text class="note" x="470" y="502">A leaf that stops returns its reason (tool_called:issue_refund, confidence_met, max_iterations); AndCondition joins them with AND.</text>
+  <text class="note" x="470" y="522">Checked at every iteration start, before Think and the built-in iteration, token and cost limits; result.stop_reason is the normalized reason.</text>
+</svg>

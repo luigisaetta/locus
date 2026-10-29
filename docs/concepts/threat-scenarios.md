@@ -16,14 +16,14 @@ catalogues real-world attack techniques against AI systems.)
 Every gist is **runnable offline with no credentials**. Together they map
 *every* ID encoded in Locus's three taxonomy enums (`OwaspLLM`, `OwaspASI`,
 and `AtlasTechnique`) to at least one runnable example, and a single runner
-keeps that mapping honest. The OWASP LLM/ASI enums encode their full
+checks that mapping on every run. The OWASP LLM/ASI enums encode their full
 published top-10s; `AtlasTechnique` encodes a representative subset of MITRE
 ATLAS:
 
 ```bash
-# in a checkout of locus-sdk
-python examples/scenarios/run_all.py          # run every gist, assert all pass
-python examples/scenarios/prompt_injection.py  # or run one
+# from the root of an oracle/locus checkout
+python packages/locus-sdk-security/examples/scenarios/run_all.py  # every gist must pass
+python packages/locus-sdk-security/examples/scenarios/prompt_injection.py  # or run one
 ```
 
 A scenario's defense is one of three kinds:
@@ -35,9 +35,8 @@ A scenario's defense is one of three kinds:
   points, where there is no single built-in;
 - **both**, where they stack.
 
-This is the difference between a control runtime and an agent framework with a
-security demo: the catalogue is *complete* and the runner *proves* it stays
-that way.
+The catalogue is complete with respect to the encoded enums, and `run_all.py`
+checks that every gist still passes.
 
 ## OWASP LLM Top 10 (2025)
 
@@ -95,10 +94,11 @@ underpins [inference fingerprinting](security.md#inference-fingerprinting).
 
 A scenario shows the defense *firing*. To turn that into an auditable,
 SIEM-ready record, wrap the observation in [`ground_finding`](security.md):
-the result is a typed `Evidence` finding tagged with the same taxonomy IDs in the
-tables above — or an `Abstention` when the evidence doesn't clear the bar. The
-[cloud-posture agent](cloud-posture.md) is the worked end-to-end version of
-that loop against a real AWS account.
+on a `proceed` decision (the allow outcome in the diagram above) the result is
+a typed `Evidence` finding that can carry the same taxonomy IDs as the tables
+above; below the threshold it is an `Abstention` that says why the finding was
+withheld. The [cloud-posture agent](cloud-posture.md) is the worked end-to-end
+version of that loop against a real OCI tenancy.
 
 ## See also
 

@@ -8,14 +8,23 @@ does, and where to find it.
 | Capability group | Status | Execution mode and requirements | Important limitation |
 |---|---|---|---|
 | Agent loop, tools, control policy, events | Supported | Core install; provider required only for model calls | Controls apply only where configured and wired |
-| OCI Generative AI, OpenAI, Anthropic, Azure OpenAI, Bedrock, OpenRouter, and Together.ai model access | Supported | Live; provider extra and credential required | Azure and Bedrock are native transports; OpenRouter and Together.ai use the OpenAI-compatible transport; model capabilities vary |
+| OCI Generative AI, OpenAI, Anthropic, OpenRouter, and Together.ai model access | Supported | Live; provider extra and credential required | OpenRouter and Together.ai use the OpenAI-compatible transport; model capabilities vary |
 | Checkpointer and vector-store adapters | Supported interfaces | Live infrastructure for non-memory backends; matching extra/config required | Operate and test the backing service yourself |
 | `SecurityContext` reference adapters | Offline simulation | No credentials | Vendor write templates return simulated receipts unless replaced and verified |
 | Published research and evaluation artifacts | Research-only | See each research page | Some source datasets and evaluated model artifacts are not publicly available |
 
-This build targets `locus-sdk` {{ locus_sdk_version }} on Python 3.11–3.14. See the
-[compatibility policy](compatibility.md) for label definitions and upgrade
-guidance.
+<dl class="locus-facts" markdown="block">
+<div markdown="block"><dt>This build</dt><dd markdown="span">`locus-sdk` {{ locus_sdk_version }}</dd></div>
+<div markdown="block"><dt>Python</dt><dd>3.11–3.14</dd></div>
+<div markdown="block"><dt>Status labels</dt><dd markdown="span">Defined in the [compatibility policy](compatibility.md), with upgrade guidance</dd></div>
+</dl>
+
+One chain carries a result from a `red_team()` or `assure()` run to the
+action it justifies. `ground_finding()` grounds the result with GSAR and
+withholds a below-threshold one as an `Abstention`; `verify()` challenges the
+`Evidence` that proceeds; `admit()` weighs the proposed action against the
+finding, the verdict and the `ControlPolicy` — allow, hold or deny — and
+records each decision on the `AuditTrail` passed to it.
 
 {{ locus_diagram trust-chain }}
 
@@ -51,9 +60,9 @@ guidance.
     - **Idempotent tools** — `@tool(idempotent=True)` dedupes identical
       `(name, args)` calls inside the documented run/checkpoint scope. External
       systems still need stable idempotency keys for crash recovery.
-    - **OCI Generative AI, OpenAI, Anthropic, Azure OpenAI, Bedrock, and compatible providers** —
-      OCI Generative AI (V1, SDK and Responses transports), OpenAI, Anthropic,
-      Azure OpenAI and Bedrock as native transports, plus
+    - **OCI Generative AI, OpenAI, Anthropic, and compatible providers** —
+      OCI Generative AI (V1, SDK and Responses transports), OpenAI and
+      Anthropic as native transports, plus
       hosted and self-hosted OpenAI-compatible endpoints (OpenRouter,
       Together.ai and more) auto-routed by model prefix. One
       `get_model()` call, any provider.
@@ -63,7 +72,7 @@ guidance.
 | Feature | What it does | Surface |
 |---|---|---|
 | **Agent** + `AgentConfig` + `AgentResult` | The Think → Execute → Reflect → Terminate loop | `locus.agent` · [Agent loop](concepts/agent-loop.md) |
-| **Termination algebra** | Stop conditions for a write — `(ToolCalled("issue_refund") & ConfidenceMet(0.9)) \| TextMention("ESCALATE") \| MaxIterations(10)` caps a refund run | `locus.core.termination` · [Termination](concepts/termination.md) |
+| **Termination algebra** | Stop conditions compose with `&` and <code>&#124;</code> into one Python expression — a refund run ends once `ToolCalled("issue_refund") & ConfidenceMet(0.9)` holds, on `TextMention("ESCALATE")`, or at `MaxIterations(10)` | `locus.core.termination` · [Termination](concepts/termination.md) |
 | **Idempotent tools** | `@tool(idempotent=True)` reuses results for identical calls in the documented run/checkpoint scope | `locus.tools.decorator` · [Idempotency](concepts/idempotency.md) |
 | **Reflexion** | Self-evaluation node in the ReAct cycle; rewrites the next turn when the last one was wrong | `Agent(reflexion=True)` · [Reasoning](concepts/reasoning.md) |
 | **Grounding** | LLM-as-judge claim verification against tool results; below-threshold triggers replanning | `Agent(grounding=True)` · [Reasoning](concepts/reasoning.md) |
@@ -135,15 +144,15 @@ so see [Guarantees and boundaries](why-locus.md).
 | Feature | What it does | Surface |
 |---|---|---|
 | **Grounded findings** | `ground_finding` returns a typed `Evidence` only when the claim clears the GSAR threshold — else an `Abstention`. Build findings through it, not by constructing `Evidence` directly. | `ground_finding` · [Grounded findings](concepts/security.md) |
-| **Target** | One handle over any AI under assessment — remote endpoint, in-process `Agent`, A2A peer, or callable | `Target.endpoint/.agent/.a2a/.from_callable` · [Agentic AI-security](concepts/agentic-ai-security.md) |
+| **Target** | One handle over any AI under assessment — remote endpoint, in-process `Agent`, A2A peer, or callable | `Target.endpoint` / `.agent` / `.a2a` / `.from_callable` · [Agentic AI-security](concepts/agentic-ai-security.md) |
 | **Red-teaming** | OWASP-ASI probe suite → grounded `Evidence` (tagged OWASP LLM / ASI / MITRE ATLAS) or `Abstention` | `red_team(target)` · [Agentic AI-security](concepts/agentic-ai-security.md) |
 | **Assurance** | Grounded guardrail-coverage posture across the suite | `assure(target)` |
-| **Verification** | An independent skeptic challenges a finding's evidence and rescores confidence | `verify(finding) -> VerificationResult` · [Verify findings](notebooks/notebook_78_verify_findings.md) |
+| **Verification** | An independent skeptic challenges a finding's evidence and rescores confidence | `verify(finding) -> VerificationResult` · [Verify findings](notebooks/notebook_86_verify_findings.md) |
 | **Policy + approval** | Weigh an action against evidence, verification, and a `ControlPolicy` → allow / hold / deny (`allow` / `require_human` / `deny` in the API) | `approve(action, policy=…)` · [SecurityContext](concepts/security-context.md) |
 | **Admission gate** | Run a side-effecting action only if it clears the chain; `admit(trail=...)` records the decision to the audit trail you pass; else raises `AdmissionError` | `admit(...)` · `ctx.actions.execute(...)` · [SecurityContext](concepts/security-context.md) |
 | **SecurityContext** | Investigate by domain (logs / endpoint / identity / cloud / threat-intel / actions), not by vendor | `SecurityContext()` · [SecurityContext](concepts/security-context.md) |
 | **Audit trail** | Hash-chained, tamper-evident record of every entry written to it, including each decision `admit(trail=...)` makes; exports JSONL for a SIEM | `AuditTrail` · [Observability](concepts/observability.md) |
-| **Cloud posture (read-only)** | Spec-driven AWS auditing — `describe_aws` introspects botocore models; `use_aws` runs read-only calls, writes refused by construction | `locus_security.aws` · [Cloud posture](concepts/cloud-posture.md) |
+| **Cloud posture (read-only)** | Spec-driven OCI auditing — `describe_oci` introspects the OCI SDK; `use_oci` runs read-only calls, writes refused by default; `create_soc_analyst` grounds the findings | `locus.tools.oci` · [Cloud posture](concepts/cloud-posture.md) |
 | **Inference fingerprinting** | Timing side-channel model/hardware fingerprint → grounded `FingerprintFinding` or abstention | `fingerprint_to_finding` · [Grounded findings](concepts/security.md) |
 | **Governed agent** | An `Agent` with grounding + guardrails + audit trail on by default | `governed_agent(...)` · [Agentic AI-security](concepts/agentic-ai-security.md) |
 
@@ -173,11 +182,15 @@ from locus_security import SecurityContext, verify
 
 ctx = SecurityContext()
 verdict = await verify(finding)
+# Raises AdmissionError unless the policy allows; here production → hold.
+# ctx.actions.execute() passes neither a trail nor an approver: to record the
+# decision or approve the hold, call admit(..., trail=trail, approved_by=...)
+# directly.
 await ctx.actions.execute(
     Action(name="isolate_host", asset="WS-0142", environment="production"),
     lambda: ctx.endpoint.isolate("WS-0142"),   # side effect, gated
     finding=finding, verdict=verdict,
-)   # raises AdmissionError unless the policy allows (here production → hold); call admit(..., trail=trail, approved_by=...) directly to record it or approve the hold
+)
 ```
 
 ## Observability
@@ -186,11 +199,19 @@ await ctx.actions.execute(
 |---|---|---|
 | **`EventBus`** | Singleton in-process pub/sub — per-run + global subscribers, bounded queues, history replay, drop accounting | `locus.observability.EventBus` · [Observability](concepts/observability.md) |
 | **`run_context()`** | ContextVar-based opt-in gate — zero allocations when inactive | `locus.observability.run_context` |
-| **Agent yield bridge** | `@_bus_bridge` on `Agent.run` transparently republishes 9 `LocusEvent` types as `agent.*` SSE events | `locus.agent.runtime_loop` |
+| **Agent yield bridge** | `@_bus_bridge` on `Agent.run` transparently republishes the loop's yielded `LocusEvent`s — think, tool, reflect, grounding, model, interrupt, compaction and terminate — as `agent.*` SSE events | `locus.agent.runtime_loop` |
 | **`EventBusHook`** | `HookProvider` that bridges all agent lifecycle hooks onto the bus (for non-async / pre-built agents) | `locus.observability.EventBusHook` |
 | **Canonical event catalogue** | {{ locus_event_count }} `EV_*` constants across {{ locus_event_prefixes }} | `locus.observability.emit` · [SSE event catalogue](concepts/sse-events.md) |
 
 ## Reasoning
+
+`GSAREvaluator` runs the loop below. A judge partitions the claims of a
+synthesis against its evidence, the partition is scored, and the score
+decides: proceed ends the loop, regenerate rewrites the synthesis from the
+same evidence, and replan — or a judge that abstains — gathers new evidence
+while the replan budget lasts, after which the report is returned as
+degraded. `Agent(gsar=GSARConfig(...))` runs the judge once over the final
+answer and reports the decision.
 
 {{ locus_diagram gsar-decision }}
 
@@ -274,10 +295,8 @@ await ctx.actions.execute(
 |---|---|---|
 | OCI Generative AI | OpenAI, Meta Llama, xAI Grok, Mistral, Google Gemini and Cohere models served on OCI (on-demand or Dedicated AI Cluster) | `locus.models.providers.oci` · [OCI Generative AI](concepts/providers/oci.md) |
 | OpenAI | All commercial models (gpt-5.5, o-series, etc) | `locus.models.native.openai` · [OpenAI](concepts/providers/openai.md) |
-| Anthropic | Claude 4.x (e.g. `claude-sonnet-4-6`) — direct API | `locus.models.native.anthropic` · [Anthropic](concepts/providers/anthropic.md) |
-| Azure OpenAI | OpenAI models on a deployment-named Azure resource | `locus.models.native.azure` · [Azure OpenAI](concepts/providers/azure.md) |
-| Amazon Bedrock | Chat models on Bedrock (Nova, Claude, Llama, Mistral and more) through one Converse-API client | `locus.models.native.bedrock` · [Amazon Bedrock](concepts/providers/bedrock.md) |
-| Auto-routing | `get_model("anthropic:claude-sonnet-4-6")` picks transport from id | `locus.models.registry.get_model` |
+| Anthropic | Claude 5.x (e.g. `claude-sonnet-5-5`) — direct API | `locus.models.native.anthropic` · [Anthropic](concepts/providers/anthropic.md) |
+| Auto-routing | `get_model("anthropic:…")` picks the transport from the provider prefix; the rest of the string is the provider's model id | `locus.models.registry.get_model` |
 | Resilience helpers | Failover classification, credential pooling, prompt-cache breakpoints, rate-limit buckets | `locus.models.failover` · `locus.models.pooled` · `locus.models.caching` · `locus.models.rate_limits` · [Resilience](concepts/providers/resilience.md) |
 
 ## Skills + Playbooks

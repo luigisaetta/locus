@@ -1,3 +1,7 @@
+---
+table_filter: true
+---
+
 # SSE event catalogue
 
 Locus publishes a single canonical stream of events on its in-process
@@ -17,8 +21,8 @@ from the in-memory history buffer.
     bounded**: events are dropped for a subscriber whose queue stays
     saturated past a 1-second timeout, history is capped (500 events per
     run, oldest of 200 runs evicted first), and nothing is persisted. It
-    is excellent for live UIs, dashboards, and forwarding to your own
-    OTEL/SIEM pipeline — but it is **not** a complete or tamper-evident
+    suits live UIs, dashboards, and forwarding to your own OTEL/SIEM
+    pipeline — but it is **not** a complete or tamper-evident
     audit trail on its own. Forward events to durable storage if you need
     retention, and route security decisions through the
     [`AuditTrail`](agentic-ai-security.md) for a tamper-evident record.
@@ -32,35 +36,13 @@ add a new emission site, list it here.
 Every `emit()` call site reads `current_run_id()` from a `ContextVar`
 (the `router.*` events and `EventBusHook` instead publish under a run id
 they are handed). When no run id is bound (no active `run_context()`,
-and not inside a `Router.dispatch`), `emit()` returns immediately —
-**zero allocations, zero bus instantiation**. SDK users who never bind a run id pay one contextvar read per call site.
+and not inside a `Router.dispatch`), `emit()` returns immediately — no
+bus is instantiated and the only work is one `ContextVar` read. SDK
+users who never bind a run id pay one `ContextVar` read per call site.
 
-```python
-import asyncio
-
-from locus.observability import run_context, get_event_bus
-
-
-async def main():
-    async with run_context() as rid:
-        bus = get_event_bus()
-
-        async def consumer():
-            # Subscribe — replays the run's timeline, then live events.
-            async for event in bus.subscribe(rid):
-                # e.g. agent.tool.completed {tool_name: "issue_refund", ...}
-                forward_to_analytics(event.event_type, event.data)
-
-        task = asyncio.create_task(consumer())
-        await asyncio.sleep(0)  # let the subscriber register
-        await agent.arun("Refund the duplicate charge on ord-4821.")
-        await bus.close_stream(rid)  # delivers the end-of-stream sentinel
-        await task                   # the iterator ends only after close_stream
-
-
-asyncio.run(main())
-```
-
+The `run_context()` / `bus.subscribe(rid)` / `close_stream(rid)` shape
+is shown once, in
+[Observability — In-process SSE](observability.md#in-process-sse-eventbus).
 The subscriber's iterator ends only when `close_stream(rid)` is called —
 `run_context` does not close the stream for you.
 
@@ -79,7 +61,7 @@ for every iteration of the inner loop.
 | `agent.tool.completed` | `tool_name`, `span_id`, `success`, `duration_ms`, `output_preview`, `error` | |
 | `agent.reflect` | `iteration`, `assessment`, `confidence_delta`, `new_confidence`, `guidance_preview` | Reflexion enabled |
 | `agent.grounding` | `score`, `claims_evaluated`, `ungrounded_count`, `requires_replan` | Grounding enabled |
-| `agent.model.chunk` | `content_preview`, `done`, `has_tool_calls` | Only with `run(..., stream_tokens=True)` |
+| `agent.model.chunk` | `content_preview`, `done`, `has_tool_calls` | Only with `stream_tokens=True` |
 | `agent.model.completed` | `content_preview`, `tool_call_count`, `stop_reason` | Not emitted by the `Agent.run` bridge (the loop never yields `ModelCompleteEvent`); `EventBusHook` publishes its own `agent.model.completed` with `stop_reason`, `content_length` |
 | `agent.tokens.used` | `prompt_tokens`, `completion_tokens`, `total_tokens` | Not currently emitted: bridged only from `ModelCompleteEvent`, which the loop never yields |
 | `agent.interrupt` | `interrupt_id`, `question_preview`, `options` | Human-in-the-loop (HITL) pause |
@@ -118,7 +100,7 @@ run id is bound, either by an active `run_context()` or by
 | `multiagent.orchestrator.specialists_invoked` | `orchestrator_id`, `specialists_invoked`, `specialists_succeeded`, `specialists_failed` |
 | `multiagent.orchestrator.summary` | `orchestrator_id`, `summary_length` |
 | `multiagent.specialist.started` | `specialist_id`, `specialist_type`, `task_preview` |
-| `multiagent.specialist.completed` | `specialist_id`, `specialist_type`, `success`, `confidence`, `duration_ms`, `output_length`, `error` |
+| `multiagent.specialist.completed` | `specialist_id`, `specialist_type`, `success`, `confidence`, `duration_ms`, `output_preview`, `error` |
 | `multiagent.handoff.initiated` | `source_agent_id`, `target_agent_id`, `reason`, `context_summary` |
 | `multiagent.handoff.completed` | `source_agent_id`, `target_agent_id`, `success`, `output_length` |
 | `multiagent.graph.node.started` | `graph_id`, `node_id`, `iteration`, `span_id`, `parallel`, `is_resuming` |
@@ -255,17 +237,18 @@ runs.
 
 1. Add a constant in `src/locus/observability/emit.py`:
 
-   ```python
-   EV_FOO_BAR = "foo.bar"
-   ```
+    ```python
+    EV_FOO_BAR = "foo.bar"
+    ```
 
 2. Emit at the call site:
 
-   <!-- docs: skip -->
-   ```python
-   from locus.observability.emit import EV_FOO_BAR, emit
-   await emit(EV_FOO_BAR, key1=value1, key2=value2)
-   ```
+    <!-- docs: skip -->
+
+    ```python
+    from locus.observability.emit import EV_FOO_BAR, emit
+    await emit(EV_FOO_BAR, key1=value1, key2=value2)
+    ```
 
 3. Add the row to the table in this doc.
 4. If the event is tied to a started/completed pair, generate

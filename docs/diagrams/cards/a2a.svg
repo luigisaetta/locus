@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A2A card: A2AClient (left) calls a peer agent across a process boundary
+  (dashed divider); A2AServer (right, the subject) exposes a Locus Agent as the
+  spec-compliant endpoint that takes the message and returns the Task.
+  locus/a2a/protocol.py: A2AClient.send_message, A2AServer
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>Two agents either side of a process boundary, request out and reply back</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <path class="divider" d="M48,4 L48,52"/>
+  <g class="node"><rect x="6" y="21" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,25 L66,25"/>
+  <g class="node primary"><rect x="68" y="21" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M68,31 L30,31"/>
+</svg>

@@ -30,7 +30,7 @@ def main() -> None:
     print("SSRF guard (url_safety.is_safe_url):")
     urls = [
         "https://docs.example.com/runbook.md",  # benign, public
-        "http://169.254.169.254/latest/meta-data/iam/security-credentials/",  # AWS IMDS
+        "http://169.254.169.254/opc/v2/instance/",  # instance metadata service (IMDS)
         "http://localhost:6379/",  # internal service
         "http://metadata.google.internal/computeMetadata/v1/",  # GCP metadata
     ]

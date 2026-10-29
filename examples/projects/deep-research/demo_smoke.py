@@ -29,7 +29,6 @@ Run:
 from __future__ import annotations
 
 import asyncio
-import os
 import sys
 
 from locus.deepagent import create_deepagent
@@ -89,7 +88,7 @@ async def main() -> None:
     from locus.models import get_model
 
     chat_model = get_model(
-        "anthropic:claude-sonnet-4-6",  # reliable tool caller for smoke
+        "anthropic:claude-sonnet-5-5",  # reliable tool caller for smoke
     )
 
     agent = create_deepagent(

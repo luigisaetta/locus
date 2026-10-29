@@ -11,8 +11,10 @@ drift from the routes the SDK actually registers.
 
 from __future__ import annotations
 
+import ast
 import os
 import re
+import textwrap
 from importlib import import_module
 from pathlib import Path
 from typing import Any
@@ -23,6 +25,8 @@ PROVIDER_TABLE_TOKEN = "{{ locus_provider_table }}"  # noqa: S105 — template p
 EXAMPLE_MODEL_TOKEN = "{{ locus_example_model }}"  # noqa: S105 — template placeholder, not a secret
 EVENT_COUNT_TOKEN = "{{ locus_event_count }}"  # noqa: S105 — template placeholder, not a secret
 EVENT_PREFIXES_TOKEN = "{{ locus_event_prefixes }}"  # noqa: S105 — template placeholder, not a secret
+MODEL_TABS_TOKEN = "{{ locus_model_tabs }}"  # noqa: S105 — template placeholder, not a secret
+MODEL_TOKEN = "{{ locus_model }}"  # noqa: S105 — template placeholder, not a secret
 
 _SDK_REPO = "https://github.com/oracle/locus/"
 #: A link into the SDK repo on its moving ``main`` branch.
@@ -32,9 +36,25 @@ _RELEASE = re.compile(r"^\d+\.\d+\.\d+$")
 
 #: ``{{ locus_diagram agent-loop }}`` inlines docs/diagrams/agent-loop.svg.
 _DIAGRAM_TOKEN = re.compile(r"\{\{\s*locus_diagram\s+([a-z0-9][a-z0-9-]*)\s*\}\}")
+#: ``{{ locus_glyph pipelines }}`` inlines docs/diagrams/cards/pipelines.svg, a
+#: card illustration drawn in the diagram vocabulary.
+_GLYPH_TOKEN = re.compile(r"\{\{\s*locus_glyph\s+([a-z0-9][a-z0-9-]*)\s*\}\}")
 _XML_PROLOG = re.compile(r"<\?xml[^>]*\?>\s*")
 _COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _ID_ATTR = re.compile(r'\bid="([^"]+)"')
+#: ``{{ locus_source examples/x.py::build_graph }}`` quotes one function or class
+#: from an example file, found by name, so the excerpt follows the code when
+#: lines move. A dotted name (``Class.method``) reaches into a class.
+_SOURCE_TOKEN = re.compile(
+    r"^\{\{\s*locus_source\s+(?P<path>[^\s:]+)::(?P<symbol>[A-Za-z_][\w.]*)\s*\}\}[ \t]*$",
+    re.MULTILINE,
+)
+#: ``{{ locus_model_tabs }}`` directly above a fenced block that contains
+#: ``{{ locus_model }}`` renders the block once per provider as a tab set.
+_MODEL_TABS = re.compile(
+    r"^\{\{\s*locus_model_tabs\s*\}\}[ \t]*\n\n?(```[A-Za-z0-9_-]*\n.*?\n```)[ \t]*$",
+    re.MULTILINE | re.DOTALL,
+)
 
 
 def _sdk_version() -> str:
@@ -122,10 +142,17 @@ def render_diagram(name: str, docs_dir: Path) -> str:
     path = docs_dir / "diagrams" / f"{name}.svg"
     if not path.is_file():
         raise RuntimeError(f"{{{{ locus_diagram {name} }}}} names {path}, which does not exist")
-    svg = _COMMENT.sub("", _XML_PROLOG.sub("", path.read_text()))
+    svg = _namespace_ids(_COMMENT.sub("", _XML_PROLOG.sub("", path.read_text())), name)
+    # Blank lines would end the raw-HTML block early and hand the rest to Markdown.
+    body = "\n".join(line for line in svg.strip().splitlines() if line.strip())
+    return f'\n<figure class="tl-dia">\n{body}\n</figure>\n'
+
+
+def _namespace_ids(svg: str, prefix: str) -> str:
+    """Prefix every id in an inlined SVG, and every reference to it."""
     ids = set(_ID_ATTR.findall(svg))
     for old in sorted(ids, key=len, reverse=True):
-        new = f"{name}--{old}"
+        new = f"{prefix}--{old}"
         svg = re.sub(rf'\bid="{re.escape(old)}"', f'id="{new}"', svg)
         svg = svg.replace(f"url(#{old})", f"url(#{new})").replace(
             f'href="#{old}"', f'href="#{new}"'
@@ -135,9 +162,89 @@ def render_diagram(name: str, docs_dir: Path) -> str:
             lambda m: m.group(1) + new,
             svg,
         )
-    # Blank lines would end the raw-HTML block early and hand the rest to Markdown.
-    body = "\n".join(line for line in svg.strip().splitlines() if line.strip())
-    return f'\n<figure class="tl-dia">\n{body}\n</figure>\n'
+    return svg
+
+
+def render_glyph(name: str, docs_dir: Path) -> str:
+    """Inline one card illustration as a single line of markup.
+
+    Card glyphs live under docs/diagrams/cards and use the diagram classes,
+    scoped by ``.tl-glyph`` in locus.css, so they theme with the page like the
+    diagrams do. They are decorative: the card title beside them carries the
+    meaning, so the span is hidden from assistive technology. The markup is
+    one line because the span sits inside a list item's paragraph, where a
+    line break would start a new block.
+    """
+    path = docs_dir / "diagrams" / "cards" / f"{name}.svg"
+    if not path.is_file():
+        raise RuntimeError(f"{{{{ locus_glyph {name} }}}} names {path}, which does not exist")
+    svg = _namespace_ids(_COMMENT.sub("", _XML_PROLOG.sub("", path.read_text())), f"card-{name}")
+    one_line = " ".join(part.strip() for part in svg.strip().splitlines() if part.strip())
+    return f'<span class="tl-glyph" aria-hidden="true">{one_line}</span>'
+
+
+def _find_symbol(tree: ast.Module, dotted: str) -> ast.AST | None:
+    node: ast.AST = tree
+    for name in dotted.split("."):
+        body = getattr(node, "body", None)
+        if body is None:
+            return None
+        for child in body:
+            if (
+                isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                and child.name == name
+            ):
+                node = child
+                break
+        else:
+            return None
+    return node
+
+
+def render_source(path: str, symbol: str, roots: list[Path]) -> str:
+    """One function or class from a source file, as a fenced Python block.
+
+    The symbol is looked up by name in the parsed module, so a page keeps
+    quoting the right code when the file is edited above it; a symbol that no
+    longer exists fails the strict build instead of silently quoting the
+    wrong lines. Decorators are included, common indentation is removed.
+    """
+    file = next((r / path for r in roots if (r / path).is_file()), None)
+    if file is None:
+        raise RuntimeError(
+            f"{{{{ locus_source {path}::{symbol} }}}} names {path}, which does not exist"
+        )
+    text = file.read_text()
+    node = _find_symbol(ast.parse(text), symbol)
+    if node is None or not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        raise RuntimeError(
+            f"{{{{ locus_source {path}::{symbol} }}}}: no function or class named {symbol} in {path}"
+        )
+    first = min([node.lineno, *[d.lineno for d in node.decorator_list]])
+    lines = text.splitlines()[first - 1 : node.end_lineno]
+    body = textwrap.dedent("\n".join(lines)).rstrip()
+    return f"```python\n{body}\n```"
+
+
+def render_model_tabs(block: str, tabs: list[dict[str, str]]) -> str:
+    """One code block, shown once per provider as a linked tab set.
+
+    The page author writes the example a single time with ``{{ locus_model }}``
+    where the model string goes; ``extra.model_tabs`` in mkdocs.yml says which
+    providers to show and the one example id each. Material's
+    ``content.tabs.link`` keeps the chosen provider in sync across the site, so
+    a reader who picks OCI once reads every page with OCI model ids.
+    """
+    if MODEL_TOKEN not in block:
+        raise RuntimeError(
+            "A {{ locus_model_tabs }} block must contain {{ locus_model }} where the model string goes"
+        )
+    parts = []
+    for tab in tabs:
+        body = block.replace(MODEL_TOKEN, tab["model"])
+        indented = "\n".join(f"    {line}" if line else "" for line in body.splitlines())
+        parts.append(f'=== "{tab["label"]}"\n\n{indented}\n')
+    return "\n".join(parts)
 
 
 def on_config(config: Any) -> Any:
@@ -153,7 +260,21 @@ def on_page_markdown(markdown: str, *, config: Any, **_: Any) -> str:
     """Expand build facts only where their explicit tokens appear."""
     extra = config["extra"]
     sdk_version = extra["sdk_version"]
-    rendered = markdown.replace(SDK_VERSION_TOKEN, sdk_version)
+    rendered = markdown
+    if "locus_source" in rendered:
+        root = Path(config["config_file_path"]).parent
+        roots = [root, root / "packages" / "locus-sdk-security"]
+        rendered = _SOURCE_TOKEN.sub(
+            lambda m: render_source(m.group("path"), m.group("symbol"), roots), rendered
+        )
+    if "locus_model_tabs" in rendered:
+        tabs = extra.get("model_tabs")
+        if not tabs:
+            raise RuntimeError(
+                "A page uses {{ locus_model_tabs }} but mkdocs.yml sets no extra.model_tabs"
+            )
+        rendered = _MODEL_TABS.sub(lambda m: render_model_tabs(m.group(1), tabs), rendered)
+    rendered = rendered.replace(SDK_VERSION_TOKEN, sdk_version)
     if PROVIDER_TABLE_TOKEN in rendered:
         rendered = rendered.replace(PROVIDER_TABLE_TOKEN, _provider_table())
     if EXAMPLE_MODEL_TOKEN in rendered:
@@ -169,5 +290,8 @@ def on_page_markdown(markdown: str, *, config: Any, **_: Any) -> str:
     if "locus_diagram" in rendered:
         docs_dir = Path(config["docs_dir"])
         rendered = _DIAGRAM_TOKEN.sub(lambda m: render_diagram(m.group(1), docs_dir), rendered)
+    if "locus_glyph" in rendered:
+        docs_dir = Path(config["docs_dir"])
+        rendered = _GLYPH_TOKEN.sub(lambda m: render_glyph(m.group(1), docs_dir), rendered)
     checkout = extra.get("sdk_checkout")
     return pin_sdk_links(rendered, sdk_version, Path(checkout) if checkout else None)

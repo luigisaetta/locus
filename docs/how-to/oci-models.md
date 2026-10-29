@@ -134,7 +134,7 @@ when the server owns the history). Memory, Reflexion, GSAR,
 grounding, tool hooks, idempotency, checkpointing, output schema,
 streaming, and termination conditions all work identically. See the
 [OCI Responses concept page](../concepts/oci-responses.md) and
-[notebook 58](../notebooks/notebook_03_oci_responses.md).
+[notebook 29](../notebooks/notebook_34_oci_responses.md).
 
 ## Cohere (Command R and Command A) — `OCIModel`
 
@@ -188,17 +188,17 @@ export LOCUS_OCI_TRANSPORT=v1     # or "sdk"
 
 Notebooks that use `from examples.config import get_model` inherit
 this routing. Notebooks that instantiate a class directly
-(e.g. `notebook_56_model_providers.py`) show both transports
+(e.g. `notebook_11_model_providers.py`) show both transports
 side-by-side.
 
 ## What's not supported today
 
-- **OpenAI Responses API on OCI.** The SDK deliberately stays on
-  chat/completions — the Responses API is built around server-side
-  conversation state which conflicts with the SDK's own memory and tool
-  layers. Practical consequence: `openai.gpt-5-pro` (Responses-only on
-  OCI per the day-0 announcement) is not reachable from the SDK today.
-  Regular `openai.gpt-5.5` works fine on V1.
+- **Responses-only models depend on the region.** `openai.gpt-5.x-pro`,
+  `openai.gpt-5.3-codex`, and tool calls on the `gpt-5.6` / `gpt-6`
+  families are served only by `/openai/v1/responses`. `OCIResponsesModel`
+  speaks that endpoint, but OCI does not expose it in every region yet
+  (some regions return 404). Where it is missing
+  those models complete plain prompts on V1 but cannot call tools.
 - **Cohere on V1.** OCI's `/openai/v1` returns `400 Unsupported OpenAI
   operation` for every `cohere.*` id, Command R and Command A alike. Use
   `OCIModel`.
@@ -207,6 +207,43 @@ side-by-side.
   reliable on OCI without a Project OCID. When it is, the SDK will add
   `api_key=` to `OCIChatCompletionsModel` as a third auth mode (additive,
   non-breaking).
+
+## Model support on OCI
+
+What the OCI Generative AI catalog can do through the same `Agent`, grouped
+by capability. Catalogs differ per tenancy and region; the
+[integration README](https://github.com/oracle/locus/tree/main/tests/integration)
+has the scripts to check yours.
+
+### Completion and tool calls
+
+| Vendor | Models |
+|---|---|
+| OpenAI | `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.2`, `gpt-5.1`, `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `gpt-4.1`, `gpt-4.1-mini`, `gpt-4o`, `gpt-4o-mini`, `gpt-oss-120b`, `gpt-oss-20b`, `o3` (and their dated aliases) |
+| Google | `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.5-flash-lite` |
+| Meta | `llama-3.3-70b-instruct` |
+| Cohere | `command-a-03-2025` (SDK transport) |
+
+### Completion only
+
+`gpt-5.6-luna` / `-sol` / `-terra`, `gpt-6-astra` /
+`-luna` / `-sol`, `gpt-6.1-sol`: tool calls need `/v1/responses`, which not
+every region serves.
+
+### Not usable
+
+Retired by the service (`o1`, `o3-mini`, `o4-mini`,
+`gpt-4.1-nano`, the `gpt-4o-search-preview` pair); not servable on-demand
+(`command-r*`, `command-a-vision`, `llama-3-70b`, `llama-3.1-*`,
+`gpt-5-codex`); Responses-only (`gpt-5.2-pro`, `gpt-5.4-pro`, `gpt-5.5-pro`,
+`gpt-5.3-codex`); audio-only (`gpt-audio`).
+
+### Embeddings and rerank
+
+`cohere.embed-v4.0` (1536), `openai.text-embedding-3-small`
+(1536), `openai.text-embedding-3-large` (3072) pass; the Cohere v3 family is
+retired. `cohere.rerank-v4.0-fast` passes; `rerank-v3.5` and
+`rerank-v4.0-pro` are retired.
 
 ## Testing
 
@@ -221,7 +258,7 @@ pytest tests/integration/test_oci_openai_compat_integration.py
 OCI_PROFILE=DEFAULT \
 OCI_ENDPOINT=https://inference.generativeai.us-chicago-1.oci.oraclecloud.com \
 OCI_COMPARTMENT=ocid1.compartment.oc1... \
-OCI_MODEL_ID=cohere.command-r-plus-08-2024 \
+OCI_MODEL_ID=cohere.command-a-03-2025 \
 pytest tests/integration/test_oci_integration.py
 ```
 

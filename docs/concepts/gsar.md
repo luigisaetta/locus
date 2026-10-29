@@ -84,7 +84,7 @@ synthesis is loose" mode that dominates real production logs.
 ## Wiring
 
 ```python
-from locus.models.native.openai import OpenAIModel
+from locus.models import OpenAIModel
 from locus.reasoning.gsar import GSARThresholds
 from locus.reasoning.gsar_evaluator import GSAREvaluator
 from locus.reasoning.gsar_judge import JudgeOutput, StructuredOutputGSARJudge
@@ -169,6 +169,6 @@ production you'd map your tool taxonomy onto these.
   — outer loop, abstain handling, budget exhaustion.
 - [`tests/integration/test_gsar_live.py`](https://github.com/oracle/locus/blob/main/tests/integration/test_gsar_live.py)
   — live LLM judge driving the full loop.
-- [`examples/notebook_37_gsar_typed_grounding.py`](https://github.com/oracle/locus/blob/main/examples/notebook_37_gsar_typed_grounding.py)
+- [`examples/notebook_55_gsar_typed_grounding.py`](https://github.com/oracle/locus/blob/main/examples/notebook_55_gsar_typed_grounding.py)
   — a runnable walkthrough of the four parts.
 - Paper: [arXiv:2604.23366 (2026)](https://arxiv.org/abs/2604.23366).

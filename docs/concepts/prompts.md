@@ -16,9 +16,11 @@ You don't usually configure 2 and 3 directly. You configure 1.
 
 ## A first system prompt
 
+{{ locus_model_tabs }}
+
 ```python
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, issue_refund],
     system_prompt=(
         "You are a support agent. "
@@ -103,7 +105,7 @@ charges fewer tokens on cache hits — pass `prompt_cache=True`:
 from locus.models import AnthropicModel
 
 agent = Agent(
-    model=AnthropicModel(model="claude-sonnet-4-6", prompt_cache=True),
+    model=AnthropicModel(model="claude-sonnet-5-5", prompt_cache=True),
     system_prompt=very_long_prompt,
 )
 ```

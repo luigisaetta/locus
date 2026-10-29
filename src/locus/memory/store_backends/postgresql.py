@@ -10,8 +10,9 @@
 """PgMemory — the multi-tenant, RLS-isolated enterprise memory store.
 
 A :class:`~locus.memory.store.BaseStore` backed by **PostgreSQL + pgvector**
-(Aurora in the paid tier, any Postgres locally). It is the enterprise counterpart
-to :class:`~locus.memory.store_backends.holographic.HolographicStore`: same HRR
+(OCI Database with PostgreSQL in production, any Postgres locally). It is the
+enterprise counterpart to
+:class:`~locus.memory.store_backends.holographic.HolographicStore`: same HRR
 associative recall, but **persisted, shared, and tenant-isolated**.
 
 Two properties make it the governed backend:
@@ -113,7 +114,7 @@ class PgMemory(BaseStore):
     ``namespace[0]`` is the tenant (the isolation boundary); the full namespace
     tuple scopes within a tenant (e.g. ``(tenant, "user", user_id)``). The schema,
     RLS policy, and HNSW index are created on first use, so it works against a
-    bare Postgres locally and a managed Aurora cluster identically.
+    bare Postgres locally and a managed OCI Database with PostgreSQL identically.
 
     **Recall quality depends on the vector.** Pass an ``embedder`` (any
     :class:`~locus.rag.embeddings.base.BaseEmbedding`, e.g. brokered OpenAI

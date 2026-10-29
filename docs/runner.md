@@ -53,15 +53,15 @@ value on its bound host and nowhere else.
    `/sandbox/.locus/events.jsonl` through outages.
 6. It ends with `POST /internal/v1/runs/{id}/result`:
 
-   ```json
-   {"status": "done", "final_message": "...", "stop_reason": "complete",
-    "usage_reported": {"prompt_tokens": 20, "completion_tokens": 40}}
-   {"status": "parked",
-    "waiting": {"kind": "approval", "call_id": "c5", "tool": "bash", "approval_id": "ap-1"}}
-   {"status": "parked", "waiting": {"kind": "question", "call_id": "q1", "question": "..."}}
-   {"status": "refused", "error": "..."}
-   {"status": "error", "error": "..."}
-   ```
+    ```json
+    {"status": "done", "final_message": "...", "stop_reason": "complete",
+     "usage_reported": {"prompt_tokens": 20, "completion_tokens": 40}}
+    {"status": "parked",
+     "waiting": {"kind": "approval", "call_id": "c5", "tool": "bash", "approval_id": "ap-1"}}
+    {"status": "parked", "waiting": {"kind": "question", "call_id": "q1", "question": "..."}}
+    {"status": "refused", "error": "..."}
+    {"status": "error", "error": "..."}
+    ```
 
    `usage_reported` is the runner's own count; the box guard's metered count is
    the one that bills and budgets.

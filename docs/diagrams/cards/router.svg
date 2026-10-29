@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Router card: Router.dispatch types the task as a GoalFrame, LLMProtocolPicker
+  chooses one protocol from the ProtocolRegistry (the decision) and
+  CognitiveCompiler builds only the chosen shape; the other candidates stay
+  unbuilt (dashed).
+  locus/router/runtime.py: Router.dispatch; picker.py: LLMProtocolPicker;
+  protocol.py: ProtocolRegistry; compiler.py: CognitiveCompiler
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>One input, a decision, three candidate shapes; the chosen edge is solid</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="4" y="21" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M26,28 L32.5,28"/>
+  <g class="decision"><polygon points="48,18 61,28 48,38 35,28"/></g>
+  <path class="edge dashed" marker-end="url(#ah)" d="M48,18 L48,10 L68,10"/>
+  <path class="edge" marker-end="url(#ah)" d="M61,28 L68,28"/>
+  <path class="edge dashed" marker-end="url(#ah)" d="M48,38 L48,46 L68,46"/>
+  <g class="node"><rect x="70" y="3" width="22" height="14" rx="3"/></g>
+  <g class="node primary"><rect x="70" y="21" width="22" height="14" rx="3"/></g>
+  <g class="node"><rect x="70" y="39" width="22" height="14" rx="3"/></g>
+</svg>

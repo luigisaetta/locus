@@ -40,7 +40,7 @@ get_model("oci:ocid1.generativeaiendpoint....")
 
 Live-tested against a `uk-london-1` DAC endpoint running Qwen
 (Alibaba Cloud) on 2026-05-01. End-to-end results from the live run
-(see [`examples/notebook_04_oci_dac.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_04_oci_dac.py)):
+(see [`examples/notebook_35_oci_dac.py`](https://github.com/oracle-samples/locus/blob/main/examples/notebook_35_oci_dac.py)):
 
 ```text
 === Part 3: complete() against the DAC ===
@@ -124,7 +124,7 @@ export LOCUS_MODEL_PROVIDER=oci
 export LOCUS_MODEL_ID="ocid1.generativeaiendpoint.oc1.<region>....<id>"
 export LOCUS_OCI_PROFILE=MY_PROFILE
 export LOCUS_OCI_COMPARTMENT="ocid1.compartment.oc1..."
-python examples/notebook_06_basic_agent.py
+python examples/notebook_02_basic_agent.py
 ```
 
 `LOCUS_OCI_TRANSPORT=sdk` forces the SDK transport explicitly if you

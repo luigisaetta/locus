@@ -40,10 +40,9 @@ jobs:
       - name: Install Hatch
         run: pip install hatch==${{ env.HATCH_VERSION }}
 
-      # Only locus-sdk (root) is published. locus-sdk-security
-      # (packages/) is built into its own directory so pre-release-checks can
-      # prove the two still install together, but it is never uploaded: it is
-      # not published to PyPI.
+      # Both distributions are published: locus-sdk from the root and
+      # locus-sdk-security from packages/, built into its own directory so
+      # each upload step and pre-release-checks can address it on its own.
       - name: Build project for distribution
         run: |
           hatch build
@@ -57,7 +56,7 @@ jobs:
           path: dist/
 
       # actions/upload-artifact@v7.0.1
-      - name: Upload security build (checks only, never published)
+      - name: Upload security build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: dist-security
@@ -87,19 +86,31 @@ jobs:
         with:
           name: dist
           path: dist/
+      - name: Download security build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: dist-security
+          path: dist-security/
 
       # pypa/gh-action-pypi-publish@v1.14.2 — Trusted Publishing (OIDC).
-      # Requires a trusted publisher registered on test.pypi.org for
-      # locus-sdk:
+      # Requires a trusted publisher registered on test.pypi.org for each
+      # project, locus-sdk and locus-sdk-security:
       #   repo=oracle/locus, workflow=_release.yml, environment=testpypi
       # continue-on-error so a TestPyPI hiccup never blocks the prod publish;
       # skip-existing tolerates re-runs over an already-uploaded version.
-      - name: Publish to TestPyPI
+      - name: Publish locus-sdk to TestPyPI
         continue-on-error: true
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
         with:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: dist/
+          skip-existing: true
+      - name: Publish locus-sdk-security to TestPyPI
+        continue-on-error: true
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist-security/
           skip-existing: true
 
   pre-release-checks:
@@ -164,11 +175,18 @@ jobs:
         with:
           name: dist
           path: dist/
+      - name: Download security build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: dist-security
+          path: dist-security/
 
       # pypa/gh-action-pypi-publish@v1.14.2 — Trusted Publishing (OIDC).
-      # Requires a trusted publisher on pypi.org for locus-sdk:
+      # Requires a trusted publisher on pypi.org for each project, locus-sdk
+      # and locus-sdk-security:
       #   repo=oracle/locus, workflow=_release.yml, environment=pypi
-      # dist/ holds locus-sdk only; locus-sdk-security is not published.
+      # dist/ holds locus-sdk, dist-security/ holds locus-sdk-security; each
+      # is uploaded by its own step so a failure names the package.
       #
       # Moved off v1.14.0 on 2026-08-12: `requires = ["hatchling"]` is unpinned,
       # so the build machine picked up a hatchling that emits
@@ -179,10 +197,15 @@ jobs:
       # that step were not `continue-on-error` — it failed there too, silently.
       # skip-existing: a re-run after a partial upload (sdist but not wheel)
       # must not trip over the file already published.
-      - name: Publish to PyPI
+      - name: Publish locus-sdk to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
         with:
           packages-dir: dist/
+          skip-existing: true
+      - name: Publish locus-sdk-security to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
+        with:
+          packages-dir: dist-security/
           skip-existing: true
 
   # The box runner (`python -m locus.runner`), shipped two ways for a Locus

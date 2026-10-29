@@ -143,11 +143,11 @@ Specialist(
 
 ## Notebooks
 
-- [`notebook_26_orchestrator_pattern.py`](https://github.com/oracle/locus/blob/main/examples/notebook_26_orchestrator_pattern.py)
+- [`notebook_22_orchestrator_pattern.py`](https://github.com/oracle/locus/blob/main/examples/notebook_22_orchestrator_pattern.py)
   — router over three specialists run in parallel, results correlated and summarized.
-- [`notebook_27_specialist_agents.py`](https://github.com/oracle/locus/blob/main/examples/notebook_27_specialist_agents.py)
+- [`notebook_23_specialist_agents.py`](https://github.com/oracle/locus/blob/main/examples/notebook_23_specialist_agents.py)
   — confidence thresholds and per-specialist playbooks.
-- [`notebook_64_procurement_approval.py`](https://github.com/oracle/locus/blob/main/examples/notebook_64_procurement_approval.py)
+- [`notebook_78_concession_approval.py`](https://github.com/oracle/locus/blob/main/examples/notebook_78_concession_approval.py)
   — customer-support concession approval with risk-tiered approval gates
   and a typed `ConcessionDecision` artifact (built on a `StateGraph`, not
   the orchestrator).

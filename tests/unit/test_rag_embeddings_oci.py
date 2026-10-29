@@ -138,7 +138,7 @@ def _stub_oci_modules(
 class TestConfigAndCapabilities:
     def test_defaults(self) -> None:
         cfg = OCIEmbeddingConfig()
-        assert cfg.model_id == OCIEmbeddingModel.COHERE_EMBED_ENGLISH_V3.value
+        assert cfg.model_id == OCIEmbeddingModel.COHERE_EMBED_V4.value
         assert cfg.profile_name == "DEFAULT"
         assert cfg.input_type == "SEARCH_DOCUMENT"
         assert cfg.query_input_type == "SEARCH_QUERY"
@@ -188,6 +188,16 @@ class TestGetClientAuthMatrix:
         assert "signer" not in kwargs
 
     @pytest.mark.asyncio
+    async def test_close_drops_the_cached_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        probes = _stub_oci_modules(monkeypatch)
+        m = OCIEmbeddings()
+        await m._get_client()
+        await m.close()
+        await m._get_client()
+        # Rebuilt after close(): two constructions.
+        assert len(probes["client_kwargs"]) == 2
+
+    @pytest.mark.asyncio
     async def test_caches_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
         probes = _stub_oci_modules(monkeypatch)
         m = OCIEmbeddings()
@@ -217,6 +227,48 @@ class TestGetClientAuthMatrix:
         await m._get_client()
         assert probes["used_signer"] == "security_token"
         assert probes["security_token"] == "FAKE_TOKEN"  # noqa: S105
+
+    @pytest.mark.asyncio
+    async def test_session_profile_is_detected_under_default_api_key_auth(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        # ``oci session authenticate`` profiles have ``security_token_file`` and
+        # no ``user``; API-key signing cannot work for them, so the default
+        # ``api_key`` setting switches to the session token.
+        token_file = tmp_path / "token.txt"
+        token_file.write_text("SESSION_TOKEN")
+        probes = _stub_oci_modules(
+            monkeypatch,
+            config_dict={
+                "region": "eu-frankfurt-1",
+                "security_token_file": str(token_file),
+                "key_file": str(tmp_path / "key.pem"),
+            },
+        )
+        m = OCIEmbeddings()  # default auth_type="api_key"
+        await m._get_client()
+        assert probes["used_signer"] == "security_token"
+        assert probes["security_token"] == "SESSION_TOKEN"  # noqa: S105
+
+    @pytest.mark.asyncio
+    async def test_api_key_profile_with_user_stays_on_api_key(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        # A ``user`` key means an API-key profile even if a stale token file is listed.
+        probes = _stub_oci_modules(
+            monkeypatch,
+            config_dict={
+                "region": "eu-frankfurt-1",
+                "user": "ocid1.user.oc1..test",
+                "security_token_file": str(tmp_path / "token.txt"),
+                "key_file": str(tmp_path / "key.pem"),
+            },
+        )
+        m = OCIEmbeddings()
+        await m._get_client()
+        kwargs = probes["client_kwargs"][0]
+        assert kwargs.get("config") is not None
+        assert "signer" not in kwargs
 
     @pytest.mark.asyncio
     async def test_security_token_without_file_falls_back_to_resource_principal(

@@ -32,7 +32,7 @@ class TestOCIEmbeddingsIntegration:
         from locus.rag.embeddings.oci import OCIEmbeddings
 
         return OCIEmbeddings(
-            model_id=os.getenv("OCI_EMBED_MODEL", "cohere.embed-english-v3.0"),
+            model_id=os.getenv("OCI_EMBED_MODEL", "cohere.embed-v4.0"),
             profile_name=oci_config["profile_name"],
             auth_type=oci_config["auth_type"],
             compartment_id=oci_config["compartment_id"],
@@ -45,9 +45,9 @@ class TestOCIEmbeddingsIntegration:
         result = await embedder.embed("Hello world, this is a test.")
 
         assert result.embedding is not None
-        assert len(result.embedding) == embedder.dimension
+        assert len(result.embedding) == embedder.config.dimension
         assert result.text == "Hello world, this is a test."
-        assert result.model == embedder.config.model_id
+        assert result.model == embedder.oci_config.model_id
 
     @pytest.mark.asyncio
     async def test_embed_batch(self, embedder):
@@ -127,7 +127,7 @@ class TestOCIEmbeddingsMultilingual:
         from locus.rag.embeddings.oci import OCIEmbeddings
 
         return OCIEmbeddings(
-            model_id=os.getenv("OCI_EMBED_MULTILINGUAL_MODEL", "cohere.embed-multilingual-v3.0"),
+            model_id=os.getenv("OCI_EMBED_MULTILINGUAL_MODEL", "cohere.embed-v4.0"),
             profile_name=oci_config["profile_name"],
             auth_type=oci_config["auth_type"],
             compartment_id=oci_config["compartment_id"],
@@ -150,13 +150,11 @@ class TestOCIEmbeddingsMultilingual:
 
 
 class TestOCIEmbeddingsLight:
-    """Tests for light (smaller) embedding model.
+    """Tests for a light (smaller) embedding model.
 
-    Pins the light variant explicitly — the ``OCI_EMBED_MODEL`` env var
-    (read by the other test classes) points to the default variant used
-    by the rest of the suite, which is the 1024-dim full model. The
-    light-variant tests need the 384-dim model regardless. Optional
-    override via ``OCI_EMBED_LIGHT_MODEL``.
+    Runs only with ``OCI_EMBED_LIGHT_MODEL`` set: the Cohere v3 light models
+    (384-dim) were OCI's only light ones, and on-demand retired them on
+    2026-09-30. A dedicated AI cluster that still hosts one can name it here.
     """
 
     @pytest.fixture
@@ -164,8 +162,13 @@ class TestOCIEmbeddingsLight:
         """Create light embedder."""
         from locus.rag.embeddings.oci import OCIEmbeddings
 
+        model_id = os.getenv("OCI_EMBED_LIGHT_MODEL")
+        if not model_id:
+            # The v3 light models were the only light ones, and OCI retired
+            # them from on-demand on 2026-09-30.
+            pytest.skip("no light embedding model on OCI on-demand; set OCI_EMBED_LIGHT_MODEL")
         return OCIEmbeddings(
-            model_id=os.getenv("OCI_EMBED_LIGHT_MODEL", "cohere.embed-english-light-v3.0"),
+            model_id=model_id,
             profile_name=oci_config["profile_name"],
             auth_type=oci_config["auth_type"],
             compartment_id=oci_config["compartment_id"],
@@ -174,12 +177,26 @@ class TestOCIEmbeddingsLight:
 
     @pytest.mark.asyncio
     async def test_embed_light(self, embedder):
-        """Test light model produces smaller embeddings."""
+        """The light model's vectors match its configured dimension."""
         result = await embedder.embed("Test text")
 
-        # Light model produces 384-dim embeddings
-        assert len(result.embedding) == 384
+        # 384 for the Cohere v3 light models; whatever the table says for an
+        # ``OCI_EMBED_LIGHT_MODEL`` override on tenancies where v3 is retired.
+        assert len(result.embedding) == embedder.config.dimension
 
-    def test_config_dimension(self, embedder):
-        """Test light model config dimension."""
-        assert embedder.config.dimension == 384
+    @pytest.mark.asyncio
+    async def test_config_dimension(self, embedder):
+        """The configured dimension is the model's real width.
+
+        Models in the hint table (the Cohere v3 light models are 384-dim) are
+        checked against the hint; an ``OCI_EMBED_LIGHT_MODEL`` override outside
+        the table is checked against an actual embedding instead of skipping.
+        """
+        from locus.rag.embeddings.oci import MODEL_DIMENSION_HINTS
+
+        hinted = MODEL_DIMENSION_HINTS.get(embedder.oci_config.model_id)
+        if hinted is not None:
+            assert embedder.config.dimension == hinted
+            return
+        result = await embedder.embed("Test text")
+        assert embedder.config.dimension == len(result.embedding)

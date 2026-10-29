@@ -12,24 +12,24 @@ route them through the [`AuditTrail`](agentic-ai-security.md).)
 
 The events are frozen Pydantic classes — not strings, not
 `dict[str, Any]` blobs — designed to drop into a `match` statement that
-your type checker can verify exhaustively:
-
-```python
-async for event in agent.run("Resolve the duplicate charge on ord-4821."):
-    match event:
-        case ThinkEvent(reasoning=r) if r:
-            print(f"💭 {r}")
-        case ToolStartEvent(tool_name=n, arguments=a):
-            print(f"🔧 {n}({a})")
-        case TerminateEvent(final_message=m):
-            print(f"\n✅ {m}")
-```
+your type checker can verify exhaustively (see
+[step 2](#2-pattern-match-on-the-event-types) below).
 
 This is the surface an operations console consumes — a support desk, a
 deploy dashboard, a SOC console — with live token rendering,
 tool-call indicators, and reasoning bubbles; the surface telemetry hooks
 observe; and the surface `AgentServer` re-emits over Server-Sent Events
 for browsers.
+
+The drawing below follows one run from the `agent.run(...)` iterator
+through the stream handlers in `locus.streaming` — which render it in a
+terminal, frame it as SSE for a server of your own, buffer it, filter it
+or fan it out to several handlers — and through `StructuredStream`,
+which yields partially parsed typed output as the tokens arrive.
+`AgentServer`'s `/stream` route (below) is a separate path that does not
+use these handlers.
+
+{{ locus_diagram streaming-paths }}
 
 ## When to consume the event stream
 
@@ -226,8 +226,8 @@ for (;;) {
 
 ## Notebooks
 
-- [`notebook_11_agent_streaming.py`](https://github.com/oracle/locus/blob/main/examples/notebook_11_agent_streaming.py) — your first event consumer.
-- [`notebook_13_sse_streaming.py`](https://github.com/oracle/locus/blob/main/examples/notebook_13_sse_streaming.py) — full SSE wiring against `AgentServer`.
+- [`notebook_06_agent_streaming.py`](https://github.com/oracle/locus/blob/main/examples/notebook_06_agent_streaming.py) — your first event consumer.
+- [`notebook_64_sse_streaming.py`](https://github.com/oracle/locus/blob/main/examples/notebook_64_sse_streaming.py) — full SSE wiring against `AgentServer`.
 
 ## Source
 

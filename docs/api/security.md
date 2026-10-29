@@ -1,10 +1,10 @@
 # Security
 
 The security domain ships as the separate `locus-sdk-security` package
-(`locus_security`). It is not published to PyPI; install it from the repository:
+(`locus_security`), released in lockstep with `locus-sdk`:
 
 ```bash
-pip install "git+https://github.com/oracle/locus#subdirectory=packages/locus-sdk-security"
+pip install locus-sdk-security
 ```
 
 The core `locus-sdk` package does not include it. It covers three separable
@@ -15,7 +15,8 @@ jobs:
 - **Grounding a finding** — refuse to assert what the evidence does not
   support, and say so explicitly rather than guessing.
 - **Building a SOC agent** — tools that talk to a SIEM, an EDR, a scanner, a
-  threat-intel feed, and AWS, plus playbooks that sequence them.
+  threat-intel feed, and the OCI control plane, plus playbooks that sequence
+  them.
 
 The admission gate also lives under this package for historical reasons. Import
 it from [`locus.control`](control.md) instead — that is the domain-neutral
@@ -178,24 +179,19 @@ whole set at once.
 ::: locus_security.scanner.scan_dependencies
 ::: locus_security.scanner.scan_dependencies_tool
 
-### AWS
+### OCI cloud posture
 
-`use_aws()` refuses any operation whose name does not start with one of the
-`READONLY_PREFIXES` verbs (Describe, List, Get, …). It raises `PermissionError`
-before any AWS call is made, and there is no override. The `use_aws_tool`
-wrapper returns that refusal to the agent as a JSON object with an `error` key.
-This name check is defence-in-depth: run under a read-only IAM identity (the
-default profile is `locus-security-audit`, overridable with `LOCUS_AWS_PROFILE`),
-because that IAM policy is what actually enforces read-only access. Writes
-belong behind `admit()` or a gated tool of your own.
-
-::: locus_security.aws.describe_aws
-::: locus_security.aws.describe_aws_tool
-::: locus_security.aws.use_aws
-::: locus_security.aws.use_aws_tool
-::: locus_security.aws.aws_services
-::: locus_security.aws.is_readonly_operation
-::: locus_security.aws.READONLY_PREFIXES
+The SOC analyst, `SecurityContext().cloud`, the `cloud_posture_audit` playbook
+and `security_toolset(oci=True)` all drive the core
+[`describe_oci` / `use_oci`](tools.md#oci-tools) tools. `use_oci()` refuses any
+operation whose name does not start with a read prefix (`list_`, `get_`,
+`summarize_`, …) before any call is made, returning `{"status": "error", ...}`
+to the agent; the only override is the explicit `allow_mutations` opt-in, which
+nothing in this package sets. This name check is defence-in-depth: run as a
+profile whose IAM group grants only `inspect` / `read` verbs
+(`SecurityControls(profile=..., auth_type=...)`), because that policy is what
+actually enforces read-only access. Writes belong behind `admit()` or a gated
+tool of your own.
 
 ## Fingerprinting
 

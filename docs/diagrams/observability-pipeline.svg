@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The observability pipeline, from the code that emits an event to the code that reads it,
+  per locus/observability (context.py, emit.py, event_bus.py, agent_bridge.py, bus_hook.py).
+    Agent.run bridge     Agent.run and _run_from_state are decorated with @_bus_bridge
+                         (agent/runtime_loop.py:721, :1962); the wrapper hands every yielded
+                         LocusEvent to bridge_locus_event (:282-341), which maps it to an agent.*
+                         event_type and calls emit()                     (agent_bridge.py:64-185)
+    Direct emit() calls  instrumentation sites call emit() / emit_sync() themselves, e.g.
+                         rag/retriever.py:478,508 (rag.query.*), memory/manager.py:332,394,402
+                         (memory.manager.*), multiagent/handoff.py:499,520 and
+                         multiagent/orchestrator.py:344-405 (multiagent.*); sync @tool bodies
+                         use emit_sync (tools/decorator.py:309,316)
+    run_context()        mints a uuid4 hex run_id when none is passed, binds it to the
+                         ContextVar and restores the previous value on exit  (context.py:45, :98-137)
+    emit()  run_id bound?  emit() and emit_sync() read current_run_id() first; when it is None
+                         they return before touching the bus: no singleton, no StreamEvent
+                                                                 (emit.py:161-163, :201-203; context.py:73-80)
+                         yes -> bus.publish(StreamEvent(run_id, event_type, data))  (emit.py:166-180)
+    EventBusHook         a HookProvider that calls self._bus.publish(...) directly for every
+                         lifecycle hook, with no gate (bus_hook.py:94, :120-215); the run_id on
+                         each event is the fixed one given to the hook, else the bound
+                         run_context id, else the run's own AgentState.run_id  (bus_hook.py:110-118)
+    EventBus.publish     appends the event to _history[run_id], a deque bounded by history_per_run,
+                         evicting the oldest runs past max_runs_retained   (event_bus.py:139-142, :331-343)
+                         then delivers to every queue registered for that run_id and to every
+                         global subscriber queue                           (event_bus.py:144-150)
+    queue full -> Dropped  a put still blocked after _PUBLISH_TIMEOUT_SECONDS, or QueueFull, drops
+                         the event for that subscriber only and increments _dropped_events,
+                         reported by stats() as dropped_events_total   (event_bus.py:152-163, :315-329)
+    subscribe(rid)       one run: the new queue is pre-loaded with the run's history, then
+                         registered for live events; the iterator ends on close_stream(rid)
+                                                                 (event_bus.py:169-184, :218-245, :265-288)
+    subscribe_global()   every run, live only, no history replay, capped in number  (event_bus.py:186-216)
+    Your SSE endpoint    not shipped: the bus docstring names an SSE endpoint as the natural HTTP
+                         wrapper around subscribe(), and StreamEvent.to_dict() is the
+                         JSON shape for that wire format                  (event_bus.py:12-14, :55-63)
+    After the fact       bus.stats() reports subscriber counts, retained runs and the drop total
+                         (event_bus.py:315-329); a subscribe(rid) after close_stream(rid) is pre-loaded
+                         with the run's retained history and then the end-of-stream sentinel, so a
+                         late reader replays a finished run           (event_bus.py:218-245, :265-288)
+  Not drawn: Router.dispatch binds the run_id with set_run_id() instead of run_context() and calls
+  close_stream(rid) when the dispatch ends (router/runtime.py:166, :191-192); router.* events are
+  published with a run_id they are handed (router_events.py:59-78). locus.streaming's SSEHandler,
+  AsyncSSEHandler and ConsoleHandler, and the server's /stream endpoint, consume the LocusEvents
+  Agent.run yields, not bus StreamEvents (streaming/handler.py:16-28, streaming/sse.py:225, :370,
+  streaming/console.py:159, server/app.py:483-492), so they are not consumers of the bus.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 490" role="img" aria-labelledby="title desc">
+  <title id="title">The observability pipeline, from emission to consumption</title>
+  <desc id="desc">Three kinds of code emit events: the bridge on Agent.run, which turns every event the agent yields into an agent.* event; direct emit() calls in the RAG, memory and multi-agent code; and the EventBusHook. The first two go through emit(), which asks whether a run_id is bound. run_context() binds one: it mints a run_id and stores it in a ContextVar. If a run_id is bound, emit() publishes a StreamEvent on the EventBus; if not, nothing is emitted: no bus is built and no event is created. The EventBusHook publishes on the bus directly, without that gate, tagging each event with its fixed run_id, else the bound one, else the run's own id. The EventBus appends every event to a bounded history kept per run_id and delivers it to the subscribers of that run and to the global subscribers; when a subscriber's queue stays full, that event is dropped for that subscriber only and the dropped_events_total counter grows. Consumers: bus.subscribe(run_id) replays the run's history and then streams live events; bus.subscribe_global() receives live events from every run with no replay; an SSE endpoint you write wraps subscribe() and sends StreamEvent.to_dict(); and after the fact, bus.stats() reports subscriber counts and the drop total, while a subscriber that connects after close_stream(run_id) is replayed the run's retained history and then receives the end-of-stream signal.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- bridge + direct emit() calls -> emit(): the two gated emitters share one bracket -->
+  <path class="edge" d="M206,161 H230 V229 H206"/>
+  <path class="edge" marker-end="url(#ah)" d="M230,195 L252,195"/>
+
+  <!-- run_context() -> emit(): binds the run_id the gate reads -->
+  <path class="edge" marker-end="url(#ah)" d="M339,98 L339,149"/>
+  <rect class="label-bg" x="295" y="114" width="88" height="20" rx="4"/>
+  <text class="label" x="339" y="124">binds run_id</text>
+
+  <!-- emit() -> EventBus: a run_id is bound -->
+  <path class="edge" marker-end="url(#ah)" d="M424,195 L488,195"/>
+  <rect class="label-bg" x="440" y="170" width="32" height="20" rx="4"/>
+  <text class="label" x="456" y="180">yes</text>
+
+  <!-- emit() -> nothing: no run_id bound -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M339,239 L339,270"/>
+  <rect class="label-bg" x="348" y="244" width="26" height="20" rx="4"/>
+  <text class="label" x="361" y="254">no</text>
+
+  <!-- EventBusHook -> EventBus: straight to publish(), no gate -->
+  <path class="edge" marker-end="url(#ah)" d="M206,361 H466 V216 H488"/>
+  <rect class="label-bg" x="273" y="351" width="126" height="20" rx="4"/>
+  <text class="label" x="336" y="361">publishes directly</text>
+
+  <!-- EventBus -> history: publish appends to the run's deque -->
+  <path class="edge" marker-end="url(#ah)" d="M580,166 L580,114"/>
+  <rect class="label-bg" x="551" y="130" width="58" height="20" rx="4"/>
+  <text class="label" x="580" y="140">appends</text>
+
+  <!-- EventBus -> dropped: a subscriber queue stays full -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M580,224 L580,270"/>
+  <rect class="label-bg" x="540" y="237" width="80" height="20" rx="4"/>
+  <text class="label" x="580" y="247">queue full</text>
+
+  <!-- history -> read after the fact -->
+  <path class="edge" marker-end="url(#ah)" d="M670,84 L750,84"/>
+
+  <!-- EventBus -> subscribe(rid): the run's own subscribers -->
+  <path class="edge" marker-end="url(#ah)" d="M670,195 L750,195"/>
+  <rect class="label-bg" x="683" y="170" width="56" height="20" rx="4"/>
+  <text class="label" x="711" y="180">one run</text>
+
+  <!-- subscribe(rid) -> your SSE endpoint -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M838,224 L838,256"/>
+
+  <!-- EventBus -> subscribe_global(): every run -->
+  <path class="edge" marker-end="url(#ah)" d="M670,216 H711 V379 H750"/>
+  <rect class="label-bg" x="676" y="244" width="70" height="20" rx="4"/>
+  <text class="label" x="711" y="254">every run</text>
+
+  <!-- emitters -->
+  <g class="node">
+    <rect x="16" y="132" width="190" height="58" rx="12"/>
+    <text x="111" y="151">Agent.run bridge</text>
+    <text class="sub" x="111" y="172">@_bus_bridge → agent.*</text>
+  </g>
+  <g class="node">
+    <rect x="16" y="200" width="190" height="58" rx="12"/>
+    <text x="111" y="219">Direct emit() calls</text>
+    <text class="sub" x="111" y="240">RAG, memory, multi-agent</text>
+  </g>
+  <g class="node">
+    <rect x="16" y="332" width="190" height="58" rx="12"/>
+    <text x="111" y="351">EventBusHook</text>
+    <text class="sub" x="111" y="372">hooks=[EventBusHook()]</text>
+  </g>
+
+  <!-- the gate -->
+  <g class="node">
+    <rect x="249" y="40" width="180" height="58" rx="12"/>
+    <text x="339" y="59">run_context()</text>
+    <text class="sub" x="339" y="80">run_id in a ContextVar</text>
+  </g>
+  <g class="decision node">
+    <polygon points="339,151 424,195 339,239 254,195"/>
+    <text x="339" y="185">emit()</text>
+    <text class="sub" x="339" y="206">run_id bound?</text>
+  </g>
+  <g class="node optional">
+    <rect x="249" y="272" width="180" height="58" rx="12"/>
+    <text x="339" y="291">Nothing emitted</text>
+    <text class="sub" x="339" y="312">no bus, no StreamEvent</text>
+  </g>
+
+  <!-- the bus -->
+  <g class="store">
+    <path d="M490,57 A90,9 0 0 1 670,57 V103 A90,9 0 0 1 490,103 Z M490,57 A90,9 0 0 0 670,57"/>
+    <g class="node">
+      <text x="580" y="76">History</text>
+      <text class="sub" x="580" y="97">bounded, per run_id</text>
+    </g>
+  </g>
+  <g class="node primary">
+    <rect x="490" y="166" width="180" height="58" rx="12"/>
+    <text x="580" y="185">EventBus</text>
+    <text class="sub" x="580" y="206">publish(StreamEvent)</text>
+  </g>
+  <g class="node optional">
+    <rect x="490" y="272" width="180" height="58" rx="12"/>
+    <text x="580" y="291">Dropped</text>
+    <text class="sub" x="580" y="312">dropped_events_total</text>
+  </g>
+
+  <!-- consumers -->
+  <g class="node">
+    <rect x="752" y="55" width="172" height="58" rx="12"/>
+    <text x="838" y="74">After the fact</text>
+    <text class="sub" x="838" y="95">stats() · late replay</text>
+  </g>
+  <g class="node">
+    <rect x="752" y="166" width="172" height="58" rx="12"/>
+    <text x="838" y="185">subscribe(rid)</text>
+    <text class="sub" x="838" y="206">history, then live</text>
+  </g>
+  <g class="node optional">
+    <rect x="752" y="258" width="172" height="58" rx="12"/>
+    <text x="838" y="277">Your SSE endpoint</text>
+    <text class="sub" x="838" y="298">StreamEvent.to_dict()</text>
+  </g>
+  <g class="node">
+    <rect x="752" y="350" width="172" height="58" rx="12"/>
+    <text x="838" y="369">subscribe_global()</text>
+    <text class="sub" x="838" y="390">every run, live only</text>
+  </g>
+
+  <text class="note" x="470" y="438">Outside run_context(), emit() and emit_sync() return after one ContextVar.get(): no bus, no StreamEvent.</text>
+  <text class="note" x="470" y="456">EventBusHook publishes without that gate, tagging each event with its fixed run_id, else the bound one, else the run's own id.</text>
+  <text class="note" x="470" y="474">A subscriber whose queue stays full past the publish timeout loses that event; every other subscriber still receives it.</text>
+</svg>

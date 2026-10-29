@@ -218,12 +218,37 @@ class TestDecodeToolArguments:
 class TestFamilyDetection:
     @pytest.mark.parametrize(
         "model",
-        ["o1-preview", "o3-mini", "gpt-5", "gpt-5.1", "gpt-5-codex", "openai.o1"],
+        [
+            "o1-preview",
+            "o3-mini",
+            "o4-mini",
+            "gpt-5",
+            "gpt-5.1",
+            "gpt-5-codex",
+            "gpt-5.6-sol",
+            "gpt-6-astra",
+            "gpt-6.1-sol",
+            "gpt-10",
+            "openai.o1",
+            "openai.gpt-6-sol",
+        ],
     )
     def test_uses_max_completion_tokens_for_reasoning_families(self, model: str) -> None:
         assert OpenAIModel._uses_max_completion_tokens(model) is True
 
-    @pytest.mark.parametrize("model", ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"])
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-3.5-turbo",
+            "gpt-4.1",
+            "gpt-4.1-nano",
+            "gpt-oss-120b",
+            "openai.gpt-4o-mini",
+            "o200k-base",
+        ],
+    )
     def test_does_not_use_max_completion_tokens_for_classic(self, model: str) -> None:
         assert OpenAIModel._uses_max_completion_tokens(model) is False
 

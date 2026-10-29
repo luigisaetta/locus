@@ -34,8 +34,9 @@ class OCIEmbeddingModel(str, Enum):
     COHERE_EMBED_MULTILINGUAL_V3 = "cohere.embed-multilingual-v3.0"
     COHERE_EMBED_ENGLISH_LIGHT_V3 = "cohere.embed-english-light-v3.0"
     COHERE_EMBED_MULTILINGUAL_LIGHT_V3 = "cohere.embed-multilingual-light-v3.0"
-    # Current generation. OCI has deprecated the v3.0 family; tenancies
-    # onboarded recently only serve v4 (1536-dim).
+    # Current generation, and the default. OCI retired the v3.0 family from
+    # on-demand on 2026-09-30 (404 "Entity with key … not found"); the v3
+    # ids stay for dedicated AI clusters that still host them.
     COHERE_EMBED_V4 = "cohere.embed-v4.0"
     COHERE_EMBED_MULTILINGUAL_V4 = "cohere.embed-multilingual-v4.0"
 
@@ -61,7 +62,7 @@ class OCIEmbeddingConfig(BaseModel):
     """Configuration for OCI GenAI Embeddings."""
 
     model_id: str = Field(
-        default=OCIEmbeddingModel.COHERE_EMBED_ENGLISH_V3.value,
+        default=OCIEmbeddingModel.COHERE_EMBED_V4.value,
         description="OCI GenAI embedding model ID",
     )
     compartment_id: str = Field(
@@ -129,16 +130,16 @@ class OCIEmbeddings(BaseModel, BaseEmbedding):
 
     Example:
         >>> embedder = OCIEmbeddings(
-        ...     model_id="cohere.embed-english-v3.0",
+        ...     model_id="cohere.embed-v4.0",
         ...     profile_name="DEFAULT",
         ...     auth_type="security_token",
         ... )
         >>> result = await embedder.embed("Hello world")
-        >>> print(len(result.embedding))  # 1024
+        >>> print(len(result.embedding))  # 1536
 
     Example with compartment:
         >>> embedder = OCIEmbeddings(
-        ...     model_id="cohere.embed-multilingual-v3.0",
+        ...     model_id="cohere.embed-v4.0",  # multilingual as well
         ...     compartment_id="ocid1.compartment.oc1..xxx",
         ... )
     """
@@ -155,7 +156,7 @@ class OCIEmbeddings(BaseModel, BaseEmbedding):
 
     def __init__(
         self,
-        model_id: str = OCIEmbeddingModel.COHERE_EMBED_ENGLISH_V3.value,
+        model_id: str = OCIEmbeddingModel.COHERE_EMBED_V4.value,
         compartment_id: str = "",
         profile_name: str = "DEFAULT",
         auth_type: str = "api_key",
@@ -260,12 +261,14 @@ class OCIEmbeddings(BaseModel, BaseEmbedding):
         # Determine auth type - respect explicit setting, only auto-detect if needed
         auth_type = self.oci_config.auth_type
 
-        # Only auto-detect security_token if:
-        # 1. User didn't explicitly set api_key auth AND
-        # 2. Config has security_token_file AND
-        # 3. Config doesn't have user field (api_key profiles have user)
+        # A profile with ``security_token_file`` and no ``user`` was written by
+        # ``oci session authenticate``; API-key signing cannot work for it, so
+        # switch to the session token — under the default ``api_key`` setting
+        # too, the same rule OCIClient and the V1 transport apply. Only the
+        # explicit principal-based modes (which never read a profile) are
+        # left alone.
         if (
-            auth_type != "api_key"
+            auth_type not in ("instance_principal", "resource_principal")
             and "security_token_file" in config_dict
             and "user" not in config_dict
         ):
@@ -440,6 +443,16 @@ class OCIEmbeddings(BaseModel, BaseEmbedding):
                 )
 
         return results
+
+    async def close(self) -> None:
+        """Drop the cached OCI client.
+
+        The OCI SDK client holds no connection pool that needs an explicit
+        shutdown, so this only forgets the client; the next call rebuilds it.
+        Present for parity with the other embedders, so callers can close any
+        provider the same way.
+        """
+        self._client = None
 
     def __repr__(self) -> str:
         return f"OCIEmbeddings(model={self.oci_config.model_id!r})"

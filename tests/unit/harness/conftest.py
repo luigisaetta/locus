@@ -129,6 +129,7 @@ class FakeOpenShellClient:
 
     calls: list[dict[str, Any]] = field(default_factory=list)
     created: list[str] = field(default_factory=list)
+    specs: list[Any] = field(default_factory=list)
     deleted: list[str] = field(default_factory=list)
     raise_after: float | None = None
 
@@ -162,6 +163,7 @@ class FakeOpenShellClient:
     def create(self, *, workspace: str, name: str | None, spec: Any, labels: Any) -> Ref:
         ref = Ref(name or "sbx-1", workspace)
         self.created.append(ref.name)
+        self.specs.append(spec)
         return ref
 
     def wait_ready(self, name: str, *, workspace: str, timeout_seconds: float) -> Ref:

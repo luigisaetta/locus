@@ -19,24 +19,41 @@ pytestmark = pytest.mark.integration
 
 
 def has_embedder_available() -> bool:
-    """Check if an embedding provider is available."""
-    return bool(os.environ.get("OPENAI_API_KEY"))
+    """Check if an embedding provider is available (OpenAI or OCI)."""
+    return bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("OCI_PROFILE"))
 
 
 def get_embedder():
-    """Get embedder based on available credentials."""
+    """Get embedder based on available credentials.
+
+    OpenAI when ``OPENAI_API_KEY`` is set; otherwise OCI Generative AI when
+    ``OCI_PROFILE`` is set (``OCI_EMBED_MODEL``, default ``cohere.embed-v4.0``;
+    ``OCI_COMPARTMENT`` / ``OCI_COMPARTMENT_ID`` and ``OCI_ENDPOINT`` honoured).
+    """
     if os.environ.get("OPENAI_API_KEY"):
         from locus.rag.embeddings import OpenAIEmbeddings
 
         return OpenAIEmbeddings(model="text-embedding-3-small")
+    if os.environ.get("OCI_PROFILE"):
+        from locus.rag.embeddings.oci import OCIEmbeddings
 
+        return OCIEmbeddings(
+            model_id=os.environ.get("OCI_EMBED_MODEL", "cohere.embed-v4.0"),
+            profile_name=os.environ["OCI_PROFILE"],
+            compartment_id=os.environ.get("OCI_COMPARTMENT")
+            or os.environ.get("OCI_COMPARTMENT_ID")
+            or "",
+            service_endpoint=os.environ.get("OCI_ENDPOINT"),
+        )
     return None
 
 
 def get_model():
     """Get LLM model based on available credentials.
 
-    OpenAI when ``OPENAI_API_KEY`` is set; otherwise ``None``.
+    OpenAI when ``OPENAI_API_KEY`` is set; otherwise whatever the shared
+    conftest selects (Anthropic, then OCI Generative AI); ``None`` if nothing
+    is configured.
     """
     if os.environ.get("OPENAI_API_KEY"):
         from locus.models.native.openai import OpenAIModel
@@ -44,18 +61,19 @@ def get_model():
         return OpenAIModel(
             model=os.environ.get("LOCUS_OPENAI_TEST_MODEL", "gpt-4o-mini"), max_tokens=256
         )
+    from tests.integration.conftest import _build_model
 
-    return None
+    return _build_model()
 
 
 # =============================================================================
-# Notebook 23: RAG Basics Tests
+# Notebook 18: RAG Basics Tests
 # =============================================================================
 
 
 @pytest.mark.skipif(not has_embedder_available(), reason="No embedder available")
 class TestNotebook22RAGBasics:
-    """Tests for Notebook 23: RAG Basics."""
+    """Tests for Notebook 18: RAG Basics."""
 
     @pytest.mark.asyncio
     async def test_embedding_single_text(self):

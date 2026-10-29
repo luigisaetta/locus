@@ -3,7 +3,6 @@
   "packages/locus-sdk-security/src/locus_security/_adapters.py": 100.0,
   "packages/locus-sdk-security/src/locus_security/adapter.py": 72.0,
   "packages/locus-sdk-security/src/locus_security/assess.py": 96.08,
-  "packages/locus-sdk-security/src/locus_security/aws.py": 98.46,
   "packages/locus-sdk-security/src/locus_security/context.py": 87.67,
   "packages/locus-sdk-security/src/locus_security/edr.py": 61.82,
   "packages/locus-sdk-security/src/locus_security/fingerprint.py": 41.94,

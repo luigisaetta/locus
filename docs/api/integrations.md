@@ -14,24 +14,20 @@ Locus `Tool`s.
 ::: locus.integrations.fastmcp.create_mcp_server
 ::: locus.integrations.fastmcp.mcp_tool_to_locus
 
-## AWS cloud-posture (read-only)
+## OCI cloud-posture (read-only)
 
-Two generic, spec-driven tools driven by botocore's service models — the
-agent discovers the shape of AWS from the spec and runs read-only operations
-whose responses become grounded-finding evidence. Read-only by construction:
-`use_aws` refuses any non-read operation before a call is made. See the
-[cloud-posture agent](../concepts/cloud-posture.md) for the full workflow.
-
-Install the extra: `pip install 'locus-sdk[aws]'`.
-
-::: locus_security.aws.describe_aws
-::: locus_security.aws.use_aws
-::: locus_security.aws.is_readonly_operation
-::: locus_security.aws.aws_services
-
-The agent-facing `@tool` wrappers (`describe_aws_tool`, `use_aws_tool`) and the
+Two generic, spec-driven tools driven by the OCI Python SDK — the agent
+discovers the shape of the control plane with `describe_oci` and runs
+read-only operations with `use_oci`, whose responses become grounded-finding
+evidence. Read-only by default: `use_oci` refuses a mutating operation before
+a call is made. Both are core tools, documented under
+[Tools](tools.md#oci-tools); the
 [`create_soc_analyst`](../concepts/cloud-posture.md) security-operations (SOC)
-analyst factory compose these into a grounded posture agent.
+analyst factory in `locus-sdk-security` composes them into a grounded posture
+agent. See the [cloud-posture agent](../concepts/cloud-posture.md) for the
+full workflow.
+
+Install the extra: `pip install 'locus-sdk[oci]'`.
 
 ## Vendor integration examples
 
@@ -51,9 +47,9 @@ the offline demo and a live deployment.
 | [`query_siem`][siem] | Splunk / Elastic log/alert search (a SIEM) | `SIEM_URL`, `SIEM_TOKEN` |
 
 Hand these to a triage agent end-to-end in
-[live vendor integrations](../notebooks/notebook_70_vendor_integrations.md);
+[live vendor integrations](../notebooks/notebook_80_vendor_integrations.md);
 the GPU probe grounds into a fingerprint finding in
-[specialist agents](../notebooks/notebook_27_specialist_agents.md). The
+[specialist agents](../notebooks/notebook_23_specialist_agents.md). The
 bring-your-own-credentials contract is documented in
 [`examples/integrations/README.md`][int].
 

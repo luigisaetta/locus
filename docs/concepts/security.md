@@ -1,10 +1,11 @@
 # Security layer — evidence-grounded findings
 
-The separate `locus-sdk-security` package (`locus_security`) applies Locus's runtime to cybersecurity. A security
-**finding can only be built from evidence that clears the [GSAR](gsar.md)
-grounding threshold.** Below the bar, the agent abstains and records why.
-An ungrounded finding would be a false positive, so the API gives you no
-way to create one: every finding carries the evidence that earned it.
+The separate `locus-sdk-security` package (`locus_security`) applies Locus's
+runtime to cybersecurity. **A security finding can only be built from
+evidence that clears the [GSAR](gsar.md) grounding threshold.** Below the
+bar, the agent abstains and records why. An ungrounded finding would be a
+false positive, so the API gives you no way to create one: every finding
+carries the evidence that earned it.
 
 {{ locus_diagram grounded-findings }}
 
@@ -93,20 +94,21 @@ finding = ground_fingerprint(
 
 ## GPU-level analysis
 
-Why does an agent SDK dispatch GPU probes? Because some teams need to
-verify what actually serves an endpoint — which model, which engine,
-which accelerator. For fingerprinting, grounding extends below the
+An agent SDK dispatches GPU probes because some teams need to verify
+what actually serves an endpoint — which model, which engine, which
+accelerator. For fingerprinting, grounding extends below the
 prompt level: it is a measurement problem. The model, engine, and
 accelerator serving an endpoint leave a signature in *timing* —
 time-to-first-token, inter-token cadence, throughput under contention.
 
 The measurement runs where the hardware is: a probe on target-class
 accelerators returns a timing profile, and that profile becomes a grounded
-finding. Core ships the dispatch contract and an offline reference
-(`dispatch_timing_probe_reference`); provisioning on a specific GPU cloud is
-an integration you write against it. The grounding
-contract is the same everywhere, and an under-observed probe abstains
-rather than asserting a fingerprint.
+finding. Core ships the `FingerprintClassifier` protocol and
+`ground_fingerprint`; `locus_security` adds an offline reference for the
+probe dispatch (`dispatch_timing_probe_reference`), and provisioning on a
+specific GPU cloud is an integration you write for your cloud. The
+grounding contract is the same everywhere, and an under-observed probe
+abstains rather than asserting a fingerprint.
 
 The pattern is always the same three steps — **measure → classify →
 ground** — with the agent orchestrating tools and `ground_fingerprint`
@@ -160,14 +162,16 @@ else:
 
 ### Measuring the timing
 
-The measurement needs no privileged
-access and no co-located hardware: stream a completion from the target
-and time the token arrivals. Core ships this as
-`measure_endpoint_timing` — it's **live** (confirmed against
-`gpt-4o-mini`): with `OPENAI_API_KEY` set it streams `samples`
-completions from the endpoint (point `TIMING_BASE_URL` at any
-OpenAI-compatible API) and computes TTFT p50, mean inter-token latency,
-its coefficient of variation, and mean tokens/sec.
+The measurement needs no privileged access and no co-located hardware:
+stream a completion from the target and time the token arrivals.
+`locus_security` ships this as `measure_endpoint_timing`. With
+`OPENAI_API_KEY` set, it streams `samples` completions from the endpoint
+(point `TIMING_BASE_URL` at any OpenAI-compatible API) and computes TTFT
+p50, mean inter-token latency, its coefficient of variation, and mean
+tokens/sec; with no key set it returns the deterministic sample vector
+described below. The example keeps an explicit OpenAI model id, the
+function's default, because the measurement calls the OpenAI-compatible
+streaming API directly rather than a Locus provider.
 
 ```python
 from locus_security import measure_endpoint_timing, fingerprint_to_finding
@@ -190,19 +194,19 @@ abstains rather than asserting an identity.
     runnable in CI — never a substitute for the live measurement.
 
 The same shape powers a complete agent workflow in the notebooks
-([forensics specialist](../notebooks/notebook_27_specialist_agents.md)),
+([forensics specialist](../notebooks/notebook_23_specialist_agents.md)),
 where a low-coverage probe correctly abstains and a full-coverage probe
 ships a finding mapped to compliance controls.
 
 ## Where it shows up
 
 - Applied end-to-end: [cloud-posture agent](cloud-posture.md) — grounded,
-  read-only AWS auditing built on `ground_finding`.
+  read-only OCI auditing built on `ground_finding`.
 - Complete defense catalogue: [threat scenarios](threat-scenarios.md) — every
   OWASP LLM / OWASP ASI / MITRE ATLAS ID mapped to a runnable gist.
-- Notebooks flagship: [GSAR typed grounding](../notebooks/notebook_37_gsar_typed_grounding.md)
-- Prompt-injection findings: [guardrails](../notebooks/notebook_50_guardrails_security.md)
-- Fingerprinting: [forensics specialist](../notebooks/notebook_27_specialist_agents.md)
-- RAG poisoning: [intel copilot](../notebooks/notebook_40_rag_agents.md)
+- Typed grounding notebook: [GSAR typed grounding](../notebooks/notebook_55_gsar_typed_grounding.md)
+- Prompt-injection findings: [guardrails](../notebooks/notebook_69_guardrails_security.md)
+- Fingerprinting: [forensics specialist](../notebooks/notebook_23_specialist_agents.md)
+- RAG poisoning: [intel copilot](../notebooks/notebook_53_rag_agents.md)
 
-[gh]: https://github.com/oracle/locus/tree/main/src/locus/security
+[gh]: https://github.com/oracle/locus/blob/main/src/locus/control/grounded.py

@@ -25,7 +25,7 @@ from locus.core.termination import MaxIterations, ToolCalled
 |---|---|---|
 | [Agent](agent.md) | `Agent`, `AgentConfig`, `AgentResult` and `AgentState`: configure an agent, run it, and read back a typed result | [Agent](../concepts/agent.md), [The agent loop](../concepts/agent-loop.md) |
 | [Termination](termination.md) | Stop conditions such as `MaxIterations`, `TimeLimit` and `ToolCalled`, composed into one rule and set on `AgentConfig.termination` | [Termination](../concepts/termination.md) |
-| [Hooks](hooks.md) | `HookProvider` and `HookRegistry`, which dispatches providers in priority order; the hook event types; and the built-in logging, telemetry, retry, guardrail and steering hooks | [Hooks](../concepts/hooks.md) |
+| [Hooks](hooks.md) | `HookProvider` and `HookRegistry`, which keeps providers sorted by `priority` and dispatches events to them (an `Agent` runs the hooks you pass it in list order); the hook event types; and the built-in logging, telemetry, retry, guardrail and steering hooks | [Hooks](../concepts/hooks.md) |
 | [Events](events.md) | The typed, frozen `LocusEvent` models that `async for event in agent.run(...)` yields | [Events](../concepts/events.md) |
 | [Streaming](streaming.md) | Handlers that send the event stream to a terminal, a Server-Sent Events response or a buffer, and structured-output streaming | [Streaming](../concepts/streaming.md), [Graph streaming](../concepts/graph-streaming.md) |
 | [Core primitives](core.md) | The shared types underneath: settings, protocols, messages, the error hierarchy, and the `Command` and `interrupt` helpers for graph control flow | [State](../concepts/state.md), [Errors](../concepts/errors.md) |
@@ -36,7 +36,7 @@ from locus.core.termination import MaxIterations, ToolCalled
 |---|---|---|
 | [Tools](tools.md) | The `@tool` decorator, which builds a tool's schema from the function's type hints and docstring; `ToolContext`, the registry and the executors | [Tools](../concepts/tools.md) |
 | [Capability providers](providers.md) | Web search, web fetch, image generation and speech providers. Set one on `AgentConfig` and the agent registers a matching tool | [Multi-modal providers](../concepts/multi-modal-providers.md), [Tools](../concepts/tools.md) |
-| [Integrations](integrations.md) | MCP in both directions: serve a Locus agent to any MCP client, or turn MCP tools into Locus tools. Also `use_aws`, which refuses any AWS operation whose name does not start with a read verb such as `Describe`, `List` or `Get` | [MCP](../concepts/mcp.md) |
+| [Integrations](integrations.md) | MCP in both directions: serve a Locus agent to any MCP client, or turn MCP tools into Locus tools. Cloud posture runs on the core `use_oci`, which refuses any OCI operation whose name does not start with a read prefix such as `list_`, `get_` or `summarize_` | [MCP](../concepts/mcp.md) |
 | [Skills](skills.md) | `Skill` and `SkillsPlugin`: `SKILL.md` instruction bundles the agent loads on demand, attached with `AgentConfig.skills` | [Skills](../concepts/skills.md) |
 | [Playbooks](playbooks.md) | Declared step sequences with expected tools. Set `AgentConfig.playbook` and a `PlaybookEnforcerHook` checks each tool call against the current step | [Playbooks](../concepts/playbooks.md) |
 
@@ -67,7 +67,7 @@ from locus.core.termination import MaxIterations, ToolCalled
 
 | Reference | What it documents | Guide |
 |---|---|---|
-| [Agent server](server.md) | `AgentServer`, which wraps an agent as a FastAPI app with `/invoke`, `/stream`, `/threads/{thread_id}` and `/health` routes; and `GraphRunnable`, for serving a compiled `StateGraph` | [Agent Server](../concepts/server.md) |
+| [Agent Server](server.md) | `AgentServer`, which wraps an agent as a FastAPI app with `/invoke`, `/stream`, `/threads/{thread_id}` and `/health` routes; and `GraphRunnable`, for serving a compiled `StateGraph` | [Agent Server](../concepts/server.md) |
 | [Observability](observability.md) | The in-process `EventBus`, which fans events out to subscribers by run id; the `emit()` helpers; run context; and `EventBusHook`, which republishes an agent's hook events onto the bus | [Observability](../concepts/observability.md), [SSE event catalogue](../concepts/sse-events.md) |
 | [Evaluation](evaluation.md) | `EvalCase`, `EvalRunner` and `EvalReport` for test suites; `LLMJudge` for answers with no single right string; `check_trajectory` for the order tools were called in; and graph evaluation targets | [Evaluation](../concepts/evaluation.md), [Testing agents](../concepts/testing.md) |
 
@@ -81,11 +81,13 @@ from locus.core.termination import MaxIterations, ToolCalled
 
 | Reference | What it documents | Guide |
 |---|---|---|
-| [Security](security.md) | One domain built on the framework: red-team probes and jobs, grounded findings that come back as evidence or an `Abstention`, verification skeptics, and MITRE ATLAS and OWASP taxonomy tags. Import the admission gate from `locus.control`, not from here | [Agentic AI-security](../concepts/agentic-ai-security.md), [Security layer](../concepts/security.md) |
+| [Security](security.md) | One domain built on the framework: red-team probes and jobs, grounded findings that come back as evidence or an `Abstention`, verification skeptics, and MITRE ATLAS and OWASP taxonomy tags. Import the admission gate from `locus.control`, not from here | [Agentic AI security](../concepts/agentic-ai-security.md), [Security layer](../concepts/security.md) |
 
 ## Deprecated
 
 [ReAct loop](loop.md) documents `locus.loop`, a second ReAct implementation
-that `Agent` has never used. It is scheduled for removal in 3.0.0, and each
-name you import from it emits `LocusDeprecationWarning`. Use
-[`Agent`](agent.md) instead.
+that `Agent` has never used. It is deprecated: it still imports, each name
+you import from it emits `LocusDeprecationWarning`, and it will be removed
+in a later major release, per the
+[deprecation policy](https://github.com/oracle/locus/blob/main/DEPRECATION.md).
+Use [`Agent`](agent.md) instead.

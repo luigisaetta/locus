@@ -57,7 +57,7 @@ need a schema for an external system (e.g. an MCP server).
 
 Agents that drive Oracle Cloud Infrastructure: `use_oci` runs a read-only
 OCI CLI / SDK operation and `describe_oci` explains a resource. Both need
-the `oci` extra. See the [OCI tools notebook](../notebooks/notebook_89_oci_tools.md).
+the `oci` extra. See the [OCI tools notebook](../notebooks/notebook_36_oci_tools.md).
 
 ::: locus.tools.oci.use_oci
 ::: locus.tools.oci.describe_oci

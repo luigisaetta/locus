@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Debate card: two advocate Agents take turns for N rounds (the opposing
+  edges: add_edge one way, a conditional edge back), then a judge Agent reads
+  the whole transcript and rules (both edges into the primary). The router's
+  debate protocol keeps the shape but runs the debaters in parallel.
+  locus/multiagent/graph.py: StateGraph.add_edge, StateGraph.add_conditional_edges
+  (examples/notebook_26_debate_with_judge.py: build_debate_graph);
+  locus/router/runnable.py: DebateRunnable (ParallelPipeline + judge Agent)
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>Two debaters argue in both directions; a judge above reads both</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="6" y="31" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,35 L66,35"/>
+  <path class="edge" marker-end="url(#ah)" d="M68,41 L30,41"/>
+  <g class="node"><rect x="68" y="31" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M17,31 L17,17 L35,17"/>
+  <path class="edge" marker-end="url(#ah)" d="M79,31 L79,17 L61,17"/>
+  <g class="node primary"><rect x="37" y="10" width="22" height="14" rx="3"/></g>
+</svg>

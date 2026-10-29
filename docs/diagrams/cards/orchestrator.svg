@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Orchestrator card: Orchestrator.execute gives each Specialist it picks a
+  subtask and runs them in parallel; their results come back to it (the return
+  edge) to be correlated and summarized into one OrchestratorResult.
+  locus/multiagent/orchestrator.py: Orchestrator.execute, OrchestratorResult;
+  locus/multiagent/specialist.py: Specialist
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>An orchestrator over three specialists, with a return edge for their results</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node primary"><rect x="37" y="4" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M41,18 C41,27 17,27 17,36"/>
+  <path class="edge" marker-end="url(#ah)" d="M45,18 L45,36"/>
+  <path class="edge" marker-end="url(#ah)" d="M55,18 C55,27 79,27 79,36"/>
+  <path class="edge" marker-end="url(#ah)" d="M51,38 L51,20"/>
+  <g class="node"><rect x="6" y="38" width="22" height="14" rx="3"/></g>
+  <g class="node"><rect x="37" y="38" width="22" height="14" rx="3"/></g>
+  <g class="node"><rect x="68" y="38" width="22" height="14" rx="3"/></g>
+</svg>

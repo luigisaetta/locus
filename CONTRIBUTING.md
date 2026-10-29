@@ -68,7 +68,7 @@ We welcome:
 ```bash
 # Clone the repository
 git clone https://github.com/oracle/locus.git
-cd locus-sdk
+cd locus
 
 # Install Hatch if needed
 pip install hatch
@@ -88,16 +88,25 @@ hatch run test
 For integration tests, configure these environment variables:
 
 ```bash
-# OpenAI (required for most integration tests)
+# OCI Generative AI (the live integration suite runs on it by default)
+export OCI_PROFILE="<profile in ~/.oci/config>"      # API key or session token
+export OCI_REGION="us-chicago-1"                      # any region that serves GenAI
+export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..."
+export OCI_COMPARTMENT="$OCI_COMPARTMENT_ID"          # some suites read this name
+export OCI_MODEL_ID="openai.gpt-4.1"                  # any chat model the region serves
+export RUN_LIVE_OCI=1
+# Leave OPENAI_API_KEY / ANTHROPIC_API_KEY unset for an OCI-only run: the
+# integration conftest prefers them when present.
+
+# OpenAI / Anthropic (optional, vendor-specific provider tests)
 export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
 
 # Cohere (optional, for the Cohere reranker / embeddings tests)
 export COHERE_API_KEY="..."
 
-# Anthropic (optional, for Anthropic provider tests)
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Docker services (for checkpoint/vector store tests)
+# Services (for checkpoint / vector store tests; Oracle Database 26ai via
+# ORACLE_DSN / ORACLE_USER / ORACLE_PASSWORD, see tests/integration/conftest.py)
 export REDIS_URL="redis://localhost:6379"
 export POSTGRES_HOST="localhost"
 export POSTGRES_PORT="5432"

@@ -21,6 +21,12 @@ report = EvalRunner(agent=agent).run(cases)
 print(report.summary())
 ```
 
+The runner takes that list, runs the agent once per case within the
+case's budget, grades what came back against the checks the case
+declares, and folds one `EvalResult` per case into an `EvalReport`:
+
+{{ locus_diagram evaluation-flow }}
+
 ## When to reach for an eval suite
 
 | Situation | Run evals? |
@@ -97,6 +103,7 @@ case. Each check contributes equally to the per-case score.
 | Field | Passes when |
 |---|---|
 | `expected_tools` | All listed tools appear in the run's tool executions. |
+| `expected_tool_sequence` | The listed tools were called in that order; extra calls around them are allowed unless `exact_tool_sequence=True`. |
 | `expected_output_contains` | Every string is a case-insensitive substring of the final message. |
 | `expected_output_not_contains` | None of the strings appear in the final message. |
 | `max_iterations` | The run finished in ≤ N ReAct turns. |
@@ -145,14 +152,15 @@ report = asyncio.run(runner.arun([case]))
 ```
 
 Grading requires `await runner.arun(cases)` — the judge is a model call,
-and `run()` is synchronous. `run()` never reads `rubric` at all, so a
-rubric case passed to it is scored on its structural checks alone and
-can report green with the rubric silently unevaluated. On `arun()`, a
-rubric case with no judge configured fails loudly instead, under a
+and `run()` is synchronous. `run()` cannot call a judge, so a rubric
+case passed to it fails under a `rubric:requires_arun` check rather than
+reporting green with the rubric unevaluated. On `arun()`, a rubric case
+with no judge configured fails loudly too, under a
 `rubric:no_judge_configured` check.
 
-On a graded case, `EvalResult.score` is the judge's 0–1 score, not the
-fraction of checks passed. A judge reply that cannot be parsed yields
+On a graded case, `EvalResult.score` is the judge's 0–1 score, capped by
+the fraction of checks passed, so a case with a failed structural check
+never scores 1.0. A judge reply that cannot be parsed yields
 `Verdict(unparseable=True)` and is recorded as a failing
 `judge_unparseable:...` check rather than a silent pass. Use a different
 model from the one under test where you can — a model grading its own
@@ -182,7 +190,7 @@ evidence? — pair the structural checks here with the
 
 ## Source and notebook
 
-- [`notebook_55_evaluation.py`](https://github.com/oracle/locus/blob/main/examples/notebook_55_evaluation.py) — runnable end-to-end suite.
+- [`notebook_56_evaluation.py`](https://github.com/oracle/locus/blob/main/examples/notebook_56_evaluation.py) — runnable end-to-end suite.
 - [`locus.evaluation.framework`](https://github.com/oracle/locus/blob/main/src/locus/evaluation/framework.py) — `EvalCase`, `EvalRunner`, `EvalReport`.
 
 ## See also

@@ -42,7 +42,7 @@ python examples/integrations/gpu_probe_dispatch.py
 ```
 
 Or see them handed to a triage agent end-to-end in
-`examples/notebook_70_vendor_integrations.py`.
+`examples/notebook_80_vendor_integrations.py`.
 
 ## GPU probe dispatch — two separate providers
 

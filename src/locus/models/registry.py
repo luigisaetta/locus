@@ -37,7 +37,7 @@ def get_model(model_string: str, **kwargs: Any) -> ModelProtocol:
 
     Examples:
         - "openai:gpt-4o"
-        - "anthropic:claude-sonnet-4-6"
+        - "anthropic:claude-sonnet-5-5"
 
     Args:
         model_string: Model identifier in "provider:model" format
@@ -92,35 +92,6 @@ def _register_defaults() -> None:
         register_provider(
             "anthropic",
             lambda m, **kw: cast("ModelProtocol", AnthropicModel(model=m, **kw)),
-        )
-    except ImportError:
-        pass
-
-    # Azure OpenAI — OpenAI's models, but deployment-named URLs, an
-    # ``api-key`` header and a required ``api-version``, so it cannot ride
-    # the OpenAI-compatible table either. Same ``openai`` dependency as the
-    # OpenAI provider; no new package.
-    try:
-        from locus.models.native.azure import AzureOpenAIModel
-
-        register_provider(
-            "azure",
-            lambda m, **kw: cast("ModelProtocol", AzureOpenAIModel(model=m, **kw)),
-        )
-    except ImportError:
-        pass
-
-    # Amazon Bedrock — its own wire protocol, so it cannot ride the
-    # OpenAI-compatible table below. One Converse-API client covers every
-    # model on the service. boto3 is an optional extra and is imported
-    # lazily inside the model, so this registration costs nothing to
-    # anyone who never names a ``bedrock:`` model.
-    try:
-        from locus.models.native.bedrock import BedrockModel
-
-        register_provider(
-            "bedrock",
-            lambda m, **kw: cast("ModelProtocol", BedrockModel(model=m, **kw)),
         )
     except ImportError:
         pass

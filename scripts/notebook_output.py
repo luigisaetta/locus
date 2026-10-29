@@ -44,13 +44,35 @@ DOCS = ROOT / "docs" / "notebooks"
 #: Deliberately not "all of them". These are the examples whose printed trail
 #: *is* the point: a gate holding, a decision recorded, a probe refused.
 PAGES: dict[str, str] = {
-    "notebook_75_agent_red_team": "what a red-team run reports",
-    "notebook_79_soc_alert_triage": "the triage an analyst would otherwise do",
-    "notebook_83_payment_refund_gate": "a small refund paid, a large one held",
-    "notebook_84_infra_deploy_gate": "a staging deploy allowed and a production rollback held",
-    "notebook_85_support_account_gate": "the account action that needed a human",
-    "notebook_86_data_deletion_gate": "a GDPR erasure, and the chain that proves it",
-    "notebook_87_cloud_resource_gate": "a staging resize allowed and a production terminate held",
+    "notebook_03_agent_with_tools": "the tools answering direct calls, the single lookup the mock model makes in each agent run (`Tool calls made: 1`; one `tool_start` / `tool_complete` pair in Part 4) followed by a fixed verdict keyed on the prompt's wording rather than derived from the lookup, and the blockers the structured readiness report lists for the failing service",
+    "notebook_08_termination": "the `(stop, reason)` each predicate and composition returns (`max_iterations`, `text_mention:TICKET_RESOLVED`, `max_iterations AND token_budget`, `confidence_met`), so the OR and AND semantics are visible before the agent runs, then the agent's normalized stop reason, the resolution read back from `state.metadata['resolution']` and the two replies the callable system prompt produced",
+    "notebook_10_hooks_advanced": "the blocked tool result RELEASE GUARD feeds back to the model, the read-only error that names the writable event fields, and the gate/ledger call sequence reversing on the way out",
+    "notebook_15_human_in_the_loop": "the pause-and-resume trail of every gate: where each graph paused, the question it surfaced, the answer given and the resulting state, including the blast-radius routing that auto-approves 2 pods and escalates 20 and 200 to the site reliability engineering (SRE) on-call and the release manager",
+    "notebook_27_multiagent_human_in_loop": "the pause-and-resume trail of all three patterns: the node each graph pauses at, the approver's question, the resume value and the final outcome, with Pattern B's escalation routed to the human's answer and Pattern C's snapshot key count",
+    "notebook_29_cognitive_router": "a fallback notice for each request (the mock extractor produces no `GoalFrame`, so the hand-built frame is used), the protocol the router selected and the runtime shape it compiled to for the five requests that run, the `PolicyGate` verdict that holds the sixth, HIGH-risk node drain for approval, and a closing protocol histogram",
+    "notebook_46_mcp_integration": "the MCP schema derived from a Locus tool and its round trip back with parameters preserved, the `tools/list` catalogue and a `tools/call` result (Part 4 ran because the optional `fastmcp` package was installed for this capture; without it the script prints an install note there instead), then the GSAR ship/abstain trail (SHIP at S=1.0000 on full refund signals, ABSTAIN/REPLAN at S=0.0000 on sparse ones)",
+    "notebook_47_plugins": "the plugin's audit trail of model and tool hooks in firing order, the event types a callback handler receives, and the `cancelled` stop reason with the count of tool calls that completed before `Agent.cancel()` took effect",
+    "notebook_53_rag_agents": "one skip notice for the four retrieval sections, which need OPENAI_API_KEY, then the answer-grounding gate's decision trail: S=1.0 and proceed for the remediation that cites retrieved runbook chunks, with its evidence references, and S=0.0 and replan for the unsupported cross-incident claim",
+    "notebook_55_gsar_typed_grounding": "the admit/withhold trail: a grounded TLS finding shipping with its score arithmetic, an ungrounded and a contradicted candidate withheld with their reasons, the Appendix-B evidence-weight table, the same finding under three threshold profiles, and the Algorithm-1 loop abstaining through its replan budget to a degraded result",
+    "notebook_57_multimodal_providers": "the four `isinstance` checks against the provider Protocols, the auto-registered tool names (`web_fetch`, then `web_search`) and the first lines of the example.com page, which Part 3 fetches live, so even this keyless run needs outbound network access",
+    "notebook_60_observability_basics": "the bus singleton still `None` after a reply made outside `run_context`, the canonical event trail a tool-calling ticket reply leaves on the bus (`agent.think`, `agent.tool.started`, `agent.tool.completed`, `agent.think`, `agent.terminate`), then the two events a late subscriber replays from history after the run has finished",
+    "notebook_62_eventbus_subscribers": "the event kinds the global telemetry forwarder and the per-deployment subscriber each received across two concurrent rollouts, then the `bus.stats()` snapshot (`active_runs`, `global_subscribers`, `history_runs`, `dropped_events_total`, `queue_depths`)",
+    "notebook_63_event_catalogue": "the canonical `event_type` catalogue grouped by prefix (every `EV_*` constant read from the installed `locus.observability.emit` module when the script runs) and then the `composition.*` events the two-stage dispute-triage pipeline publishes, with no model text in the trail",
+    "notebook_71_payment_refund_gate": "a small refund paid, a large one held",
+    "notebook_72_infra_deploy_gate": "a staging deploy allowed and a production rollback held",
+    "notebook_73_support_account_gate": "a small credit applied, a plan upgrade held, and the trail that records both",
+    "notebook_74_data_deletion_gate": "the export allowed on its own, the erasure held with nothing deleted until the Data Protection Officer signs off and it is re-admitted, and the three-record trail that verifies intact",
+    "notebook_75_cloud_resource_gate": "a staging resize allowed, then a production terminate and an IAM grant held",
+    "notebook_80_vendor_integrations": "the offline sample each integration returns: the risk verdict for three identifiers, the two catalog records that hold the subject's data with their sensitivity, and the four PII categories a scan of `crm.customers` finds, then the STEWARD triage result",
+    "notebook_81_cloud_posture_agent": "the grounding decision trail: two findings shipped with their GSAR score and evidence refs, the speculative one abstaining with its reason, then the analyst's read-only tool list before the bring-your-own-credentials skip notice",
+    "notebook_82_security_playbooks": "the four bundled playbooks with their step order, the mock model's one-line triage verdict from the enforced agent run, then the `PlaybookEnforcer` step gate for phishing triage: each expected tool allowed in turn, progress 100% and no violations",
+    "notebook_83_agent_red_team": "what a red-team run reports",
+    "notebook_84_redteam_support_bot": "the graded trail for both bots: five naive-bot findings with their severity and OWASP LLM / ASI / MITRE ATLAS tags and one abstention on the proof-of-execution probe, then an abstention for every probe against the hardened bot",
+    "notebook_85_ci_security_gate": "the PASS/FAIL coverage line for each build against the 80% bar, the grounded finding title, the taxonomy tags of the categories that slipped through on the failing candidate, and the merge verdict",
+    "notebook_86_verify_findings": "the verdict for each of the three findings: the grounded one survives at confidence 1.00, and each refuted one lists its weighted objections (no evidence references, grounding score below the 0.80 proceed threshold, high severity asserted on a single reference)",
+    "notebook_87_soc_alert_triage": "one verdict per alert: the three corroborated alerts filed as findings with their severity, GSAR score and evidence references, the benign-noise alert withheld as an abstention with the reason and the score that fell short, then the count of findings filed and abstentions",
+    "notebook_88_model_fingerprint": "the probe's model name, sample count and path, the timing feature vector of the deterministic sample with its coverage, the grounded `FingerprintFinding` (GSAR score, model class, engine, hardware class, confidence, coverage, evidence reference and MITRE ATLAS tags) with the script's interpretation of the hardware class against the vendor claim, the audit-trail record count and integrity check, and the command for probing a live endpoint",
+    "notebook_89_investigate_with_ctx": "the five-step investigation trail: each domain port's answer from the reference providers (a high-risk user with impossible travel, a malicious indicator) and the policy verdict on `disable_user` in production, REQUIRE_HUMAN with its reason",
 }
 
 _MARKER = "## Output"
@@ -114,7 +136,9 @@ def run_notebook(stem: str, sdk: Path) -> str:
     )
     if completed.returncode != 0:
         raise SystemExit(f"{stem} exited {completed.returncode}:\n{completed.stderr[-2000:]}")
-    return completed.stdout.rstrip("\n")
+    # Trailing whitespace is dropped line by line: a page that carried it would
+    # fail the repository's whitespace hook, and it carries no information.
+    return "\n".join(line.rstrip() for line in completed.stdout.splitlines()).rstrip("\n")
 
 
 def uses_model(stem: str, sdk: Path) -> bool:

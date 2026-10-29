@@ -291,7 +291,7 @@ class AgentConfig(BaseModel):
     # Model specification
     model: str | Any = Field(
         ...,
-        description="Model string ('openai:gpt-4o' or 'anthropic:claude-sonnet-4-6') or ModelProtocol instance",
+        description="Model string ('openai:gpt-4o' or 'anthropic:claude-sonnet-5-5') or ModelProtocol instance",
     )
 
     # Provider configuration that has to travel with the string form.

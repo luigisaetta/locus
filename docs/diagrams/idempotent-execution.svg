@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  One tool call through the Execute step of Agent.run(), per locus/agent/runtime_loop.py.
+    model -> before-hooks      each tool call in the model's response runs the before-tool hooks first;
+                               the hooks may rewrite the arguments (runtime_loop.py:1407, :1446)
+    before-hooks -> key        for a tool declared @tool(idempotent=True) the key is (tool name, arguments as
+                               the hooks left them): _maybe_cached_idempotent_result(state, name, modified_args)
+                               (:1458-1460, :3521-3555); a tool without the flag gets no key and no check
+                               (:3541-3542, :3512-3513) and is dispatched like any new call
+    key -> already recorded?   find_matching_execution scans state.tool_executions newest first for the same
+                               tool_name and dict(prior.arguments) == arguments (tools/executor.py:23-46)
+    match -> recorded result   the prior result (or error) is returned with duration 0; the body does not run
+                               (:3550-3555); the slot is kind "cache" (:1462-1477)
+    no match -> executor       kind "execute" (:1505-1516); Phase 2 streams the survivors through
+                               self._executor.execute_streaming (:1545-1549), a ConcurrentExecutor by default
+                               or a SequentialExecutor when tool_execution="sequential" (agent/initializer.py:86-89,
+                               agent/config.py:560-563); the executor calls tool.execute(ctx=ctx, **arguments)
+                               (tools/executor.py:414, :547). CircuitBreakerExecutor (executor.py:566) wraps a
+                               delegate but Agent never constructs it, so it is not drawn.
+    both -> ToolExecution      Phase 3 appends a ToolExecution to the state in tool_call order: a replay with
+                               idempotent_cache_hit=True (:1647-1651, core/state.py:43), an executed call after
+                               its after-hooks (:1767-1819); AgentState.with_tool_execution (core/state.py:207-214)
+    ToolExecution -> model     every result goes back as a tool message, state.with_message(Message.tool(result))
+                               (:1844), and the loop returns to the model
+    same response              a second identical idempotent call inside one model response is matched before
+                               anything is recorded, on (name, json.dumps(arguments, sort_keys=True)):
+                               _idempotent_batch_key (:1488-1503, :3498-3519); it is recorded as a cache hit (:1653-1681)
+    scope                      the record is the run's own AgentState: a new run() turn on a checkpointed thread
+                               starts from _fresh_turn_state with an empty tool_executions (:2659-2673, :2712-2757);
+                               resume() and continue_turn() run _run_from_state (:1963), which has no cache check.
+                               Hook cancellations are recorded too (:1413-1443, :1641-1645) but are not drawn.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 586" role="img" aria-labelledby="title desc">
+  <title id="title">Idempotent execution of a tool call</title>
+  <desc id="desc">The model emits a tool call. Inside the Execute step the before-tool hooks run first and may change the arguments. For a tool declared idempotent=True, the idempotency key is the tool name plus the arguments as the hooks left them; a tool without the flag gets no key and goes straight to the executor. The key is looked up in the agent state's tool_executions, newest first. A call that equals a prior call returns the recorded result and the tool body does not run; any other call goes to the executor, sequential or concurrent, which runs the body. Either way a ToolExecution is appended to the agent state, flagged idempotent_cache_hit=True when the result was reused, and the result goes back to the model as a tool message. Two identical calls in one model response are matched too, on a sorted-key JSON of the arguments. The record belongs to the run: a new run() turn starts it empty, even on a checkpointed thread, and resume() does not consult it.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the Execute step, once per tool call -->
+  <g class="lane">
+    <rect x="172" y="20" width="762" height="508" rx="12"/>
+    <text class="lane-title" x="192" y="42">Execute · each tool call</text>
+  </g>
+
+  <!-- model -> before-hooks -->
+  <path class="edge" marker-end="url(#ah)" d="M138,95 L188,95"/>
+
+  <!-- before-hooks -> key -->
+  <path class="edge" marker-end="url(#ah)" d="M350,95 L448,95"/>
+  <rect class="label-bg on-lane" x="356" y="106" width="84" height="20" rx="4"/>
+  <text class="label" x="398" y="116">after hooks</text>
+
+  <!-- key -> decision -->
+  <path class="edge" marker-end="url(#ah)" d="M540,124 L540,144"/>
+
+  <!-- decision -> store: the lookup -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M650,186 H832 V354"/>
+  <rect class="label-bg on-lane" x="802" y="260" width="60" height="20" rx="4"/>
+  <text class="label" x="832" y="270">look up</text>
+
+  <!-- decision -> recorded result (match) -->
+  <path class="edge" marker-end="url(#ah)" d="M540,226 V244 H410 V260"/>
+  <rect class="label-bg on-lane" x="451" y="234" width="48" height="20" rx="4"/>
+  <text class="label" x="475" y="244">match</text>
+
+  <!-- decision -> executor (no match) -->
+  <path class="edge" marker-end="url(#ah)" d="M540,226 V244 H670 V260"/>
+  <rect class="label-bg on-lane" x="573" y="234" width="64" height="20" rx="4"/>
+  <text class="label" x="605" y="244">no match</text>
+
+  <!-- both -> ToolExecution -->
+  <path class="edge" marker-end="url(#ah)" d="M410,320 V338 H540 V354"/>
+  <path class="edge" marker-end="url(#ah)" d="M670,320 V338 H540 V354"/>
+
+  <!-- ToolExecution -> store -->
+  <path class="edge" marker-end="url(#ah)" d="M640,385 L738,385"/>
+  <rect class="label-bg on-lane" x="661" y="375" width="56" height="20" rx="4"/>
+  <text class="label" x="689" y="385">append</text>
+
+  <!-- ToolExecution -> tool message -->
+  <path class="edge" marker-end="url(#ah)" d="M540,414 L540,448"/>
+
+  <!-- tool message -> model -->
+  <path class="edge" marker-end="url(#ah)" d="M440,479 H73 V126"/>
+  <rect class="label-bg" x="31" y="290" width="84" height="20" rx="4"/>
+  <text class="label" x="73" y="300">observation</text>
+
+  <g class="node">
+    <rect x="8" y="66" width="130" height="58" rx="12"/>
+    <text x="73" y="85">Model</text>
+    <text class="sub" x="73" y="106">emits tool calls</text>
+  </g>
+  <g class="node">
+    <rect x="190" y="66" width="160" height="58" rx="12"/>
+    <text x="270" y="85">Before-hooks</text>
+    <text class="sub" x="270" y="106">on_before_tool_call</text>
+  </g>
+  <g class="node primary">
+    <rect x="450" y="66" width="180" height="58" rx="12"/>
+    <text x="540" y="85">Idempotency key</text>
+    <text class="sub" x="540" y="106">(name, arguments)</text>
+  </g>
+  <text class="note" x="790" y="88">only idempotent=True tools get a key;</text>
+  <text class="note" x="790" y="106">others go straight to the executor</text>
+
+  <g class="decision node">
+    <polygon points="430,186 540,146 650,186 540,226"/>
+    <text x="540" y="176">Already recorded?</text>
+    <text class="sub" x="540" y="197">equals a prior call</text>
+  </g>
+
+  <g class="node">
+    <rect x="310" y="262" width="200" height="58" rx="12"/>
+    <text x="410" y="281">Recorded result</text>
+    <text class="sub" x="410" y="302">idempotent_cache_hit=True</text>
+  </g>
+  <g class="node">
+    <rect x="570" y="262" width="200" height="58" rx="12"/>
+    <text x="670" y="281">Executor</text>
+    <text class="sub" x="670" y="302">sequential or concurrent</text>
+  </g>
+
+  <g class="node">
+    <rect x="440" y="356" width="200" height="58" rx="12"/>
+    <text x="540" y="375">ToolExecution</text>
+    <text class="sub" x="540" y="396">appended to the record</text>
+  </g>
+
+  <g class="node">
+    <rect x="440" y="450" width="200" height="58" rx="12"/>
+    <text x="540" y="469">Tool message</text>
+    <text class="sub" x="540" y="490">Message.tool(result)</text>
+  </g>
+
+  <!-- where the record lives -->
+  <g class="store">
+    <path d="M740,365 A92,9 0 0 1 924,365 V499 A92,9 0 0 1 740,499 Z M740,365 A92,9 0 0 0 924,365"/>
+    <g class="node">
+      <text x="832" y="422">Agent state</text>
+      <text class="sub" x="832" y="443">state.tool_executions</text>
+    </g>
+  </g>
+
+  <text class="note" x="470" y="552">Two identical calls in one model response are matched too, on a sorted-key JSON of the arguments, before either is recorded.</text>
+  <text class="note" x="470" y="570">The record is this run's own: a new run() turn starts it empty, even on a checkpointed thread, and resume() does not consult it.</text>
+</svg>

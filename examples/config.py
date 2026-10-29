@@ -58,36 +58,38 @@ Environment Variables:
 
 Examples:
     # Run with mock (default - no credentials needed):
-    python examples/notebook_06_basic_agent.py
+    python examples/notebook_02_basic_agent.py
 
     # Run with OCI GenAI (V1 transport, OpenAI-compatible endpoint):
     export LOCUS_MODEL_PROVIDER=oci
     export LOCUS_MODEL_ID=openai.gpt-5.5
     export LOCUS_OCI_PROFILE=MY_PROFILE
-    python examples/notebook_06_basic_agent.py
+    python examples/notebook_02_basic_agent.py
 
     # Run with OCI GenAI (SDK transport, required for Cohere R-series):
     export LOCUS_MODEL_PROVIDER=oci
     export LOCUS_MODEL_ID=cohere.command-r-plus
     export LOCUS_OCI_PROFILE=MY_PROFILE
-    python examples/notebook_06_basic_agent.py
+    python examples/notebook_02_basic_agent.py
 
     # Run with OpenAI:
     export LOCUS_MODEL_PROVIDER=openai
     export OPENAI_API_KEY=sk-...
-    python examples/notebook_06_basic_agent.py
+    python examples/notebook_02_basic_agent.py
 
     # Run with Anthropic:
     export LOCUS_MODEL_PROVIDER=anthropic
     export ANTHROPIC_API_KEY=sk-ant-...
-    python examples/notebook_06_basic_agent.py
+    python examples/notebook_02_basic_agent.py
 
     # Pick a specific model for the selected provider:
     export LOCUS_MODEL_ID=gpt-4o-mini
-    python examples/notebook_06_basic_agent.py
+    python examples/notebook_02_basic_agent.py
 """
 
+import ast
 import configparser
+import operator
 import os
 import re
 import sys
@@ -133,7 +135,7 @@ class MockModel(BaseModel):
     # answering either with the other's verdict is how an offline run stops
     # reading like the real thing and starts reading like a broken example.
     _responses: dict[str, str] = {
-        # Payments triage (notebook 06). Three distinct patterns, because a
+        # Payments triage (notebook 02). Three distinct patterns, because a
         # queue where every transaction gets the same verdict teaches nothing.
         "declines": (
             "Consistent with card testing: a run of small declines from one BIN "
@@ -149,7 +151,7 @@ class MockModel(BaseModel):
             "address and the account has prior undisputed orders there. Gather "
             "the delivery signature and order history, then represent."
         ),
-        # Deployment readiness (notebook 07). Keyed on the go/no-go language
+        # Deployment readiness (notebook 03). Keyed on the go/no-go language
         # the release-engineer prompts use.
         "pre-deploy": (
             "No-go on search: the image is unsigned and only 2 of 5 replicas "
@@ -312,23 +314,31 @@ class MockModel(BaseModel):
         yield ModelChunkEvent(done=True)
 
 
+def resolved_provider() -> str:
+    """The provider ``get_model()`` will actually use.
+
+    ``LOCUS_MODEL_PROVIDER`` wins when set; otherwise the same auto-detection
+    ``get_model()`` runs (OCI when a usable profile exists, else ``mock``).
+    Notebooks that behave differently under the mock model must ask this,
+    not read the environment variable, or they misreport a live OCI run.
+    """
+    return os.environ.get("LOCUS_MODEL_PROVIDER", "").lower() or _auto_detect_provider()
+
+
 def check_structured_output_capable() -> None:
     """Exit cleanly with guidance if the current model cannot produce JSON.
 
     Guards against MockModel (plain text).
     """
-    provider = os.environ.get("LOCUS_MODEL_PROVIDER", "mock").lower()
-
-    if provider != "mock":
+    if resolved_provider() != "mock":
         return
 
     print(
         "\n⚠  This notebook requires structured-output (JSON schema) support.\n"
         "   MockModel returns plain text and cannot demonstrate these features.\n\n"
-        "   Run with a model that supports constrained decoding:\n\n"
-        "     export LOCUS_MODEL_PROVIDER=openai\n"
-        "     export OPENAI_API_KEY=sk-...\n"
-        "     export LOCUS_MODEL_ID=gpt-4o\n"
+        "   Run with a model that supports constrained decoding, for example:\n\n"
+        "     export LOCUS_MODEL_PROVIDER=oci LOCUS_MODEL_ID=openai.gpt-4o   # an OCI profile\n"
+        "     export LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o      # OPENAI_API_KEY\n"
         f"     python {Path(sys.argv[0]).name}\n"
     )
     sys.exit(0)
@@ -462,9 +472,7 @@ def get_model(**kwargs: Any) -> Any:
     elif provider == "anthropic":
         return _get_anthropic_model(**kwargs)
     else:
-        raise ValueError(
-            f"Unknown model provider: {provider}. Use 'oci', 'mock', 'openai', or 'anthropic'."
-        )
+        return _get_registry_model(provider, **kwargs)
 
 
 def get_model_b(**kwargs: Any) -> Any:
@@ -616,11 +624,29 @@ def _get_openai_model(**kwargs: Any) -> Any:
     )
 
 
+def _get_registry_model(provider: str, **kwargs: Any) -> Any:
+    """Any other provider the model registry knows — openrouter, groq, gemini, ollama, …
+
+    The provider reads its own credentials; ``LOCUS_MODEL_ID`` names the model.
+    """
+    from locus.models import get_model as registry_get_model
+    from locus.models.registry import list_providers
+
+    if provider not in list_providers():
+        raise ValueError(
+            f"Unknown model provider: {provider}. Use 'mock' or one of {list_providers()}."
+        )
+    model_id = kwargs.pop("model_id", None) or os.environ.get("LOCUS_MODEL_ID")
+    if not model_id:
+        raise ValueError(f"LOCUS_MODEL_ID is required with LOCUS_MODEL_PROVIDER={provider}")
+    return registry_get_model(f"{provider}:{model_id}", **kwargs)
+
+
 def _get_anthropic_model(**kwargs: Any) -> Any:
     """Get Anthropic model."""
     from locus.models.native.anthropic import AnthropicModel
 
-    model_id = kwargs.pop("model_id", os.environ.get("LOCUS_MODEL_ID", "claude-sonnet-4-6"))
+    model_id = kwargs.pop("model_id", os.environ.get("LOCUS_MODEL_ID", "claude-sonnet-5-5"))
     api_key = os.environ.get("ANTHROPIC_API_KEY")
 
     if not api_key:
@@ -659,14 +685,57 @@ def get_embedding_dimension(default: int = 1536) -> int:
     return int(os.environ.get("LOCUS_EMBEDDING_DIM", default))
 
 
-def print_config():
-    """Print current configuration for debugging."""
-    provider = os.environ.get("LOCUS_MODEL_PROVIDER", "").lower() or "mock"
-    model_id = os.environ.get("LOCUS_MODEL_ID", "(default)")
+_SAFE_MATH_BIN_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
+_SAFE_MATH_UNARY_OPS = {ast.USub: operator.neg, ast.UAdd: operator.pos}
 
+
+def safe_math_eval(expression: str) -> float:
+    """Evaluate plain arithmetic for the notebooks' ``calculate`` tools.
+
+    AST-only: numbers and the arithmetic operators above, no names, calls,
+    or attribute access, so a model-supplied expression cannot turn the
+    calculator into a sandbox escape. Raises ``ValueError`` (or
+    ``SyntaxError`` / ``ZeroDivisionError``) on anything else.
+    """
+    tree = ast.parse(expression, mode="eval")
+
+    def _eval(node: ast.AST) -> float:
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return node.value
+        if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_MATH_BIN_OPS:
+            return _SAFE_MATH_BIN_OPS[type(node.op)](_eval(node.left), _eval(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_MATH_UNARY_OPS:
+            return _SAFE_MATH_UNARY_OPS[type(node.op)](_eval(node.operand))
+        raise ValueError("Unsupported expression")
+
+    return _eval(tree)
+
+
+def print_config():
+    """Print the provider and model the notebook will actually use.
+
+    Uses :func:`resolved_provider`, so an OCI profile picked up by
+    auto-detection is reported as OCI rather than as the mock model.
+    """
+    provider = resolved_provider()
     print(f"Model Provider: {provider}")
 
     if provider == "mock":
         print("Using mock model (no API calls)")
-    else:
-        print(f"Model ID: {model_id}")
+        return
+    if provider == "oci":
+        try:
+            print(f"OCI profile: {_resolve_oci_profile()}")
+        except RuntimeError as exc:
+            print(f"OCI profile: unresolved ({exc})")
+    print(f"Model ID: {os.environ.get('LOCUS_MODEL_ID', '(provider default)')}")

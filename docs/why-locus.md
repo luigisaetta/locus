@@ -5,11 +5,18 @@ description: What Locus's policy gate, grounding, idempotency, and audit trail e
 
 # Why Locus
 
-Locus is a complete open-source agent framework with an explicit enforcement
-point for consequential actions. Its useful promise is narrow and testable:
-**a callable routed through `admit()` is invoked only after the supplied policy
-allows its declared `Action`.** The runtime can instead hold the call for a
-person or deny it, and it can record that decision.
+Locus is the Oracle Generative AI Agentic Harness: one `Agent` class, eight
+multi-agent shapes, and the runtime around the model (tools, memory, RAG,
+observability, guardrails), built first-class for OCI Generative AI and
+Oracle Database 26ai and open to every other provider. The [home page](index.md)
+covers that ground. This page is
+about the part that is easiest to over-claim: what the control layer
+guarantees, what you configure, and what stays model-dependent.
+
+Its useful promise is narrow and testable: **a callable routed through
+`admit()` is invoked only after the supplied policy allows its declared
+`Action`.** The runtime can instead hold the call for a person or deny it, and
+it can record that decision.
 
 This is stronger than a prompt instruction, but it is not a claim that every
 possible action is automatically safe. Coverage depends on how an application

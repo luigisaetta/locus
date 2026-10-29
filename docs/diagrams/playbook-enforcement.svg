@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  How a Playbook is enforced over an Agent's tool calls, per src/locus/playbooks; line numbers as of
+  this commit. The steps are the refund example on docs/concepts/playbooks.md.
+    the playbook      Playbook.steps is an ordered list (models.py:139-142); a PlaybookStep carries
+                      expected_tools (:68-71), hints (:72-75), required_probes (:95-102) of
+                      RequiredProbe(name, match) where match is a case-insensitive substring (:26-56),
+                      min_tool_calls (:103-111) and max_tool_calls (:112-115). The plan's
+                      current_step_index names the current step (models.py:237, :252-257).
+    Agent(playbook=…) installs the PlaybookEnforcerHook (agent/initializer.py:141-153); by default
+                      one enforcer per run, keyed by run id (hook.py:131, :197-232).
+    model -> hook     on_before_tool_call fires before each tool the model called
+                      (agent/runtime_loop.py:1407-1409); the hook calls
+                      enforcer.validate_tool_call(event.tool_name) (hook.py:234-242).
+    hook -> allowed   result.allowed: the hook returns and the tool body runs (hook.py:243-244).
+                      validate_tool_call allows a tool that is in the current step's expected_tools
+                      (when listed) and in its skills' allowed_tools (when declared), while the step
+                      is under max_tool_calls (enforcer.py:206-312).
+    hook -> denied    otherwise event.cancel = "PlaybookEnforcer blocked: " + violation.message +
+                      " | Hints: " + hints (hook.py:248-253); the hints are "Current step expects: …"
+                      plus the step's hints (enforcer.py:283-286, :258). Violation types:
+                      unexpected_tool (:262-288), tool_outside_skill (:239-259), max_tool_calls
+                      (:291-306), playbook_complete (:218-233); allow_extra_tools=True waives all but
+                      max_tool_calls (:229, :241-242, :264-269). The violation is recorded on
+                      enforcer.violations (:571-591, :180-183).
+    denied -> model   the agent loop turns event.cancel into the call's ToolResult, whose content is
+                      that message, and skips the tool body and the after-hook
+                      (agent/runtime_loop.py:1413-1425, :1434-1442, :1641-1646).
+    allowed -> record on_after_tool_call fires for calls that executed (agent/runtime_loop.py:1767);
+                      the hook calls enforcer.record_tool_call(tool, arguments, result)
+                      (hook.py:255-280). record_tool_call creates the step's StepExecution as
+                      in_progress on its first call and appends to tool_calls / tool_call_count
+                      (enforcer.py:340-350); probes are matched against the tool name and the
+                      serialised arguments, never the result (:351-401). An errored call is recorded
+                      but never advances (hook.py:265-270).
+    record -> next    advance rule (hook.py:294-301): when every entry of step.expected_tools is in
+                      step_exec.tool_calls, or step.max_tool_calls is not None and tool_call_count
+                      has reached it, the hook calls complete_current_step(), which records
+                      evidence_incomplete for unmatched probes (enforcer.py:430-444) and
+                      insufficient_effort under min_tool_calls (:445-456), sets the status to
+                      completed (:457-459) and moves current_step_index on (:462-467).
+    StepExecution     models.py:181-198: step_id, status, started_at, completed_at, tool_calls,
+                      tool_call_count, error, result, matched_probes.
+    StepStatus        pending, in_progress, completed, skipped, failed (models.py:16-23). The hook
+                      path produces in_progress and completed; skipped and failed come from the
+                      enforcer's skip_current_step (enforcer.py:471-508, non-required steps only) and
+                      fail_current_step (:510-532), which nothing in the SDK calls for you.
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 646" role="img" aria-labelledby="title desc">
+  <title id="title">Playbook enforcement at the tool-call hook point</title>
+  <desc id="desc">A playbook is an ordered list of steps. In the refund example, verify_order expects lookup_order and lookup_customer and declares a required probe named charge_history; check_eligibility expects check_refund_policy; issue_refund expects issue_refund. When the model proposes a tool call, the agent loop fires on_before_tool_call and the PlaybookEnforcerHook asks the enforcer to validate the tool against the plan's current step. If the current step allows it, the call is allowed and the tool body runs; then, at on_after_tool_call, the hook records the call in that step's StepExecution, which holds its tool_calls, matched_probes and status, and once every tool in the step's expected_tools has been seen, or its max_tool_calls is reached, it completes the step so the next step becomes current. If the current step does not allow it, the call is denied: the hook sets event.cancel, the tool body never runs, the violation is recorded on the enforcer, and the model receives the message "PlaybookEnforcer blocked: reason | Hints: what the step expects, plus its hints" as the tool's result, so it can recover. A call is denied when its tool is not in the step's expected_tools or its skills' allowed_tools, when the step's max_tool_calls is reached, or when the playbook is already complete. A step's status moves from pending to in_progress to completed; skipped and failed are the other terminal statuses. Probes never block: a step closed with a probe unmatched, or with fewer calls than min_tool_calls, records an evidence_incomplete or insufficient_effort violation. By default each run gets its own enforcer, and its plan lives in memory only.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the playbook: ordered steps, the first one current -->
+  <g class="lane">
+    <rect x="16" y="175" width="256" height="284" rx="12"/>
+    <text class="lane-title" x="32" y="197">Playbook · steps in order</text>
+  </g>
+  <g class="node">
+    <rect x="28" y="211" width="232" height="58" rx="12"/>
+    <text x="144" y="230">verify_order</text>
+    <text class="sub" x="144" y="251">lookup_order, lookup_customer</text>
+  </g>
+  <g class="node optional"><rect x="40" y="277" width="220" height="26" rx="8"/><text class="sub" x="150" y="290">RequiredProbe charge_history</text></g>
+  <g class="node">
+    <rect x="28" y="319" width="232" height="58" rx="12"/>
+    <text x="144" y="338">check_eligibility</text>
+    <text class="sub" x="144" y="359">check_refund_policy</text>
+  </g>
+  <g class="node">
+    <rect x="28" y="385" width="232" height="58" rx="12"/>
+    <text x="144" y="404">issue_refund</text>
+    <text class="sub" x="144" y="425">issue_refund</text>
+  </g>
+
+  <!-- model -> hook: the before-tool-call hook point -->
+  <path class="edge" marker-end="url(#ah)" d="M490,74 L490,114"/>
+  <rect class="label-bg" x="419" y="85" width="142" height="20" rx="4"/>
+  <text class="label" x="490" y="95">on_before_tool_call</text>
+
+  <!-- hook -> the check -->
+  <path class="edge" marker-end="url(#ah)" d="M490,174 L490,200"/>
+
+  <!-- the check reads the plan's current step -->
+  <path class="edge" marker-end="url(#ah)" d="M390,240 L262,240"/>
+  <rect class="label-bg" x="280" y="251" width="92" height="20" rx="4"/>
+  <text class="label" x="326" y="261">current step</text>
+
+  <!-- allowed: the tool body runs -->
+  <path class="edge allow" marker-end="url(#ah)" d="M490,278 L490,302"/>
+
+  <!-- denied: event.cancel -->
+  <path class="edge deny" marker-end="url(#ah)" d="M590,240 L696,240"/>
+
+  <!-- denied -> model: the cancel message is the call's result -->
+  <path class="edge deny" marker-end="url(#ah)" d="M804,211 V45 L577,45"/>
+  <rect class="label-bg" x="705" y="118" width="198" height="20" rx="4"/>
+  <text class="label" x="804" y="128">returned as the tool result</text>
+
+  <!-- denied -> violations -->
+  <path class="edge" marker-end="url(#ah)" d="M804,269 L804,314"/>
+
+  <!-- allowed -> after-hook -->
+  <path class="edge" marker-end="url(#ah)" d="M490,362 L490,402"/>
+  <rect class="label-bg" x="423" y="372" width="134" height="20" rx="4"/>
+  <text class="label" x="490" y="382">on_after_tool_call</text>
+
+  <!-- record -> StepExecution -->
+  <path class="edge" marker-end="url(#ah)" d="M575,433 L616,433"/>
+
+  <!-- record -> next step, when the current step is satisfied -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M405,433 H300 V348 L262,348"/>
+  <rect class="label-bg" x="317" y="423" width="72" height="20" rx="4"/>
+  <text class="label" x="353" y="433">next step</text>
+
+  <!-- the flow -->
+  <g class="node">
+    <rect x="405" y="16" width="170" height="58" rx="12"/>
+    <text x="490" y="35">Model</text>
+    <text class="sub" x="490" y="56">proposes a tool call</text>
+  </g>
+  <g class="node primary">
+    <rect x="390" y="116" width="200" height="58" rx="12"/>
+    <text x="490" y="135">PlaybookEnforcerHook</text>
+    <text class="sub" x="490" y="156">validate_tool_call(tool)</text>
+  </g>
+  <g class="decision node">
+    <polygon points="490,202 590,240 490,278 390,240"/>
+    <text x="490" y="230">Current step</text>
+    <text class="sub" x="490" y="251">allows this tool?</text>
+  </g>
+  <g class="node allow">
+    <rect x="405" y="304" width="170" height="58" rx="12"/>
+    <text x="490" y="323">Allowed</text>
+    <text class="sub" x="490" y="344">the tool body runs</text>
+  </g>
+  <g class="node deny">
+    <rect x="698" y="211" width="212" height="58" rx="12"/>
+    <text x="804" y="230">Denied</text>
+    <text class="sub" x="804" y="251">PlaybookEnforcer blocked: …</text>
+  </g>
+  <g class="node">
+    <rect x="405" y="404" width="170" height="58" rx="12"/>
+    <text x="490" y="423">Record + advance</text>
+    <text class="sub" x="490" y="444">record_tool_call()</text>
+  </g>
+
+  <!-- what the enforcer keeps for the run -->
+  <g class="lane">
+    <rect x="604" y="290" width="320" height="274" rx="12"/>
+    <text class="lane-title" x="620" y="312">Enforcer state</text>
+  </g>
+  <g class="node">
+    <rect x="698" y="316" width="212" height="58" rx="12"/>
+    <text x="804" y="335">Violations</text>
+    <text class="sub" x="804" y="356">enforcer.violations</text>
+  </g>
+  <g class="node">
+    <rect x="618" y="404" width="292" height="58" rx="12"/>
+    <text x="764" y="423">StepExecution</text>
+    <text class="sub" x="764" y="444">tool_calls · matched_probes · status</text>
+  </g>
+  <path class="edge" marker-end="url(#ah)" d="M653,462 L653,486"/>
+  <g class="node"><rect x="618" y="488" width="70" height="26" rx="8"/><text class="sub" x="653" y="501">pending</text></g>
+  <path class="edge" marker-end="url(#ah)" d="M688,501 L706,501"/>
+  <g class="node"><rect x="708" y="488" width="98" height="26" rx="8"/><text class="sub" x="757" y="501">in_progress</text></g>
+  <path class="edge" marker-end="url(#ah)" d="M806,501 L824,501"/>
+  <g class="node end"><rect x="826" y="488" width="84" height="26" rx="13"/><text class="sub" x="868" y="501">completed</text></g>
+  <text class="note" x="686" y="539">also terminal</text>
+  <g class="node end"><rect x="754" y="522" width="78" height="26" rx="13"/><text class="sub" x="793" y="535">skipped</text></g>
+  <g class="node end"><rect x="840" y="522" width="70" height="26" rx="13"/><text class="sub" x="875" y="535">failed</text></g>
+
+  <text class="note" x="470" y="590">Denied: the tool is not in the step's expected_tools or its skills' allowed_tools, max_tool_calls is reached, or the playbook is complete.</text>
+  <text class="note" x="470" y="610">Advance: when every expected_tools entry has been seen, or max_tool_calls is reached, the hook calls complete_current_step().</text>
+  <text class="note" x="470" y="630">Probes never block: a step closed with one unmatched, or under min_tool_calls, records evidence_incomplete / insufficient_effort.</text>
+</svg>

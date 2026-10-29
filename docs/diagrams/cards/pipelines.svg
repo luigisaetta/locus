@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pipelines card: SequentialPipeline chains agents, output to input; LoopAgent
+  (dashed return) runs one agent again until a reviewer clears it.
+  locus/agent/composition.py: SequentialPipeline.run, LoopAgent.run
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>Three agents in a chain, with a return edge for the loop</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="6" y="18" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M28,25 L35,25"/>
+  <g class="node primary"><rect x="37" y="18" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M59,25 L66,25"/>
+  <g class="node"><rect x="68" y="18" width="22" height="14" rx="3"/></g>
+  <path class="edge dashed" marker-end="url(#ah)" d="M79,32 L79,44 L17,44 L17,34"/>
+</svg>

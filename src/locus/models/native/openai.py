@@ -9,13 +9,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
 from locus.core.events import ModelChunkEvent
-from locus.core.loop_bound import loop_bound
+from locus.core.loop_bound import loop_bound, own_loop_http_client
 from locus.core.media import (
     EARLIER_IMAGE_OMITTED,
     ImagePart,
@@ -423,12 +424,22 @@ _RESPONSES_RESERVED_PARAMS = frozenset(
 
 _RESPONSES_PARAMS = _responses_param_names()
 
-#: Model families served only by the Responses API. GPT-5.6 rejects function
-#: tools on chat-completions whenever reasoning is active — the API 400s with
-#: "Function tools with reasoning_effort are not supported … use /v1/responses
-#: or set reasoning_effort to 'none'" — and disabling reasoning defeats the
-#: family's purpose, so ``api="auto"`` routes these to ``/v1/responses``.
-_RESPONSES_ONLY_PREFIXES = ("gpt-5.6",)
+#: Families that take ``max_completion_tokens`` instead of ``max_tokens``:
+#: the o-series (``o1``…``o9``, with or without a suffix) and ``gpt-5`` and
+#: every later generation (``gpt-5.6-sol``, ``gpt-6``, ``gpt-6.1-sol``,
+#: ``gpt-10``…). ``gpt-4o`` / ``gpt-4.1`` stay on ``max_tokens``.
+_MAX_COMPLETION_TOKENS_FAMILY = re.compile(r"^(?:o[1-9]\d*|gpt-(?:[5-9]|[1-9]\d+))(?:[-.]|$)")
+
+#: Model families served only by the Responses API. GPT-5.6 and GPT-6 (6,
+#: 6.1, …) reject function tools on chat-completions whenever reasoning is
+#: active — the API 400s with "Function tools with reasoning_effort are not
+#: supported … use /v1/responses or set reasoning_effort to 'none'" — and
+#: disabling reasoning defeats the family's purpose, so ``api="auto"`` routes
+#: these to ``/v1/responses``. The ``-pro`` models (gpt-5-pro, gpt-5.2-pro,
+#: gpt-5.4-pro, gpt-5.5-pro, …) are not chat models at all: chat-completions
+#: answers 404 "This is not a chat model".
+_RESPONSES_ONLY_PREFIXES = ("gpt-5.6", "gpt-6")
+_RESPONSES_ONLY_PRO = re.compile(r"^gpt-5(?:\.\d+)?-pro(?:-|$)")
 
 #: ``Message.metadata`` key under which the Responses path stashes the raw
 #: output items of an assistant turn (reasoning items with their
@@ -748,7 +759,7 @@ class OpenAIModel(BaseModel):
         def build() -> openai.AsyncOpenAI:
             import openai  # noqa: PLC0415
 
-            http_client = None
+            http_kwargs: dict[str, Any] = {}
             if not self.config.keepalive:
                 import sys  # noqa: PLC0415
 
@@ -757,7 +768,7 @@ class OpenAIModel(BaseModel):
                 # (httpx2 from openai 3.x, httpx before), whatever else is installed.
                 http_lib = sys.modules[openai.DefaultAsyncHttpxClient.__mro__[1].__module__]
                 limits = http_lib.Limits(max_keepalive_connections=0)
-                http_client = openai.DefaultAsyncHttpxClient(limits=limits)
+                http_kwargs["limits"] = limits
             return openai.AsyncOpenAI(
                 api_key=self.config.api_key,
                 base_url=self.config.base_url,
@@ -765,7 +776,7 @@ class OpenAIModel(BaseModel):
                 default_headers=self.config.default_headers,
                 max_retries=self.config.max_retries,
                 timeout=self.config.request_timeout,
-                http_client=http_client,
+                http_client=own_loop_http_client(openai, **http_kwargs),
             )
 
         return loop_bound(self, "_client", build)
@@ -921,44 +932,53 @@ class OpenAIModel(BaseModel):
     def _uses_max_completion_tokens(model: str) -> bool:
         """Whether the model requires ``max_completion_tokens`` over ``max_tokens``.
 
-        Detects the o1 / o3 / gpt-5* families. Tolerates a leading
-        purely-alphabetic namespace segment so namespaced model ids
-        (``openai.gpt-5``, ``vendor.model-…``) are treated the same as
+        Detects the o-series (``o1``, ``o3``, ``o4-mini``, …) and every
+        ``gpt-5`` and later generation (``gpt-5.6-sol``, ``gpt-6-astra``,
+        ``gpt-6.1-sol``) — OCI answers ``400 Unsupported parameter:
+        'max_tokens' … Use 'max_completion_tokens' instead`` for the newer
+        ones, so a fixed prefix list goes stale with each release. Tolerates
+        a leading purely-alphabetic namespace segment so namespaced model
+        ids (``openai.gpt-5``, ``vendor.model-…``) are treated the same as
         native OpenAI names (``gpt-5.1-chat-latest``). Native ids start
         with a token containing digits/hyphens (``gpt-5``, ``o1-…``) so
         the namespace strip is a no-op for them.
         """
         name = _strip_model_namespace(model.lower())
-        return any(name.startswith(prefix) for prefix in ("o1", "o3", "gpt-5"))
+        return _MAX_COMPLETION_TOKENS_FAMILY.match(name) is not None
 
     @staticmethod
     def _rejects_sampling_params(model: str) -> bool:
         """Whether the model rejects ``temperature`` / ``top_p``.
 
-        OpenAI's ``*-search-preview`` chat-completions models perform their
-        own retrieval and refuse caller-supplied sampling controls with a
-        400 ``Model incompatible request arguments supplied: temperature,
-        top_p`` error. Treat them like reasoning models for the purposes
+        OpenAI's search models (``*-search-preview``, ``*-search-api``)
+        perform their own retrieval and refuse caller-supplied sampling
+        controls with a 400 ``Model incompatible request arguments
+        supplied: temperature, top_p`` error. Treat them like reasoning models for the purposes
         of building the request body, even though they still use plain
         ``max_tokens``.
         """
-        return "search-preview" in _strip_model_namespace(model.lower())
+        name = _strip_model_namespace(model.lower())
+        return "search-preview" in name or "search-api" in name
 
     @staticmethod
     def _requires_responses_api(model: str) -> bool:
         """Whether the model family is served only by the Responses API.
 
-        The GPT-5.6 family (sol / terra / luna) rejects function tools on
-        chat-completions whenever reasoning is active: the API 400s with
-        "Function tools with reasoning_effort are not supported … To use
-        function tools, use /v1/responses or set reasoning_effort to
-        'none'". Setting effort to none defeats the family's purpose, so
-        these models route to ``/v1/responses`` under ``api="auto"``.
-        Tolerates a leading purely-alphabetic namespace segment like the
-        other family detectors.
+        The GPT-5.6 and GPT-6 families (sol / terra / luna / astra, 6.1 …)
+        reject function tools on chat-completions whenever reasoning is
+        active: the API 400s with "Function tools with reasoning_effort are
+        not supported … To use function tools, use /v1/responses or set
+        reasoning_effort to 'none'". Setting effort to none defeats the
+        family's purpose, so these models route to ``/v1/responses`` under
+        ``api="auto"``. The ``gpt-5*-pro`` models are Responses-only outright
+        (chat-completions: 404 "This is not a chat model"). Tolerates a
+        leading purely-alphabetic namespace segment like the other family
+        detectors.
         """
         name = _strip_model_namespace(model.lower())
-        return name.startswith(_RESPONSES_ONLY_PREFIXES)
+        return (
+            name.startswith(_RESPONSES_ONLY_PREFIXES) or _RESPONSES_ONLY_PRO.match(name) is not None
+        )
 
     def _use_responses_api(self) -> bool:
         """Whether this instance's requests go to ``/v1/responses``.

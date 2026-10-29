@@ -13,7 +13,7 @@ code, you're talking to GPT-5 or the o-series reasoning models.
 |---|---|
 | GPT-5, GPT-4o, or any latest OpenAI release | ✓ |
 | The o-series reasoning models (`o3`, `o4-mini`) | ✓ |
-| To go through Azure / Portkey / LiteLLM / vLLM | ✓ — same class, different `base_url` |
+| To go through Portkey / LiteLLM / vLLM | ✓ — same class, different `base_url` |
 
 ## Getting started
 
@@ -56,7 +56,7 @@ Vision input (image URLs / base64), audio input, and
 function calling work the same way you'd use them on the OpenAI SDK
 directly — the SDK just normalises the events the model emits.
 
-Image *generation* (`gpt-image-1`) is a separate provider, not a chat
+Image *generation* (`gpt-image-2`) is a separate provider, not a chat
 model — see [Multi-modal providers](../multi-modal-providers.md).
 
 ### Reasoning models — the o-series
@@ -77,12 +77,14 @@ it goes. Note: OpenAI does not return separate reasoning traces over the
 API, so the `ThinkEvent` carries the model's normal per-turn message
 text, not hidden chain-of-thought.
 
-### The gpt-5.6 family and the Responses API
+### Responses-only families: gpt-5.6, gpt-6 and the `-pro` models
 
 `OpenAIModel` speaks both OpenAI wire APIs. `api="auto"` (the default) sends
-chat-completions for everything except model ids starting with `gpt-5.6`
-(`gpt-5.6-sol`, `-terra`, `-luna`): that family rejects function tools on
-chat-completions whenever reasoning is active, so Locus routes it to
+chat-completions for everything except the families that chat-completions
+cannot serve: ids starting with `gpt-5.6` or `gpt-6` (`gpt-5.6-sol`,
+`gpt-6-sol`, `gpt-6.1-terra`, …) reject function tools whenever reasoning is
+active, and the `gpt-5*-pro` models (`gpt-5-pro`, `gpt-5.4-pro`,
+`gpt-5.5-pro`, …) are not chat models at all. Locus routes all of them to
 `/v1/responses`. Auto-routing fires only when no `base_url` is passed to the
 model. With a custom `base_url` the request stays on chat-completions, because
 an OpenAI-compatible gateway typically does not serve the Responses path. A
@@ -108,7 +110,7 @@ deltas, the SDK turns them into `ModelChunkEvent`s, your `async for`
 loop reads them as they arrive — no buffering, no fake chunking.
 
 ```python
-async for event in agent.run("Summarise the history of order ord-4821."):
+async for event in agent.run("Summarise the history of order ord-4821.", stream_tokens=True):
     if isinstance(event, ModelChunkEvent) and event.content:
         print(event.content, end="", flush=True)
 ```
@@ -151,7 +153,6 @@ OpenAI-compatible endpoint:
 
 | Gateway | When to use it | `base_url` |
 |---|---|---|
-| **Azure OpenAI** | Enterprise / regulated workloads, Azure billing | `https://<resource>.openai.azure.com/openai/deployments/<deployment-id>` |
 | **Portkey** | Virtual keys, request routing across providers, retries | `https://api.portkey.ai/v1` |
 | **LiteLLM Proxy** | Self-hosted control plane in front of N providers | `https://<your-litellm-host>/v1` |
 | **vLLM** | Self-hosted inference for open models with the OpenAI shape | `http://localhost:8000/v1` |
@@ -162,16 +163,15 @@ hand it to the agent:
 
 ```python
 from locus.agent import Agent
-from locus.models.native.openai import OpenAIModel
+from locus.models import OpenAIModel
 
 agent = Agent(
     model=OpenAIModel(model="gpt-4o", base_url="https://api.portkey.ai/v1"),
 )
 ```
 
-The `api_key` your `OPENAI_API_KEY` provides is forwarded — for Azure
-that's the Azure resource key, for Portkey it's the Portkey virtual
-key, etc.
+The `api_key` your `OPENAI_API_KEY` provides is forwarded — for Portkey
+it's the Portkey virtual key, etc.
 
 ## Handling sensitive data
 
@@ -192,7 +192,7 @@ stream — the faithful trace you forward to your logging backend — and
 admission decisions land on the hash-chained
 [`AuditTrail`](../agentic-ai-security.md) (hash-chained: each entry
 commits to the one before it, so editing any record breaks
-verification). Routing through a gateway (Azure / Portkey /
+verification). Routing through a gateway (Portkey /
 LiteLLM) keeps your `OPENAI_API_KEY` off the egress path when policy
 requires it.
 

@@ -14,7 +14,7 @@ opencode ``agent/`` files work unchanged::
     ---
     name: reviewer
     description: Reviews a diff for bugs. Use after a change, before commit.
-    model: anthropic:claude-sonnet-4-6
+    model: anthropic:claude-sonnet-5-5
     tools: read, grep, glob          # or a YAML list
     disallowed_tools: [bash]
     mode: subagent                   # primary | subagent | all

@@ -11,7 +11,7 @@
 No credentials to hand? Two things run with none at all::
 
     python -m locus.rogue                       # the 30-second control demo
-    python examples/notebook_06_basic_agent.py  # the notebooks use a mock model
+    python examples/notebook_02_basic_agent.py  # the notebooks use a mock model
 
 The numbered notebooks each teach one idea against a worked scenario, which
 makes them longer than the API they demonstrate. This file is the API and

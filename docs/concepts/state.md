@@ -8,21 +8,28 @@ metadata dict for application code.
 It's an **immutable Pydantic model**: every mutation returns a new
 instance, every collection is a `tuple` or `frozenset`, and the whole
 thing round-trips through JSON without loss. That immutability is
-load-bearing — it's why checkpoints are reproducible, why two
+load-bearing — it is why checkpoints are reproducible, why two
 parallel branches in a graph can each "modify" the state without
-stepping on each other, and why a hook reading `state.tool_executions`
-can't accidentally corrupt the run.
+interfering with each other, and why a hook reading
+`state.tool_executions` cannot accidentally corrupt the run. Here is
+one iteration of the agent loop seen from the state's side: each node
+takes the current `AgentState` and returns a new one, hooks read it,
+and the checkpointer saves it at its save points.
+
+{{ locus_diagram state-flow }}
+
+The same guarantee at the call site:
 
 ```python
 from locus.core.state import AgentState
 from locus.core.messages import Message, Role
 
-state = AgentState(agent_id="my-agent", max_iterations=20)
-state = state.with_message(Message(role=Role.USER, content="hi"))
-state = state.with_confidence(0.85)
+original = AgentState(agent_id="my-agent", max_iterations=20)
+original = original.with_message(Message(role=Role.USER, content="hi"))
+updated = original.with_confidence(0.85)
 
-# The original is untouched.
-assert state.confidence == 0.85
+# Every with_* returns a copy; the original is untouched.
+assert original.confidence != updated.confidence
 ```
 
 ## When you'll touch state directly
@@ -43,7 +50,7 @@ for you. Reach for it when:
 | Field | Type | Meaning |
 |---|---|---|
 | `run_id` | `str` (UUID) | Unique to this run. |
-| `agent_id` | `str \| None` | Stable identifier carried across runs of the same agent. |
+| `agent_id` | <code>str &#124; None</code> | Stable identifier carried across runs of the same agent. |
 | `messages` | `tuple[Message, ...]` | Full conversation, in order. |
 | `iteration` | `int` | Current ReAct iteration index. |
 | `max_iterations` | `int` | Upper bound before termination. |
@@ -56,7 +63,7 @@ for you. Reach for it when:
 | `tool_loop_threshold` | `int` | How many identical consecutive calls qualify as a loop. |
 | `terminal_tools` | `frozenset[str]` | Tool names that auto-end the run when called. |
 | `total_tokens_used` | `int` | Running total. `prompt_tokens_used` + `completion_tokens_used`. |
-| `token_budget` | `int \| None` | Optional cap; `TokenLimit` reads this. |
+| `token_budget` | <code>int &#124; None</code> | Optional cap; `TokenLimit` reads this. |
 | `errors` | `tuple[str, ...]` | Tool/model error messages encountered this run. |
 | `metadata` | `dict[str, Any]` | Free-form context you can attach. |
 | `started_at`, `updated_at` | `datetime` | UTC timestamps. |
@@ -79,9 +86,11 @@ state = (
 )
 ```
 
-The full set: `with_message`, `with_messages`, `with_iteration`,
+The common ones: `with_message`, `with_messages`, `with_iteration`,
 `with_tool_execution`, `with_reasoning_step`, `with_confidence`,
-`with_error`, `with_metadata`, `with_token_usage`.
+`with_error`, `with_metadata`, `with_token_usage`. `next_iteration()`
+is shorthand for `with_iteration(iteration + 1)`; it is what the loop
+calls before Think, as the diagram shows.
 
 ## Round-trip through JSON
 
@@ -91,8 +100,8 @@ restored = AgentState.from_checkpoint(data)
 assert restored == state
 ```
 
-Every checkpointer in `locus.memory.backends` uses this pair under the
-hood. If you're writing a custom backend, all you need to do is
+Every checkpointer in `locus.memory.backends` uses this pair
+internally. If you're writing a custom backend, all you need to do is
 serialize whatever `to_checkpoint()` returns and rehydrate with
 `from_checkpoint()` on resume.
 
@@ -114,13 +123,13 @@ to know how to merge them. That's what reducers do:
 Reducers are **opt-in at the graph level** — a plain `agent.run(...)`
 doesn't use them. See `locus.core.reducers` for the source.
 
-## Common gotchas
+## Common problems
 
 | Symptom | Likely cause |
 |---|---|
 | `state.messages.append(...)` raises | Tuples are immutable. Use `state.with_message(m)`. |
 | `to_checkpoint()` round-trip drops a field | The field's value isn't JSON-serialisable (e.g., a custom class in `metadata`). Stash a serialisable form, or extend the checkpointer. |
-| Two branches in a graph clobber each other's messages | You forgot to declare the reducer for `messages`. Use `add_messages`. |
+| Two branches in a graph overwrite each other's messages | You forgot to declare the reducer for `messages`. Use `add_messages`. |
 | `confidence_history` has fewer entries than iterations | Reflexion isn't running (`reflexion=True` not set), or the run terminated before the first reflect step. |
 
 ## Source
@@ -133,4 +142,4 @@ doesn't use them. See `locus.core.reducers` for the source.
 - [Checkpointers](checkpointers.md) — durable persistence of `AgentState`.
 - [Events](events.md) — what gets emitted as state changes.
 - [Termination](termination.md) — `CustomCondition(fn)` is `(state, **ctx) -> (stop, reason)`.
-- [Multi-agent: StateGraph](multi-agent/graph.md) — where reducers earn their keep.
+- [Multi-agent: StateGraph](multi-agent/graph.md) — where reducers are needed.

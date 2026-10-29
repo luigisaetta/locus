@@ -1,0 +1,179 @@
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
+"""
+Notebook 04: a chat loop — actually talking to your agent.
+
+The other examples in this series are batch scripts: each asks one thing,
+prints the answer, and exits. That is the right shape for teaching a
+primitive and the wrong shape for the first thing most people want to do,
+which is have a conversation.
+
+This is the missing REPL. It is deliberately small — a loop, a checkpointer,
+and one ``thread_id`` — because the interesting part is not the loop, it is
+that continuity comes from the checkpointer rather than from anything you
+have to hold in your own code. Every turn is saved; the next turn resumes
+from the saved state. Swap ``MemoryCheckpointer`` for Redis or Postgres and
+the same conversation survives a restart.
+
+What this notebook covers:
+- A ``thread_id`` names the conversation; the checkpointer stores it.
+- The loop keeps no history of its own — the agent's state is the history.
+- Each answer is printed with the tool calls the agent made to reach it, so
+  you can see the agent act rather than infer it from the answer.
+- ``/reset`` starts a fresh thread, which shows the boundary a
+  ``thread_id`` draws: same agent, no shared memory.
+
+Run it:
+    .venv/bin/python examples/notebook_04_chat_loop.py
+
+Non-interactive (CI, or just to see the shape) — the script detects a
+non-tty and replays a scripted conversation instead of prompting:
+    echo "" | .venv/bin/python examples/notebook_04_chat_loop.py
+
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile,
+otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``,
+``openai``, ``anthropic``, ``mock``) to choose.
+"""
+
+import asyncio
+import sys
+
+from config import get_model, print_config, resolved_provider
+
+from locus.agent import Agent
+from locus.memory.backends import MemoryCheckpointer
+from locus.tools import tool
+
+
+BANNER = """
+Type a message and press enter. The agent remembers the conversation.
+
+  /reset   start a new thread (drops the memory)
+  /thread  show the current thread id
+  /exit    quit
+"""
+
+# A scripted conversation for non-interactive runs. The second turn only
+# makes sense if the first was remembered, which is the point being shown.
+SCRIPTED = [
+    "My name is Marta and I'm looking at flights to Lisbon.",
+    "What's the weather there?",
+    "What did I say my name was?",
+]
+
+
+@tool
+def get_weather(city: str) -> str:
+    """Get the current weather for a city."""
+    known = {
+        "lisbon": "18°C, light rain",
+        "berlin": "9°C, overcast",
+        "tokyo": "24°C, clear",
+    }
+    return f"{city}: {known.get(city.lower(), 'no data on file')}"
+
+
+def build_agent() -> Agent:
+    """One agent, one checkpointer. Continuity lives in the checkpointer."""
+    return Agent(
+        model=get_model(),
+        tools=[get_weather],
+        checkpointer=MemoryCheckpointer(),
+        # Save after every iteration, once its tool results are in the state:
+        # on a durable backend a process exit mid-turn leaves a state that
+        # Agent.continue_turn picks up from the last completed iteration
+        # instead of re-running finished tool calls. On a thread with a
+        # checkpointer that can delete single checkpoints this is already
+        # the default; it is explicit here so the cadence is visible.
+        checkpoint_every_n_iterations=1,
+        system_prompt=(
+            "You are a concise travel assistant. Use the weather tool when "
+            "asked about weather. Keep answers to one or two sentences."
+        ),
+    )
+
+
+async def say(agent: Agent, thread_id: str, text: str) -> None:
+    """Send one turn and print the answer plus any tools the agent used."""
+    result = await agent.arun(text, thread_id=thread_id)
+    for execution in result.tool_executions:
+        print(f"    · {execution.tool_name}({execution.arguments})")
+    print(f"  agent: {(result.text or '').strip()}\n")
+
+
+async def scripted_run(agent: Agent) -> None:
+    """Replay a fixed conversation — used when there is no terminal."""
+    thread_id = "chat-scripted"
+    print("(no terminal detected — replaying a scripted conversation)\n")
+    for line in SCRIPTED:
+        print(f"  you  : {line}")
+        await say(agent, thread_id, line)
+
+    if resolved_provider() == "mock":
+        # Be straight about it: the mock answers the same way whatever it is
+        # asked, so this run shows the loop and the tool calls but proves
+        # nothing about memory. Against a real model the third answer names
+        # you, which is the part worth seeing.
+        print(
+            "The mock answers identically every turn, so memory is not "
+            "visible here.\nRe-run with a live provider and the third answer "
+            "will repeat your name back."
+        )
+    else:
+        print("The third answer is only possible because the first turn was saved.")
+
+
+async def interactive_run(agent: Agent) -> None:
+    """Read from stdin until the user leaves."""
+    thread_id = "chat-1"
+    turn = 1
+    print(BANNER)
+    while True:
+        try:
+            # Off the event loop: a bare input() blocks it, which would stall
+            # any streaming or background work the agent has in flight.
+            line = (await asyncio.to_thread(input, "  you  : ")).strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not line:
+            continue
+        if line == "/exit":
+            break
+        if line == "/thread":
+            print(f"  thread: {thread_id}\n")
+            continue
+        if line == "/reset":
+            turn += 1
+            thread_id = f"chat-{turn}"
+            print(f"  (new thread: {thread_id} — previous memory is not visible)\n")
+            continue
+
+        await say(agent, thread_id, line)
+
+    print("Bye.")
+
+
+async def main() -> None:
+    print("=" * 60)
+    print("Notebook 04: A chat loop")
+    print("=" * 60)
+    print()
+    print_config()
+
+    agent = build_agent()
+    if sys.stdin.isatty():
+        await interactive_run(agent)
+    else:
+        await scripted_run(agent)
+
+    print()
+    print("=" * 60)
+    print("Next: Notebook 05 — Conversation memory: remembering what you told it")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

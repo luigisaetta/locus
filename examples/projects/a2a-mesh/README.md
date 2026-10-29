@@ -6,7 +6,7 @@ with capability-based discovery via `AgentCard`. The mesh models a SOC
 where a threat-intel service and an alert-triage service run as separate
 peers, and an orchestrator routes each request to the right one.
 
-The starting point was [`notebook_28_a2a_protocol.py`][t34]; this is
+The starting point was [`notebook_30_a2a_protocol.py`][t34]; this is
 the project version with proper service boundaries, a Makefile, an
 orchestrator that does real capability-tagged discovery, and an
 integration test.
@@ -130,6 +130,6 @@ Vite proxies `/api/intel/*` and `/api/triage/*` to the two services,
 so it works against the same `make intel` / `make triage` pair from
 above.
 
-[t34]: https://github.com/oracle/locus/blob/main/examples/notebook_28_a2a_protocol.py
+[t34]: https://github.com/oracle/locus/blob/main/examples/notebook_30_a2a_protocol.py
 [a2a]: https://github.com/oracle/locus/blob/main/src/locus/a2a/protocol.py
 [orch]: https://locusagents.ai/concepts/multi-agent/orchestrator/

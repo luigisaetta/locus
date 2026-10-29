@@ -1,0 +1,207 @@
+# Copyright (c) 2025, 2026 Oracle and/or its affiliates.
+# Licensed under the Universal Permissive License v1.0 as shown at
+# https://oss.oracle.com/licenses/upl/
+"""
+Notebook 08: bounded resolution — deciding when the support loop stops.
+
+A customer-support agent that never stops is a liability: a ticket
+triage loop must end after a fixed budget, a time limit, or as soon as
+the agent declares the issue resolved — both to bound cost and to keep
+the customer from waiting on an agent that keeps talking to itself.
+Locus ships a handful of small predicates that you compose with ``|``
+(OR) and ``&`` (AND) to describe exactly when the loop should end. This
+notebook also covers two related features: ``output_key`` (auto-save the
+final verdict into the agent's state metadata) and a callable
+``system_prompt`` that picks its text from runtime context.
+
+Key ideas:
+- Termination predicates: ``MaxIterations``, ``TextMention``,
+  ``TokenLimit``, ``TimeLimit``, ``ConfidenceMet``, plus
+  ``CustomCondition(callable)`` for anything else.
+- Combine them: ``MaxIterations(5) | TextMention("TICKET_RESOLVED")``
+  stops on either; ``MaxIterations(3) & TokenLimit(1000)`` stops only
+  when both budgets are met.
+- ``output_key="resolution"`` tells the agent to write ``result.message``
+  into ``result.state.metadata["resolution"]`` — handy for handing data
+  between agents without parsing prose.
+- ``system_prompt`` can be a callable ``ctx -> str``; Locus calls it
+  with the runtime context (including ``metadata``) on every turn.
+
+Run it:
+    .venv/bin/python examples/notebook_08_termination.py
+
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile,
+otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``,
+``openai``, ``anthropic``, ``mock``) to choose.
+"""
+
+import asyncio
+
+from config import get_model, print_config
+
+from locus.agent import Agent, AgentConfig
+from locus.core.termination import (
+    ConfidenceMet,
+    CustomCondition,
+    MaxIterations,
+    TextMention,
+    TimeLimit,
+    TokenLimit,
+)
+
+
+# =============================================================================
+# Part 1: composing termination predicates with | and &
+# =============================================================================
+
+
+async def example_termination():
+    """Build OR / AND combinations of stop predicates and probe them by hand."""
+    print("=== Part 1: Composable Termination ===\n")
+
+    from locus.core.messages import Message
+    from locus.core.state import AgentState
+
+    # OR — stop the resolution loop when either predicate fires.
+    condition = MaxIterations(5) | TextMention("TICKET_RESOLVED")
+    print("MaxIterations(5) | TextMention('TICKET_RESOLVED')")
+
+    state = AgentState(agent_id="support").with_iteration(6)
+    stop, reason = condition.check(state)
+    print(f"  Turn 6: stop={stop}, reason={reason}")
+
+    state2 = AgentState(agent_id="support").with_message(
+        Message.assistant("Refund issued and confirmation emailed. TICKET_RESOLVED")
+    )
+    stop2, reason2 = condition.check(state2)
+    print(f"  Message 'TICKET_RESOLVED': stop={stop2}, reason={reason2}")
+
+    # AND — stop only when both budget predicates fire.
+    condition2 = MaxIterations(3) & TokenLimit(1000)
+    print("\nMaxIterations(3) & TokenLimit(1000)")
+
+    state3 = AgentState(agent_id="support").with_iteration(4)
+    stop3, _ = condition2.check(state3)
+    print(f"  Iterations met, tokens not: stop={stop3}")
+
+    state4 = state3.with_token_usage(prompt_tokens=600, completion_tokens=500)
+    stop4, reason4 = condition2.check(state4)
+    print(f"  Both met: stop={stop4}, reason={reason4}")
+
+    # A predicate of your own, through CustomCondition.
+    custom = CustomCondition(lambda state, **_ctx: (state.iteration > 10, "reply_budget_exhausted"))
+    print(f"\nCustomCondition: {custom.check(AgentState(agent_id='s').with_iteration(11))}")
+
+    # Two more off-the-shelf predicates, probed the same way. TimeLimit starts
+    # its clock on the first check, so a fresh one with an hour to spare says no.
+    confident = AgentState(agent_id="support").with_confidence(0.92)
+    print(f"ConfidenceMet(0.9) at confidence 0.92: {ConfidenceMet(0.9).check(confident)}")
+    print(f"TimeLimit(3600) on a fresh run: {TimeLimit(3600).check(confident)}")
+
+    # The same composed condition attached to a real agent. Locus evaluates it
+    # at the start of each iteration, before the model call; result.stop_reason
+    # is the normalized reason, and a reply with no tool calls ends the run as
+    # "complete" under the default completion_mode="auto".
+    agent = Agent(
+        model=get_model(max_tokens=80),
+        system_prompt=(
+            "You are a support triage agent. When a ticket is fully handled, end "
+            "your reply with the word TICKET_RESOLVED."
+        ),
+        termination=MaxIterations(5) | TextMention("TICKET_RESOLVED"),
+    )
+    result = await agent.arun("Ticket #4471: refund issued and confirmation emailed. Close it out.")
+    print(f"\nAgent reply: {result.message.strip()[:80]}")
+    print(f"Stop reason: {result.stop_reason}")
+    print()
+
+
+# =============================================================================
+# Part 2: output_key — store the resolution at a known key
+# =============================================================================
+
+
+async def example_output_key():
+    """Set output_key='resolution' and the final message lands in state.metadata['resolution']."""
+    print("=== Part 2: output_key ===\n")
+
+    model = get_model()
+
+    agent = Agent(
+        config=AgentConfig(
+            system_prompt="You are a support triage assistant. Answer in one word.",
+            max_iterations=3,
+            model=model,
+            output_key="resolution",
+        )
+    )
+
+    result = await agent.arun(
+        "Disposition for a customer asking to reset a password they simply forgot?"
+    )
+    print(f"Response: {result.message}")
+    print(f"State metadata['resolution']: {result.state.metadata.get('resolution')}")
+    print("Downstream agents read state.metadata['resolution'] directly — no parsing.")
+    print()
+
+
+# =============================================================================
+# Part 3: a callable system prompt
+# =============================================================================
+
+
+async def example_dynamic_prompt():
+    """System prompt is a function of runtime context.metadata."""
+    print("=== Part 3: Dynamic System Prompt ===\n")
+
+    model = get_model()
+
+    def my_prompt(context):
+        role = context.get("metadata", {}).get("role", "support agent")
+        audience = context.get("metadata", {}).get("audience", "the customer")
+        return f"You are a {role}. Write for {audience}. Be concise."
+
+    agent = Agent(
+        config=AgentConfig(
+            system_prompt=my_prompt,
+            max_iterations=3,
+            model=model,
+        )
+    )
+
+    # Different metadata → different system prompt → different behaviour.
+    r1 = await agent.arun(
+        "Summarize: customer was double-charged $49.99 on their last invoice.",
+        metadata={"role": "tier-1 support agent"},
+    )
+    print(f"Tier-1 agent: {r1.message}")
+
+    r2 = await agent.arun(
+        "What does 'chargeback' mean on a billing ticket?",
+        metadata={"role": "billing specialist", "audience": "non-technical customers"},
+    )
+    print(f"Billing specialist (for customers): {r2.message[:100]}")
+    print()
+
+
+async def main():
+    """Run all notebook parts."""
+    print("=" * 60)
+    print("Notebook 08: Bounded Resolution — When the Support Loop Stops")
+    print("=" * 60)
+    print()
+
+    print_config()
+    print()
+
+    await example_termination()
+    await example_output_key()
+    await example_dynamic_prompt()
+
+    print("=" * 60)
+    print("Next: Notebook 09 — Audit hooks: every agent action on the record")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

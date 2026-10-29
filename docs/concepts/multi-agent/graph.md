@@ -60,10 +60,14 @@ class ResearchState(BaseModel):
 graph = StateGraph(state_schema=ResearchState)
 
 # Each node is a function that takes the state dict and returns the fields it updates.
-graph.add_node("plan", plan_agent)
-graph.add_node("investigate", investigate_agent)
-graph.add_node("report", report_agent)
-graph.add_node("review", review_agent)
+# An Agent is not callable; await it inside the function.
+async def plan(state):
+    return {"findings": [(await planner.arun(state["prompt"])).message]}
+
+graph.add_node("plan", plan)
+graph.add_node("investigate", investigate)   # same shape, wrapping its own agent
+graph.add_node("report", report)
+graph.add_node("review", review)
 
 graph.add_edge(START, "plan")
 graph.add_edge("plan", "investigate")
@@ -86,7 +90,7 @@ from locus.multiagent.graph import RetryPolicy, CachePolicy
 
 graph.add_node(
     "investigate",
-    investigate_agent,
+    investigate,
     retry_policy=RetryPolicy(max_attempts=3, backoff_factor=2.0),
     cache_policy=CachePolicy(ttl_seconds=3600),
 )
@@ -138,24 +142,24 @@ so that graph's review loop is missing from the output. Pass a
 
 ## Notebooks
 
-- [`notebook_16_basic_graph.py`](https://github.com/oracle/locus/blob/main/examples/notebook_16_basic_graph.py)
+- [`notebook_12_basic_graph.py`](https://github.com/oracle/locus/blob/main/examples/notebook_12_basic_graph.py)
   — your first StateGraph.
-- [`notebook_17_conditional_routing.py`](https://github.com/oracle/locus/blob/main/examples/notebook_17_conditional_routing.py)
+- [`notebook_13_conditional_routing.py`](https://github.com/oracle/locus/blob/main/examples/notebook_13_conditional_routing.py)
   — `add_conditional_edges`.
-- [`notebook_18_state_reducers.py`](https://github.com/oracle/locus/blob/main/examples/notebook_18_state_reducers.py)
+- [`notebook_14_state_reducers.py`](https://github.com/oracle/locus/blob/main/examples/notebook_14_state_reducers.py)
   — custom state reducers.
-- [`notebook_22_graph_advanced.py`](https://github.com/oracle/locus/blob/main/examples/notebook_22_graph_advanced.py)
+- [`notebook_17_graph_advanced.py`](https://github.com/oracle/locus/blob/main/examples/notebook_17_graph_advanced.py)
   — `RetryPolicy`, `CachePolicy`, Mermaid output, streaming with `emit_custom`.
-- [`notebook_30_map_reduce_code_review.py`](https://github.com/oracle/locus/blob/main/examples/notebook_30_map_reduce_code_review.py)
+- [`notebook_20_map_reduce_support_triage.py`](https://github.com/oracle/locus/blob/main/examples/notebook_20_map_reduce_support_triage.py)
   — `Send` fan-out / reduce in a graph.
-- [`notebook_31_supervisor_critic_loop.py`](https://github.com/oracle/locus/blob/main/examples/notebook_31_supervisor_critic_loop.py)
+- [`notebook_21_supervisor_critic_loop.py`](https://github.com/oracle/locus/blob/main/examples/notebook_21_supervisor_critic_loop.py)
   — a draft → review loop on `add_conditional_edges`, capped at two
   revisions by a counter in state.
-- [`notebook_63_incident_response.py`](https://github.com/oracle/locus/blob/main/examples/notebook_63_incident_response.py)
+- [`notebook_77_incident_response.py`](https://github.com/oracle/locus/blob/main/examples/notebook_77_incident_response.py)
   — triage → parallel investigators → severity gate → page-the-human.
-- [`notebook_64_procurement_approval.py`](https://github.com/oracle/locus/blob/main/examples/notebook_64_procurement_approval.py)
+- [`notebook_78_concession_approval.py`](https://github.com/oracle/locus/blob/main/examples/notebook_78_concession_approval.py)
   — stacked `interrupt()` gates with tier routing.
-- [`notebook_65_contract_review.py`](https://github.com/oracle/locus/blob/main/examples/notebook_65_contract_review.py)
+- [`notebook_79_contract_review.py`](https://github.com/oracle/locus/blob/main/examples/notebook_79_contract_review.py)
   — parallel reviewers + `Command(goto=...)` to short-circuit a loop.
 
 ## Source

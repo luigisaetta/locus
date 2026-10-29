@@ -279,6 +279,116 @@ class TestOpenAISearchPreviewProvider:
         assert out[0].title == "1"
         assert out[1].title == "2"
 
+    @pytest.mark.asyncio
+    async def test_sends_no_response_format(self) -> None:
+        # gpt-5-search-api answers a json_schema response_format with a 500
+        # and json_object with a 400, so the JSON contract travels in the
+        # prompt of the fallback request instead.
+        model = MagicMock()
+        model.complete = AsyncMock(return_value=_build_response('{"results":[]}'))
+        await OpenAISearchPreviewProvider(model).search("q", max_results=4)
+        kwargs = model.complete.call_args.kwargs
+        assert "response_format" not in kwargs
+        system_prompt = kwargs["messages"][0].content
+        assert '"results"' in system_prompt
+        assert "top 4 results" in system_prompt
+
+    @pytest.mark.asyncio
+    async def test_parses_json_wrapped_in_prose(self) -> None:
+        # Without a response_format the model may add a sentence around the
+        # object; the outermost {...} still has to parse.
+        model = MagicMock()
+        model.complete = AsyncMock(
+            return_value=_build_response(
+                "Here are the results: "
+                '{"results":[{"title":"t","url":"https://t.example","snippet":"s"}]} '
+                "Let me know if you need more."
+            )
+        )
+        out = await OpenAISearchPreviewProvider(model).search("q")
+        assert [h.url for h in out] == ["https://t.example"]
+
+    @pytest.mark.asyncio
+    async def test_falls_back_when_model_has_no_client(self) -> None:
+        # A model object without a client attribute (a plain stub) cannot be
+        # asked for citations; the prompt path answers instead.
+        model = MagicMock(spec=["complete", "config"])
+        model.complete = AsyncMock(
+            return_value=_build_response(
+                '{"results":[{"title":"t","url":"https://t.example","snippet":"s"}]}'
+            )
+        )
+        out = await OpenAISearchPreviewProvider(model).search("q")
+        assert [h.url for h in out] == ["https://t.example"]
+
+    @pytest.mark.asyncio
+    async def test_falls_back_when_reply_has_no_citations(self) -> None:
+        # Prose without a single url_citation yields nothing from the
+        # annotations path, so the prompt path runs.
+        message = MagicMock()
+        message.content = "Nothing to cite here."
+        message.annotations = []
+        completion = MagicMock()
+        completion.choices = [MagicMock(message=message)]
+        model = MagicMock()
+        model.config.model = "gpt-5-search-api"
+        model.client.chat.completions.create = AsyncMock(return_value=completion)
+        model.complete = AsyncMock(
+            return_value=_build_response(
+                '{"results":[{"title":"t","url":"https://t.example","snippet":"s"}]}'
+            )
+        )
+        out = await OpenAISearchPreviewProvider(model).search("q")
+        assert [h.url for h in out] == ["https://t.example"]
+        model.complete.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_object_is_not_hits(self) -> None:
+        # An object of the wrong shape inside the prose means no results,
+        # not an exception.
+        model = MagicMock()
+        model.complete = AsyncMock(
+            return_value=_build_response('Sorry, I can only say {"note": "no results"} today.')
+        )
+        out = await OpenAISearchPreviewProvider(model).search("q")
+        assert out == []
+
+    @pytest.mark.asyncio
+    async def test_prefers_url_citation_annotations(self) -> None:
+        # gpt-5-search-api cites its sources as annotations on the message;
+        # those are the hits, deduplicated by URL and capped at max_results.
+        def citation(url: str, title: str, start: int, end: int) -> Any:
+            c = MagicMock()
+            c.url, c.title, c.start_index, c.end_index = url, title, start, end
+            a = MagicMock()
+            a.url_citation = c
+            return a
+
+        message = MagicMock()
+        message.content = "OpenAI offers ChatGPT and an API for developers."
+        message.annotations = [
+            citation("https://a.example", "A", 0, 13),
+            citation("https://a.example", "A again", 0, 13),
+            citation("https://b.example", "B", 14, 48),
+            citation("https://c.example", "C", 0, 5),
+        ]
+        completion = MagicMock()
+        completion.choices = [MagicMock(message=message)]
+        model = MagicMock()
+        model.config.model = "gpt-5-search-api"
+        model.client.chat.completions.create = AsyncMock(return_value=completion)
+        model.complete = AsyncMock(side_effect=AssertionError("fallback must not run"))
+
+        out = await OpenAISearchPreviewProvider(model).search("q", max_results=2)
+
+        assert [(h.title, h.url, h.snippet) for h in out] == [
+            ("A", "https://a.example", "OpenAI offers"),
+            ("B", "https://b.example", "ChatGPT and an API for developers."),
+        ]
+        sent = model.client.chat.completions.create.call_args.kwargs
+        assert sent["model"] == "gpt-5-search-api"
+        assert "response_format" not in sent
+
     def test_provider_is_runtime_checkable(self) -> None:
         model = MagicMock()
         provider = OpenAISearchPreviewProvider(model)

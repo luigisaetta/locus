@@ -39,7 +39,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -81,6 +83,82 @@ def _default_agent_id(state: AgentState) -> str | None:
     return str(value) if value else None
 
 
+_LITELLM_OCI_ENV = ("OCI_USER", "OCI_KEY_FILE", "OCI_KEY_CONTENT", "OCI_FINGERPRINT")
+
+
+def oci_litellm_auth(spec: str) -> dict[str, Any]:
+    """litellm OCI auth kwargs for an ``oci/...`` model spec, or ``{}``.
+
+    litellm's OCI driver takes a signer or raw key fields per call and does
+    not read ``~/.oci/config``. Locus users already have a profile (API key
+    or ``oci session authenticate`` token) or run under an instance /
+    resource principal, so build the signer from that, the way
+    ``OCIChatCompletionsModel`` does. Returns ``{}`` for non-OCI specs, when
+    the ``oci`` SDK is missing, when litellm's own ``OCI_USER`` /
+    ``OCI_KEY_FILE`` variables are set (the caller configured litellm
+    directly), or when no usable profile is found, so behaviour is unchanged
+    for anyone not relying on it.
+    """
+    if not spec.startswith("oci/") or any(os.environ.get(k) for k in _LITELLM_OCI_ENV):
+        return {}
+    try:
+        import oci  # noqa: PLC0415
+    except ImportError:
+        return {}
+    region = os.environ.get("OCI_REGION")
+    compartment = os.environ.get("OCI_COMPARTMENT_ID") or os.environ.get("OCI_COMPARTMENT")
+    auth_type = (os.environ.get("OCI_AUTH_TYPE") or "").lower()
+    signer: Any = None
+    try:
+        if auth_type == "instance_principal":
+            signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
+            region = region or getattr(signer, "region", None)
+        elif auth_type == "resource_principal":
+            signer = oci.auth.signers.get_resource_principals_signer()
+            region = region or getattr(signer, "region", None)
+        else:
+            profile = (
+                os.environ.get("OCI_SESSION_PROFILE")
+                or os.environ.get("OCI_PROFILE")
+                or os.environ.get("OCI_CLI_PROFILE")
+                or "DEFAULT"
+            )
+            cfg = oci.config.from_file(profile_name=profile)
+            region = region or cfg.get("region")
+            key_file = str(Path(cfg["key_file"]).expanduser())
+            token_file = cfg.get("security_token_file")
+            if token_file:
+                token = Path(token_file).expanduser().read_text(encoding="utf-8").strip()
+                private_key = oci.signer.load_private_key_from_file(
+                    key_file, cfg.get("pass_phrase")
+                )
+                signer = oci.auth.signers.SecurityTokenSigner(token, private_key)
+            else:
+                signer = oci.signer.Signer(
+                    tenancy=cfg["tenancy"],
+                    user=cfg["user"],
+                    fingerprint=cfg["fingerprint"],
+                    private_key_file_location=key_file,
+                    pass_phrase=cfg.get("pass_phrase"),
+                )
+    except Exception:  # noqa: BLE001 - any config problem means "not derivable"
+        return {}
+    kwargs: dict[str, Any] = {"oci_signer": signer}
+    if region:
+        kwargs["oci_region"] = region
+    if compartment:
+        kwargs["oci_compartment_id"] = compartment
+    return kwargs
+
+
+def _litellm_kwargs_for(spec: str, explicit: dict[str, Any] | None) -> dict[str, Any]:
+    """Auto-derived OCI auth for ``spec`` with the caller's kwargs layered on top."""
+    merged = oci_litellm_auth(spec)
+    if explicit:
+        merged.update(explicit)
+    return merged
+
+
 class OracleAgentMemoryManager(BaseMemoryManager):
     """``BaseMemoryManager`` backed by Oracle's ``oracleagentmemory`` client.
 
@@ -104,7 +182,7 @@ class OracleAgentMemoryManager(BaseMemoryManager):
                 wallet_location="~/.oci/wallets/mydb",
                 wallet_password=...,
             ),
-            embedder="oci/cohere.embed-english-v3.0",
+            embedder="oci/cohere.embed-v4.0",
             llm="oci/openai.gpt-4.1",
             table_name_prefix="locus_oam_",
         )
@@ -162,6 +240,15 @@ class OracleAgentMemoryManager(BaseMemoryManager):
             — number of relevant memories to render into the card.
         max_recent_messages: Forwarded to ``get_context_card_async``
             — number of recent messages to render into the card.
+        litellm_kwargs: Extra keyword arguments for the ``Embedder`` and
+            ``Llm`` wrappers when ``embedder`` / ``llm`` are strings (for
+            example ``{"oci_signer": signer}``). For ``oci/...`` specs the
+            manager fills in ``oci_signer``, ``oci_region`` and
+            ``oci_compartment_id`` from the OCI profile and environment
+            (``OCI_SESSION_PROFILE`` / ``OCI_PROFILE``, ``OCI_REGION``,
+            ``OCI_COMPARTMENT_ID``, ``OCI_AUTH_TYPE``) unless litellm's own
+            ``OCI_USER`` / ``OCI_KEY_FILE`` variables are set; anything you
+            pass here overrides that.
     """
 
     def __init__(
@@ -169,7 +256,7 @@ class OracleAgentMemoryManager(BaseMemoryManager):
         *,
         connection: Any = None,
         store: Any = None,
-        embedder: Any = "oci/cohere.embed-english-v3.0",
+        embedder: Any = "oci/cohere.embed-v4.0",
         llm: Any = "oci/openai.gpt-4.1",
         extract_memories: bool = True,
         table_name_prefix: str = "locus_oam_",
@@ -181,6 +268,7 @@ class OracleAgentMemoryManager(BaseMemoryManager):
         max_relevant_results: int = 5,
         max_recent_messages: int = 5,
         thread_defaults: dict[str, Any] | None = None,
+        litellm_kwargs: dict[str, Any] | None = None,
     ) -> None:
         if connection is None and store is None:
             raise ValueError(
@@ -213,17 +301,30 @@ class OracleAgentMemoryManager(BaseMemoryManager):
         # ``llm`` blows up later inside the extractor with
         # "'str' object has no attribute 'generate_async'". Wrap both
         # eagerly so the caller-friendly string shape just works.
+        # ``oci/...`` specs: litellm's OCI driver does not read ~/.oci/config,
+        # so derive its auth kwargs (signer, region, compartment) from the
+        # same OCI environment the rest of Locus uses. Explicit
+        # ``litellm_kwargs`` win; non-OCI specs are passed through untouched.
         if isinstance(embedder, str):
-            embedder = Embedder(model=embedder)
+            embedder = Embedder(model=embedder, **_litellm_kwargs_for(embedder, litellm_kwargs))
         if isinstance(llm, str):
-            llm = Llm(model=llm)
+            llm = Llm(model=llm, **_litellm_kwargs_for(llm, litellm_kwargs))
 
         ctor_kwargs: dict[str, Any] = {
             "embedder": embedder,
             "llm": llm,
-            "extract_memories": extract_memories,
             "table_name_prefix": table_name_prefix,
         }
+        # oracleagentmemory >= 26.8 deprecates the inline flag in favour of
+        # ``memory_extraction_config``; older releases only know the flag.
+        try:
+            from oracleagentmemory.core import MemoryExtractionConfig  # noqa: PLC0415
+
+            ctor_kwargs["memory_extraction_config"] = MemoryExtractionConfig(
+                extract_memories=extract_memories
+            )
+        except ImportError:
+            ctor_kwargs["extract_memories"] = extract_memories
         if connection is not None:
             ctor_kwargs["connection"] = connection
         if store is not None:

@@ -30,6 +30,9 @@
   {% set page_url = page.canonical_url if page and page.canonical_url else config.site_url %}
   {% set og_image = (config.site_url ~ "/img/og-card.png") | replace("//img/", "/img/") %}
 
+  {% if page and page.meta and page.meta.table_filter %}
+  <meta name="locus:table-filter" content="page">
+  {% endif %}
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Oracle Generative AI Agentic Harness">
   <meta property="og:title" content="{{ page_title }}">

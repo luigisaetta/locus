@@ -21,9 +21,9 @@ others.
 | Situation | Layer |
 |---|---|
 | Tool args from the model are sometimes malformed | Validation — already on; nothing to do |
-| Public-facing agent — block prompt injection, SQL/command/path-traversal patterns, cap input length | `GuardrailsHook` with the default `GuardrailConfig` |
+| Public-facing agent — block SQL/command/path-traversal patterns, cap input length | `GuardrailsHook` with the default `GuardrailConfig`; prompt-injection coverage is mapped on the [threat scenarios](threat-scenarios.md) page |
 | Customer-facing answer where leaking PII (emails, SSN, credit cards, IPs) is a compliance issue | `GuardrailsHook` with PII patterns enabled |
-| High-stakes tools (`issue_refund`, `delete_records`, `isolate_host`) — the action must not happen unless a policy allows it | [`gate_tool`](../api/control.md) — a check in real code, which the model cannot talk around |
+| High-stakes tools (`issue_refund`, `delete_records`, `isolate_host`) — the action must not happen unless a policy allows it | [`gate_tool`](../api/control.md) — a check in real code that the model cannot bypass |
 | The same tools, where you want a second model's opinion *as well* | `SteeringHook` with a steering `model=` and a policy string — advisory, see below |
 | Domain restriction — *"the user came in to resolve this ticket, reject anything else"* | `SteeringHook` with that policy verbatim |
 | Internal-only agent, trusted prompts, low-stakes tools | none of the above; default validation is enough |
@@ -31,6 +31,8 @@ others.
 ## Getting started
 
 ### Guardrails — block dangerous tools and redact PII
+
+{{ locus_model_tabs }}
 
 ```python
 from locus.agent import Agent
@@ -42,14 +44,26 @@ config = GuardrailConfig(
     block_dangerous_tools=frozenset({"shell", "exec", "rm", "drop"}),
     max_prompt_length=50_000,
     default_action=GuardrailAction.BLOCK,
+    action_overrides={
+        "pii_email": GuardrailAction.REDACT,
+        "pii_phone_us": GuardrailAction.REDACT,
+        "pii_ssn": GuardrailAction.REDACT,
+        "pii_credit_card": GuardrailAction.REDACT,
+        "pii_ip_address": GuardrailAction.REDACT,
+    },
 )
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[query_siem, summarise],
     hooks=[GuardrailsHook(config=config)],
 )
 ```
+
+Rules without an override take `default_action`. The PII rules are
+overridden to `REDACT`, so an email or card number in a tool argument is
+rewritten to a `[REDACTED_EMAIL]`-style placeholder before the tool runs,
+while a blocked tool or an injection pattern is still refused.
 
 `GuardrailsHook` ships with sensible defaults — the empty
 `GuardrailConfig()` already blocks `eval`, `exec`, `system`, `shell`,
@@ -92,8 +106,8 @@ agent = Agent(
 
 Both policies are simple keyword classifiers — fast, predictable,
 auditable. For production-grade content moderation, swap in an
-ML-backed policy (OpenAI Moderation, etc.)
-behind the same `Policy.check(text) -> str | None` shape.
+ML-backed policy (a hosted moderation API or a classifier model) that
+exposes the same `check(text) -> str | None` method.
 
 ### Steering — a second model judges every tool call
 
@@ -102,11 +116,14 @@ behind the same `Policy.check(text) -> str | None` shape.
     A steering policy is a second model asked to judge the first, so a judge
     that does not intervene is indistinguishable from one that approved.
 
-    Measured against a self-hosted Qwen3.6-35B with
-    `policy="Never allow delete or destructive operations."` — the judge did
+    In testing with a self-hosted open-weights model and
+    `policy="Never allow delete or destructive operations."`, the judge did
     not intervene, and the agent reported:
 
     > the `users` table has been successfully deleted.
+
+    The run is `test_steering_blocks_dangerous_tool` in
+    [`tests/integration/test_agent_integration.py`](https://github.com/oracle/locus/blob/main/tests/integration/test_agent_integration.py).
 
     Under the **same model and the same prompt**, a tool whose body goes
     through [`admit()`](../api/control.md) held: the model still called the
@@ -118,12 +135,12 @@ behind the same `Policy.check(text) -> str | None` shape.
     set-membership check that never consults the judge and so cannot fail open.
 
 ```python
-from locus.models import AnthropicModel
-from locus.hooks.builtin.steering import SteeringHook
+from locus.hooks.builtin import SteeringHook
+from locus.models import get_model
 
-# The steering model is a model instance — it can be a smaller/cheaper
-# model than the agent's main one.
-judge = AnthropicModel(model="claude-sonnet-4-6")
+# The judge is a model instance, loaded here from the agent's provider;
+# it can be a smaller, cheaper model than the agent's main one.
+judge = get_model("{{ locus_example_model }}")
 
 agent = Agent(
     model="{{ locus_example_model }}",
@@ -151,9 +168,10 @@ decisions:
   tool listed in `interrupt_tools=`).
 
 Use the smallest model that gives reliable decisions — a `mini` /
-`flash` / `haiku` is usually enough.
+`flash` / `haiku` is usually enough. The judge may come from a different
+provider than the agent; it then needs that provider's credentials.
 
-## Validation (you don't have to do anything)
+## Validation (on by default)
 
 The `@tool` decorator builds a JSON schema from the function's typed
 signature. Every model tool call goes through that schema before the
@@ -163,7 +181,9 @@ to write any of that defensively.
 
 ```python
 @tool
-def isolate_host(host_id: str, incident_id: str, mode: Literal["full", "soft", "audit"]) -> dict:
+def isolate_host(
+    host_id: str, incident_id: str, mode: Literal["full", "soft", "audit"]
+) -> dict:
     ...
 ```
 
@@ -178,14 +198,15 @@ capability-restricted tool removes the capability, so there is nothing to
 decide. The two compose — but when you can constrain the tool, do that first.
 
 The [cloud-posture agent](cloud-posture.md) is the worked example. Its
-`use_aws` tool admits an operation only if its name starts with a read verb
-(`Describe` / `List` / `Get` / …), and it checks **before** any API call:
+`use_oci` tool admits an operation only if its name starts with a read prefix
+(`list_` / `get_` / `summarize_` / …), and it checks **before** any API call:
 
 ```python
-from locus_security import use_aws
+from locus.tools import use_oci
 
-use_aws("iam", "CreateUser", {"UserName": "x"})
-# PermissionError: refused: iam:CreateUser is not a read-only operation.
+use_oci("identity", "IdentityClient", "create_user", parameters={"name": "x"})
+# {"status": "error",
+#  "error": "Operation 'create_user' looks mutating ... Refusing by default."}
 ```
 
 The principle is **defense in depth across a trust boundary**: pair an
@@ -194,7 +215,7 @@ doesn't trust your code at all —
 
 | In-process gate | Out-of-process backstop |
 |---|---|
-| read-verb allowlist in `use_aws` | read-only IAM identity (`SecurityAudit` + `ViewOnlyAccess`) |
+| read-prefix allowlist in `use_oci` | read-only IAM group (policies with `inspect` / `read` verbs only) |
 | `block_dangerous_tools` in `GuardrailsHook` | container without the binary; seccomp profile |
 | SQL-shape detection in tool inputs | database role with `SELECT`-only grants |
 
@@ -207,14 +228,14 @@ the model — and the backstop doesn't trust the gate either.
 |---|---|
 | PII redaction over-aggressive | The default IP regex matches version strings too. Drop `ip_address` from `pii_patterns` or tighten to a CIDR-aware pattern. |
 | Steering rejects almost everything | Judge model is too strict. Tune the policy or move to a stronger model — a `nano` is often too small for nuanced judgement. |
-| `GuardrailsHook` blocks a legitimate message | Inspect `hook._violations` after the run for the violation type, then add an action override (`action_overrides={"sql_injection": ALLOW}`) or trim the regex. |
+| `GuardrailsHook` blocks a legitimate message | Inspect `hook.violations` after the run for the violation's `rule_name`, then add an action override (`action_overrides={"blocked_sql_injection": GuardrailAction.ALLOW}`) or trim the regex. |
 | Validation error swallows a tool-arg bug | The error came back to the model — it's in the trace, look for `ToolCompleteEvent.error`. |
 
 ## Source and notebooks
 
-- [`notebook_50_guardrails_security.py`](https://github.com/oracle/locus/blob/main/examples/notebook_50_guardrails_security.py) — basic guardrails.
-- [`notebook_51_guardrails_advanced.py`](https://github.com/oracle/locus/blob/main/examples/notebook_51_guardrails_advanced.py) — topic + content + PII layered.
-- [`notebook_49_steering.py`](https://github.com/oracle/locus/blob/main/examples/notebook_49_steering.py) — judge-model approval.
+- [`notebook_69_guardrails_security.py`](https://github.com/oracle/locus/blob/main/examples/notebook_69_guardrails_security.py) — guardrails against indirect prompt injection in untrusted tool output.
+- [`notebook_70_guardrails_advanced.py`](https://github.com/oracle/locus/blob/main/examples/notebook_70_guardrails_advanced.py) — trace hygiene: `OutputFilterHook` with topic, content, and PII policies.
+- [`notebook_68_steering.py`](https://github.com/oracle/locus/blob/main/examples/notebook_68_steering.py) — judge-model approval.
 - [`locus.hooks.builtin.guardrails`](https://github.com/oracle/locus/blob/main/src/locus/hooks/builtin/guardrails.py)
 - [`locus.hooks.builtin.steering`](https://github.com/oracle/locus/blob/main/src/locus/hooks/builtin/steering.py)
 

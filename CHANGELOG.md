@@ -8,6 +8,30 @@ policy.
 
 ## [Unreleased]
 
+### Changed
+
+- **Cognitive router: a request too risky for its shape is held, not
+  refused.** When every protocol that handles a frame's intent caps risk
+  below the frame's, the compiler used to raise `NoMatchingProtocolError`:
+  a HIGH-risk plan, diagnosis or question had nowhere to go. It now compiles
+  onto `approval_gated_execution` and is always held for approval, whatever
+  the gate's thresholds; `router.explain()` reports the choice as
+  `method="risk_fallback"`. `CognitiveCompiler(risk_fallback=None)` restores
+  the error, and a goal no protocol handles still raises.
+- **Cognitive router: canonical fit outranks cost distance when adjacent.**
+  The ranker put cost-to-complexity distance first, so a MEDIUM-complexity
+  research request landed on `handoff_chain` (a coordination shape) and a
+  HIGH-complexity coordination on `specialist_fanout`. A protocol that lists
+  the goal in `primary_for` now wins whenever its cost is within one step of
+  the frame's complexity; a LOW-complexity task still never gets a HIGH-cost
+  shape for being canonical.
+- **Routing benchmark gates on what the router guarantees.** The
+  typed-frame-versus-free-form accuracy comparison is printed as data rather
+  than asserted: on OCI Generative AI it goes both ways by model (Cohere
+  Command A beats the free-form baseline, Llama 3.3 70B does not). The
+  assertions are the structural ones: selections stay in the registered set,
+  including under prompt injection.
+
 ### Added
 
 - **OCI GenAI Sandboxes as a coding-harness workspace.**
@@ -21,8 +45,271 @@ policy.
   `/workspace/.locus-harness` (`/tmp` is read-only there), now in
   `SKIP_DIRS`.
 
+- **Intent meanings in the goal frame.** `GoalFrame.primary_goal` carries one
+  line per `TaskType` (`TASK_TYPE_GUIDE`), so an extractor model sees what
+  separates `plan` from `build` or `research` from `diagnose` instead of
+  thirteen bare names.
+- **`locus-sdk-security` on PyPI.** The release workflow publishes the
+  security package next to `locus-sdk`, so `pip install locus-sdk-security`
+  replaces the install-from-repository line; the two stay in lockstep.
+
+## [5.0.0] - 2026-10-29
+
+### Added
+
+- **Sandbox image and OpenShell providers from `OpenShellBackend.create`.**
+  `image=` picks the container image; `providers=` attaches OpenShell
+  providers, whose credentials stay at the gateway while the sandbox sees a
+  placeholder the sandbox proxy swaps in at the provider's endpoints. The
+  live test exercises OpenShell's `oci-genai` profile: a sandboxed `curl`
+  reaches OCI Generative AI without the key. `examples/openshell-gateway/
+  provider.py` imports a profile and creates a provider where the OpenShell
+  CLI is not installed.
+- **A local NVIDIA OpenShell gateway for the coding harness.**
+  `examples/openshell-gateway/` starts the gateway with `docker compose up -d`
+  (loopback, Docker-outside-of-Docker, adapted from NVIDIA's reference
+  deployment) so `OpenShellBackend` and the live harness tests run on any
+  machine with Docker; `LOCUS_OPENSHELL_ENDPOINT=127.0.0.1:8080` points at it.
+  The README lists the one host requirement (Landlock in the kernel's active
+  LSM list). The live tests name their sandboxes within OpenShell's
+  19-character limit.
+
+### Changed
+
+- **`CloudSource.describe` / `events` take a keyword-only `client`.** OCI
+  services expose several SDK clients (`core` alone has five), so the
+  `SecurityContext().cloud` port names one; when omitted it resolves the
+  service's only client and otherwise returns an `error` dict listing them.
+  Third-party `CloudSource` providers should accept the new keyword.
+
+- **Documentation site: diagrams instead of ASCII, and a Markdown twin of
+  every page.** The sixteen diagrams the site drew as text inside code blocks
+  (the provider tree, the OCI transports, the memory layers, the admission
+  gates in notebooks 72–75, the incident-response, concession and contract
+  workflows, the EventBus, the audio pipelines, in-database embeddings and
+  scatter-gather) are SVGs drawn from the SDK source, themed with the page,
+  and checked against the code. The Memory page's five-column table that
+  wrapped class names mid-token is a diagram plus a prose table, and
+  identifiers in any table no longer break mid-token. Build facts and
+  requirements show as a row of tiles rather than key/value tables. The
+  colour scheme follows the operating system on first visit, with a
+  three-way toggle; pages carry previous/next links, edit and view-source
+  actions, and a **Copy page** button that copies the page as Markdown.
+  Every page is also published as Markdown at `<page>/index.md`, with
+  `/llms.txt` and `/llms-full.txt` for tools that read the site that way
+  (`hooks/llms_txt.py`). The captured output on the cloud-resource gate,
+  red-team and SOC-triage notebook pages is refreshed to what the examples
+  print today, and the cloud-resource gate page now describes all three
+  attempts its example runs.
+
+- **Documentation site: a diagram on every concept page, provider tabs, and
+  searchable catalogues.** Nineteen concept pages gained a diagram drawn from
+  the SDK source and reviewed against it: the hook lifecycle, the event
+  taxonomy, the observability pipeline, state flow, checkpointer shapes,
+  streaming paths, the termination algebra, the server request flow,
+  interrupt and resume, the RAG pipeline, context strategies, idempotent
+  execution, the fallback chain, structured output, Oracle Database 26ai
+  primitives, the tool pipeline, skills disclosure, playbook enforcement and
+  the evaluation flow; the older drawings now carry their status words and
+  pass the same lint. The first generic code block on 31 pages renders as
+  linked provider tabs (OCI, OpenAI, Anthropic, self-hosted) written once with
+  `{{ locus_model_tabs }}`, and the generic example model is an OCI id. The
+  event catalogues and the environment-variable reference have a filter box
+  that hides rows and empty sections as you type. Several facts the reviews
+  surfaced are corrected: the hook lifecycle has nine points, not eight, and
+  `on_before_compaction` is in the table; `HookRegistry` orders providers and
+  the agent's `HookOrchestrator` runs them; three rerankers ship, including
+  `OCICohereReranker`; the `/resume` route's behaviour is described as the
+  code implements it.
+
+- **Documentation site: one template for the 89 notebook pages.** Each page
+  shows, in the same order, what the example builds, the diagram of its
+  shape, the functions that carry the point, how to run it, what it prints
+  where that is worth reading, and the full source collapsed at the end. A
+  new build macro, `{{ locus_source <file>::<symbol> }}`, quotes a function
+  or class by name so the excerpt follows the code and a renamed symbol
+  fails the build; `tests/docs/test_notebook_pages.py` enforces the template;
+  `scripts/notebook_output.py` captures the printed trail of every notebook
+  whose offline run is deterministic and worth reading. Run blocks are fenced
+  commands with the provider sentence that is true for each notebook.
+
+- **Documentation site: home page.** The three card grids (shapes, Oracle
+  Cloud, harness) open with a small drawing of the pattern each card is about
+  instead of a generic icon; a "What are you building?" section offers four
+  tabs (support bot, incident response, contract review, SOC alert triage),
+  each a short snippet linked to the notebook that runs it in full; "Your
+  first agent" switches providers with the site's tabs while the hero keeps
+  one literal OCI call; the notebook sidebar nests its topic groups so a
+  notebook page fits the viewport; and the Markdown twins drop the glyph
+  markup. Page copy is corrected where it had drifted from the code: the
+  Responses transport is opt-in through `OCIResponsesModel`, not chosen by
+  region, and product names are written in full.
+
+### Removed
+
+- **AWS cloud-posture tools.** `locus_security.aws` (`describe_aws`, `use_aws`
+  and their `@tool` wrappers), the `aws` extra on both packages and the
+  `LOCUS_AWS_*` variables are gone; Locus targets OCI first. The cloud-posture
+  capability stays, on the core OCI tools: `create_soc_analyst`,
+  `SecurityControls`, `SecurityContext().cloud`, the `cloud_posture_audit`
+  playbook and `security_toolset(oci=True)` drive `describe_oci` / `use_oci`
+  (read-only by default), and `SecurityControls` carries the OCI `profile`,
+  `auth_type`, `region` and `compartment_id` the review runs as.
+  S3-compatible object storage — `S3Backend` and the `s3` extra — is
+  unaffected: it is how OCI Object Storage is reached.
+
+## [4.0.0] - 2026-10-28
+
+### Removed
+
+- **Amazon Bedrock and Azure OpenAI providers.** The `bedrock:` and `azure:`
+  model prefixes, `locus.models.native.bedrock` / `locus.models.native.azure`,
+  the `bedrock` extra and their documentation are gone; Locus targets OCI
+  Generative AI first and keeps OpenAI, Anthropic and the OpenAI-compatible
+  endpoints. The `s3` and security `aws` extras (Object Storage on S3, the AWS
+  posture audit) are unaffected.
+
 ### Fixed
 
+- **`OpenAISearchPreviewProvider` always failed against `gpt-5-search-api`.**
+  The provider asked the search model for a strict `json_schema`
+  `response_format`, which that model answers with an HTTP 500
+  (`json_object` gets a 400). It now reads the `url_citation` annotations
+  the search models attach to their reply — title, URL and the cited span
+  as the snippet — and only falls back to a prompt-described JSON request
+  when a model returns no citations.
+
+- **OpenAI GPT-6 and `-pro` models could not call tools (or answer at all)
+  through `openai:`.** Chat-completions rejects function tools for the
+  gpt-6 / gpt-6.1 families when reasoning is active and does not serve the
+  `gpt-5*-pro` models at all. `api="auto"` now routes both to
+  `/v1/responses`, as it already did for gpt-5.6; verified live on
+  gpt-6-sol, gpt-6.1-sol, gpt-6.1-terra and gpt-5.5-pro.
+
+- **`OracleAgentMemoryManager` could not use OCI Generative AI models with a
+  profile or session token.** litellm's `oci/` driver, which Oracle's
+  `oracleagentmemory` client uses for its embedder and extraction model,
+  does not read `~/.oci/config`, so the manager's own defaults
+  (`oci/cohere.embed-v4.0`, `oci/openai.gpt-4.1`) failed with "Missing
+  required parameters" unless litellm's `OCI_USER` / `OCI_KEY_FILE`
+  variables were set. For `oci/...` specs the manager now builds the signer
+  from the OCI profile (`OCI_SESSION_PROFILE` / `OCI_PROFILE`, API key or
+  session token, instance and resource principals via `OCI_AUTH_TYPE`) and
+  passes it with `OCI_REGION` and `OCI_COMPARTMENT_ID`; `litellm_kwargs=`
+  overrides any of it and `oci_litellm_auth()` exposes the same derivation.
+  The manager also uses `MemoryExtractionConfig` where `oracleagentmemory`
+  provides it instead of the deprecated inline flag. Notebook 44 runs
+  OCI-only by default.
+
+- **`OCIEmbeddings()` and `OracleAgentMemoryManager` failed with their
+  default embedding model.** OCI retired the Cohere v3.0 embedding models
+  from on-demand on 2026-09-30 (`404 Entity with key
+  cohere.embed-english-v3.0 not found`). The default is now
+  `cohere.embed-v4.0`, which is multilingual and 1536-dimensional (it was
+  1024): an index built with v3 has to be re-embedded either way, since v3
+  and v4 vectors are not comparable. Pass `output_dimensions=1024` to keep
+  1024-wide columns. The v3 ids remain for dedicated AI clusters.
+
+- **Session-token OCI profiles work on every OCI client, not only the V1
+  transport.** `oci session authenticate` writes a profile with
+  `security_token_file` and no `user`; `OCIModel` (the Cohere / SDK
+  transport), `OCIEmbeddings`, `OCICohereReranker` and `OCIBucketBackend`
+  defaulted to API-key signing for it and failed with
+  `InvalidConfig {'user': 'missing'}` unless `auth_type="security_token"` was
+  passed. They now detect the profile shape the way `OCIChatCompletionsModel`
+  always did. Found running the suites against a Frankfurt tenancy with a
+  session profile. `OCIEmbeddings` also gains the `close()` the other
+  embedders have, so a store can shut any provider down the same way.
+- **Gemini tool calls on OCI.** OCI maps a tool message onto Gemini's
+  `function_response.response`, which must be a JSON object; a tool that
+  returned a number or a plain string made the next request fail with
+  `400 Invalid value at 'contents[n].parts[0].function_response.response'`.
+  The V1 transport now wraps non-object tool results as `{"result": …}` for
+  `google.*` models.
+- **RAG tool returned nothing on OCI embeddings.** `create_rag_tool()` /
+  `RAGRetriever.as_tool()` applied a fixed similarity threshold of 0.5, which
+  is calibrated for OpenAI embeddings; with Cohere embed-v4 on OCI a clearly
+  relevant document scores about 0.4, so the agent's search tool came back
+  empty. The default is now `None` (rank by similarity, bounded by `limit`,
+  scores still returned) and `as_tool()` accepts `limit=` / `threshold=` so a
+  deployment can set its own cut-off.
+- **Gemini on OCI rejected schemas with `enum` and validation keywords.**
+  OCI's Gemini translation answers `400 Unsupported JSON Schema feature for
+  Gemini: enum` (also `additionalProperties`, `title`, `pattern`, `minimum`,
+  …) for `response_format` schemas and tool parameters — the cognitive
+  router's strict `GoalFrame` schema has both, so every dispatch failed on
+  `google.*` models. The V1 transport now folds `enum` / `const` values into
+  the property's description (`Allowed values: "a", "b".`), keeps the type,
+  and drops the validation keywords for Gemini; other vendors receive the
+  schema unchanged.
+- **Cohere on OCI rejected turns that end with an instruction.** The SDK
+  transport sends the last user message as Cohere's `message` and everything
+  before it as history, so a conversation ending in a system message — the
+  planning prompt, grounding replan guidance, the "[Replan]" nudge — went out
+  with an empty `message` and OCI answered `400 message must be at least 1
+  token long or tool results must be specified`. Trailing system messages are
+  now sent as the current turn (a turn ending on an assistant message asks the
+  model to continue).
+- **Harness session backend on macOS and BSDs.** Background jobs were
+  started through `setsid`, a util-linux command that does not exist there,
+  so `start_background()` failed with "could not start … in the session
+  workspace" (and `tests/unit/harness` had one permanent failure on a Mac).
+  Without `setsid` the backend now enables POSIX job control (`set -m`), which
+  gives each job its own process group — the unit the kill path signals.
+- **`max_completion_tokens` for every GPT-5+ and o-series model.** The family
+  check was a fixed prefix list (`o1`, `o3`, `gpt-5`), so `o4-mini`, the
+  `gpt-5.6` and `gpt-6` generations still received `max_tokens` and OCI
+  answered `400 Unsupported parameter: 'max_tokens'`. The check is now a
+  pattern over the generation number.
+- **Every Anthropic call failed with anthropic 2.3.** The SDK pins API
+  version `2026-10-21`, which removed `temperature` for every model:
+  `messages.create()` raised `TypeError: unexpected keyword argument
+  'temperature'`, and the API answers `temperature: Extra inputs are not
+  permitted` if it is sent anyway. `AnthropicModel` now omits `temperature`
+  when the installed SDK does not declare it, as it already did for the
+  models that reject it.
+- **`OpenAISearchPreviewProvider` returned nothing.** OpenAI retired
+  `gpt-4o-search-preview` and `gpt-4o-mini-search-preview` (`404
+  model_not_found`); their successor, `gpt-5-search-api`, ignores a
+  non-strict JSON schema and answers in a shape of its own, which parsed to
+  no results. The provider now requests a strict schema, the docs and
+  notebook 57 use `gpt-5-search-api`, and `*-search-api` models are
+  treated as rejecting sampling parameters.
+- **"Task exception was never retrieved … Event loop is closed" on every
+  loop change.** The openai and anthropic SDKs close their HTTP client from
+  `__del__` by scheduling `aclose()` on whichever loop is running; a client
+  built under an earlier `asyncio.run()` was closed through a dead loop and
+  printed a traceback. The native OpenAI and Anthropic models and the
+  OpenAI image, speech and embedding providers now pass an HTTP client that
+  closes only on the loop that built it (`locus.core.loop_bound.own_loop_http_client`).
+- **`OpenAIImageProvider()` failed with its default model.** OpenAI retired
+  `gpt-image-1` (`400 The model 'gpt-image-1' does not exist`); the default
+  is now `gpt-image-2`.
+- **A timed-out `DockerSandbox` call could leave its code running.** With a
+  single `docker run`, the timeout could fire before the daemon had created
+  the container; the `docker kill` then found nothing, and the daemon went
+  on to start the container and run the timed-out code to completion. The
+  container is now created first and started under the timeout, so it
+  always exists to be removed (`docker rm --force`).
+- **Notebook 34 timed out on Claude.** It printed which protocol each router
+  picks, but called `dispatch()`, which also runs the protocol — ten full
+  multi-agent runs for ten protocol ids. It now uses `Router.compile()` and
+  hands both routers the same frame, so a difference comes from the picker
+  alone; under the mock model, which cannot fill a `GoalFrame`, it explains
+  that and exits instead of printing a table of errors.
+- **Notebook 81 timed out on Claude.** Its telemetry stubs ignored the
+  rollback, so a careful model kept re-verifying a mitigation the simulated
+  cluster never applied. The stubs now reflect the rollback.
+
+- **Tool arguments are coerced to the declared parameter types.** Models do
+  not reliably honour the JSON types in a tool schema: Llama on OCI sends
+  `{"a": "17", "b": "25"}` for two `int` parameters, and `add("17", "25")`
+  returned `"1725"`. `Tool.execute()` now validates each argument against
+  the parameter annotation with pydantic in lax mode (numeric strings,
+  `"true"`, JSON strings for containers, dicts for `BaseModel` parameters,
+  numbers for `str` parameters); values that still do not validate are
+  passed through unchanged, and unannotated or `Any` parameters are left
+  alone.
 - **Oracle agent memory with a single connection crashed the driver.**
   `oracleagentmemory` extracts memories on a background thread; sharing
   one sync `oracledb.Connection` between that thread and the agent's own
@@ -49,6 +336,53 @@ policy.
 
 ### Changed
 
+- **Notebooks 01–89 and the concept pages were reviewed for clean, didactic
+  code.** Every notebook now runs offline on the bundled mock model with the
+  OCI GenAI auto-detect described accurately, one function per part with
+  `main()` last, imports at the top, no private attributes, no unused
+  imports or dead branches, and comments that explain a decision rather than
+  restate the next line. Model calls that only asked the model to comment on
+  a feature were removed; the remaining calls exercise the primitive being
+  shown. Stale cross-references, old table names and wrong claims about the
+  SDK (hook ordering, `run_sync` inside a running loop, checkpoint cadence,
+  event payloads) were corrected, and two notebooks were renamed to match
+  their content: `notebook_20_map_reduce_support_triage.py` and
+  `notebook_78_concession_approval.py`. The concept pages' code blocks were
+  checked against the SDK: snippets calling non-existent APIs
+  (`Orchestrator.run`, `EvalRunner(agent=graph)`, the `KnowledgeProvider`
+  example, `Agent.run` used synchronously) were fixed, duplicated blocks were
+  merged, and import paths were standardised on the public modules. The
+  `examples/` lint exemptions for unused imports, unused locals and
+  placeholder-free f-strings were dropped.
+
+- **Documentation site reorganised around the harness.** The home page leads
+  with the eight multi-agent shapes, then the harness (tools and MCP, memory,
+  RAG, grounding, guardrails and the admission gate, observability, serving,
+  skills, providers), a "Verified on OCI" section with the 27 October 2026
+  model matrix, a compact control-layer section, and a comparison with
+  LangGraph and Strands Agents (new `concepts/compare.md`). The Concepts
+  navigation follows the same order: start here, multi-agent shapes, the
+  harness, control layer, providers. The OCI models page carries the verified
+  matrix and corrects the Responses-API note (availability is per region).
+
+### Added
+
+- **`runpod:` provider prefix.** RunPod serverless and public endpoints
+  (`https://api.runpod.ai/v2/<endpoint-id>/openai/v1`) behind one prefix:
+  set `RUNPOD_API_KEY` and `RUNPOD_ENDPOINT_ID` (or `RUNPOD_BASE_URL` /
+  `LOCUS_RUNPOD_BASE_URL`), then `Agent(model="runpod:Qwen/Qwen3-32B-AWQ")`.
+  Verified against RunPod's public `qwen3-32b-awq` endpoint with a tool call.
+  A live integration test (`tests/integration/test_compatible_providers_live.py`)
+  covers OpenRouter, Together and RunPod whenever their keys are present.
+
+- **The generic integration tests and the notebooks run against any
+  provider.** `LOCUS_TEST_MODEL=provider:model` points the shared `model`
+  fixture at anything `locus.models.get_model` accepts (it only knew OpenAI,
+  Anthropic and OCI), and `LOCUS_MODEL_PROVIDER` / `LOCUS_MODEL_ID` do the
+  same for the notebooks (`scripts/run_notebooks.py --provider <prefix>
+  --model <id>`). Notebooks whose prerequisites are missing exit with 77 and
+  the runner reports them as SKIP instead of FAIL.
+
 - **Embeddings examples use `cohere.embed-v4.0` (1536-dim).** OCI has
   deprecated the Cohere v3.0 embedding family and recently onboarded
   tenancies answer `404 Entity not found` for it. The `OCIEmbeddingModel`
@@ -61,7 +395,18 @@ policy.
 - **Positioning.** Locus is presented as the **Oracle Generative AI Agentic Harness**
   across the README, the documentation site (home page, site description, page
   titles, social card), the package metadata and the security policy. The
-  social card now points at `github.com/oracle/locus`.
+  social card now points at `github.com/oracle/locus`. The site header
+  carries a slogan under the `locus` wordmark again ("OCI Agentic Harness
+  SDK"; the line was dropped with the newer stylesheet), the logo SVG slogan
+  matches, the social card no longer carries the old "Multi-Agent Reasoning
+  Orchestrator SDK" line, and "Day 0 OCI" is the second card in the home
+  page's "What Locus gives you" grid. The home page itself is cut to about
+  half its length: a three-bullet hero with a `governed_agent()` example,
+  six feature cards, one example per section, and a pill-badge eyebrow in
+  place of the monospace kicker. Home page and README links labelled
+  "admission gate" now land on the control-layer page (they pointed at the
+  `locus-sdk-security` findings page), notebook links carry the notebook's
+  own title, and the nav labels the security page as what it is.
 
 ## [3.0.1] - 2026-10-22
 

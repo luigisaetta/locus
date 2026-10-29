@@ -164,6 +164,26 @@ class CohereProvider(OCIModelProvider):
 
         flush_pending()
 
+        # Cohere requires a non-empty ``message`` unless tool results are being
+        # returned. Locus appends instructions as trailing system messages —
+        # the planning prompt, grounding replan guidance, the "[Replan]" nudge
+        # — so the conversation often ends in SYSTEM, not USER, and the
+        # request would be rejected with "message must be at least 1 token
+        # long or tool results must be specified". Send those trailing system
+        # messages as the current turn instead of leaving the message empty.
+        if not current_message and not tool_results:
+            trailing: list[str] = []
+            for msg in reversed(messages):
+                if msg.role != Role.SYSTEM:
+                    break
+                trailing.append(msg.content or "")
+            if trailing:
+                del chat_history[len(chat_history) - len(trailing) :]
+                current_message = "\n\n".join(reversed(trailing)).strip()
+            if not current_message:
+                # Conversation ends on an assistant turn: ask it to carry on.
+                current_message = "Continue."
+
         return {  # type: ignore[return-value]
             "_current_message": current_message,
             "_chat_history": chat_history,

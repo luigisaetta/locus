@@ -132,8 +132,13 @@ def anthropic_available() -> bool:
 
 @lru_cache(maxsize=1)
 def any_model_available() -> bool:
-    """Check if any model (Anthropic, OpenAI, or OCI Generative AI) is available."""
-    return anthropic_available() or openai_available() or oci_config_available()
+    """Check if any model is available: ``LOCUS_TEST_MODEL``, OpenAI, Anthropic or OCI."""
+    return (
+        bool(os.getenv("LOCUS_TEST_MODEL"))
+        or anthropic_available()
+        or openai_available()
+        or oci_config_available()
+    )
 
 
 # =============================================================================
@@ -178,7 +183,10 @@ skip_without_anthropic = pytest.mark.skipif(
 
 skip_without_model = pytest.mark.skipif(
     not any_model_available(),
-    reason="No model available (need OPENAI_API_KEY, ANTHROPIC_API_KEY, or OCI_PROFILE)",
+    reason=(
+        "No model available (set LOCUS_TEST_MODEL=provider:model, "
+        "OPENAI_API_KEY, ANTHROPIC_API_KEY or OCI_PROFILE)"
+    ),
 )
 
 
@@ -192,6 +200,12 @@ def _build_model():
 
     Resolution order (first match wins):
 
+    0. ``LOCUS_TEST_MODEL`` — any ``provider:model`` string the model
+       registry knows (``gemini:gemini-2.5-flash``, ``groq:llama-3.3-70b``,
+       ``mistral:…``, ``ollama:qwen3``, ``openrouter:…``; see
+       ``locus.models.registry.list_providers()``), so the generic tests run
+       against any provider. The provider reads its own credentials.
+       ``LOCUS_TEST_MAX_TOKENS`` (default 4096) caps each response.
     1. OpenAI — when ``OPENAI_API_KEY`` is set.
     2. Anthropic — when ``ANTHROPIC_API_KEY`` is set.
     3. OCI Generative AI — when ``OCI_PROFILE`` is set. Goes through the
@@ -204,6 +218,12 @@ def _build_model():
     Model id is controlled per-provider by ``OPENAI_MODEL_ID`` /
     ``ANTHROPIC_MODEL_ID`` / ``OCI_MODEL_ID``.
     """
+    spec = os.getenv("LOCUS_TEST_MODEL")
+    if spec:
+        from locus.models import get_model
+
+        return get_model(spec, max_tokens=int(os.getenv("LOCUS_TEST_MAX_TOKENS", "4096")))
+
     # OpenAI (preferred)
     if openai_available():
         from locus.models.native.openai import OpenAIModel
@@ -220,34 +240,47 @@ def _build_model():
 
     # OCI Generative AI — the Oracle-native path.
     if oci_config_available():
-        from locus.models import get_model
-
-        model_id = os.getenv("OCI_MODEL_ID", "meta.llama-3.3-70b-instruct")
-        profile = os.getenv("OCI_PROFILE", "DEFAULT")
-        region = os.getenv("OCI_REGION", "us-chicago-1")
-        compartment = os.getenv("OCI_COMPARTMENT") or os.getenv("OCI_COMPARTMENT_ID")
-        auth_type = os.getenv("OCI_AUTH_TYPE")
-        kwargs: dict[str, Any] = {"max_tokens": 2048}
-        if compartment:
-            kwargs["compartment_id"] = compartment
-        if model_id.lower().startswith(("cohere.", "ocid1.generativeaiendpoint.")):
-            # SDK transport (OCIModel) argument names.
-            kwargs["profile_name"] = profile
-            kwargs["service_endpoint"] = os.getenv(
-                "OCI_ENDPOINT",
-                f"https://inference.generativeai.{region}.oci.oraclecloud.com",
-            )
-        elif auth_type in ("instance_principal", "resource_principal", "security_token"):
-            kwargs["auth_type"] = auth_type
-            kwargs["region"] = region
-        else:
-            # V1 transport (OCIChatCompletionsModel): profile implies api-key
-            # or session auth from ~/.oci/config.
-            kwargs["profile"] = profile
-            kwargs["region"] = region
-        return get_model(f"oci:{model_id}", **kwargs)
+        return build_oci_model()
 
     return None
+
+
+def build_oci_model(max_tokens: int = 2048) -> Any:
+    """OCI Generative AI model from the ``OCI_*`` environment.
+
+    ``OCI_MODEL_ID`` (default ``meta.llama-3.3-70b-instruct``) goes through the
+    ``oci:`` string factory so the transport follows the model id;
+    ``OCI_PROFILE``, ``OCI_REGION``, ``OCI_COMPARTMENT`` / ``OCI_COMPARTMENT_ID``
+    and ``OCI_ENDPOINT`` are honoured, ``OCI_AUTH_TYPE`` selects a
+    principal-based mode instead of the profile. Shared by ``_build_model`` and
+    the live test files that parametrize over provider factories.
+    """
+    from locus.models import get_model
+
+    model_id = os.getenv("OCI_MODEL_ID", "meta.llama-3.3-70b-instruct")
+    profile = os.getenv("OCI_PROFILE", "DEFAULT")
+    region = os.getenv("OCI_REGION", "us-chicago-1")
+    compartment = os.getenv("OCI_COMPARTMENT") or os.getenv("OCI_COMPARTMENT_ID")
+    auth_type = os.getenv("OCI_AUTH_TYPE")
+    kwargs: dict[str, Any] = {"max_tokens": max_tokens}
+    if compartment:
+        kwargs["compartment_id"] = compartment
+    if model_id.lower().startswith(("cohere.", "ocid1.generativeaiendpoint.")):
+        # SDK transport (OCIModel) argument names.
+        kwargs["profile_name"] = profile
+        kwargs["service_endpoint"] = os.getenv(
+            "OCI_ENDPOINT",
+            f"https://inference.generativeai.{region}.oci.oraclecloud.com",
+        )
+    elif auth_type in ("instance_principal", "resource_principal", "security_token"):
+        kwargs["auth_type"] = auth_type
+        kwargs["region"] = region
+    else:
+        # V1 transport (OCIChatCompletionsModel): profile implies api-key
+        # or session auth from ~/.oci/config.
+        kwargs["profile"] = profile
+        kwargs["region"] = region
+    return get_model(f"oci:{model_id}", **kwargs)
 
 
 @lru_cache(maxsize=1)
@@ -260,12 +293,15 @@ def get_test_model():
 def model():
     """Session-scoped model fixture for integration tests.
 
-    Uses OpenAI if configured (OPENAI_API_KEY), falls back to Anthropic.
-    Model ID from OPENAI_MODEL_ID / ANTHROPIC_MODEL_ID env vars.
+    ``LOCUS_TEST_MODEL=provider:model`` selects any registered provider;
+    otherwise OpenAI, then Anthropic, then OCI — see :func:`_build_model`.
     """
     m = get_test_model()
     if m is None:
-        pytest.skip("No model available (need OPENAI_API_KEY or ANTHROPIC_API_KEY)")
+        pytest.skip(
+            "No model available (set LOCUS_TEST_MODEL=provider:model, "
+            "OPENAI_API_KEY, ANTHROPIC_API_KEY or OCI_PROFILE)"
+        )
     return m
 
 

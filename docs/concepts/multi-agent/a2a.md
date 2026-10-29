@@ -1,6 +1,7 @@
-# A2A — Agent-to-Agent
+# A2A
 
-A2A is the **cross-process / cross-runtime** version of multi-agent.
+A2A (Agent-to-Agent) is the **cross-process / cross-runtime** version
+of multi-agent.
 Each agent runs as its own service, advertises an Agent Card
 (capabilities + skills + endpoint URL) at a well-known URL, and other
 agents discover and call it over HTTP.
@@ -45,31 +46,33 @@ shape (`text`, `raw`, `url`, `data`) and back.
 
 ## When to use it
 
-- ✅ **Multi-process or multi-host** agent deployments.
-- ✅ **Different teams own different agents** on different stacks.
-- ✅ You need a **network boundary** for security or scaling.
-- ✅ **Polyglot** — an SDK agent calling a non-SDK A2A peer (or
+- **Multi-process or multi-host** agent deployments.
+- **Different teams own different agents** on different stacks.
+- You need a **network boundary** for security or scaling.
+- **Polyglot** — an SDK agent calling a non-SDK A2A peer (or
   vice versa) speaks the same protocol verbatim.
-- ✅ **Capability-based discovery** — the caller reads the Agent
+- **Capability-based discovery** — the caller reads the Agent
   Card and decides whether to delegate.
 
 ## When NOT to use it
 
-- ❌ **Single-process** — use one of the in-process patterns; HTTP
+- **Single-process** — use one of the in-process patterns; HTTP
   round-trips are pure overhead.
-- ❌ **Tight latency requirements** — every A2A hop is an HTTP round-trip.
-- ❌ The peer is **always the same agent** — just call it directly.
+- **Tight latency requirements** — every A2A hop is an HTTP round-trip.
+- The peer is **always the same agent** — just call it directly.
 
 ## Code
 
 ### Host side — expose an agent over A2A
+
+{{ locus_model_tabs }}
 
 ```python
 from locus.agent import Agent
 from locus.a2a import A2AServer, AgentSkill
 
 research_agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[web_search, fetch_page, cite],
     system_prompt="You research questions across sources and summarise the evidence.",
 )
@@ -111,6 +114,7 @@ from locus.a2a import A2AClient, Message, TextPart
 
 async def main():
     client = A2AClient(url="https://research.example.com", api_key="rotate-this-secret")
+    prompt = "Research why checkout conversion dropped last week; cite sources."
 
     # Read the public card to learn the agent's skills + capabilities.
     card = await client.get_agent_card()
@@ -118,11 +122,7 @@ async def main():
 
     # Synchronous send — returns a Task in the `completed` state.
     task = await client.send_message(
-        Message(
-            role="user",
-            parts=[TextPart(text="Research why checkout conversion dropped last week; cite sources.")],
-            messageId="m-1",
-        )
+        Message(role="user", parts=[TextPart(text=prompt)], messageId="m-1")
     )
     final_text = task.artifacts[-1].parts[0].text
     print(final_text)
@@ -145,11 +145,7 @@ JSON-RPC calls that carry it.
 
 ```python
 async for event in client.send_message_streaming(
-    Message(
-        role="user",
-        parts=[TextPart(text="Research why checkout conversion dropped last week; cite sources.")],
-        messageId="m-2",
-    )
+    Message(role="user", parts=[TextPart(text=prompt)], messageId="m-2")
 ):
     if event.get("kind") == "status-update":
         print("status:", event["status"]["state"])
@@ -224,16 +220,17 @@ asyncio.run(main())
 The remote agent still owns its tools and orchestration. The caller passes a
 single user message and unwraps the final text from the returned Task artifact.
 
-## Auth + TLS
+## Authentication and TLS
 
 `A2AServer` ships with bearer-token auth: pass `api_key="..."` (or set
 `LOCUS_A2A_API_KEY`) and every route — including
 `/.well-known/agent-card.json` — requires `Authorization: Bearer ...`.
 With no key the server refuses non-loopback bindings unless
 `allow_unauthenticated=True` is passed (use that only behind an
-upstream proxy that terminates auth). TLS is the standard FastAPI
-story — terminate it at your load balancer or via uvicorn's `--ssl-*`
-flags.
+upstream proxy that terminates auth). TLS is handled as for any FastAPI
+application: terminate it at the load balancer, or pass uvicorn's
+`ssl_keyfile` and `ssl_certfile` options to `server.run()`, which
+forwards keyword arguments to `uvicorn.run()`.
 
 ## Backwards compatibility
 
@@ -252,7 +249,7 @@ use `Message` + `client.send_message()` so they can read the full
 
 ## Notebook
 
-[`notebook_28_a2a_protocol.py`](https://github.com/oracle/locus/blob/main/examples/notebook_28_a2a_protocol.py)
+[`notebook_30_a2a_protocol.py`](https://github.com/oracle/locus/blob/main/examples/notebook_30_a2a_protocol.py)
 — host + client + streaming.
 
 ## Source

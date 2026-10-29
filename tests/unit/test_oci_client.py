@@ -306,3 +306,58 @@ class TestOCIClientInstancePrincipalAuth:
 
         # Should return empty dict without reading config file
         assert client.oci_config == {}
+
+
+class TestSessionProfileAutoDetect:
+    """A profile with ``security_token_file`` and no ``user`` signs with the session token
+    under the default ``api_key`` auth type — API-key signing cannot work for it."""
+
+    @patch("oci.config.from_file")
+    def test_session_profile_uses_security_token_path_by_default(self, mock_from_file):
+        mock_from_file.return_value = {
+            "tenancy": "ocid1.tenancy.oc1..test",
+            "security_token_file": "/path/to/token",
+            "key_file": "/path/to/key.pem",
+            "region": "eu-frankfurt-1",
+        }
+        client = OCIClient(OCIClientConfig(profile_name="SESSION_PROFILE"))
+        sentinel = MagicMock(name="session_client")
+        with patch.object(client, "_create_security_token_client", return_value=sentinel) as m:
+            assert client.client is sentinel
+        m.assert_called_once_with()
+
+    @patch("oci.generative_ai_inference.GenerativeAiInferenceClient")
+    @patch("oci.config.from_file")
+    def test_api_key_profile_keeps_api_key_path(self, mock_from_file, mock_client_class):
+        mock_from_file.return_value = {
+            "tenancy": "ocid1.tenancy.oc1..test",
+            "user": "ocid1.user.oc1..test",
+            "fingerprint": "aa:bb",
+            "key_file": "/path/to/key.pem",
+            "region": "eu-frankfurt-1",
+        }
+        client = OCIClient(OCIClientConfig(profile_name="API_PROFILE"))
+        with patch.object(client, "_create_security_token_client") as m:
+            _ = client.client
+        m.assert_not_called()
+        mock_client_class.assert_called_once()
+        assert "signer" not in mock_client_class.call_args.kwargs
+
+    @patch("oci.config.from_file")
+    def test_profile_with_user_and_token_file_is_not_a_session_profile(self, mock_from_file):
+        mock_from_file.return_value = {
+            "user": "ocid1.user.oc1..test",
+            "security_token_file": "/path/to/token",
+            "key_file": "/path/to/key.pem",
+        }
+        client = OCIClient(OCIClientConfig(profile_name="MIXED"))
+        assert client._profile_is_session_token() is False
+
+    @patch("oci.config.from_file")
+    def test_session_profile_shape_is_detected(self, mock_from_file):
+        mock_from_file.return_value = {
+            "security_token_file": "/path/to/token",
+            "key_file": "/path/to/key.pem",
+        }
+        client = OCIClient(OCIClientConfig(profile_name="SESSION_PROFILE"))
+        assert client._profile_is_session_token() is True

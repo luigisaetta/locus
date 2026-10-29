@@ -4,7 +4,7 @@
 
 """Integration tests: drive a live LiteLLM AI Gateway end-to-end.
 
-Mirrors what ``examples/notebook_71_litellm_gateway.py`` does, but
+Mirrors what ``examples/notebook_66_litellm_gateway.py`` does, but
 asserts on the responses so a CI run catches regressions in the
 gateway integration before they hit users. Auto-skips when the
 ``LITELLM_GATEWAY_URL`` / ``LITELLM_GATEWAY_KEY`` env vars aren't set,
@@ -100,7 +100,7 @@ def test_gateway_rejects_unauthenticated_call():
 
 @pytest.fixture
 def model():
-    """Build the exact OpenAIModel the docs / notebook 71 instruct users
+    """Build the exact OpenAIModel the docs / notebook 66 instruct users
     to build. If this fixture stops working, the docs are wrong."""
     from locus.models.native.openai import OpenAIModel
 
