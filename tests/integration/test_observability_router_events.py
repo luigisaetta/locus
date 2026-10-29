@@ -49,17 +49,19 @@ def _reset_bus():
     reset_event_bus()
 
 
-def _build_compiler() -> CognitiveCompiler:
+def _build_compiler(**overrides: object) -> CognitiveCompiler:
     caps = CapabilityIndex(create_registry(_echo))
     caps.annotate("c1", tool_name="_echo", description="echo", domain="d")
     protocols = ProtocolRegistry()
     protocols.register_many(builtin_protocols())
-    return CognitiveCompiler(
-        protocols=protocols,
-        capabilities=caps,
-        policy=PolicyGate(),
-        model="openai:gpt-4o-mini",  # opaque — never invoked in compile()
-    )
+    kwargs: dict[str, object] = {
+        "protocols": protocols,
+        "capabilities": caps,
+        "policy": PolicyGate(),
+        "model": "openai:gpt-4o-mini",  # opaque — never invoked in compile()
+    }
+    kwargs.update(overrides)
+    return CognitiveCompiler(**kwargs)  # type: ignore[arg-type]
 
 
 async def _collect_events(run_id: str, expected_count: int) -> list[StreamEvent]:
@@ -127,13 +129,13 @@ class TestCompileEventSequence:
         assert compiled.data["runnable_type"] == "AgentRunnable"
 
     async def test_unmatched_frame_emits_no_match_then_raises(self):
-        compiler = _build_compiler()
+        # Without the risk fallback a HIGH-risk ANSWER has nowhere to go:
+        # the compiler emits the no-match event for tail-able diagnostics,
+        # then raises.
+        compiler = _build_compiler(risk_fallback=None)
         run_id = "compile-2"
         task, received = await _collect_events(run_id, expected_count=1)
 
-        # HIGH risk + ANSWER has no canonical protocol — registry
-        # raises NoMatchingProtocolError after emitting the no-match
-        # event for tail-able diagnostics.
         with pytest.raises(NoMatchingProtocolError):
             await compiler.compile(
                 GoalFrame(
@@ -146,6 +148,35 @@ class TestCompileEventSequence:
             )
         await asyncio.wait_for(task, timeout=2.0)
         assert [e.event_type for e in received] == ["router.protocol.no_match"]
+
+    async def test_too_risky_frame_is_held_through_the_risk_fallback(self):
+        """With the default fallback the same frame compiles onto the
+        approval-gated shape, and the stream says so: the selection names
+        the method, the verdict requires approval, the runnable is wrapped."""
+        compiler = _build_compiler()
+        run_id = "compile-2b"
+        task, received = await _collect_events(run_id, expected_count=3)
+
+        await compiler.compile(
+            GoalFrame(
+                primary_goal=TaskType.ANSWER,
+                domain="d",
+                complexity=Complexity.LOW,
+                risk=Risk.HIGH,
+            ),
+            run_id=run_id,
+        )
+        await asyncio.wait_for(task, timeout=2.0)
+        assert [e.event_type for e in received] == [
+            "router.protocol.selected",
+            "router.policy.verdict",
+            "router.runnable.compiled",
+        ]
+        selected, verdict, compiled = received
+        assert selected.data["protocol_id"] == "approval_gated_execution"
+        assert selected.data["method"] == "risk_fallback"
+        assert verdict.data["require_approval"] is True
+        assert compiled.data["runnable_type"] == "_ApprovalRunnable"
 
     async def test_no_run_id_means_no_events(self):
         """Compile without a ``run_id`` is silent — backward-compat with
