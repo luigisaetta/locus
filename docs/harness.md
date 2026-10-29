@@ -184,7 +184,8 @@ backend.close()  # a sandbox create() made is stopped and deleted
 
 An OCI Enterprise AI sandbox is an isolated Linux runtime (gVisor) that
 belongs to a Generative AI project; the project fixes its outbound network.
-`create` makes one (`runtime`, `shape`, `expiration` up to 48 hours,
+`create` makes one (`runtime`, `shape`, `expiration` as an ISO 8601 duration
+of up to 48 hours, sent as `expiresInMinutes`,
 `warmpool_name`), waits until it runs, and owns it; `connect` attaches to
 one that exists and needs only `use generative-ai-sandbox`. `extend("PT30M")`
 adds lifetime. Auth is an `~/.oci/config` profile (API key or session

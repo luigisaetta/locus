@@ -235,10 +235,10 @@ def test_create_waits_for_running_and_owns_the_sandbox(monkeypatch: pytest.Monke
     )
     [(project, details)] = client.created
     assert project == "ocid1.project"
-    assert (details.runtime, details.shape, details.expiration_duration) == (
+    assert (details.runtime, details.shape, details.expires_in_minutes) == (
         "python-3.11",
         "SMALL",
-        "PT30M",
+        30,
     )
     assert made == [("DEFAULT", "api_key", "eu-frankfurt-1", None)]
     assert b.capabilities.label == "oci-sandbox:eu-frankfurt-1/sbx-1"
@@ -556,3 +556,24 @@ def test_close_still_deletes_when_stopping_background_commands_fails(
     with pytest.raises(ConnectionError):
         b.close()
     assert client.deleted == ["sbx-1"], "the sandbox goes even if its jobs could not be stopped"
+
+
+@pytest.mark.parametrize(
+    ("expiration", "minutes"),
+    [("PT1H", 60), ("PT30M", 30), ("PT90S", 2), ("P2D", 2880), ("pt5m", 5), ("P1DT12H", 2160)],
+)
+def test_expiration_is_sent_as_whole_minutes(expiration: str, minutes: int) -> None:
+    from locus.harness.oci_sandbox import _minutes
+
+    assert _minutes(expiration) == minutes
+
+
+@pytest.mark.parametrize("expiration", ["-1", "PT0S", "P", "PT49H", "P3D", "1h", "", "PT1.5H"])
+def test_a_lifetime_outside_one_minute_to_48_hours_is_refused_before_a_sandbox_exists(
+    monkeypatch: pytest.MonkeyPatch, expiration: str
+) -> None:
+    client = FakeOCISandboxClient(states=["RUNNING"])
+    install_client(monkeypatch, client)
+    with pytest.raises(ValueError, match="expiration"):
+        OCISandboxBackend.create("ocid1.project", poll_interval=0, expiration=expiration)
+    assert client.created == []

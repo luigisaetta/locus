@@ -54,6 +54,7 @@ import hashlib
 import io
 import json
 import math
+import re
 import shlex
 import time
 import uuid
@@ -84,6 +85,13 @@ _KILL_GRACE = 5
 
 #: Seconds the service's own timeout runs past the in-sandbox one.
 _SERVICE_GRACE = 30
+
+#: The longest lifetime a sandbox may be created with: 48 hours.
+MAX_EXPIRATION_MINUTES = 48 * 60
+
+_ISO_DURATION = re.compile(
+    r"^P(?:(?P<d>\d+)D)?(?:T(?:(?P<h>\d+)H)?(?:(?P<m>\d+)M)?(?:(?P<s>\d+)S)?)?$"
+)
 
 #: States a sandbox does not come back from to ``RUNNING``.
 _TERMINAL = frozenset({"FAILED", "STOPPING", "STOPPED", "DELETING", "DELETED"})
@@ -130,6 +138,25 @@ def _models() -> Any:
 def _duration(seconds: float) -> str:
     """Whole seconds as an ISO 8601 duration, at least one second."""
     return f"PT{max(1, math.ceil(seconds))}S"
+
+
+def _minutes(expiration: str) -> int:
+    """An ISO 8601 duration as whole minutes, rounded up; between one minute and 48 hours.
+
+    The service takes a sandbox's lifetime as ``expiresInMinutes``; a value
+    that never expires (``-1``) is refused, because the expiry is the backstop
+    for a sandbox a crashed process leaves behind.
+    """
+    match = _ISO_DURATION.match(expiration.strip().upper()) if isinstance(expiration, str) else None
+    if match is None:
+        raise ValueError(
+            f"expiration must be an ISO 8601 duration such as 'PT1H', got {expiration!r}"
+        )
+    days, hours, minutes, seconds = (int(match.group(k) or 0) for k in ("d", "h", "m", "s"))
+    total = math.ceil((((days * 24 + hours) * 60 + minutes) * 60 + seconds) / 60)
+    if not 1 <= total <= MAX_EXPIRATION_MINUTES:
+        raise ValueError(f"expiration must be between one minute and 48 hours, got {expiration!r}")
+    return total
 
 
 def _lines(data: Any) -> Iterable[bytes | str]:
@@ -496,8 +523,10 @@ class OCISandboxBackend(SessionBackend):
         """Create a sandbox in ``project_id``, wait until it runs, and return a backend over it.
 
         The backend owns the sandbox: :meth:`close` stops and deletes it. The
-        sandbox also expires on its own after ``expiration`` (ISO 8601, at
-        most 48 hours), so one a crashed process left behind does not run on.
+        sandbox also expires on its own after ``expiration`` (an ISO 8601
+        duration of at most 48 hours, sent to the service as whole minutes),
+        so one a crashed process left behind does not run on; a lifetime that
+        never ends is refused.
         Needs ``manage generative-ai-sandbox``.
 
         Raises:
@@ -507,13 +536,14 @@ class OCISandboxBackend(SessionBackend):
                 it is stopped and deleted before the error propagates.
         """
         _check_output_limit(options.get("max_output_bytes", MAX_OUTPUT_BYTES))
+        minutes = _minutes(expiration)
         client, resolved = _client(profile, auth_type, region, service_endpoint)
         models = _models()
         details = models.CreateSandboxDetails(
             display_name=display_name or f"locus-harness-{uuid.uuid4().hex[:8]}",
             runtime=runtime,
             shape=shape,
-            expiration_duration=expiration,
+            expires_in_minutes=minutes,
             warmpool_name=warmpool_name,
         )
         sandbox_id = client.create_sandbox(project_id, details).data.id
