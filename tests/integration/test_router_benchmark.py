@@ -2,13 +2,15 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
-"""Routing-accuracy benchmark for ``locus.router``.
+"""Routing benchmark for ``locus.router``.
 
-This is the load-bearing artifact behind the SDK's headline claim:
-**bounded graph generation via typed goal frames is more accurate than
-free-form LLM routing**. Every PR that touches ``locus.router`` should
-re-run this benchmark; the table it prints is the empirical evidence
-behind the design.
+The evidence behind the router's claim, which is structural, not an
+accuracy claim: **a typed goal frame keeps every selection inside the
+registered protocols, including under prompt injection**, where a model
+asked to name the protocol directly can be talked into inventing one. The
+accuracy comparison against that free-form baseline is printed as data; on
+OCI Generative AI it goes both ways by model. Every PR that touches
+``locus.router`` should re-run this benchmark and read the tables.
 
 Three ablations, run against the same labelled corpus:
 
