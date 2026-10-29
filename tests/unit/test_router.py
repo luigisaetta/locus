@@ -800,7 +800,7 @@ class TestFilterCandidates:
         reg = ProtocolRegistry()
         reg.register_many(builtin_protocols())
         # COMPARE is handled by specialist_fanout (risk_max=MEDIUM) AND
-        # debate (risk_max=LOW). At risk=LOW both survive.
+        # debate (risk_max=MEDIUM). At risk=LOW both survive.
         survivors = reg.filter_candidates(_frame(primary_goal=TaskType.COMPARE))
         ids = {p.id for p in survivors}
         assert {"specialist_fanout", "debate"}.issubset(ids)
@@ -964,10 +964,13 @@ class TestLLMProtocolPicker:
         from locus.router.picker import LLMProtocolPicker
 
         picker = MagicMock(spec=LLMProtocolPicker)
-        compiler = _picker_compiler(picker)
+        # Without approval_gated_execution registered there is no risk
+        # fallback either, so PLAN at HIGH risk has nowhere to go.
+        reg = ProtocolRegistry()
+        reg.register_many([p for p in builtin_protocols() if p.id != "approval_gated_execution"])
+        compiler = _picker_compiler(picker, protocols=reg)
 
         async def _drive():
-            # PLAN at HIGH risk — no built-in protocol covers this.
             return await compiler.compile(_frame(primary_goal=TaskType.PLAN, risk=Risk.HIGH))
 
         with pytest.raises(NoMatchingProtocolError):
