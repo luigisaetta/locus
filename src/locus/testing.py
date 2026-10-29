@@ -98,7 +98,8 @@ def tool_call(
     *,
     content: str | None = None,
     call_id: str | None = None,
-    **arguments: Any,
+    arguments: Mapping[str, Any] | None = None,
+    **keywords: Any,
 ) -> ModelResponse:
     """A turn that calls one tool.
 
@@ -106,17 +107,26 @@ def tool_call(
 
         tool_call("issue_refund", order_id="ord-4821", amount=49.0)
 
+    A tool whose argument is named like one of this function's own
+    parameters (``name``, ``content``, ``call_id``, ``arguments``) takes its
+    arguments as a mapping instead; the harness ``write`` tool is one::
+
+        tool_call("write", arguments={"path": "app.py", "content": "print(1)"})
+
     Args:
         name: Tool to call.
         content: Optional assistant text alongside the call.
         call_id: Tool-call id. Defaults to a stable id derived from the name,
             so assertions do not depend on a random value.
-        **arguments: Arguments for the tool.
+        arguments: Arguments for the tool, as a mapping. Keywords are added
+            on top and win on a repeated key.
+        **keywords: Arguments for the tool.
     """
+    merged = {**(arguments or {}), **keywords}
     return ModelResponse(
         message=Message.assistant(
             content=content,
-            tool_calls=[ToolCall(id=call_id or f"call_{name}", name=name, arguments=arguments)],
+            tool_calls=[ToolCall(id=call_id or f"call_{name}", name=name, arguments=merged)],
         ),
         usage=dict(_USAGE),
         stop_reason="tool_calls",

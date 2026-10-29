@@ -95,6 +95,9 @@ async def emit_protocol_selected(
       no ranker call needed.
     - ``"llm_picked"`` — the opt-in :class:`LLMProtocolPicker` made
       the call; ``rationale`` carries its one-sentence justification.
+    - ``"risk_fallback"`` — no protocol that handles the goal accepts the
+      frame's risk, so the compiler chose its ``risk_fallback`` protocol
+      (``approval_gated_execution`` by default) and holds it for approval.
     - ``"rule_based_fallback"`` — the picker raised or returned an
       unknown id, and ``_rank_key`` resolved it instead. The matching
       ``router.protocol.picker_fallback`` event carries the underlying

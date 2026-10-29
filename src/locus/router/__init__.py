@@ -10,6 +10,18 @@ existing locus primitives (``Agent``, ``Pipeline``, ``Orchestrator``,
 :class:`GoalFrame`; protocol selection, capability binding, policy
 checks and graph compilation are all deterministic.
 
+What that buys, and what it does not. The model never names a shape, so
+the router cannot emit a topology outside the registered protocols, and a
+prompt that tells it to invent one has nothing to grab. Every frame passes
+the :class:`PolicyGate` before anything runs, and a frame too risky for
+the shapes that handle it is held for approval. The same frame always
+compiles to the same shape, and :meth:`Router.explain` shows why without
+a model call. Routing accuracy, measured in
+``tests/integration/test_router_benchmark.py``, is comparable to letting
+the model pick the protocol directly: better on some models, worse on
+others, with the misses visible per prompt. The guarantees above are the
+reason to use it; accuracy is not the claim.
+
 Quick start::
 
     from locus import Agent, tool

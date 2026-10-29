@@ -144,6 +144,7 @@ class CognitiveCompiler:
         hooks: list[Any] | None = None,
         on_approval: ApprovalCallback | None = None,
         protocol_picker: LLMProtocolPicker | None = None,
+        risk_fallback: str | None = "approval_gated_execution",
     ) -> None:
         self.protocols = protocols
         self.capabilities = capabilities
@@ -154,6 +155,46 @@ class CognitiveCompiler:
         self.hooks = list(hooks or [])
         self._on_approval: ApprovalCallback = on_approval or _default_deny
         self.protocol_picker = protocol_picker
+        self.risk_fallback = risk_fallback
+
+    def _risk_fallback(self, frame: GoalFrame, available: set[str]) -> Protocol | None:
+        """The protocol a frame compiles onto when its risk is above every handler's cap.
+
+        A request the registry *does* understand but every protocol for it caps
+        below the frame's risk (a HIGH-risk plan, say) is the case the router
+        exists for; raising ``NoMatchingProtocolError`` there would be the worst
+        answer. Such a frame goes to ``risk_fallback`` (default
+        ``approval_gated_execution``) and is always held for approval, whatever
+        the gate's thresholds. Returns ``None`` when the fallback is disabled or
+        unregistered, when it cannot take the risk itself, when it lacks a
+        required capability, or when nothing handles the goal at all: a goal
+        the registry has no protocol for stays an error.
+        """
+        if not self.risk_fallback:
+            return None
+        handlers = [p for p in self.protocols.all() if frame.primary_goal in p.handles]
+        if not handlers or not any(p.risk_max < frame.risk for p in handlers):
+            return None
+        fallback = next((p for p in self.protocols.all() if p.id == self.risk_fallback), None)
+        if fallback is None or fallback.risk_max < frame.risk:
+            return None
+        if not set(fallback.requires_capabilities).issubset(available):
+            return None
+        return fallback
+
+    @staticmethod
+    def _held_for_approval(frame: GoalFrame, verdict: PolicyVerdict) -> PolicyVerdict:
+        """``verdict`` with approval forced on; used on the risk-fallback path."""
+        if not verdict.allow or verdict.require_approval:
+            return verdict
+        return PolicyVerdict(
+            allow=True,
+            require_approval=True,
+            reason=(
+                f"risk {frame.risk.value!r} exceeds every protocol that handles "
+                f"{frame.primary_goal.value!r}; held for approval."
+            ),
+        )
 
     def _build_context(self) -> BuilderContext:
         return BuilderContext(
@@ -246,6 +287,13 @@ class CognitiveCompiler:
             else:
                 method = "llm_picked"
             verdict = self.policy.check(frame, picked)
+        else:
+            fallback = self._risk_fallback(frame, available)
+            if fallback is not None:
+                candidates = [fallback]
+                selected = fallback.id
+                method = "risk_fallback"
+                verdict = self._held_for_approval(frame, self.policy.check(frame, fallback))
 
         return RoutingExplanation(
             goal=goal,
@@ -282,7 +330,8 @@ class CognitiveCompiler:
         if self.a2a_endpoint:
             available.add(A2A_PEER_CAPABILITY)
         candidates = self.protocols.filter_candidates(frame, available_capabilities=available)
-        if not candidates:
+        fallback = None if candidates else self._risk_fallback(frame, available)
+        if not candidates and fallback is None:
             err = NoMatchingProtocolError(
                 f"No protocol handles primary_goal={frame.primary_goal!r} "
                 f"at risk={frame.risk!r} with capabilities={sorted(available)}.",
@@ -291,7 +340,12 @@ class CognitiveCompiler:
                 await emit_protocol_no_match(run_id, frame, str(err))
             raise err
 
-        protocol, method, rationale = await self._pick_protocol(frame, candidates, run_id=run_id)
+        if fallback is not None:
+            protocol, method, rationale = fallback, "risk_fallback", None
+        else:
+            protocol, method, rationale = await self._pick_protocol(
+                frame, candidates, run_id=run_id
+            )
 
         if run_id:
             await emit_protocol_selected(
@@ -299,6 +353,8 @@ class CognitiveCompiler:
             )
 
         verdict = self.policy.check(frame, protocol)
+        if fallback is not None:
+            verdict = self._held_for_approval(frame, verdict)
         if run_id:
             await emit_policy_verdict(run_id, frame, protocol, verdict)
         if not verdict.allow:

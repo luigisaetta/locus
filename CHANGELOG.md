@@ -25,6 +25,10 @@ policy.
   the goal in `primary_for` now wins whenever its cost is within one step of
   the frame's complexity; a LOW-complexity task still never gets a HIGH-cost
   shape for being canonical.
+- **Cognitive router: `debate` accepts MEDIUM risk.** A debate weighs options
+  and recommends; it changes nothing. Capped at LOW, a comparison the
+  extractor rated MEDIUM risk fell through to `specialist_fanout`; on the
+  Frankfurt benchmark that was two of Llama 3.3 70B's seven misses.
 - **Routing benchmark gates on what the router guarantees.** The
   typed-frame-versus-free-form accuracy comparison is printed as data rather
   than asserted: on OCI Generative AI it goes both ways by model (Cohere
@@ -56,6 +60,14 @@ policy.
   it discovers peers from `/.well-known/agent-card.json`, sends with
   `SendMessage` and renders the `SendStreamingMessage` task events. Tests
   cover the v1.0 card, both methods and routing on v1.0 skill ids (#274).
+
+- **`locus.testing.tool_call` could not script the harness `write` tool.**
+  The helper reserved `content` for the assistant's text, so a tool argument
+  of that name (`write(path, content)`) was silently dropped and the tool
+  failed with a missing-argument error. `tool_call(name, arguments={...})`
+  now takes the arguments as a mapping, for any tool whose argument is named
+  like one of the helper's own parameters; keywords still work and win on a
+  repeated key.
 
 ## [5.0.0] - 2026-10-29
 

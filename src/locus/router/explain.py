@@ -49,7 +49,9 @@ Gate = Literal["goal", "risk", "capabilities"]
 
 #: How the survivor was picked. Mirrors the ``method`` already reported on
 #: ``router.protocol.selected``.
-Method = Literal["rule_based", "single_candidate", "llm_picked", "rule_based_fallback"]
+Method = Literal[
+    "rule_based", "single_candidate", "llm_picked", "rule_based_fallback", "risk_fallback"
+]
 
 _COST_RANK = {"low": 0, "medium": 1, "high": 2}
 _COMPLEXITY_RANK = {Complexity.LOW: 0, Complexity.MEDIUM: 1, Complexity.HIGH: 2}

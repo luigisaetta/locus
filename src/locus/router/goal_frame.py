@@ -94,6 +94,30 @@ class Complexity(_OrderedStrEnum):
     HIGH = "high"
 
 
+#: One line per intent, shown to the extractor through the ``primary_goal``
+#: field description so a model sees what separates neighbouring intents
+#: instead of thirteen bare enum names.
+TASK_TYPE_GUIDE: dict[TaskType, str] = {
+    TaskType.ANSWER: "a factual question answered in one reply",
+    TaskType.EXPLAIN: "a concept, mechanism or trade-off explained; no artefact produced",
+    TaskType.PLAN: "a sequence of steps written down, not executed",
+    TaskType.BUILD: "a new artefact produced (schema, config, CLI, document) other than program code",
+    TaskType.MODIFY: "an existing artefact, setting or policy changed",
+    TaskType.DIAGNOSE: "the cause of a symptom found from alerts, metrics or logs",
+    TaskType.REMEDIATE: "a live system acted on to fix it (restart, roll back, drain, recreate)",
+    TaskType.GENERATE_CODE: "program code written, usually with tests",
+    TaskType.RESEARCH: "information looked up or gathered from sources",
+    TaskType.COMPARE: "two or more options weighed against each other, a recommendation made",
+    TaskType.MONITOR: "current values and alerts observed and reported, possibly repeatedly",
+    TaskType.COORDINATE: "several agents or steps sequenced, each handing off to the next",
+    TaskType.ESCALATE: "a person or team notified, a runbook triggered",
+}
+
+
+def _intent_guide() -> str:
+    return "; ".join(f"{t.value}: {text}" for t, text in TASK_TYPE_GUIDE.items())
+
+
 class GoalFrame(BaseModel):
     """The single typed object the LLM produces.
 
@@ -105,7 +129,11 @@ class GoalFrame(BaseModel):
 
     primary_goal: TaskType = Field(
         ...,
-        description="The dominant intent. The protocol registry filters by this.",
+        description=(
+            "The dominant intent; the protocol registry filters by this. "
+            "Pick by what the request wants done, not by its subject. "
+            f"Meanings: {_intent_guide()}."
+        ),
     )
     secondary_goals: list[TaskType] = Field(
         default_factory=list,
