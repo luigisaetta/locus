@@ -8,6 +8,12 @@ policy.
 
 ## [Unreleased]
 
+### Added
+
+- **`locus-sdk-security` on PyPI.** The release workflow publishes the
+  security package next to `locus-sdk`, so `pip install locus-sdk-security`
+  replaces the install-from-repository line; the two stay in lockstep.
+
 ## [5.0.0] - 2026-10-29
 
 ### Added
