@@ -226,6 +226,24 @@ AgentServer(agent=my_agent, api_key=os.environ["API_KEY"]).run(host="0.0.0.0", p
 
 ---
 
+## Build it with Codex
+
+Hand [OpenAI Codex](https://developers.openai.com/codex) the prompt in [`codex/`](codex/) and it
+installs Locus in a fresh environment, writes a first agent with a typed tool, puts an admission
+gate in front of a payment, runs the rogue-agent challenge, and reports, against the provider you
+name: OCI Generative AI from a profile in `~/.oci/config`, OpenAI or Anthropic from a key in the
+environment, or none for the offline parts. [`AGENTS.md`](AGENTS.md) carries the rules it follows;
+[`codex/SPEC.md`](codex/SPEC.md) is written for a person to follow by hand as well.
+
+```bash
+git clone https://github.com/oracle/locus.git && cd locus
+codex -s workspace-write -c sandbox_workspace_write.network_access=true "$(cat codex/PROMPT.md)"
+```
+
+→ [Build it with Codex](https://locusagents.ai/how-to/codex/)
+
+---
+
 ## Repo layout
 
 ```text
