@@ -1,10 +1,11 @@
 # Security
 
 The security domain ships as the separate `locus-sdk-security` package
-(`locus_security`), released in lockstep with `locus-sdk`:
+(`locus_security`). It is not published to PyPI; install it from the
+repository at the tag matching your `locus-sdk` version:
 
 ```bash
-pip install locus-sdk-security
+pip install "git+https://github.com/oracle/locus@v5.1.0#subdirectory=packages/locus-sdk-security"
 ```
 
 The core `locus-sdk` package does not include it. It covers three separable

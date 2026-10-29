@@ -5,18 +5,13 @@ agents, shipped as a separate, opt-in distribution. The core `locus-sdk`
 runtime — the admission gate, policy, audit trail, and the GSAR grounding and
 verification layer in `locus.control` — does not include any of it.
 
-Install it from PyPI; it is released in lockstep with `locus-sdk`:
+It is not published to PyPI. Install it from the repository; its version
+tracks `locus-sdk` release for release, so pin the tag you run:
 
 ```bash
-pip install locus-sdk-security
+pip install "git+https://github.com/oracle/locus@v5.1.0#subdirectory=packages/locus-sdk-security"
 # + the OCI SDK for the cloud-posture tools (core describe_oci / use_oci):
 pip install "locus-sdk[oci]"
-```
-
-For the unreleased `main`:
-
-```bash
-pip install "git+https://github.com/oracle/locus#subdirectory=packages/locus-sdk-security"
 ```
 
 It is imported as `locus_security`.

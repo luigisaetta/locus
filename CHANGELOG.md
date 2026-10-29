@@ -8,20 +8,13 @@ policy.
 
 ## [Unreleased]
 
-### Fixed
+### Changed
 
-- **The `a2a-mesh` example routed no requests, and spoke only the pre-v1.0
-  surface.** `A2AClient.get_agent_card()` returns v1.0 cards whose skills
-  are `AgentSkill` objects, but the orchestrator matched them as strings, so
-  every query failed with "No peer advertises skill". The orchestrator now
-  routes on skill ids, prints each peer's `protocolVersion` and
-  `supportedInterfaces`, and talks A2A v1.0 JSON-RPC: `SendMessage`, with
-  the reply read from the task's artifacts, and `SendStreamingMessage` for
-  `--stream`. `--legacy` keeps the flat `/a2a/invoke` and `/a2a/stream`
-  endpoints to show backwards compatibility. The web console does the same:
-  it discovers peers from `/.well-known/agent-card.json`, sends with
-  `SendMessage` and renders the `SendStreamingMessage` task events. Tests
-  cover the v1.0 card, both methods and routing on v1.0 skill ids (#274).
+- **`locus-sdk-security` ships from the repository, not from PyPI.** The
+  5.1.0 notes said the release workflow publishes it; the upload needs a
+  PyPI project that does not exist, and the package is one install line
+  from the repository at the matching tag, so the workflow publishes
+  `locus-sdk` alone again and the install instructions say so.
 
 ## [5.1.0] - 2026-10-29
 
