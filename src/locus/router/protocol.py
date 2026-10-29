@@ -213,15 +213,14 @@ class ProtocolRegistry:
 def _rank_key(protocol: Protocol, frame: GoalFrame) -> tuple[int, int, int, int]:
     """Lower is better. Ranks are layered:
 
-    1. ``distance``: how close the protocol's cost matches the frame's
-       complexity (0 = perfect match). The frame's complexity is the
-       *first* signal — a LOW-complexity task should never get a
-       HIGH-cost protocol just because that protocol claims to be
-       "canonical" for the goal type.
-    2. ``canonical``: 0 if the protocol declares this primary_goal in
-       ``primary_for``, else 1. Breaks distance ties — when two
-       protocols both fit the complexity, the one designed for this
-       specific goal wins.
+    1. ``fit``: 0 for a protocol that declares this primary_goal in
+       ``primary_for`` *and* whose cost is within one step of the frame's
+       complexity, else 1. The protocol designed for the goal wins as long
+       as it is not wildly over- or under-sized for the task: a
+       LOW-complexity task still never gets a HIGH-cost protocol just
+       because that protocol claims to be canonical.
+    2. ``distance``: how close the protocol's cost matches the frame's
+       complexity (0 = perfect match).
     3. ``cost_rank``: lower-cost protocols win at the next tier.
     4. ``handles``: fewer ``handles`` wins as a final tiebreaker (more
        specific protocol). Rarely activates.
@@ -229,8 +228,9 @@ def _rank_key(protocol: Protocol, frame: GoalFrame) -> tuple[int, int, int, int]
     cost_rank = {"low": 0, "medium": 1, "high": 2}
     complexity_rank = {Complexity.LOW: 0, Complexity.MEDIUM: 1, Complexity.HIGH: 2}
     distance = abs(cost_rank[protocol.cost] - complexity_rank[frame.complexity])
-    canonical = 0 if frame.primary_goal in protocol.primary_for else 1
-    return (distance, canonical, cost_rank[protocol.cost], len(protocol.handles))
+    canonical = frame.primary_goal in protocol.primary_for
+    fit = 0 if canonical and distance <= 1 else 1
+    return (fit, distance, cost_rank[protocol.cost], len(protocol.handles))
 
 
 # ---------------------------------------------------------------------------
@@ -640,7 +640,10 @@ def builtin_protocols() -> list[Protocol]:
             description="Two debaters argue opposing positions; a judge picks the winner.",
             handles=[TaskType.COMPARE, TaskType.RESEARCH],
             primary_for=[TaskType.COMPARE],
-            risk_max=Risk.LOW,
+            # A debate weighs options and recommends; it changes nothing, so a
+            # MEDIUM-risk comparison (two rollback strategies, say) still gets
+            # the shape built for comparing rather than a specialist fan-out.
+            risk_max=Risk.MEDIUM,
             cost="high",
             latency="high",
             builder=_build_debate,

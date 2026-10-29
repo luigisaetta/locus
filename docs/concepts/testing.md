@@ -36,6 +36,14 @@ ScriptedModel([
 ])
 ```
 
+A tool whose argument is named like one of `tool_call()`'s own parameters
+(`name`, `content`, `call_id`, `arguments`) takes them as a mapping; the
+harness `write` tool is one:
+
+```python
+tool_call("write", arguments={"path": "app.py", "content": "print(1)\n"})
+```
+
 Arguments are keywords, so the call reads like the tool it names, and the
 tool-call id is derived from the name rather than randomised — assertions
 never depend on a value that changes per run.
