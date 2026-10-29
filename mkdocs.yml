@@ -68,6 +68,8 @@ theme:
 hooks:
 - hooks/cache_bust.py
 - hooks/build_metadata.py
+- hooks/search_exclude.py
+- hooks/inline_code_breaks.py
 # After build_metadata so the Markdown twins carry the expanded build facts.
 - hooks/llms_txt.py
 
@@ -78,6 +80,8 @@ extra_javascript:
 - javascripts/header-home.js
 - javascripts/copy-page.js
 - javascripts/diagram-zoom.js
+- javascripts/mobile-tables.js
+- javascripts/output-blocks.js
 - javascripts/table-filter.js
 - javascripts/notebook-filter.js
 - javascripts/sidebar-filter.js
@@ -147,6 +151,13 @@ markdown_extensions:
 
 plugins:
 - search
+# Self-hosts the web fonts the theme loads from Google Fonts (and any other
+# external asset the built pages reference), so a page load makes no
+# third-party request. The PyPI badge stays live: it is excluded because
+# the build would freeze the version it shows.
+- privacy:
+    assets_exclude:
+    - img.shields.io/*
 - mkdocstrings:
     default_handler: python
     handlers:

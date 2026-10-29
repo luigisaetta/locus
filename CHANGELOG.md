@@ -8,18 +8,13 @@ policy.
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- **OCI GenAI Sandboxes as a coding-harness workspace.**
-  `locus.harness.OCISandboxBackend` runs the harness tools in an OCI
-  Enterprise AI sandbox (`pip install "locus-sdk[oci-sandbox]"`, `oci`
-  2.189.0+). `create(project_id, ...)` makes a sandbox and deletes it on
-  `close()`; `connect(sandbox_id, ...)` attaches to one; `extend()` adds
-  lifetime. Commands stream with their output order kept, run under an
-  in-sandbox deadline, and return at most 900 kB of output, because the
-  service loses larger output. Background state lives in
-  `/workspace/.locus-harness` (`/tmp` is read-only there), now in
-  `SKIP_DIRS`.
+- **`locus-sdk-security` ships from the repository, not from PyPI.** The
+  5.1.0 notes said the release workflow publishes it; the upload needs a
+  PyPI project that does not exist, and the package is one install line
+  from the repository at the matching tag, so the workflow publishes
+  `locus-sdk` alone again and the install instructions say so.
 
 ## [5.1.0] - 2026-10-29
 

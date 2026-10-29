@@ -84,6 +84,7 @@ setup.
 [The Agent →](concepts/agent.md) ·
 [Notebook 02 — Basic agent →](notebooks/notebook_02_basic_agent.md) ·
 [Notebook 03 — Agent with tools →](notebooks/notebook_03_agent_with_tools.md)
+{ .locus-links }
 
 ## What are you building?
 
@@ -280,6 +281,7 @@ print(result.text)          # findings from 3 parallel probes
 [Notebook 19 — Composition →](notebooks/notebook_19_composition.md) ·
 [Notebook 22 — Orchestrator →](notebooks/notebook_22_orchestrator_pattern.md) ·
 [Notebook 29 — Cognitive router →](notebooks/notebook_29_cognitive_router.md)
+{ .locus-links }
 
 ## Oracle Cloud, native
 
@@ -357,6 +359,7 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 [Configure any provider →](how-to/configure-providers.md) ·
 [Dedicated AI Clusters →](how-to/oci-dac.md) ·
 [Oracle Database 26ai notebooks →](notebooks/index.md#oracle-cloud-and-database-26ai)
+{ .locus-links }
 
 ## The harness
 
@@ -425,6 +428,7 @@ pip install locus-sdk && python -m locus.rogue
 [How the admission gate works →](concepts/control-layer.md) ·
 [First controlled action →](how-to/first-controlled-action.md) ·
 [Notebook 71 — Payment refund gate →](notebooks/notebook_71_payment_refund_gate.md)
+{ .locus-links }
 
 ## Where next
 
@@ -432,3 +436,4 @@ pip install locus-sdk && python -m locus.rogue
 [Capabilities →](capabilities.md) ·
 [API reference →](api/index.md) ·
 [Deploy →](how-to/deploy.md)
+{ .locus-links }
