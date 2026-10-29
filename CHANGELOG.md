@@ -8,6 +8,14 @@ policy.
 
 ## [Unreleased]
 
+### Changed
+
+- **`locus-sdk-security` ships from the repository, not from PyPI.** The
+  5.1.0 notes said the release workflow publishes it; the upload needs a
+  PyPI project that does not exist, and the package is one install line
+  from the repository at the matching tag, so the workflow publishes
+  `locus-sdk` alone again and the install instructions say so.
+
 ## [5.1.0] - 2026-10-29
 
 ### Added
