@@ -139,9 +139,9 @@ Using mock model (no API calls)
   [shape]    ParallelPipeline of N tool-bound Agents
   [result]
   Alert assessment: likely true positive. Recommend containment.
-  
+
   ---
-  
+
   Alert assessment: likely true positive. Recommend containment.
 
 === Prompt 4 ===
