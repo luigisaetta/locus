@@ -14,9 +14,11 @@ Key concepts:
 - Pass the endpoint OCID as the model id and Locus routes it through
   ``OCIModel`` (the OCI SDK client). The OpenAI-compatible client
   cannot speak ``DedicatedServingMode``, which is required for DACs.
-- Tool schemas pass through unchanged. Whether the model on the cluster
-  emits structured ``tool_calls`` (OpenAI / Llama / Cohere) or text
-  ``<tool_call>`` blocks (default Qwen3) depends on the deployment.
+- Tool schemas reach the cluster as the OCI SDK's ``FunctionDefinition``,
+  the conversion ``OCIModel`` applies to every id other than
+  ``cohere.command*``. Whether the model on the cluster emits structured
+  ``tool_calls`` (OpenAI / Llama / Cohere) or text ``<tool_call>``
+  blocks (default Qwen3) depends on the deployment.
 - Both ``complete()`` and SSE ``stream()`` work end-to-end against a
   DAC — the call sites look identical to a public model.
 
@@ -37,8 +39,8 @@ Run it:
     export OCI_AUTH_TYPE=api_key                 # or security_token
     python examples/notebook_35_oci_dac.py
 
-Without the DAC env vars Parts 2-5 print the wiring snippet and skip,
-so the file still runs cleanly in CI.
+Without the DAC env vars Part 2 prints the wiring snippet and Parts 3-5
+skip, so the file still runs cleanly in CI.
 
 Difficulty: Intermediate
 """
@@ -75,6 +77,7 @@ def example_routing() -> None:
     print("locus.models.registry inspects the model id:")
     print()
     print("  1. ocid1.generativeaiendpoint.<region>....   -> OCIModel (OCI SDK)")
+    # The registry matches every ``cohere.`` id; command-r is the common case.
     print("  2. cohere.command-r-*                         -> OCIModel (OCI SDK)")
     print("  3. everything else                            -> OCIChatCompletionsModel")
     print()
@@ -100,7 +103,7 @@ def _dac_env_ready() -> bool:
 
 
 def _dac_model(max_tokens: int) -> OCIModel:
-    """The OCI SDK client Parts 3 and 4 call directly; one place to wire it."""
+    """Build the ``OCIModel`` Parts 3 and 4 call directly; one place to wire it."""
     from locus.models.providers.oci import OCIModel
 
     return OCIModel(
@@ -230,21 +233,26 @@ async def example_stream() -> None:
 async def example_agent_with_tool() -> None:
     """Wire a tool-using Agent on top of the DAC.
 
-    Locus sends the same OpenAI-style tool definitions to the DAC that
-    it sends to on-demand models. Whether the model on the cluster
-    emits structured tool calls or text-format ones depends on the
-    model and the deployment:
+    The ``Agent`` hands ``OCIModel`` the same OpenAI-style tool
+    definitions it hands any other model, and ``OCIModel`` converts
+    them to the OCI SDK's ``FunctionDefinition`` — the same conversion
+    whatever the serving mode. Whether the model on the cluster emits
+    structured tool calls or text-format ones depends on the model and
+    the deployment:
 
     - **OpenAI / Llama / Cohere on OCI** emit structured ``tool_calls``.
       Locus extracts them automatically.
     - **Qwen on a DAC** by default emits ``<tool_call>...</tool_call>``
-      text blocks. Locus's parser doesn't pick those up, so
-      ``result.metrics.tool_calls`` will be 0 even though the model
-      "called" the tool in its content. Two fixes:
+      text blocks. With the default ``text_tool_calls="auto"`` the
+      ``Agent`` parses text calls only for a model that declares
+      ``supports_native_tool_calls = False``, which ``OCIModel`` does
+      not, so ``result.metrics.tool_calls`` will be 0 even though the
+      model "called" the tool in its content. Two fixes:
         (a) Enable OpenAI-compatible tool-call output on the deployment
             (Qwen3 supports ``--enable-auto-tool-choice``).
-        (b) Add a post-processor that converts the text blocks into
-            Locus ``ToolCall`` objects.
+        (b) Build the ``Agent`` with ``text_tool_calls="on"``: Locus
+            then parses a ``<tool_call>`` tag whose body is a JSON call
+            naming a registered tool into a ``ToolCall`` and runs it.
 
     This part shows the wiring. The output depends on the model.
     """

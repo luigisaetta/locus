@@ -28,8 +28,8 @@ Key ideas:
   yields partial Pydantic instances as JSON arrives.
 
 The scenario is data-privacy triage (GDPR Art. 15 right of access). All
-subjects, records, and contact details are fabricated — ``*.example``
-domains and 555-01xx phone numbers.
+subjects, records, and contact details are fabricated — ``example.com``,
+``example.org`` and ``example.net`` addresses and 555-01xx phone numbers.
 
 Run it:
     .venv/bin/python examples/notebook_06_agent_streaming.py

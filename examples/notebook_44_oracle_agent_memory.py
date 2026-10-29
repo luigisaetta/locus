@@ -15,10 +15,11 @@ manager gets you:
   the upstream README)
 - Prompt-ready context cards with summaries + recent messages
 - Scoped retrieval (``user_id`` / ``agent_id`` / ``thread_id``)
-- Temporal reasoning + automatic memory expiry
+- Time-to-live retention (``MemoryRetentionConfig``), so records can
+  expire
 
-The trade-off: it's Oracle-only and the upstream is alpha — check the
-``oracleagentmemory`` README on PyPI for its current status. For non-Oracle backends
+The trade-off: it's Oracle-only — Locus pins
+``oracleagentmemory>=26.4.0,<27``. For non-Oracle backends
 (InMemoryStore / Redis / Postgres / OpenSearch) or for test
 environments, stick with notebook 37.
 
@@ -26,12 +27,15 @@ Same two-session shape as notebook 37 so you can compare side-by-side:
 
 - Session A (``thread_id=THREAD_A``, ``user_id="alice"``) — agent learns
   a fact about Alice; the manager's ``on_session_end`` hook ships the
-  transcript to ``Thread.add_messages_async``, which triggers
+  transcript to ``OracleThread.add_messages_async``, which triggers
   oracleagentmemory's LLM extractor.
 - Session B (``thread_id=THREAD_B``, **same** ``user_id="alice"``) — a
-  brand-new Agent; on session start the manager fetches a context card
-  for Alice via ``Thread.get_context_card_async`` and injects it into
-  the system prompt. The agent answers the follow-up.
+  brand-new Agent; on session start the manager inserts one system
+  message right after the user's turn holding thread B's context card
+  (``OracleThread.get_context_card_async``, which has no messages or
+  summary yet for a new thread) and the records a ``search_async``
+  scoped to ``user_id`` returns from every thread — the route by which
+  Alice's preference reaches the model. The agent answers the follow-up.
 
 Prerequisites::
 
@@ -64,11 +68,11 @@ Run it:
 
     python examples/notebook_44_oracle_agent_memory.py
 
-If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` aren't set the notebook prints
-the wiring snippet and exits cleanly — no traceback, no
-half-initialised state. Same goes for ``oracleagentmemory`` not being
-installed: the manager raises a clear ImportError pointing at the
-extras command.
+If any of ``ORACLE_DSN``, ``ORACLE_USER``, ``ORACLE_PASSWORD`` or
+``ORACLE_WALLET`` is unset the notebook prints the wiring snippet and
+exits cleanly — no traceback, no half-initialised state. Same goes for
+``oracleagentmemory`` not being installed: the manager raises a clear
+ImportError pointing at the extras command.
 
 Difficulty: Intermediate. Self-contained — no prior notebook required.
 """
@@ -151,8 +155,8 @@ def _build_connection():
     """Open a sync oracledb *pool* — oracleagentmemory wants sync, and it
     runs memory extraction on a background thread. A single
     ``oracledb.Connection`` shared between that thread and the agent's
-    own queries is not thread-safe (it crashed the thin driver in
-    testing); a pool hands each caller its own session."""
+    own queries is not thread-safe; a pool hands each caller its own
+    session."""
     import oracledb
 
     return oracledb.create_pool(
@@ -177,13 +181,15 @@ def _build_manager(conn):
         extract_memories=True,
         table_name_prefix=TABLE_PREFIX,
         # First-run provisioning of the oracleagentmemory schema. For
-        # production swap to "managed" and create the schema as a DBA
-        # before deploying the runtime user.
+        # production swap to "require_existing" and create the schema as
+        # a DBA before deploying the runtime user.
         schema_policy="create_if_necessary",
-        # Force the LLM extractor to run on EVERY add_messages call so
-        # the demo's session B sees Alice's preference immediately. In
-        # production leave these as upstream defaults (-1) to batch
-        # extraction over a windowing schedule.
+        # Forwarded to create_thread for every thread the manager creates:
+        # extract after every appended message and keep a running context
+        # summary, so session A's single turn is enough to store Alice's
+        # preference. oracleagentmemory 26.6 deprecated these per-thread
+        # keywords in favour of ``memory_extraction_config``; the pinned
+        # ``<27`` releases still accept them.
         thread_defaults={
             "memory_extraction_frequency": 1,
             "memory_extraction_window": 0,
@@ -243,9 +249,11 @@ async def session_a(manager) -> None:
 async def session_b(manager) -> None:
     """Brand-new Agent on a different thread — same user_id.
 
-    The manager's ``on_session_start`` pulls a context card for Alice
-    and injects it. Thread B has zero prior messages, so the only way
-    the agent knows about her region preference is via that card.
+    The manager's ``on_session_start`` inserts thread B's context card
+    (empty of messages and summary for a new thread) together with the
+    records a ``user_id``-scoped ``search_async`` returns from every
+    thread. Thread B has zero prior messages, so that block is the only
+    way the agent knows about her region preference.
     """
     print(f"\n--- Session B: brand-new Agent recalls Alice's preference (thread {THREAD_B}) ---")
     agent = _build_agent(manager)
@@ -285,7 +293,8 @@ async def show_what_was_extracted(conn) -> None:
     finally:
         await client.close_async()
     print(
-        f"\n--- Inspect: client.search_async(user_id={USER_ID!r}) returned {len(hits)} record(s) ---"
+        f"\n--- Inspect: client.search_async(user_id={USER_ID!r}) returned "
+        f"{len(hits)} record(s) ---"
     )
     for i, hit in enumerate(hits, start=1):
         snippet = (getattr(hit, "content", None) or str(hit))[:160].replace("\n", " ")

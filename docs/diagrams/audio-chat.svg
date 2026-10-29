@@ -59,6 +59,6 @@
     <text class="sub" x="680" y="180">wav + transcript</text>
   </g>
 
-  <text class="note" x="385" y="236">Offline (mock provider or no OPENAI_API_KEY) nothing is sent.</text>
+  <text class="note" x="385" y="236">Offline (mock provider or no OPENAI_API_KEY), nothing is sent.</text>
   <text class="note" x="385" y="256">A question wav not yet on disk is written as a placeholder tone; the answer is a canned transcript plus a tone.</text>
 </svg>

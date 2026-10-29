@@ -28,10 +28,10 @@ Key concepts:
   as with any other model.
 - Streaming arrives as ``ModelChunkEvent`` from the SSE
   ``output_text.delta`` stream — agent-layer code doesn't change.
-- ``ConversationManager`` is the one Locus primitive that bypasses on
-  this path (no client-side history to trim). Memory, Reflexion, GSAR,
-  grounding, idempotency, checkpointing, output schema, streaming, and
-  termination conditions all apply.
+- With ``store=True`` the runtime loop skips ``ConversationManager``
+  (no client-side history to trim) and calls ``complete()`` rather than
+  ``stream()``. Memory, Reflexion, GSAR, grounding, idempotency,
+  checkpointing, output schema, and termination conditions all apply.
 
 Run it:
     export OCI_PROFILE=<your-profile>

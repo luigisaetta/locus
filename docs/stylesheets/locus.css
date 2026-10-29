@@ -291,6 +291,24 @@ html {
   font-family: var(--locus-mono);
 }
 
+/* Code blocks: the repository formats Python at 100 columns, and the
+   article column is 828px wide. At Material's default .68rem the block
+   fits 97 columns, so a line at the project limit scrolls; at .66rem with
+   slightly narrower side padding it fits 101. Inline code is unchanged. */
+.md-typeset pre > code {
+  font-size: 0.66rem;
+  padding-left: 0.9em;
+  padding-right: 0.9em;
+}
+
+/* Program output (```text blocks) wraps like a terminal does, so a long
+   printed line is read in full instead of scrolled. Source code keeps
+   its line structure and scrolls. */
+.md-typeset .language-text pre > code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .md-typeset h1,
 .md-typeset h2,
 .md-typeset h3,

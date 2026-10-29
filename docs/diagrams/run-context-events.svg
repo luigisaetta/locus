@@ -7,10 +7,10 @@
     agent.arun(...)      drives Agent.run (agent.py:365). run is decorated with @_bus_bridge
                          (runtime_loop.py:721), which hands every yielded LocusEvent to
                          bridge_locus_event before passing it on to the caller       (runtime_loop.py:282-338)
-    bridged events       ThinkEvent         -> agent.think, once per loop iteration           (runtime_loop.py:838, 1119; agent_bridge.py:95-102)
+    bridged events       ThinkEvent         -> agent.think, once per loop iteration           (runtime_loop.py:1119, 2154; agent_bridge.py:95-102)
                          ToolStartEvent     -> agent.tool.started, span_id = tool_call_id    (runtime_loop.py:1401; agent_bridge.py:103-109)
                          ToolCompleteEvent  -> agent.tool.completed, the same span_id        (runtime_loop.py:1573-1831 via _complete_event; agent_bridge.py:110-119)
-                         ModelCompleteEvent -> agent.tokens.used, only when it carries usage (agent_bridge.py:144-159)
+                         ModelCompleteEvent -> agent.tokens.used, only when it carries usage; the agent loop never yields one (agent_bridge.py:144-159)
                                                dashed: Agent.run has no yield site for ModelCompleteEvent, so the
                                                agent path records the other four and not this one
                          TerminateEvent     -> agent.terminate with reason + iterations_used (runtime_loop.py:857-1909; agent_bridge.py:177-185)
@@ -26,7 +26,7 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 436" role="img" aria-labelledby="title desc">
   <title id="title">What run_context() switches on</title>
-  <desc id="desc">Entering run_context() mints a run_id and binds it to the asyncio context; agent.arun() is called inside that block. The agent loop yields LocusEvents, and the bus bridge turns them into the canonical events agent.think (once per iteration), agent.tool.started and agent.tool.completed (a pair sharing one span_id, the tool_call_id), agent.tokens.used (only when a ModelCompleteEvent carrying usage is bridged) and agent.terminate (stop reason and iterations used). Each is published through emit() onto the EventBus, which appends it to a per-run history deque and fans it out to subscribers. bus.subscribe(rid) replays that history first, then streams live events until close_stream(rid) ends the iterator. Outside run_context(), emit() returns after a single ContextVar lookup: no bus is built and no event is created.</desc>
+  <desc id="desc">Entering run_context() mints a run_id and binds it to the asyncio context; agent.arun() is called inside that block. The agent loop yields LocusEvents, and the bus bridge turns them into the canonical events agent.think (once per iteration), agent.tool.started and agent.tool.completed (a pair sharing one span_id, the tool_call_id), agent.tokens.used (mapped from a ModelCompleteEvent carrying usage, which the agent loop does not yield, so it never fires on this path) and agent.terminate (stop reason and iterations used). Each is published through emit() onto the EventBus, which appends it to a per-run history deque and fans it out to subscribers. bus.subscribe(rid) replays that history first, then streams live events until close_stream(rid) ends the iterator. Outside run_context(), emit() returns after a single ContextVar lookup: no bus is built and no event is created.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -118,5 +118,5 @@
   </g>
 
   <text class="note" x="450" y="400">Outside run_context(), emit() returns after one ContextVar.get(): no bus, no StreamEvent, no allocation.</text>
-  <text class="note" x="450" y="418">Dashed: agent.tokens.used is bridged only from a ModelCompleteEvent that carries usage.</text>
+  <text class="note" x="450" y="418">Dashed: agent.tokens.used maps from a ModelCompleteEvent with usage; the agent loop never yields one.</text>
 </svg>

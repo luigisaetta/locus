@@ -27,9 +27,10 @@ Four SIEM alerts arrive in a 1-hour window:
   3. C2 beacon (known bad IP)   → Threat-intel enrichment → HIGH Evidence
   4. benign process noise       → No corroborating evidence → Abstention
 
-This runs fully offline using mock SIEM/EDR/intel adapters.  Swap the mocks
-for ``security_toolset(siem=True, edr=True, threat_intel=True)`` and a real
-model to run against a live environment.
+This runs fully offline: a mock evidence builder derives each proposed
+finding from corroboration flags on the alert.  Swap it for
+``security_toolset(siem=True, edr=True, threat_intel=True)``,
+``create_soc_analyst`` and a real model to run against a live environment.
 
 Run it:
     python packages/locus-sdk-security/examples/notebook_87_soc_alert_triage.py
@@ -125,8 +126,9 @@ def _build_mock_evidence(alert: Alert) -> list[PostureFinding]:
     """
     In production this is where the SOC analyst agent runs:
       tools = security_toolset(siem=True, edr=True, threat_intel=True)
-      agent = create_soc_analyst(model=get_model(), tools=tools)
-      response = await agent.arun(f"Investigate alert: {alert.title}\n{alert.raw}")
+      agent = create_soc_analyst(model="oci:openai.gpt-4o", tools=tools)
+      result = await agent.arun(f"Investigate alert: {alert.title}\n{alert.raw}")
+      report = result.parsed_as(PostureReport)  # what ground_report takes
 
     For this offline demo the proposed finding is derived from the alert's
     raw fields — each corroboration flag stands in for one tool result the

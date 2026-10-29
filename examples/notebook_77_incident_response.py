@@ -27,12 +27,12 @@ Models the loop an infra/devops on-call engineer runs when a page fires::
                        Postmortem (structured)
 
 - Send: fan out to 3 investigator Agents in parallel.
-- add_conditional_edges: severity-based routing decides auto-mitigate
-  vs escalate to a human.
+- add_conditional_edges: severity-based routing decides between
+  auto-mitigation and escalation to a human.
 - interrupt(): critical severity pauses for explicit human approval
   before any mitigation runs.
 - output_schema=Postmortem: the final report is a typed Pydantic
-  instance, ready to file into the reliability-review database.
+  instance rather than free text.
 
 Run it:
     # Default: OCI GenAI if ~/.oci/config has a usable profile, else the bundled mock model
@@ -41,8 +41,8 @@ Run it:
     # Offline / no credentials:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_77_incident_response.py
 
-    # Pin a strong-enough model for the structured postmortem schema:
-    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_77_incident_response.py
+    export LOCUS_MODEL_PROVIDER=oci LOCUS_MODEL_ID=openai.gpt-4o  # a model with structured output
+    python examples/notebook_77_incident_response.py
 """
 
 from __future__ import annotations
@@ -221,8 +221,8 @@ async def write_postmortem(state: dict[str, Any]) -> dict[str, Any]:
 
     The agent reads the workflow's accumulated state (severity, hypothesis,
     investigator reports, mitigation) and emits a Pydantic ``Postmortem``.
-    ``result.parsed`` must be populated — if the model can't honor the JSON
-    schema we surface that as a hard error rather than fabricating a record.
+    ``result.parsed`` must be populated; if the model can't honor the schema we
+    raise rather than fabricate a record, and the graph records the node as failed.
     """
     reports: list[InvestigatorReport] = state.get("reports", [])
     bullets = "\n".join(f"- [{r.source}] {'; '.join(r.findings)}" for r in reports)

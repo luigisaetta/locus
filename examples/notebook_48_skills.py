@@ -1,38 +1,39 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Notebook 48: skills — a payments-ops skill library with progressive disclosure.
+"""Notebook 48: skills — a skill library with progressive disclosure.
 
 A Skill (the AgentSkills.io shape) bundles a name, a description, and
 a block of instructions — think of each one as a vetted operations
 procedure: dispute triage, refund-policy review, safe queries against
 the ledger. The ``SkillsPlugin`` exposes a catalog of skills to the
-agent and only injects the full instructions once the agent activates a
+agent and delivers the full instructions only once the agent activates a
 specific one. Progressive disclosure keeps the system prompt small and
-the payments agent focused on the procedure that matters right now.
+the agent focused on the procedure that matters right now.
 
 - ``Skill`` — built in code or loaded from a ``SKILL.md`` file with
-  YAML front-matter.
+  YAML front matter.
 - ``Skill.from_directory(path)`` — load every skill under a directory
   (your team's reviewed, versioned procedure library).
 - ``Skill.from_file(path)`` — load one skill directory or ``SKILL.md``.
-- ``Agent(skills=[...])`` — wires up the SkillsPlugin and the
+- ``Agent(skills=[...])`` — installs the SkillsPlugin and registers the
   ``skills`` tool that the agent calls to activate one.
-- The ``SKILL.md`` format itself — front-matter for ``name``,
+- The ``SKILL.md`` format itself — front matter for ``name``,
   ``description``, ``allowed-tools``, ``metadata``, plus the
   instruction body and optional ``scripts/``, ``references/``,
   ``assets/`` directories.
 
 Run it:
     # Default: OCI GenAI if ~/.oci/config has a usable profile, else the bundled mock model
-    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_48_skills.py
+    python examples/notebook_48_skills.py
 
     # Offline:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_48_skills.py
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
-  ``openai`` / ``anthropic`` / ``mock``.
+- An OCI profile in ``~/.oci/config`` (picked up automatically), or
+  ``LOCUS_MODEL_PROVIDER`` set to ``openai`` / ``anthropic`` / ``mock``
+  with the matching key.
 - Optional: an ``examples/skills/`` directory with one or more
   ``SKILL.md`` files for Part 2 to find. The bundled ones are
   ``code-review``, ``incident-triage``, ``ioc-enrichment`` and
@@ -117,9 +118,9 @@ async def example_filesystem():
     for s in skills:
         print(f"  - {s.name}: {s.description[:60]}...")
 
-    # The agent sees only the catalog (names + descriptions) up front; the
-    # full instructions arrive when it activates one — so four procedures
-    # cost the system prompt four lines, not four runbooks.
+    # The agent sees only the catalog (names, descriptions, locations) up
+    # front; the full instructions arrive when it activates one — so four
+    # procedures cost the prompt four catalog entries, not four runbooks.
     agent = Agent(
         model=get_model(max_tokens=200),
         system_prompt="You are the on-call operations agent. Use available skills.",
@@ -137,7 +138,7 @@ async def example_filesystem():
 
 
 # =============================================================================
-# Part 3: SKILL.md file format — YAML front-matter + instruction body,
+# Part 3: SKILL.md file format — YAML front matter + instruction body,
 #         written to disk and read back through the SDK's loader.
 # =============================================================================
 
@@ -176,8 +177,8 @@ async def example_format():
         (skill_dir / "references").mkdir()
         (skill_dir / "references" / "bin-ranges.md").write_text("# BIN ranges\n")
 
-        # Same parser the directory loader uses: front-matter becomes typed
-        # fields, the body becomes the instructions injected on activation.
+        # Same parser the directory loader uses: front matter becomes typed
+        # fields, the body becomes the instructions returned on activation.
         skill = Skill.from_file(skill_dir)
         print(f"name:          {skill.name}")
         print(f"description:   {skill.description}")

@@ -4,27 +4,29 @@
 """
 Notebook 18: Payment dispute triage with the functional API.
 
-If `StateGraph` feels like overkill for a straight-line dispute
-workflow, the functional API lets you write the same payment dispute
-triage as ordinary Python: decorate the units of work with
-`@task`, decorate the orchestrator with `@entrypoint`, and Locus
-tracks timing, retries, and caching for you behind the scenes. Scenario:
-payments operations — fetch transaction, look up risk score, assess dispute.
+Express a payment dispute triage workflow as decorated async functions
+instead of a graph. When ``StateGraph`` is more than a straight-line
+pipeline needs, decorate the units of work with ``@task``, decorate the
+orchestrator with ``@entrypoint``, and Locus records timing and applies
+retries and caching without a graph object. Scenario: payments
+operations — fetch the transaction, look up the risk score, assess the
+dispute.
 
 Key ideas:
 - @task — a unit of work; can declare retry_attempts and cache.
-- @entrypoint — the top-level coroutine; tracks every task it awaits.
+- @entrypoint — the top-level coroutine; records a TaskResult for each
+  task that runs inside it.
 - pipeline.get_result() returns an EntrypointResult with per-task metadata.
-- Same execution semantics as StateGraph, written imperatively.
+- Plain async/await control flow; no graph object, so no state reducers,
+  conditional edges, checkpointing or interrupt/resume.
 
 Run it:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_18_functional_api.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose.
-Set LOCUS_MODEL_PROVIDER=mock for offline runs. Pick a live provider with
-LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
-(or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
-provider: ollama, vllm, groq, together, openrouter, ...).
+The default provider is OCI Generative AI when ``~/.oci/config`` holds a
+usable profile, otherwise the bundled mock model; set
+``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to
+choose, and ``LOCUS_MODEL_ID`` to name the model.
 """
 
 import asyncio
@@ -153,7 +155,8 @@ async def example_with_llm():
         result = await analyst.arun(prompt)
         dt = time.perf_counter() - t0
         print(
-            f"  [model call: {dt:.2f}s · {result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]"
+            f"  [model call: {dt:.2f}s · "
+            f"{result.metrics.prompt_tokens}→{result.metrics.completion_tokens} tokens]"
         )
         return result.message.strip()
 

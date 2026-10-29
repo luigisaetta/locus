@@ -19,17 +19,21 @@ Key ideas:
 - A ``checkpointer`` saves and restores agent state under keys you scope.
 - ``thread_id`` keys conversations — one store can hold many independent
   conversations side by side without mixing them up.
-- ``checkpoint_every_n_iterations=1`` writes after every loop iteration,
-  so even a mid-tool-call interruption resumes cleanly.
-- The saved state is rich: messages, tool history, iteration count,
-  Reflexion confidence — all loadable for review.
+- ``checkpoint_every_n_iterations=1`` pins a save after every tool-calling
+  iteration — the default on a store that can delete a single checkpoint,
+  such as ``MemoryCheckpointer`` — so a process killed mid-turn loses at
+  most the iteration in flight and ``Agent.continue_turn(thread_id)``
+  resumes from the last save.
+- The saved state holds the conversation's messages plus the last turn's
+  iteration count, tool history and Reflexion confidence — all loadable
+  for review.
 
 Run it:
     .venv/bin/python examples/notebook_05_agent_memory.py
 
-The agent itself goes through whichever provider you configure via
-``LOCUS_MODEL_PROVIDER`` (``openai`` / ``anthropic``).
-Set ``LOCUS_MODEL_PROVIDER=mock`` to bypass the model for offline runs.
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile,
+otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``,
+``openai``, ``anthropic``, ``mock``) to choose.
 """
 
 import asyncio
@@ -112,7 +116,7 @@ def get_notes() -> str:
 
 
 async def example_checkpointing_with_tools():
-    """checkpoint_every_n_iterations=1 means a mid-loop interruption still recovers."""
+    """checkpoint_every_n_iterations=1 pins a save after each tool-calling iteration."""
     print("=== Part 2: Checkpoint after each iteration ===\n")
 
     model = get_model(max_tokens=150)
@@ -234,8 +238,10 @@ async def example_inspect_checkpoint():
 
     Reflexion's confidence score rises on successful tool calls and falls
     on errors and loops, so the inspector gets a ``record_detail`` tool.
-    After two turns that each fire a successful tool call,
-    ``state.confidence`` should be > 0.
+    Confidence is per turn — a new turn on the thread starts it at 0 — so
+    the saved value is the last turn's: above 0 when that turn made a
+    successful tool call, 0 with an empty history when it answered without
+    one (the bundled mock model calls a tool only on a thread's first turn).
     """
     print("=== Part 5: Inspecting a saved checkpoint ===\n")
 
@@ -294,9 +300,9 @@ async def example_inspect_checkpoint():
 
         print("\nMessages:")
         for i, msg in enumerate(state.messages):
-            content = (
-                msg.content[:50] + "..." if msg.content and len(msg.content) > 50 else msg.content
-            )
+            content = msg.content
+            if content and len(content) > 50:
+                content = content[:50] + "..."
             print(f"  {i}. [{msg.role.value}] {content}")
 
     print(f"\nDetails recorded by record_detail: {_details}")

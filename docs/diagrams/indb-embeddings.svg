@@ -29,9 +29,9 @@
   stores it with INSERT ... TO_VECTOR(:embedding)   rag/retriever.py:227, :318-328; rag/stores/oracle.py:521-531
   Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 500" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 516" role="img" aria-labelledby="title desc">
   <title id="title">A retrieval that embeds and searches inside Oracle Database 26ai</title>
-  <desc id="desc">Two lanes: your process, holding the Agent and a RAGRetriever whose embedder is OracleInDBEmbeddings and whose store is OracleVectorStore, and Oracle Database 26ai, holding the ONNX model, loaded once with LOAD_ONNX_MODEL, and the corpus table with its VECTOR column. The Agent calls the retriever as a tool with a query. The retriever sends the query text to the database as a bind of UTL_TO_EMBEDDING, the ONNX model embeds it there, and the database returns the query vector serialized. The retriever then sends that vector back into a VECTOR_DISTANCE cosine search over the VECTOR column, ordered by distance and limited to the top rows, and gets ranked rows back. The tool returns the results, each with its content and score, to the Agent. The text is embedded where it is stored; nothing goes to an external embedding endpoint.</desc>
+  <desc id="desc">Two lanes: your process, holding the Agent and a RAGRetriever whose embedder is OracleInDBEmbeddings and whose store is OracleVectorStore, and Oracle Database 26ai, holding the ONNX model, loaded once with LOAD_ONNX_MODEL (on Autonomous Database, LOAD_ONNX_MODEL_CLOUD loads it from Object Storage), and the corpus table with its VECTOR column. The Agent calls the retriever as a tool with a query. The retriever sends the query text to the database as a bind of UTL_TO_EMBEDDING, the ONNX model embeds it there, and the database returns the query vector serialized. The retriever then sends that vector back into a VECTOR_DISTANCE cosine search over the VECTOR column, ordered by distance and limited to the top rows, and gets ranked rows back. The tool returns the results, each with its content and score, to the Agent. The text is embedded where it is stored; nothing goes to an external embedding endpoint.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -111,5 +111,6 @@
   </g>
 
   <text class="note" x="460" y="478">The query text enters the database and is embedded there; only the vector and the ranked rows cross back out.</text>
-  <text class="note" x="460" y="494">LOAD_ONNX_MODEL runs once, out of band. add_documents embeds each passage the same way and stores it with TO_VECTOR.</text>
+  <text class="note" x="460" y="494">LOAD_ONNX_MODEL runs once, out of band; on Autonomous Database, LOAD_ONNX_MODEL_CLOUD loads the model from Object Storage.</text>
+  <text class="note" x="460" y="510">add_documents embeds each passage the same way and stores it with TO_VECTOR.</text>
 </svg>

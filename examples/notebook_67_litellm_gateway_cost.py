@@ -15,10 +15,9 @@ each, then walks the spend surface — per-request rows, per-key rollups,
 per-model rollups, and per-team filtering via metadata.
 
 Run it:
-    # 1. Bring the gateway + Postgres up (see notebook 66 for the
-    #    provider env vars and master key setup).
-    cd examples/litellm-gateway/
-    docker compose up -d
+    # 1. Bring the gateway + Postgres up from the repository root (see
+    #    notebook 66 for the provider env vars and master key setup).
+    docker compose -f examples/litellm-gateway/docker-compose.yml up -d
 
     # 2. Wire this notebook at the gateway.
     export LITELLM_GATEWAY_URL="http://localhost:4000"

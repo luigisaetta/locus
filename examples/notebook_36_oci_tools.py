@@ -1,7 +1,7 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Notebook 36: Drive the entire OCI control plane from natural language — `use_oci` + `describe_oci`.
+"""Notebook 36: Drive the OCI control plane from natural language — `use_oci` + `describe_oci`.
 
 Locus ships two built-in tools that, together, expose every OCI Python
 SDK operation to an agent without per-service plumbing:
@@ -39,11 +39,12 @@ Key concepts:
   ``Client``: ``IdentityClient``, ``ComputeClient``, ``DatabaseClient``).
 - An *operation* is a method on the client (snake_case, mirrors the
   REST operation id: ``list_compartments``, ``get_autonomous_database``).
-- Auth flows through ``~/.oci/config`` profiles. ``auth_type`` accepts
-  ``api_key`` (default), ``security_token`` (session-token profiles
-  from ``oci session authenticate``), ``instance_principal`` (running
-  on an OCI compute instance with a dynamic group), or
-  ``resource_principal`` (running as an OCI Function).
+- ``auth_type`` accepts ``api_key`` (default) and ``security_token``
+  (session-token profiles from ``oci session authenticate``), both read
+  from ``~/.oci/config`` profiles, plus ``instance_principal`` (running
+  on an OCI compute instance with a dynamic group) and
+  ``resource_principal`` (running as an OCI Function), which build a
+  signer without a config file.
 
 Run it:
     # 1. Pick a tenancy-side profile for the OCI control-plane calls

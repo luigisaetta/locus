@@ -3,15 +3,15 @@
 # https://oss.oracle.com/licenses/upl/
 """Notebook 54: reasoning patterns — a missed-redaction postmortem.
 
-A privacy-team exercise seeded a synthetic PII canary (a fake SSN) into a
-data export and the redaction pipeline never flagged it. The postmortem
-question is why the redaction pipeline stayed silent: a stale PII
-classifier model and a saturated scan queue amount to an unintended
-privacy gap (the kind that ships personal data in the clear — a
-data-protection-by-design failure under GDPR Art. 25 / Art. 32). Each
-part exercises one piece of the Locus reasoning toolkit against that
+A privacy-team exercise seeded a synthetic PII canary (a fabricated Social
+Security number) into a data export and the redaction pipeline never
+flagged it. The postmortem question is why the redaction pipeline stayed
+silent: a stale PII classifier model and a saturated scan queue amount to
+an unintended privacy gap (the kind that ships personal data in the
+clear — a data-protection-by-design failure under GDPR Art. 25 / Art. 32).
+Each part exercises one piece of the Locus reasoning toolkit against that
 postmortem; the parts that run an agent print a
-``[model call: X.XXs · prompt→completion tokens]`` banner.
+``[model call Part N: X.XXs · prompt→completion tokens · iters=N]`` banner.
 
 The thesis the reasoning layer enforces here: an ungrounded claim in a
 postmortem is how a false root cause gets written into a runbook, so each
@@ -28,25 +28,32 @@ claim is scored against tool evidence before it is allowed to stand.
   decide whether to replan. Ungrounded claims in a postmortem are how
   false root causes get written into runbooks.
 - ``CausalChain`` / ``build_causal_chain`` — build and walk a graph of
-  cause/effect relationships from canary seed to shipped-in-the-clear PII.
+  cause/effect relationships from the stale classifier and saturated scan
+  queue to PII shipped in the clear, then flag a cycle as a conflict.
 
 Read end to end, the parts form one pipeline — typed claims → grounding
 score → replan guidance → causal chain → reflexion over the run — which
 ``docs/concepts/reasoning.md`` describes piece by piece.
 
 Run it:
-    # Default: OCI GenAI if ~/.oci/config has a usable profile, else the bundled mock model
-    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_54_reasoning_patterns.py
+    # Default: OCI Generative AI if ~/.oci/config has a usable profile, else the mock model
+    python examples/notebook_54_reasoning_patterns.py
 
-    # Offline:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_54_reasoning_patterns.py
+    # Force a provider and model:
+    export LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+    python examples/notebook_54_reasoning_patterns.py
+
+    # There is no offline run: Parts 4 and 6 need a live model that can
+    # produce JSON, so under the mock provider the notebook exits at once.
 
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
-  ``openai`` / ``anthropic`` / ``mock``.
-- A model that supports constrained JSON decoding for the
-  ``output_schema=`` parts. The ``check_structured_output_capable()``
-  helper exits cleanly under mock.
+- A live, JSON-capable model: OCI Generative AI (the default when
+  ``~/.oci/config`` has a usable profile), or an OpenAI or Anthropic key
+  with the matching ``LOCUS_MODEL_PROVIDER``.
+- For Parts 4 and 6, a model that returns JSON matching the schema; a
+  reply that does not parse into ``ClaimList`` or ``EventList`` stops the
+  run with a ``RuntimeError``. The ``check_structured_output_capable()``
+  helper exits cleanly under mock, before Part 1 runs.
 """
 
 import asyncio
@@ -152,7 +159,12 @@ async def part1_reflexion() -> tuple[Reflector, AgentState]:
 
 
 # =============================================================================
-# Part 2: Loop detection — Reflector flags the same tool called repeatedly.
+# Part 2: Loop detection — the same Reflector on a hand-built state whose
+#         tool_history repeats query_dlp. In this release the loop check runs
+#         only once state.iteration reaches loop_threshold and reads the
+#         repeated tool sets from reasoning_steps, so a state carrying only
+#         tool_history is assessed on_track with no loop pattern; a live
+#         agent run fills both fields.
 # =============================================================================
 
 

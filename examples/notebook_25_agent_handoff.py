@@ -4,39 +4,45 @@
 """
 Notebook 25: Support tier escalation — L1 → L2 → L3 handoff with typed context.
 
-A handoff is one support agent saying "I'm done, please take this further."
-The source agent packages the ticket, its findings, and an explicit reason
-into a typed ``HandoffContext`` so the next tier inherits the full case
-state — not just a string. No re-asking the customer, no lost context.
+A handoff is one support agent declaring its part of a case complete and
+passing the ticket to the next tier. The source agent packages the ticket,
+its findings and an explicit reason into a typed ``HandoffContext`` so the
+next tier starts from the case state gathered so far rather than from a
+bare string, and the customer is not asked the same questions again.
 
 The running case is a classic support tier escalation: a customer reports
 that a paid subscription was charged twice but only one plan is active. The
 ticket walks L1 → L2 → L3, with billing-system lookups and account history
 gathered along the way. The typed chain is also the audit trail — every
-transfer, reason, and confidence value is recorded for the QA review.
+transfer the manager makes, with its reason and confidence, is recorded
+for review.
 
 Key ideas:
 - ``HandoffContext`` carries the source/target ids, original task,
   conversation summary, findings dict, confidence, instructions, and the
   full handoff chain.
 - ``HandoffReason`` enumerates why the handoff happened — SPECIALIZATION,
-  ESCALATION, DELEGATION, COMPLETION, FAILURE. The reason drives prompt
-  templating and audit trails.
-- ``HandoffManager`` registers a pool of agents, enforces a
-  ``max_handoff_chain`` cap (prevents loops), and records every transfer
-  for inspection or replay.
+  ESCALATION, DELEGATION, COMPLETION, FAILURE. The reason is written into
+  the prompt header and kept with the context in the manager's history.
+- ``Handoff`` (the manager ``create_handoff_manager`` returns) registers a
+  pool of agents, refuses further ``execute_handoff`` calls once its history
+  holds ``max_handoff_chain`` contexts, and records every transfer for
+  inspection or replay.
 - ``manager.chain_handoff([a, b, c], task)`` walks the chain end-to-end
   with each tier inheriting the previous one's findings.
 
 Run it:
     .venv/bin/python examples/notebook_25_agent_handoff.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable
+profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER``
+(``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
 ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
-This notebook fires five handoffs serially, so it can use Locus's "Model B"
-slot — a second, typically cheaper model id read from ``LOCUS_MODEL_ID_B``
-— for the L1 front-line seat. With Model B unset, the slot collapses to Model A.
+This notebook makes its model calls serially (Parts 1, 4 and 6), so it can
+use Locus's "Model B" slot — a second, typically cheaper model id read from
+``LOCUS_MODEL_ID_B`` — for the L1 front-line seat. With Model B unset, the
+slot collapses to Model A.
 
 Prerequisites:
 - Notebook 02 (Agent basics).
@@ -111,7 +117,9 @@ async def main():
     l3_manager = create_handoff_agent(
         name="L3 Escalation Manager",
         description="Handles confirmed issues requiring senior authority",
-        system_prompt="You are an L3 escalation manager. Direct the resolution of confirmed issues.",
+        system_prompt=(
+            "You are an L3 escalation manager. Direct the resolution of confirmed issues."
+        ),
         model=model,
     )
 
@@ -186,7 +194,7 @@ async def main():
         print(f"  {reason.value}: {REASON_DESCRIPTIONS[reason]}")
 
     # =========================================================================
-    # Part 4: the HandoffManager — registry + chain cap + history
+    # Part 4: the Handoff manager — registry + chain cap + history
     # =========================================================================
     print("\n=== Part 4: Handoff Manager ===\n")
 
@@ -253,7 +261,10 @@ async def main():
     t0 = time.perf_counter()
     chain_results = await manager.chain_handoff(
         agent_chain=[l1_agent.id, l2_specialist.id, l3_manager.id],
-        task="Enterprise customer threatening to churn over repeated billing errors — needs a goodwill credit",
+        task=(
+            "Enterprise customer threatening to churn over repeated billing errors "
+            "— needs a goodwill credit"
+        ),
         initial_state=state,
     )
     _banner("Part 6", time.perf_counter() - t0)

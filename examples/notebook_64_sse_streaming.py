@@ -2,33 +2,33 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 """
-Notebook 64: stream a payment review to an ops dashboard with SSE.
+Notebook 64: stream a payment review to an operations dashboard with SSE.
 
-SSE is the simplest way to push live payment-review updates from a
-Python backend to a payments operations dashboard — one HTTP response,
-one event per line. Locus ships two handlers that turn the agent event
+Server-Sent Events (SSE) push live payment-review updates from a Python
+backend to a payments operations dashboard over a single HTTP response,
+one frame per event. Locus ships two handlers that turn the agent event
 stream into SSE wire format: a buffered ``SSEHandler`` and a queue-based
 ``AsyncSSEHandler`` for true streaming.
 
 Key ideas:
-- An ``SSEMessage`` is a small dataclass with ``event``, ``data``, and
-  ``id`` fields, plus ``.format()`` to produce the wire bytes.
+- An ``SSEMessage`` is a small Pydantic model with ``event``, ``data``,
+  ``id`` and ``retry`` fields, plus ``.format()`` to produce the wire text.
 - ``SSEHandler`` collects messages in memory — good for short runs and
   tests.
 - ``AsyncSSEHandler.stream()`` is an async iterator you can hand
   straight to FastAPI / Starlette ``StreamingResponse``.
-- ``create_sse_response_headers()`` returns the correct
-  ``text/event-stream`` headers and disables proxy buffering.
-- Pass ``custom_serializer=...`` to either handler to shape what the
-  dashboard sees.
+- ``create_sse_response_headers()`` returns the ``text/event-stream``
+  headers and disables nginx proxy buffering.
+- Pass ``custom_serializer=...`` to ``SSEHandler`` to shape what the
+  dashboard sees; ``AsyncSSEHandler`` has no such parameter.
 
 Run it:
     .venv/bin/python examples/notebook_64_sse_streaming.py
 
 This notebook does not call an LLM — it only exercises the SSE
-plumbing, so no provider configuration is needed. For wiring the
-handlers into a FastAPI route and the production checklist see
-``docs/concepts/sse-events.md`` and ``docs/concepts/server.md``.
+plumbing, so no provider configuration is needed. For the frames the
+ready-made ``AgentServer`` ``/stream`` route writes without these
+handlers, see ``docs/concepts/streaming.md`` and ``docs/concepts/server.md``.
 """
 
 import asyncio
@@ -167,6 +167,9 @@ async def main():
     handler.clear()
 
     await handler.on_event(ThinkEvent(iteration=1, reasoning="Starting enrichment..."))
+    # The error frame carries "internal error" plus a correlation id; the
+    # exception text is logged server-side (stderr here) and reaches the
+    # frame only when LocusSettings.debug is true.
     await handler.on_error(ValueError("Processor gateway unavailable"))
 
     print(f"Has error: {handler.has_error}")
@@ -251,8 +254,9 @@ async def main():
     # =========================================================================
     print("\n=== Part 9: Supported Event Types ===\n")
 
-    # Read the set off the handler class so this list cannot drift from
-    # what the SDK actually renders.
+    # SUPPORTED_EVENTS is the set the handler declares; on_event itself
+    # renders any LocusEvent, so the set can lag the catalogue in
+    # locus.core.events (notebook 63).
     print("Event types a payments dashboard can subscribe to:")
     for event_type in sorted(SSEHandler.SUPPORTED_EVENTS):
         print(f"  {event_type}")
@@ -263,7 +267,7 @@ async def main():
     print("\n=== Part 10: Heartbeat ===\n")
 
     # Proxies drop idle connections; a periodic heartbeat is just another
-    # SSEMessage the dashboard ignores.
+    # SSEMessage the dashboard ignores. Locus does not send one for you.
     heartbeat = SSEMessage(event="heartbeat", data='{"status": "alive"}')
     print(f"Heartbeat message:\n{heartbeat.format()}")
 

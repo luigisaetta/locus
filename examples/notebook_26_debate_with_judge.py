@@ -26,10 +26,13 @@ Key ideas:
 Run it:
     .venv/bin/python examples/notebook_26_debate_with_judge.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose.g. ``LOCUS_MODEL_PROVIDER=oci
-LOCUS_MODEL_ID=openai.gpt-4o``, or ``LOCUS_MODEL_PROVIDER=openai
-LOCUS_MODEL_ID=gpt-4o``). Set ``LOCUS_MODEL_PROVIDER=mock`` and the
-notebook exits cleanly with setup instructions.
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable
+profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER``
+(``oci``, ``openai``, ``anthropic``, ``mock``) to choose, e.g.
+``LOCUS_MODEL_PROVIDER=oci LOCUS_MODEL_ID=openai.gpt-4o`` or
+``LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o``. Set
+``LOCUS_MODEL_PROVIDER=mock`` and the notebook exits cleanly with setup
+instructions.
 
 Prerequisites:
 - Notebook 07 (structured output).

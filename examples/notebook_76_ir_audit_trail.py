@@ -6,13 +6,14 @@
 
 A production outage pages the on-call at 2 AM. A ``GovernedAgent`` runs the
 ``sre_incident_runbook`` defined below (detect → triage → mitigate → recover),
-and every tool call — metrics query, log tail, deploy rollback — lands on an
-immutable ``AuditTrail`` through ``AuditHook``.
+and every tool call — metrics query, log tail, deploy rollback — lands on a
+tamper-evident ``AuditTrail`` through ``AuditHook``.
 
-When the incident closes, ``trail.verify()`` proves the chain was not tampered
-with and ``trail.export_jsonl()`` writes a portable record for the postmortem,
-the change-management log, and any audit hold. That record is the answer to
-"why was this release rolled back at 2 AM?" — "the AI decided" is not one.
+When the incident closes, ``trail.verify()`` confirms the chain is internally
+consistent — pin ``trail.head`` externally to catch truncation — and
+``trail.export_jsonl()`` produces a portable JSONL record for the postmortem,
+the change-management log, and any audit hold: the answer to "why was this
+release rolled back at 2 AM?".
 
 ``ops_toolset(allow_mitigation=True)`` opts in to the write-capable
 ``rollback_deploy``; without it the agent is read-only.
@@ -110,8 +111,8 @@ def sre_incident_runbook() -> Runbook:
 
 # ---------------------------------------------------------------------------
 # Ops toolset. Read-only telemetry tools are always available; write-capable
-# mitigation tools (rollback_deploy) are gated behind allow_mitigation, mirror-
-# ing how you would never hand an unattended agent a destructive verb by default.
+# mitigation tools (rollback_deploy) are gated behind allow_mitigation, so an
+# unattended agent is never handed a destructive verb by default.
 #
 # Every tool here is a deterministic offline stub returning canned data, so the
 # notebook runs with no cluster, no creds, and no network. The stubs share one
@@ -207,8 +208,9 @@ async def run_incident_response(incident: str) -> None:
     trail = AuditTrail()
     # Guardrails off: the incident brief arrives from Alertmanager (trusted
     # internal source), not from an untrusted user. Grounding stays on so the
-    # agent's claims must cite tool evidence. audit=True makes governed_agent
-    # attach its own AuditHook to `trail` — no need to pass one explicitly.
+    # agent's answer is scored against the evidence its tools returned.
+    # audit=True makes governed_agent attach its own AuditHook to `trail` — no
+    # need to pass one explicitly.
     profile = GovernanceProfile(grounding=True, guardrails=False, audit=True)
 
     runbook = sre_incident_runbook()

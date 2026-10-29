@@ -4,8 +4,7 @@
   factory _make_oci in locus/models/registry.py (:132-151), rules read top-down:
     oci: -> DAC endpoint    id.lower().startswith("ocid1.generativeaiendpoint.") -> OCIModel(model_id=…)   (:135-136)
     oci: -> SDK transport   id.lower().startswith("cohere.")                     -> OCIModel(model_id=…)   (:140-143)
-    oci: -> V1 transport    everything else; the source names OpenAI / Meta / xAI / Mistral / Gemini, and
-                            anthropic.* ids take the same path (no rule matches them)
+    oci: -> V1 transport    everything else; the source names OpenAI / Meta / xAI / Mistral / Gemini
                             -> OCIChatCompletionsModel(model=…)                                            (:123, :151)
     Responses transport     never returned by _make_oci: OCIResponsesModel is constructed directly, opt-in
                             (locus/models/__init__.py:16, locus/models/providers/oci/responses.py:119)
@@ -21,7 +20,7 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 936 456" role="img" aria-labelledby="title desc">
   <title id="title">How the oci: prefix picks a transport</title>
-  <desc id="desc">The oci: prefix reads the model id and routes it to one of three transports. An id that starts with ocid1.generativeaiendpoint, a Dedicated AI Cluster endpoint, goes to OCIModel over the OCI Generative AI Python SDK with DedicatedServingMode. An id that starts with cohere. also goes to OCIModel over the Python SDK, with OnDemandServingMode. Any other id, such as openai, meta, xai, mistral, google or anthropic models, goes to OCIChatCompletionsModel, which calls the OpenAI-compatible /openai/v1/chat/completions endpoint. The fourth transport, OCIResponsesModel against /openai/v1/responses, is opt-in: the prefix never selects it, you construct the class yourself.</desc>
+  <desc id="desc">The oci: prefix reads the model id and routes it to one of three paths. An id that starts with ocid1.generativeaiendpoint, a Dedicated AI Cluster endpoint, goes to OCIModel over the OCI Generative AI Python SDK with DedicatedServingMode. An id that starts with cohere. also goes to OCIModel over the Python SDK, with OnDemandServingMode. Any other id, such as openai, meta, xai, mistral or google models, goes to OCIChatCompletionsModel, which calls the OpenAI-compatible /openai/v1/chat/completions endpoint. A fourth path, OCIResponsesModel against /openai/v1/responses, is opt-in: the prefix never selects it, you construct the class yourself.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -53,8 +52,8 @@
   <text class="label" x="311" y="226">any other id</text>
   <rect class="label-bg" x="217" y="236" width="188" height="20" rx="4"/>
   <text class="label" x="311" y="246">openai.* meta.* xai.* mistral.*</text>
-  <rect class="label-bg" x="245" y="256" width="132" height="20" rx="4"/>
-  <text class="label" x="311" y="266">google.* anthropic.*</text>
+  <rect class="label-bg" x="283" y="256" width="56" height="20" rx="4"/>
+  <text class="label" x="311" y="266">google.*</text>
 
   <!-- explicit class -> Responses transport -->
   <path class="edge dashed" marker-end="url(#ah)" d="M174,371 L448,371"/>

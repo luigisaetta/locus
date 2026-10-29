@@ -16,19 +16,24 @@ Key ideas:
   reply and validate it against a Pydantic schema (a typed model that
   the LLM must produce JSON for).
 - ``create_schema_prompt`` / ``create_output_instructions`` — emit the
-  schema-aware system prompt the model needs to comply.
-- ``Agent(output_schema=YourModel)`` — constrained decoding plus a
-  prompted-JSON fallback wired into the agent loop, so the parsed
-  Pydantic object lands on ``result.parsed``.
+  schema-aware instruction the model needs to comply.
+- ``Agent(output_schema=YourModel)`` — the schema instruction rides the
+  system prompt, supporting providers also receive a native
+  ``response_format``, and the parsed Pydantic object lands on
+  ``result.parsed``.
 - ``StructuredOutputError`` for strict-mode parse failures.
 - ``ConversationVerdict`` — a notebook-local schema the model produces as
-  constrained JSON in Part 6, classifying a chat transcript into
+  prompted JSON in Part 6, classifying a chat transcript into
   (intent, sentiment) with a confidence and an ``evidence_coverage``
-  signal a downstream grounding step uses to abstain.
+  signal a downstream grounding step can use to abstain.
 
 Run it:
     # Default: OCI GenAI if ~/.oci/config has a usable profile, else the bundled mock model
-    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_07_structured_output.py
+    python examples/notebook_07_structured_output.py
+
+    # Force a provider and model:
+    export LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+    python examples/notebook_07_structured_output.py
 
     # There is no offline run: every part needs a live model that can
     # produce JSON, so under the mock provider the notebook exits at once.
@@ -37,8 +42,10 @@ Prerequisites:
 - A live, JSON-capable model: OCI GenAI (the default when an OCI profile
   is present), or an OpenAI / Anthropic key with the matching
   ``LOCUS_MODEL_PROVIDER``.
-- Constrained JSON decoding for Part 8 — the
-  ``check_structured_output_capable()`` helper exits cleanly under mock.
+- For Part 8, a model that returns JSON matching the schema, natively via
+  ``response_format`` or through the prompted instruction and schema
+  repair — the ``check_structured_output_capable()`` helper exits cleanly
+  under mock.
 """
 
 import asyncio
@@ -281,9 +288,9 @@ async def main() -> None:
     # =========================================================================
     # Part 6: A typed verdict schema — ConversationVerdict from a chat
     #         transcript. The model maps the conversation to an (intent,
-    #         sentiment) read with a confidence. Low evidence_coverage is the
-    #         signal a downstream grounding step uses to abstain rather than
-    #         auto-route on a guess — see notebook 55.
+    #         sentiment) read with a confidence. A low evidence_coverage is a
+    #         typed signal a downstream grounding step can use to abstain
+    #         rather than auto-route on a guess — see notebook 55.
     # =========================================================================
     print("\n=== Part 6: ConversationVerdict ===\n")
     cv_instructions = create_output_instructions(ConversationVerdict)

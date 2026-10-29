@@ -4,14 +4,15 @@
 """
 Notebook 17: Resilient cloud-provisioning workflows.
 
-Cloud control planes are flaky by nature — provisioning APIs get
-throttled, capacity pools fill up, instances take time to boot. The
-graph executor lets you attach policies to individual nodes: the
-instance-launch call retries with backoff without touching the rest of
-the workflow, and a repeated machine-image lookup gets cached without
-changing how it's called. The visualisation helpers and streaming hooks
-give you the operational story to go with it. Scenario: provisioning a
-small web tier on OCI (launch a VM, attach it, run a health check).
+Cloud control planes fail transiently: provisioning APIs throttle
+calls, capacity pools fill up, and instances take time to boot. The
+graph executor attaches policies to individual nodes, so the
+instance-launch call retries with backoff while the rest of the workflow
+is unchanged, and a repeated machine-image lookup is cached without
+changing how the node is called. The diagram helpers and streaming hooks
+show the shape of the run and its progress. Scenario: provisioning a
+small web tier on OCI with ``launch``, ``attach`` and ``healthcheck``
+steps.
 
 Key ideas:
 - RetryPolicy — exponential backoff with optional jitter, per node.

@@ -5,18 +5,17 @@
 Notebook 09: audit hooks — every agent action on the record.
 
 A ``HookProvider`` exposes nine lifecycle callbacks; this notebook uses
-the four most-used of them: before/after the whole invocation, and
-before/after each tool call. For a cloud-ops
-agent that's an audit trail for free — every scaling action it takes
-can be logged, timed, validated, or blocked without touching the agent
-or the tools themselves.
+four of them: before/after the whole invocation, and before/after each
+tool call. For a cloud-ops agent that is an audit trail: every scaling
+action it takes can be logged, timed, validated, or blocked without
+touching the agent or the tools themselves.
 
 Key ideas:
 - Subclass ``HookProvider`` and override only the callbacks you need.
 - Each hook declares a ``priority`` band (``HookPriority`` names the
   common ones: SECURITY, OBSERVABILITY, BUSINESS). A ``HookRegistry``
   sorts on it; an ``Agent`` runs hooks in the order you list them.
-- ``on_before_tool_call(event)`` can mutate ``event.arguments`` — handy
+- ``on_before_tool_call(event)`` can mutate ``event.arguments`` — useful
   for clamping or sanitising values before the tool actually runs.
 - Multiple hooks compose. Locus runs them in list order on the way in
   and in reverse on the way out.
@@ -297,8 +296,8 @@ class GuardrailsHook(HookProvider):
 
     @property
     def priority(self) -> int:
-        # SECURITY_MIN places this hook ahead of every other band, so it
-        # gets first look at the prompt and at every tool call.
+        # SECURITY_MIN is the band a HookRegistry sorts first. The Agent itself
+        # runs hooks in list order, and this agent registers only this one.
         return HookPriority.SECURITY_MIN
 
     async def on_before_invocation(self, prompt, state):

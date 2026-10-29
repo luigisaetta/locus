@@ -28,10 +28,11 @@ Pipeline::
                             ▼
                       ./notebook_58_response.mp3
 
-- Bring-your-own-voice via the voice= parameter (alloy, ash, ballad,
-  coral, echo, sage, shimmer, verse).
-- Output is a normal MP3 you can pipe into a frontend <audio> element,
-  the on-call IVR, or a status-page audio feed.
+- Choose the voice with default_voice= on the provider or voice= per
+  call (for example alloy, coral or verse; the list is OpenAI's and the
+  SDK passes the name through unchanged).
+- Output is a standard MP3 file that can be served to a web <audio>
+  element, the on-call IVR, or a status-page audio feed.
 
 Prerequisites for live speech: an OpenAI API key with access to a TTS
 model. The notebook uses gpt-4o-mini-tts for synthesis.
@@ -41,7 +42,7 @@ Run it:
     OPENAI_API_KEY=sk-... \\
     python examples/notebook_58_audio_response.py
 
-    afplay notebook_58_response.mp3   # macOS
+    afplay examples/notebook_58_response.mp3   # macOS
     # or open it in any media player
 
 Offline: under LOCUS_MODEL_PROVIDER=mock (or with no OPENAI_API_KEY) the
@@ -78,9 +79,10 @@ def _speech_provider() -> OpenAISpeechProvider | None:
     """The TTS provider, or None if offline.
 
     The provider takes the TTS model and default voice up front, so the
-    synthesis call below is just ``speak(text)``. When no ``OPENAI_API_KEY``
-    is set (e.g. the mock-model walkthrough) we return None so the caller
-    can describe the synthesis step without a network call.
+    synthesis call in ``main`` is just ``speak(reply, response_format="mp3")``.
+    When no ``OPENAI_API_KEY`` is set (e.g. the mock-model walkthrough) we
+    return None so the caller can describe the synthesis step without a
+    network call.
     """
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:

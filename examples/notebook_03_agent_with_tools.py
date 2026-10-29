@@ -39,7 +39,10 @@ Run it:
 
 The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile,
 otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``,
-``openai``, ``anthropic``, ``mock``) to choose.
+``openai``, ``anthropic``, ``mock``) to choose. The mock makes exactly one
+tool call per agent run and then answers with a fixed sentence keyed on the
+prompt, so its verdicts illustrate the loop rather than follow from the
+lookups.
 
 Prerequisite: notebook 02.
 """
@@ -301,12 +304,14 @@ def readiness_report(service: str) -> dict:
 
 
 async def example_structured_tools():
-    """A dict comes back as a dict, not as a string the model has to parse."""
+    """A dict comes back as a dict from the function; the model receives it as
+    JSON text rather than prose."""
     print("=== Part 5: Structured Return Types ===\n")
 
     # ``.func`` is the undecorated function, so this is the real dict.
-    # ``.execute()`` returns the same dict; the agent loop serialises it to
-    # JSON afterwards, because that is what crosses the wire to a model.
+    # ``.execute()`` runs the same function but hands the dict back as JSON
+    # text (``Tool._format_result``), because that is what crosses the wire
+    # to a model.
     for service in ("checkout", "search"):
         report = readiness_report.func(service=service)
         blockers = report["blockers"] or ["none"]

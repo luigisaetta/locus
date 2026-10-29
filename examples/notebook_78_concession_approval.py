@@ -350,8 +350,9 @@ async def _drive(graph: StateGraph, initial: dict[str, Any], answers: list[str])
         payload = result.interrupt.interrupt.payload
         print(f"  ⏸  [{payload.get('tier', '?')}] {payload.get('question')}")
         print(f"  ▶  Reviewer responds: {answer!r}")
-        # A resumed run starts from the checkpointed state, so the model
-        # object has to be re-injected alongside the reviewer's answer.
+        # The graph has no checkpointer, so the state handed back at the
+        # interrupt (with its __resume_node__ marker) goes forward again in
+        # the Command, the model object kept alongside the reviewer's answer.
         result = await graph.execute(
             Command(
                 resume=answer,
@@ -415,7 +416,7 @@ async def main() -> None:
             "risk_score": score,
             "ticket": ticket,
             # The model rides along in graph state so every node can build its
-            # agent from it (see _drive for why it is re-injected on resume).
+            # agent from it (see _drive for how it travels across a resume).
             "__model__": model,
         }
         result = await _drive(graph, initial, answers)

@@ -24,11 +24,14 @@ Key ideas:
   ``event.tool_name`` and you get an ``AttributeError`` — that's the
   framework guarding the agent's invariants (and your change log).
 - A small set of fields *is* writable: ``event.arguments`` (so a hook
-  can rewrite tool input) and ``event.cancel`` (set it to a string to
-  block the call and surface that message as the tool's "result").
-- Hooks run in the order they are listed (a ``HookRegistry`` sorts them
-  by ``priority`` first); the "after" callbacks unwind in reverse so
-  cleanup is LIFO.
+  can rewrite tool input), ``event.secret_arguments`` (extra input that
+  reaches the tool invocation only and is never checkpointed) and
+  ``event.cancel`` (set it to a string to block the call and surface
+  that message as the tool's "result").
+- Hooks run in the order they are listed on the "before" callbacks and
+  unwind in reverse on the "after" callbacks, so cleanup is LIFO. The
+  ``Agent`` keeps the order of its ``hooks=[...]`` list; ``priority``
+  only orders hooks that pass through a ``HookRegistry``.
 
 Run it:
     .venv/bin/python examples/notebook_10_hooks_advanced.py
@@ -125,7 +128,7 @@ async def example_write_protection():
         tool_name="scale_deployment", tool_call_id="c1", arguments={"replicas": 10}
     )
 
-    # Writable: arguments and cancel.
+    # Writable: arguments, cancel and secret_arguments; the probe sets the first two.
     event.arguments = {"replicas": 3}
     event.cancel = "blocked pending change-approval ticket"
     print(f"arguments (writable): {event.arguments}")

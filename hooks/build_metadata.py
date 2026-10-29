@@ -11,8 +11,10 @@ drift from the routes the SDK actually registers.
 
 from __future__ import annotations
 
+import ast
 import os
 import re
+import textwrap
 from importlib import import_module
 from pathlib import Path
 from typing import Any
@@ -40,6 +42,13 @@ _GLYPH_TOKEN = re.compile(r"\{\{\s*locus_glyph\s+([a-z0-9][a-z0-9-]*)\s*\}\}")
 _XML_PROLOG = re.compile(r"<\?xml[^>]*\?>\s*")
 _COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _ID_ATTR = re.compile(r'\bid="([^"]+)"')
+#: ``{{ locus_source examples/x.py::build_graph }}`` quotes one function or class
+#: from an example file, found by name, so the excerpt follows the code when
+#: lines move. A dotted name (``Class.method``) reaches into a class.
+_SOURCE_TOKEN = re.compile(
+    r"^\{\{\s*locus_source\s+(?P<path>[^\s:]+)::(?P<symbol>[A-Za-z_][\w.]*)\s*\}\}[ \t]*$",
+    re.MULTILINE,
+)
 #: ``{{ locus_model_tabs }}`` directly above a fenced block that contains
 #: ``{{ locus_model }}`` renders the block once per provider as a tab set.
 _MODEL_TABS = re.compile(
@@ -174,6 +183,49 @@ def render_glyph(name: str, docs_dir: Path) -> str:
     return f'<span class="tl-glyph" aria-hidden="true">{one_line}</span>'
 
 
+def _find_symbol(tree: ast.Module, dotted: str) -> ast.AST | None:
+    node: ast.AST = tree
+    for name in dotted.split("."):
+        body = getattr(node, "body", None)
+        if body is None:
+            return None
+        for child in body:
+            if (
+                isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                and child.name == name
+            ):
+                node = child
+                break
+        else:
+            return None
+    return node
+
+
+def render_source(path: str, symbol: str, roots: list[Path]) -> str:
+    """One function or class from a source file, as a fenced Python block.
+
+    The symbol is looked up by name in the parsed module, so a page keeps
+    quoting the right code when the file is edited above it; a symbol that no
+    longer exists fails the strict build instead of silently quoting the
+    wrong lines. Decorators are included, common indentation is removed.
+    """
+    file = next((r / path for r in roots if (r / path).is_file()), None)
+    if file is None:
+        raise RuntimeError(
+            f"{{{{ locus_source {path}::{symbol} }}}} names {path}, which does not exist"
+        )
+    text = file.read_text()
+    node = _find_symbol(ast.parse(text), symbol)
+    if node is None or not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        raise RuntimeError(
+            f"{{{{ locus_source {path}::{symbol} }}}}: no function or class named {symbol} in {path}"
+        )
+    first = min([node.lineno, *[d.lineno for d in node.decorator_list]])
+    lines = text.splitlines()[first - 1 : node.end_lineno]
+    body = textwrap.dedent("\n".join(lines)).rstrip()
+    return f"```python\n{body}\n```"
+
+
 def render_model_tabs(block: str, tabs: list[dict[str, str]]) -> str:
     """One code block, shown once per provider as a linked tab set.
 
@@ -209,6 +261,12 @@ def on_page_markdown(markdown: str, *, config: Any, **_: Any) -> str:
     extra = config["extra"]
     sdk_version = extra["sdk_version"]
     rendered = markdown
+    if "locus_source" in rendered:
+        root = Path(config["config_file_path"]).parent
+        roots = [root, root / "packages" / "locus-sdk-security"]
+        rendered = _SOURCE_TOKEN.sub(
+            lambda m: render_source(m.group("path"), m.group("symbol"), roots), rendered
+        )
     if "locus_model_tabs" in rendered:
         tabs = extra.get("model_tabs")
         if not tabs:

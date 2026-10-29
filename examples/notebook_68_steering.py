@@ -1,44 +1,56 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Notebook 68: steering — a policy LLM gates a live production incident.
+"""Notebook 68: steering — a policy model judges an on-call agent's tool calls.
 
 ``SteeringHook`` runs a second LLM ("the steering model") in front of
 every tool call, which is how you steer an on-call agent while it is
-running — keep it read-only, redirect it ("check the canary first"),
-or stop a mutating action that nobody approved. The steering model
-reads a natural-language policy plus the agent's activity so far, then
-returns one of three actions:
+running — keep it read-only, or turn back a mutating action that nobody
+approved. The steering model reads a natural-language policy plus the
+agent's recent tool calls, then returns one of three actions:
 
 - ``PROCEED`` — let the tool call go through.
-- ``GUIDE`` — let it through but inject a note for the agent to read
-  (e.g. "check the canary metrics before scaling").
-- ``INTERRUPT`` — block the tool call and return a refusal message.
+- ``GUIDE`` — cancel the tool call and return the guidance message
+  ("Steering blocked: <reason>") in its place, so the agent reads the
+  correction instead of a result.
+- ``INTERRUPT`` — cancel the tool call and return a
+  ``REQUIRES APPROVAL: <reason>`` message in its place.
 
-The result is a real-time guardrail you can author in plain English —
-no rules engine, no policy DSL — and every decision is recorded for
-the post-incident review. Holding a diagnostics session read-only is a
-direct control against blast radius: the agent can query Prometheus and
-read logs all day, but it cannot reach a mutating operation — restarting
-a service, scaling a deployment, terminating an instance — that no one
-approved.
+Neither refusal pauses the run: the decision is recorded and the agent
+loop continues with the message as the tool's result.
+
+The result is a guardrail you can author in plain English — no rules
+engine, no policy DSL — and every decision is recorded for the
+post-incident review. Here a read-only policy covers an on-call
+diagnostics session: a metric query is expected to proceed and a
+restart to be refused. The policy is advisory and can fail open — a
+judge reply that is not a refusal, or a failed judge call, counts as
+PROCEED — so for an action that must not happen use ``gate_tool`` from
+``locus.control``, or the hook's ``interrupt_tools=`` set, which
+refuses the named tools without consulting the judge.
 
 - ``SteeringHook(model=..., policy="...")`` — attach it to any agent
   via the ``hooks=`` parameter.
-- ``steering.decisions`` — every action with its reason, for audit.
+- ``steering.decisions`` — every decision, with the judge's reason for
+  a refusal, for audit.
 
 The configured provider drives both the agent and the steering model.
 
 Run it:
     # Default: OCI GenAI if ~/.oci/config has a usable profile, else the bundled mock model
-    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_68_steering.py
+    python examples/notebook_68_steering.py
 
-    # Offline:
+    # Offline / no credentials (the mock judge's canned reply counts as
+    # PROCEED, so both calls run):
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_68_steering.py
 
+    # Pin a specific model:
+    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_68_steering.py
+
 Prerequisites:
-- An OpenAI or Anthropic API key, or set ``LOCUS_MODEL_PROVIDER`` to
-  ``openai`` / ``anthropic`` / ``mock``.
+- An OCI profile in ``~/.oci/config`` (picked up automatically), or
+  ``LOCUS_MODEL_PROVIDER`` set to ``openai`` / ``anthropic`` with the
+  matching key, or ``mock`` for an offline run.
 """
 
 import asyncio
@@ -89,8 +101,8 @@ def _print_decisions(steering: SteeringHook) -> None:
 
 
 # =============================================================================
-# Part 1: A read-only diagnostics policy. Mutating ops are blocked,
-#         metric queries are allowed.
+# Part 1: A read-only diagnostics policy. A restart is expected to be
+#         refused, a metric query to proceed.
 # =============================================================================
 
 
@@ -99,7 +111,7 @@ async def example_steering():
 
     model = get_model()
 
-    # Should be INTERRUPTed — the policy forbids mutating actions.
+    # Expected to be refused (GUIDE or INTERRUPT) — the policy forbids mutating actions.
     print("Attempt: Restart service checkout-api")
     steering = SteeringHook(model=model, policy=_POLICY)
     result = await _make_agent(model, steering).arun("Restart service checkout-api")

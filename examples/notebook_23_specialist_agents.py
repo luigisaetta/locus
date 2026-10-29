@@ -5,7 +5,7 @@
 Notebook 23: RIGHTSIZER — the cloud-rightsizing specialist.
 
 Notebook 22 introduced the Specialist as the worker STEWARD hands tasks
-to. This notebook dives into the Specialist itself, using RIGHTSIZER —
+to. This notebook turns to the Specialist itself, using RIGHTSIZER —
 the platform team's cloud cost-and-capacity specialist — as the running
 case: how to narrow a model's failure surface with a focused system
 prompt, a hand-picked tool set, optional playbooks (your runbooks,
@@ -21,9 +21,10 @@ gated by GSAR grounding before it ships; here the subject is the
 Specialist API itself.
 
 Key ideas:
-- A ``Specialist`` is a Locus ``Agent`` with role metadata
-  (``specialist_type``, ``description``), a tool list, and a
-  ``confidence_threshold`` that gates "good enough" answers.
+- A ``Specialist`` is a Pydantic model (not an ``Agent`` subclass) with
+  role metadata (``specialist_type``, ``description``), a system
+  prompt, a tool list, and a ``confidence_threshold`` the result's
+  confidence is read against.
 - ``Playbook`` and ``PlaybookStep`` encode standard procedures —
   preconditions, ordered steps with required tools and expected
   outputs, plus failure handling.
@@ -36,7 +37,9 @@ Key ideas:
 Run it:
     .venv/bin/python examples/notebook_23_specialist_agents.py
 
-The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable
+profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER``
+(``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
 ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
@@ -110,7 +113,7 @@ async def check_catalog() -> str:
 
 
 async def example_anatomy(model: Any) -> Specialist:
-    """Build RIGHTSIZER once — prompt, tools, iteration cap, confidence threshold."""
+    """Build RIGHTSIZER once — prompt, tools, iteration budget, confidence threshold."""
     print("\n=== Part 1: Specialist Anatomy ===\n")
 
     # A specialist pairs a focused system prompt with domain tools,
@@ -283,8 +286,9 @@ async def example_execute(specialist: Specialist) -> None:
 
     # ``confidence`` comes from the built-in estimator, which scans the
     # reply for hedging vs certainty markers — a rough proxy you would
-    # replace with a domain scorer in production. The specialist's
-    # ``confidence_threshold`` is what that number is compared against.
+    # replace with a domain scorer in production. The print below reads
+    # it against the specialist's ``confidence_threshold``; the SDK records
+    # the threshold on the result's state but does not gate on it.
     print("Execution Result:")
     print(f"  Success: {result.success}")
     print(
@@ -390,7 +394,8 @@ async def example_team(model: Any) -> None:
         print(f"  {role}: {spec.name}")
     t0 = time.perf_counter()
     p8 = await team["intake"].execute(
-        task="In one sentence, classify this request: 'p95 CPU on the checkout fleet held above 85% for 6 hours.'",
+        task="In one sentence, classify this request: "
+        "'p95 CPU on the checkout fleet held above 85% for 6 hours.'",
     )
     dt = time.perf_counter() - t0
     print(f"  [model call: {dt:.2f}s · intake.execute()]")
@@ -418,7 +423,8 @@ async def main():
 
     print("\n" + "=" * 60)
     print(
-        "Next: Notebook 24 — Outage war room — mitigation, diagnostics, and comms agents in a swarm"
+        "Next: Notebook 24 — Outage war room — "
+        "mitigation, diagnostics, and comms agents in a swarm",
     )
     print("=" * 60)
 

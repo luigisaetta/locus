@@ -8,23 +8,23 @@ The earlier notebooks used inline mock tools to keep the focus on agent
 mechanics. Real privacy work calls real systems: a data-classification
 feed to score an identifier, a data catalog to pull the records behind a
 subject request, a scanning cloud to run a PII-discovery probe over a
-data store. This notebook wires three vendor-shaped integrations into a
-data-subject-request (DSAR) triage agent.
+data store. This notebook works through three vendor integrations and
+hands two of them to a data-subject-request (DSAR) triage agent.
 
 Every integration follows one convention: read the vendor credential from
 the environment and take the live path when it's set — the live path is a
 stub you fill in with your vendor's client; otherwise return a
-deterministic, synthetic sample so the cookbook runs offline with no
-account. The return shape is identical either way, so the agent's
-reasoning doesn't change between this offline demo and a live deployment.
+deterministic, synthetic sample so the notebook runs offline with no
+account. The return shape is the same either way, so the agent code does
+not change when you replace a stub with the real vendor call.
 
-- ``scan_for_pii`` — BigID/OneTrust-shaped identifier classification
-  (``DATAMAP_API_KEY``).
-- ``query_data_map`` — Collibra/Atlan-shaped data-catalog search
-  (``DATAMAP_URL`` + ``DATAMAP_TOKEN``).
-- ``scan_dataset_reference`` — PII discovery scan over a named data store;
-  the live version dispatches the scan to a classification cloud
-  (``SCANNER_API_KEY``). It returns the same category map either way.
+- ``scan_for_pii`` — identifier classification against a
+  data-classification API (``DATAMAP_API_KEY``).
+- ``query_data_map`` — data-catalog search for the records that hold a
+  subject's data (``DATAMAP_URL`` + ``DATAMAP_TOKEN``).
+- ``scan_dataset_reference`` — PII-discovery scan over a named data store
+  (``SCANNER_API_KEY``); the live version is meant to send the scan to a
+  classification cloud and return the same category map.
 
 Run it:
     .venv/bin/python examples/notebook_80_vendor_integrations.py
@@ -37,7 +37,8 @@ route a tool to its live stub.
 
 Prerequisites:
 - Notebook 03 (Agent with tools).
-- Notebook 23 (RIGHTSIZER) — grounds the data inventory the scan feeds.
+- Notebook 23 (RIGHTSIZER) — the Specialist deep-dive; STEWARD here is
+  built on the same class.
 """
 
 import asyncio
@@ -123,7 +124,8 @@ def scan_dataset_reference(target: str) -> dict:
     """
     if os.getenv("SCANNER_API_KEY"):  # pragma: no cover - live path
         raise NotImplementedError(
-            f"Live classification-cloud scan of {target!r} goes here; this demo runs the sample path."
+            f"Live classification-cloud scan of {target!r} goes here; "
+            "this demo runs the sample path."
         )
     # Offline sample: the catalog table we know about; anything else is clean.
     if target != "crm.customers":

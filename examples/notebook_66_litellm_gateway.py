@@ -32,6 +32,7 @@ Run it:
     export OPENAI_API_KEY="sk-..."          # upstream provider key
     export ANTHROPIC_API_KEY="sk-ant-..."   # optional second provider
     export LITELLM_MASTER_KEY="$(openssl rand -hex 32)"
+    export LITELLM_DB_PASSWORD="$(openssl rand -hex 16)"  # Postgres sidecar password
     docker compose up -d
 
     # 2. Point this notebook at the gateway:
@@ -84,6 +85,7 @@ def _print_skip_banner(missing: list[str]) -> None:
         '     export OPENAI_API_KEY="sk-..."\n'
         '     export ANTHROPIC_API_KEY="sk-ant-..."\n'
         '     export LITELLM_MASTER_KEY="$(openssl rand -hex 32)"\n'
+        '     export LITELLM_DB_PASSWORD="$(openssl rand -hex 16)"\n'
         "     docker compose up -d\n\n"
         " Then export the gateway URL and key in this shell:\n\n"
         '     export LITELLM_GATEWAY_URL="http://localhost:4000"\n'
@@ -192,7 +194,8 @@ async def _run_streaming(url: str, key: str, model_alias: str) -> None:
     )
     full: list[str] = []
     async for ev in agent.run(
-        "List three common causes of a surprise cloud bill, comma-separated."
+        "List three common causes of a surprise cloud bill, comma-separated.",
+        stream_tokens=True,
     ):
         if isinstance(ev, ModelChunkEvent) and ev.content:
             print(ev.content, end="", flush=True)

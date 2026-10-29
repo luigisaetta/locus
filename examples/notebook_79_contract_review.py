@@ -38,7 +38,7 @@ The processor here is a marketing-analytics SaaS that ingests your
 customers' personal data (email addresses, device identifiers,
 behavioural events) — a data processor in the controller's vendor chain.
 A weak erasure SLA or a vague international-transfer mechanism is a real
-compliance gap, not a paperwork nit: the vendor's breach-notification
+compliance gap, not a paperwork detail: the vendor's breach-notification
 window should track the GDPR Art. 33 72-hour timeline you owe your own
 supervisory authority. The DPO — the privacy office's data-protection
 officer — writes the typed sign-off.
@@ -57,8 +57,10 @@ Run it:
     # Offline / no credentials:
     LOCUS_MODEL_PROVIDER=mock python examples/notebook_79_contract_review.py
 
-    # Pin a strong-enough model for the structured ContractDecision schema:
-    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_79_contract_review.py
+    # Pin a model that supports structured output for the ContractDecision schema:
+    export LOCUS_MODEL_PROVIDER=openai
+    export LOCUS_MODEL_ID=gpt-4o
+    python examples/notebook_79_contract_review.py
 """
 
 from __future__ import annotations
@@ -463,8 +465,9 @@ async def sign_off(state: dict[str, Any]) -> dict[str, Any]:
 def build_review_graph() -> StateGraph:
     g = StateGraph(
         name="dpa-review",
-        # parse → scatter → synthesize → negotiate → parse is a real cycle,
-        # so we have to opt in.
+        # parse → scatter → synthesize → negotiate → parse is a cycle; declare
+        # it. add_edge's cycle check follows fixed edges only, and this loop
+        # closes through the conditional edge, so the check would not catch it.
         config=GraphConfig(allow_cycles=True, max_iterations=20),
     )
     g.add_node("parse", parse_contract)
@@ -514,14 +517,17 @@ async def _drive(graph: StateGraph, initial: dict[str, Any], answers: list[str])
         answer_idx += 1
         payload = result.interrupt.interrupt.payload
         print(
-            f"\n  ⏸  Round {payload.get('round')}: {len(payload.get('open_blockers', []))} blocker(s)"
+            f"\n  ⏸  Round {payload.get('round')}: "
+            f"{len(payload.get('open_blockers', []))} blocker(s)"
         )
         for b in payload.get("open_blockers", [])[:3]:
             print(f"      - {b[:80]}")
         preview = answer if len(answer) <= 80 else answer[:77] + "..."
         print(f"  ▶  Counsel responds: {preview!r}")
-        # A resumed run starts from the checkpointed state, so the model
-        # object has to be re-injected alongside counsel's answer.
+        # The graph has no checkpointer, so a resumed run starts from whatever
+        # this Command carries: hand back the interrupted run's final_state
+        # (it includes the executor's resume marker) with the model object
+        # set explicitly.
         result = await graph.execute(
             Command(
                 resume=answer,
@@ -542,7 +548,7 @@ async def main() -> None:
         "counterparty": "PixelPulse Analytics",
         "contract_text": SAMPLE_CONTRACT,
         # The model rides along in graph state so every node can build its
-        # agent from it (see _drive for why it is re-injected on resume).
+        # agent from it (see _drive for how it travels across a resume).
         "__model__": model,
     }
 

@@ -2,20 +2,22 @@
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
-"""Notebook 75: A cloud-ops agent that can only touch production with a human's say-so.
+"""Notebook 75: A cloud-ops agent that cannot touch production without human approval.
 
-A cloud-ops agent is handy and dangerous in the same breath. It can free up a
-forgotten dev box in seconds — and it can just as easily terminate the database
-that the whole product runs on, or hand an outside principal admin over your
-account. The model deciding *what* to do is not the place to enforce *whether*
-it is allowed to. That belongs in code that runs before the API call.
+A cloud-ops agent is useful and dangerous in equal measure. It can free up a
+forgotten development instance in seconds — and it can just as easily terminate
+the database the whole product runs on, or grant an outside principal
+administrative rights over your account. The model deciding *what* to do is not
+the place to enforce *whether* it is allowed to. That belongs in code that runs
+before the API call.
 
 This example puts :func:`locus.control.admit` in front of every cloud mutation.
 The agent proposes an :class:`Action`; the gate weighs it against a
 :class:`ControlPolicy` you wrote; the actual cloud call (here a local stub —
 no network, no credentials) fires *only* if the policy admits it. Small,
 contained changes proceed on their own. Anything that touches a production
-resource, or reaches across many resources at once, is held for a human.
+resource, grants IAM permissions, or touches more than one resource at once is
+held for a human.
 Either way the decision lands on a tamper-evident :class:`AuditTrail`, so there
 is no un-recorded path to a side effect.
 
@@ -24,10 +26,10 @@ is no un-recorded path to a side effect.
        ▼
     admit(action, perform, policy, trail)
        │
-       ├─ blast radius small AND not production ──> perform() runs (resize dev box)
+       ├─ blast radius 1, not production or iam ──> perform() runs (resize staging runner)
        │
-       └─ production OR wide blast radius ────────> AdmissionError, held for a human
-                                                    (terminate prod DB, open IAM)
+       └─ production, iam, or blast radius > 1 ───> AdmissionError, held for a human
+                                                    (terminate prod DB, grant IAM)
        │
        ▼
     AuditTrail records every attempt — admitted or not
@@ -35,12 +37,13 @@ is no un-recorded path to a side effect.
 The policy here gates on two attributes of the action:
 
 - ``max_blast_radius`` — how many resources one action may touch and still
-  auto-proceed. Resizing one dev instance is blast radius 1. Deleting an
+  auto-proceed. Resizing one development instance is blast radius 1. Deleting an
   auto-scaling group of 12 nodes is blast radius 12.
 - ``require_human_for`` — labels that always need a person. ``production`` is
-  the default; you can add more (``iam``, ``billing``, a specific tag).
+  the default; this example adds ``iam``, and any other label (``billing``, a
+  specific tag) works the same way.
 
-A model that is jailbroken, prompt-injected, or just wrong still cannot push a
+A model that is jailbroken, prompt-injected, or simply mistaken still cannot push a
 production change past this gate. The check is not advice in the system prompt —
 it is the function that owns the cloud call.
 
@@ -79,9 +82,9 @@ IAM: dict[str, list[str]] = {
 }
 
 
-# The side effects. Each is a zero-arg async callable — exactly what admit()
-# expects for `perform`. In a real agent these would call the OCI SDK or
-# gcloud; here they just edit the dicts above and return a short receipt.
+# The side effects. Each factory returns a zero-argument async callable — exactly
+# what admit() expects for `perform`. In a real agent that callable would use the
+# OCI SDK; here it edits the dicts above and returns a short receipt.
 
 
 def resize_instance(instance_id: str, new_size: str):
@@ -115,7 +118,8 @@ async def attempt(action: Action, perform, *, policy: ControlPolicy, trail: Audi
     """Run one gated action and narrate what the runtime decided."""
     print(f"\n--- agent proposes: {action.name} ---")
     print(
-        f"    asset={action.asset!r}  env={action.environment!r}  blast_radius={action.blast_radius}"
+        f"    asset={action.asset!r}  env={action.environment!r}"
+        f"  blast_radius={action.blast_radius}"
     )
     try:
         receipt = await admit(action, perform, policy=policy, trail=trail)
@@ -131,8 +135,8 @@ async def main() -> None:
     print("=" * 60)
 
     # The policy. Verification scoring is off here (require_verification_score=0)
-    # so the example stays focused on the two cloud knobs: blast radius and the
-    # production label. One resource at a time may auto-proceed; production
+    # so the example stays focused on the two cloud rules: blast radius and the
+    # restricted labels. One resource at a time may auto-proceed; production
     # always needs a human; opening IAM always needs a human.
     policy = ControlPolicy(
         require_verification_score=0.0,
@@ -192,9 +196,9 @@ async def main() -> None:
         trail=trail,
     )
 
-    # Show the account state. The dev box changed; the prod DB and the IAM
-    # policy are exactly as they were, because those calls were blocked before
-    # they could run.
+    # Show the account state. The staging runner changed; the production
+    # database and the IAM permissions are exactly as they were, because those
+    # calls were blocked before they could run.
     print("\nCloud account after all three attempts:")
     print("-" * 60)
     for iid, row in INVENTORY.items():
@@ -202,13 +206,14 @@ async def main() -> None:
     for principal, perms in IAM.items():
         print(f"  {principal:12}  permissions={perms}")
 
-    # The audit trail recorded ALL three attempts — the one that ran and the two
+    # The audit trail recorded all three attempts — the one that ran and the two
     # that were held. The hash chain is intact, so the record is tamper-evident.
     print("\nAudit trail:")
     print("-" * 60)
     for rec in trail.records():
         print(
-            f"  #{rec.seq}  {rec.payload['action']:20}  -> {rec.payload['outcome']:14}  ({rec.payload['asset']})"
+            f"  #{rec.seq}  {rec.payload['action']:20}  -> {rec.payload['outcome']:14}"
+            f"  ({rec.payload['asset']})"
         )
     print(f"  chain intact (tamper-evident): {trail.verify()}")
 
@@ -224,7 +229,8 @@ async def main() -> None:
     assert "iam:PassRole" not in IAM["svc-deploy"], "IAM grant must not have run"
 
     print(
-        "\nAll assertions passed: low-risk action ran, production and IAM changes held, all audited."
+        "\nAll assertions passed: low-risk action ran, production and IAM changes held, "
+        "all audited."
     )
 
 

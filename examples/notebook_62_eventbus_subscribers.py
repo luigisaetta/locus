@@ -4,7 +4,7 @@
 
 """Notebook 62: Shipping agent events to a cloud telemetry platform.
 
-The bus has three subscribe shapes, each suited to a different consumer
+The bus has two subscribe shapes, each suited to a different consumer
 in a cloud-ops pipeline:
 
 - bus.subscribe(run_id): events for one deployment, with history
@@ -13,6 +13,8 @@ in a cloud-ops pipeline:
 - bus.subscribe_global(): every event from every run, no history
   replay. The shape a telemetry forwarder uses — one tap covering all
   concurrent deployments.
+
+What this notebook covers:
 
 - Per-deployment subscriber alongside an observability-style global
   subscriber on two concurrent rollouts.

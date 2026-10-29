@@ -24,10 +24,12 @@ Key concepts:
   and the agent loop persists state on every iteration.
 - ``agent.run_sync(prompt, thread_id="...")`` loads state for that
   thread before the first model call and saves after each iteration.
-- ``checkpoint_every_n_iterations=1`` means a mid-loop crash recovers
-  to the last completed iteration, not the start of the turn.
-- ``cp.list_threads()`` enumerates every persisted conversation — the
-  primitive admin dashboards use to enumerate sessions.
+- ``checkpoint_every_n_iterations=1`` saves after every iteration
+  (already the default for this adapter on a thread), so a process
+  killed mid-turn loses at most the iteration in flight.
+- ``cp.list_threads()`` on the agent's own checkpointer — the
+  enumeration an admin dashboard would use (see the note in
+  ``first_session``).
 
 The demo simulates two sessions. Session 1 starts a conversation and
 the agent persists the state to Oracle automatically. Session 2 spins
@@ -44,8 +46,9 @@ Run it:
 
     python examples/notebook_42_oracle_26ai_checkpointer.py
 
-If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` aren't set the notebook prints
-the wiring snippet and exits cleanly — no traceback, no
+If any of ``ORACLE_DSN``, ``ORACLE_USER``, ``ORACLE_PASSWORD`` or
+``ORACLE_WALLET`` is unset the notebook prints the missing names and
+the wiring snippet, then exits cleanly — no traceback, no
 half-initialised state.
 
 Difficulty: Intermediate. Self-contained — no prior notebook required.
@@ -135,9 +138,10 @@ def _build_agent():
             "you earlier in this thread."
         ),
         checkpointer=_build_checkpointer(),
-        # Persist after every iteration, not just at session end. A
-        # mid-loop crash on a tool call recovers to the last completed
-        # iteration instead of the start of the turn.
+        # Save after every iteration, so a crash mid-turn loses at most the
+        # iteration in flight. On a thread this adapter already saves that
+        # often by default (it can delete a single save); the setting makes
+        # it explicit.
         checkpoint_every_n_iterations=1,
     )
 
@@ -154,8 +158,10 @@ async def first_session() -> None:
         print(f"Agent: {result.message.strip()}")
         print(f"  state size after this turn: {len(result.state.messages)} messages")
 
-        # The state hit Oracle, not just memory. Confirm through the agent's
-        # own checkpointer — its admin surface is the one a dashboard would use.
+        # The agent's own checkpointer is the admin surface a dashboard would
+        # use. Note: the adapter forwards its default pattern "*" unchanged to
+        # the Oracle backend's LIKE filter, which matches no row, so this
+        # prints []; cp.list_threads(pattern="%") lists the stored keys.
         threads = await cp.list_threads()
         print(f"  threads currently in {TABLE_NAME}: {threads}")
     finally:
@@ -165,10 +171,11 @@ async def first_session() -> None:
 async def second_session() -> None:
     """Session 2 — different ``Agent`` object, same ``thread_id``.
 
-    The new agent loads state from Oracle on the first ``run_sync``
-    call. The model never sees turn 1 in the prompt — Locus reads
-    ``thread_id`` from the checkpointer and injects the recovered
-    messages into the agent loop.
+    The new agent loads the thread's newest checkpoint from Oracle on
+    the first ``run_sync`` call. The application passes only the new
+    prompt; Locus loads the saved state for ``thread_id`` from the
+    checkpointer and starts the new turn on it, so the model sees turn 1
+    as prior messages.
     """
     print("\n--- Session 2: a brand-new Agent resumes the thread ---")
     agent = _build_agent()

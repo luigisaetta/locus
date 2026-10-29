@@ -88,7 +88,7 @@ async def example_termination():
     stop4, reason4 = condition2.check(state4)
     print(f"  Both met: stop={stop4}, reason={reason4}")
 
-    # Roll your own predicate with CustomCondition.
+    # A predicate of your own, through CustomCondition.
     custom = CustomCondition(lambda state, **_ctx: (state.iteration > 10, "reply_budget_exhausted"))
     print(f"\nCustomCondition: {custom.check(AgentState(agent_id='s').with_iteration(11))}")
 
@@ -98,8 +98,10 @@ async def example_termination():
     print(f"ConfidenceMet(0.9) at confidence 0.92: {ConfidenceMet(0.9).check(confident)}")
     print(f"TimeLimit(3600) on a fresh run: {TimeLimit(3600).check(confident)}")
 
-    # The same composed condition attached to a real agent. Locus evaluates
-    # it after every iteration and reports which predicate ended the run.
+    # The same composed condition attached to a real agent. Locus evaluates it
+    # at the start of each iteration, before the model call; result.stop_reason
+    # is the normalized reason, and a reply with no tool calls ends the run as
+    # "complete" under the default completion_mode="auto".
     agent = Agent(
         model=get_model(max_tokens=80),
         system_prompt=(

@@ -1,59 +1,75 @@
-# An account gate that applies small credits and holds the big changes
+# Support account gate
 
 A customer-support agent works tickets by changing the customer's account:
-applying a goodwill credit, bumping a plan, waiving a fee. Most of those are
-routine and should just happen — a $5 credit for a late reply does not need a
-human. But a plan upgrade, or a $500 retention credit, moves real money and
-changes what the customer is entitled to. Those should pause and wait for a
-support lead before anything is written.
+applying a goodwill credit, upgrading a plan, waiving a fee. Most of those
+changes are routine and should proceed without review — a $5 credit for a late
+reply does not need a human. A plan upgrade, or a $500 retention credit, moves
+real money and changes what the customer is entitled to; those should wait for
+a support lead before anything is written.
 
-The decision of *whether the change lands* does not live in the agent's prompt.
-It lives in ``admit()``, a gate that runs before the account is touched. The
-agent can be confused, jailbroken, or talked into a $500 credit; the change
-still only goes through if the ``ControlPolicy`` admits it. Each proposed change
-becomes an ``Action`` whose scope drives two policy-visible attributes: how many
-account entitlements it touches (``blast_radius``) and whether it crosses the
-human-review line (a ``high_value`` tag). The policy auto-allows a
-single-field change that carries no ``high_value`` tag and holds anything bigger.
+This example places that decision in `admit()`, a gate that runs before the
+account is touched, rather than in the agent's prompt. The agent can be
+confused, jailbroken or persuaded to issue a $500 credit; the change still goes
+through only if the `ControlPolicy` admits it, and the applied credit and the
+held upgrade both land on a hash-chained `AuditTrail`. The account write itself
+is a local stub that mutates an in-memory dict, so the script runs offline;
+replacing it with a call to the billing API leaves the gate unchanged.
+
+What this notebook covers:
+
+- Describing each proposed change as an `Action` whose scope sets the two
+  attributes this policy reads: `blast_radius`, the number of account
+  entitlements the change touches, and a `high_value` tag on changes that cross
+  the human-review line.
+- A `ControlPolicy` with `max_blast_radius=1` and
+  `require_human_for={"high_value"}`: a change to a single entitlement without
+  the tag clears on its own, while a change that touches more than one
+  entitlement, or carries the tag, holds for a person.
+  `require_verification_score` is deliberately `0.0`: crediting an account is a
+  business action, not a security finding, so the gate requires no verification
+  verdict and reasons over scope and labels alone.
+- `admit()` as the single enforcement point. It asks `approve()` for a decision,
+  records that decision on the `AuditTrail` whether or not it allows, and only
+  then awaits `perform`. The $5 credit (ticket SUP-7781) is applied; the
+  enterprise upgrade with a $500 retention credit (ticket SUP-7782) trips both
+  rules — blast radius 2 exceeds the maximum of 1, and the `high_value` label
+  requires human approval — so `admit()` raises an `AdmissionError` whose
+  `decision.outcome` is `require_human` and the account is left untouched.
+- `trail.verify()` on the resulting chain. It confirms the SHA-256 chain is
+  internally consistent — an edit, a reorder or a deletion from the middle
+  fails it — but on its own it cannot catch records dropped off the end, or a
+  chain re-hashed from an edited record onward; the bare call this script makes
+  returns `True` for both. Anchor `trail.head` where the agent cannot reach it,
+  pass it back as `verify(expected_head=…)` and sign the trail before treating
+  it as evidence; see
+  [what `verify()` catches](../api/control.md#what-verify-catches-and-the-one-thing-it-cannot).
+
+The drawing follows both changes through the gate: `admit()` hands each `Action`
+to `approve()` with the policy, the $5 credit clears and `perform()` updates the
+account, the upgrade is held and nothing is written, and each decision is
+recorded on the `AuditTrail` before `perform()` runs or the error is raised.
 
 {{ locus_diagram gate-support-account }}
 
-The rule lives in one ``ControlPolicy``. ``require_human_for={"high_value"}``
-means any change carrying the ``high_value`` label always stops for a person —
-no matter how small the blast radius looks. Routine changes are left to clear on
-blast radius alone, capped by ``max_blast_radius=1``.
-``require_verification_score`` is set to ``0.0`` on purpose: crediting an account
-is a business action, not a security finding — there is no threat to verify, so
-the gate reasons purely over scope and labels.
+## Key lines
 
-``admit()`` is the single enforcement point. It asks the policy (``approve()``),
-records the decision to the ``AuditTrail`` whether or not it allows, and only
-then awaits ``perform``. There is no path to the write that skips the log — the
-held plan upgrade lands on the trail next to the small credit that actually ran,
-and ``trail.verify()`` confirms the SHA-256 chain is internally consistent: an
-edit, a reorder, or a deletion from the middle fails it. On its own it cannot
-catch records dropped off the end, or a chain rewritten and re-hashed from an
-edited record onward; the bare call this script makes returns ``True`` for both.
-Anchor ``trail.head`` where the agent cannot reach it and pass it back as
-``verify(expected_head=…)``, and sign the trail, before treating it as evidence
-— see
-[what `verify()` catches](../api/control.md#what-verify-catches-and-the-one-thing-it-cannot).
+`apply_account_change` is the `perform` callable that the two `admit()` calls in
+`main()` guard: a stand-in for the billing API that mutates an in-memory account
+dict, and the only code that writes to the account, so it runs for the allowed
+$5 credit and never for the held upgrade:
 
-In this run the small change (one field, a $5 credit on ticket SUP-7781) is
-applied automatically, while the big one (ticket SUP-7782: upgrade to enterprise
-plus a $500 retention credit) trips *both* rules — the blast radius exceeds
-``max_blast_radius`` and the ``high_value`` tag is in ``require_human_for`` — so
-it raises an ``AdmissionError(require_human)``, the upgrade never runs, and the
-account is left untouched. Both decisions are recorded on the trail.
+{{ locus_source examples/notebook_73_support_account_gate.py::apply_account_change }}
 
-``apply_account_change`` here is a local stub: it mutates an in-memory account
-dict instead of calling the billing/account API, so no account service is needed
-to run the script. Swap that one function for a real account-API call and the
-gate is unchanged.
+## Run it
 
-Run it (fully offline — no model, no provider, no network):
+```bash
+python examples/notebook_73_support_account_gate.py
+```
 
-    python examples/notebook_73_support_account_gate.py
+There is no model to configure: the script stands in for the agent by building
+the two proposed `Action` values itself, and its only side effect is a write to
+an in-memory dict, so it runs offline with no provider, credentials or network.
+`LOCUS_MODEL_PROVIDER` has no effect here.
 
 ## Output
 
@@ -83,6 +99,8 @@ Both decisions are on the trail: one allowed, one held. No write went unrecorded
 
 ## Source
 
-````python
---8<-- "examples/notebook_73_support_account_gate.py"
-````
+??? note "Full source — `examples/notebook_73_support_account_gate.py`"
+
+    ````python
+    --8<-- "examples/notebook_73_support_account_gate.py"
+    ````

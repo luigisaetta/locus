@@ -40,9 +40,11 @@ Why this shape:
   rules engine — plain :class:`ControlPolicy` fields.
 - Every attempt — the allowed export, the held erasure, and the erasure that
   runs after sign-off — lands on the same :class:`AuditTrail`. The trail is
-  hash-chained and tamper-evident: edit, delete, or reorder a record and
-  :meth:`AuditTrail.verify` returns ``False``. That makes it the artifact you
-  hand a regulator to show the erasure happened with human authorization.
+  hash-chained and tamper-evident: edit a record, reorder records, or delete
+  one from the middle and :meth:`AuditTrail.verify` returns ``False``; anchor
+  ``trail.head`` externally and pass it back as ``expected_head`` to catch
+  truncation. That makes it the artifact you hand a regulator to show the
+  erasure happened with human authorization.
 
 Run it:
     # Fully offline — no network, no credentials. The "perform" steps mutate
@@ -64,9 +66,9 @@ from locus.control import (
 
 
 # A stand-in for the systems that hold a data subject's personal data. In a
-# real deployment these are rows in Postgres, objects in S3, documents in a
-# search index, and so on. Here they are just keys in a dict so the example
-# runs offline with no credentials.
+# real deployment these are rows in a relational database, objects in an
+# object store, documents in a search index, and so on. Here they are just
+# keys in a dict so the example runs offline with no credentials.
 
 SUBJECT = "subject:eu-44213"  # pseudonymous handle for one EU data subject
 

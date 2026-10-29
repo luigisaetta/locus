@@ -41,13 +41,17 @@ from locus.hooks.builtin.guardrails import (
 
 
 async def _timed_call(prompt: str) -> str:
-    """One short model call with a timing/token banner, so the policy checks sit next to a real round-trip."""
+    """One short model call with a timing/token banner.
+
+    Keeps each policy check next to a real model round-trip.
+    """
     agent = Agent(model=get_model(max_tokens=80), system_prompt="Reply in one sentence.")
     t0 = time.perf_counter()
     res = await agent.arun(prompt)
     dt = time.perf_counter() - t0
     print(
-        f"  [model call: {dt:.2f}s · {res.metrics.prompt_tokens}→{res.metrics.completion_tokens} tokens]"
+        f"  [model call: {dt:.2f}s · {res.metrics.prompt_tokens}"
+        f"→{res.metrics.completion_tokens} tokens]"
     )
     return res.message.strip()
 

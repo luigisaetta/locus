@@ -6,9 +6,9 @@
 
 A customer-support agent resolves tickets by changing the customer's
 account: applying a goodwill credit, bumping a plan, waiving a fee. Most
-of these are routine and should just happen. A few move real money or
-change what the customer is entitled to, and those should pause for a
-human before anything is written.
+of these are routine and should proceed without review. A few move real
+money or change what the customer is entitled to, and those should pause
+for a human before anything is written.
 
 The agent does not decide that for itself. Every account change runs
 through ``admit()`` first. ``admit()`` weighs the change against a
@@ -29,14 +29,14 @@ if the policy allows it, and records the decision either way::
     AuditTrail records BOTH decisions (allowed and held)
 
 The gate is code that runs *before* the write, not a line in the agent's
-prompt. A model that is talked into issuing a $500 credit still cannot
+prompt. A model that is persuaded to issue a $500 credit still cannot
 issue it: the high-value change holds for a human, and the attempt lands
 on a tamper-evident audit trail. Fooling the model does not move money.
 
-The policy here gates on the action's labels, not on a human reading the
-ticket: a change tagged ``high_value`` always holds, and any change that
-touches more than ``max_blast_radius`` accounts holds too. Everything
-else auto-allows.
+The policy here gates on the action's scope and labels, not on a human
+reading the ticket: a change tagged ``high_value`` always holds, and any
+change that touches more than ``max_blast_radius`` entitlements holds too.
+Everything else auto-allows.
 
 Run it:
     # Fully offline — no network, no credentials. The "perform" is a
@@ -83,7 +83,7 @@ async def main() -> None:
     print("=" * 60)
 
     # The support-ops knobs. Routine changes auto-allow; anything tagged
-    # high_value, or touching more than one account, holds for a human.
+    # high_value, or touching more than one entitlement, holds for a human.
     #
     # require_verification_score=0.0 turns off the security-grounding bar:
     # that check belongs to the security domain (a finding that survived
