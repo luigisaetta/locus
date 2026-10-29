@@ -640,7 +640,10 @@ def builtin_protocols() -> list[Protocol]:
             description="Two debaters argue opposing positions; a judge picks the winner.",
             handles=[TaskType.COMPARE, TaskType.RESEARCH],
             primary_for=[TaskType.COMPARE],
-            risk_max=Risk.LOW,
+            # A debate weighs options and recommends; it changes nothing, so a
+            # MEDIUM-risk comparison (two rollback strategies, say) still gets
+            # the shape built for comparing rather than a specialist fan-out.
+            risk_max=Risk.MEDIUM,
             cost="high",
             latency="high",
             builder=_build_debate,

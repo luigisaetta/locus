@@ -25,6 +25,10 @@ policy.
   the goal in `primary_for` now wins whenever its cost is within one step of
   the frame's complexity; a LOW-complexity task still never gets a HIGH-cost
   shape for being canonical.
+- **Cognitive router: `debate` accepts MEDIUM risk.** A debate weighs options
+  and recommends; it changes nothing. Capped at LOW, a comparison the
+  extractor rated MEDIUM risk fell through to `specialist_fanout`; on the
+  Frankfurt benchmark that was two of Llama 3.3 70B's seven misses.
 - **Routing benchmark gates on what the router guarantees.** The
   typed-frame-versus-free-form accuracy comparison is printed as data rather
   than asserted: on OCI Generative AI it goes both ways by model (Cohere

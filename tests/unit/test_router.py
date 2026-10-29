@@ -800,7 +800,7 @@ class TestFilterCandidates:
         reg = ProtocolRegistry()
         reg.register_many(builtin_protocols())
         # COMPARE is handled by specialist_fanout (risk_max=MEDIUM) AND
-        # debate (risk_max=LOW). At risk=LOW both survive.
+        # debate (risk_max=MEDIUM). At risk=LOW both survive.
         survivors = reg.filter_candidates(_frame(primary_goal=TaskType.COMPARE))
         ids = {p.id for p in survivors}
         assert {"specialist_fanout", "debate"}.issubset(ids)
