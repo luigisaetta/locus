@@ -964,10 +964,13 @@ class TestLLMProtocolPicker:
         from locus.router.picker import LLMProtocolPicker
 
         picker = MagicMock(spec=LLMProtocolPicker)
-        compiler = _picker_compiler(picker)
+        # Without approval_gated_execution registered there is no risk
+        # fallback either, so PLAN at HIGH risk has nowhere to go.
+        reg = ProtocolRegistry()
+        reg.register_many([p for p in builtin_protocols() if p.id != "approval_gated_execution"])
+        compiler = _picker_compiler(picker, protocols=reg)
 
         async def _drive():
-            # PLAN at HIGH risk — no built-in protocol covers this.
             return await compiler.compile(_frame(primary_goal=TaskType.PLAN, risk=Risk.HIGH))
 
         with pytest.raises(NoMatchingProtocolError):

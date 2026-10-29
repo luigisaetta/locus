@@ -8,8 +8,36 @@ policy.
 
 ## [Unreleased]
 
+### Changed
+
+- **Cognitive router: a request too risky for its shape is held, not
+  refused.** When every protocol that handles a frame's intent caps risk
+  below the frame's, the compiler used to raise `NoMatchingProtocolError`:
+  a HIGH-risk plan, diagnosis or question had nowhere to go. It now compiles
+  onto `approval_gated_execution` and is always held for approval, whatever
+  the gate's thresholds; `router.explain()` reports the choice as
+  `method="risk_fallback"`. `CognitiveCompiler(risk_fallback=None)` restores
+  the error, and a goal no protocol handles still raises.
+- **Cognitive router: canonical fit outranks cost distance when adjacent.**
+  The ranker put cost-to-complexity distance first, so a MEDIUM-complexity
+  research request landed on `handoff_chain` (a coordination shape) and a
+  HIGH-complexity coordination on `specialist_fanout`. A protocol that lists
+  the goal in `primary_for` now wins whenever its cost is within one step of
+  the frame's complexity; a LOW-complexity task still never gets a HIGH-cost
+  shape for being canonical.
+- **Routing benchmark gates on what the router guarantees.** The
+  typed-frame-versus-free-form accuracy comparison is printed as data rather
+  than asserted: on OCI Generative AI it goes both ways by model (Cohere
+  Command A beats the free-form baseline, Llama 3.3 70B does not). The
+  assertions are the structural ones: selections stay in the registered set,
+  including under prompt injection.
+
 ### Added
 
+- **Intent meanings in the goal frame.** `GoalFrame.primary_goal` carries one
+  line per `TaskType` (`TASK_TYPE_GUIDE`), so an extractor model sees what
+  separates `plan` from `build` or `research` from `diagnose` instead of
+  thirteen bare names.
 - **`locus-sdk-security` on PyPI.** The release workflow publishes the
   security package next to `locus-sdk`, so `pip install locus-sdk-security`
   replaces the install-from-repository line; the two stay in lockstep.

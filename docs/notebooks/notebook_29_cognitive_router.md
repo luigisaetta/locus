@@ -47,9 +47,12 @@ so the gate's own ceiling denies nothing), a `CognitiveCompiler` that
 keeps the default approval callback, and an `Agent` extractor whose
 `output_schema` is `GoalFrame`, so the model fills a typed frame and never
 chooses the topology. With no `protocol_picker` configured, the compiler
-ranks the candidates that pass the filter by rule: closest
-cost-to-complexity fit first, then the protocol that lists the goal in
-`primary_for`, then lower cost, then fewer `handles`:
+ranks the candidates that pass the filter by rule: the protocol that
+lists the goal in `primary_for` wins when its cost is within one step of
+the frame's complexity, then the closest cost-to-complexity fit, then
+lower cost, then fewer `handles`. A frame whose risk is above every
+eligible protocol's cap is not an error: it compiles onto
+`approval_gated_execution` and is held for approval:
 
 {{ locus_source examples/notebook_29_cognitive_router.py::build_router }}
 
