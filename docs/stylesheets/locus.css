@@ -300,6 +300,13 @@ html {
   padding-left: 0.9em;
   padding-right: 0.9em;
 }
+/* The line-number gutter of a numbered listing (the collapsed source blocks
+   on the API pages) is a second <pre> beside the code. It has to take the
+   same size as the code, or the numbers drift from their lines: inside a
+   details block it was 10.9px against 13.2px, 52px off by line fifteen. */
+.md-typeset .highlighttable .linenodiv pre {
+  font-size: 0.66rem;
+}
 
 /* Program output (```text blocks) wraps like a terminal does, so a long
    printed line is read in full instead of scrolled. Source code keeps
@@ -332,11 +339,13 @@ html {
   .md-typeset h1 { font-size: 1.7rem !important; }
 }
 @media (max-width: 48em) {
-  .md-typeset h1 { font-size: 1.35rem !important; }
+  .md-typeset h1 { font-size: 1.6rem !important; line-height: 1.15; }
   .md-typeset h1 a.headerlink { display: none; }
+  .md-typeset h2 { font-size: 1.25rem; }
+  .md-typeset h3 { font-size: 1.05rem; }
 }
 @media (max-width: 36em) {
-  .md-typeset h1 { font-size: 1.2rem !important; }
+  .md-typeset h1 { font-size: 1.45rem !important; }
 }
 .md-typeset h2 {
   color: var(--locus-ink);
@@ -1350,7 +1359,15 @@ form.md-header__option {
   .md-typeset table:not([class]) td {
     padding: 0.45em 0.5em;
     line-height: 1.4;
-    overflow-wrap: anywhere;
+    /* break-word, not anywhere: anywhere lets the auto layout shrink a column
+       below its longest word ("Requireme / nts"); break-word keeps the word's
+       width as the column minimum and only splits a token wider than the cell. */
+    overflow-wrap: break-word;
+  }
+  /* Material keeps the table inline-block; with width:100% that stretched the
+     frame but not the rows, leaving a blank strip inside the border at 768px. */
+  .md-typeset__table > table:not([class]) {
+    display: table;
   }
   /* On /notebooks/ index the first column is the row number ("01"…"63") —
      slim it to a chip so the prose columns get more room. Other pages
@@ -2058,13 +2075,17 @@ form.md-header__option {
 .tl-glyph .divider { fill: none; stroke: var(--tl-rule-strong); stroke-width: 1.2; stroke-dasharray: 3 3; }
 .tl-glyph .dot { fill: var(--tl-text-mute); }
 
-/* On a phone the column is ~330px, which would shrink a diagram's labels to
-   about a third of their size. Below tablet width a diagram keeps a readable
-   minimum and pans sideways inside its frame; the page itself never scrolls. */
+/* On a phone the column is ~330px, a third of a drawing's design width. The
+   inline figure fits the column so the shape of the diagram is visible at a
+   glance, and the drawing is read in the expand overlay, which opens it at its
+   design size (docs/javascripts/diagram-zoom.js makes the whole figure tappable
+   on touch screens; the Expand pill stays as the visible affordance). A pannable
+   600px minimum was tried first: it showed 60% of the drawing at 9px and hid
+   the rest, which is the worst of both. */
 @media screen and (max-width: 48em) {
-  .md-typeset .tl-dia { padding: var(--tl-space-sm); overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .md-typeset .tl-dia svg { min-width: 600px; }
+  .md-typeset .tl-dia { padding: var(--tl-space-sm) var(--tl-space-xs); }
 }
+.md-typeset .tl-dia--tap { cursor: zoom-in; }
 
 /* ---------------------------------------------------------------------------
    Homepage bands and the hero bloom motif.
@@ -2726,3 +2747,577 @@ form.md-header__option {
 .locus-filter-hidden { display: none !important; }
 .md-typeset .locus-table-filter__input::placeholder,
 .notebook-filter__input::placeholder { color: var(--tl-text-mute); opacity: 1; }
+
+
+/* ===================================================================
+   Mobile pass. Everything below applies to phones and tablets only (the
+   drawer breakpoint, 60em, and the one-column breakpoint, 48em) or to touch
+   screens (hover: none). Desktop layout is untouched.
+   =================================================================== */
+
+/* Header: 80px of a 844px screen was the sticky header. 56px holds the mark
+   (28px) and the wordmark (24px) with room to spare, like a native app bar. */
+@media (max-width: 60em) {
+  .md-header__inner {
+    min-height: 2.8rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.3rem;
+  }
+}
+
+/* Inputs: iPhone Safari zooms the page when a focused field is under 16px and
+   leaves it zoomed. Every filter field is 16px below the drawer breakpoint
+   (Material's own search field already is). */
+@media (max-width: 60em) {
+  .sidebar-filter__input,
+  .notebook-filter__input,
+  .md-typeset .locus-table-filter__input {
+    font-size: 0.8rem;
+  }
+}
+
+/* Title row: the Copy page group and Material's view/edit icons float right
+   of the H1 and took 212px of a 358px column, so "Capabilities" broke as
+   "Capabilitie / s" and most titles ran to two or three lines. On one-column
+   screens the actions sit on their own row above the title and the title gets
+   the full column. */
+@media (max-width: 48em) {
+  .md-content__inner > h1,
+  .md-content__inner > .md-typeset > h1 {
+    clear: both;
+  }
+  .md-content__inner .locus-copy-page {
+    margin: 0 0 0.9rem 0.5rem;
+  }
+  .md-content__inner > .md-content__button {
+    margin-top: 0;
+    margin-bottom: 0.9rem;
+  }
+}
+
+/* Touch targets. Material's code copy button is 1.5em (20px) and the diagram
+   Expand pill was 26px tall; both grow to a finger-sized box on touch screens
+   without moving anything on a pointer device. */
+@media (hover: none) {
+  .md-typeset .md-code__button {
+    width: 2.2em;
+    height: 2.2em;
+  }
+  .md-typeset .md-code__button::after {
+    width: 1.3em;
+    height: 1.3em;
+  }
+  .md-typeset .tl-dia__expand {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.66rem;
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+  .md-typeset .tl-dia__expand svg { width: 0.85rem; height: 0.85rem; }
+  /* The always-visible pill sat on the drawing's top-right corner and hid a
+     node there on some pages; on touch the figure reserves a band for it. */
+  .md-typeset .tl-dia--tap {
+    padding-top: 2.9rem;
+  }
+}
+
+/* Diagram overlay. The panel was 96vw with the drawing scaled to fit, which on
+   a phone made the expanded drawing smaller than the inline one (260px against
+   600px). The clone now carries its design width as a minimum (set by
+   diagram-zoom.js from the viewBox), so on a phone or a tablet the overlay
+   shows the drawing at the size it was designed at and pans in both axes;
+   pinch zoom still works because the overlay is in the page. On one-column
+   screens the panel is the whole screen, and the page behind does not scroll
+   while it is open. */
+.tl-dia-overlay__panel {
+  overscroll-behavior: contain;
+}
+html.tl-dia-open,
+html.tl-dia-open body {
+  overflow: hidden;
+}
+@media (max-width: 48em) {
+  .tl-dia-overlay {
+    padding: 0;
+    align-items: stretch;
+  }
+  .tl-dia-overlay__panel {
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    padding: 3.4rem var(--tl-space-sm) var(--tl-space-lg);
+    border: 0;
+    border-radius: 0;
+  }
+  .tl-dia-overlay__close {
+    top: 0.6rem;
+    right: 0.6rem;
+    min-height: 2.2rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* Stacked tables. A table with three or more columns that cannot give each
+   column a readable width on a one-column screen is shown as a list of rows
+   (docs/javascripts/mobile-tables.js sets data-stack after measuring, and
+   copies each header into data-label). The first cell is the row's title, the
+   other cells carry their column header as a small caption, so the event
+   catalogues, the capability matrix and the API parameter tables read as cards
+   instead of five-word-wide columns with broken words. Two-column tables and
+   short matrices stay tables. */
+@media (max-width: 48em) {
+  .md-typeset__scrollwrap:has(> .md-typeset__table > table[data-stack]) {
+    margin-left: 0;
+    margin-right: 0;
+    overflow: visible;
+  }
+  .md-typeset__table:has(> table[data-stack]) {
+    padding: 0;
+  }
+  .md-typeset table[data-stack] {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 0.74rem;
+    overflow: visible;
+  }
+  .md-typeset table[data-stack] > thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .md-typeset table[data-stack] > thead > tr,
+  .md-typeset table[data-stack] > thead th {
+    display: block;
+    width: 1px;
+    padding: 0;
+  }
+  .md-typeset table[data-stack] > tbody {
+    display: block;
+  }
+  .md-typeset table[data-stack] > tbody > tr {
+    display: block;
+    margin: 0 0 var(--tl-space-xs);
+    padding: var(--tl-space-xs) var(--tl-space-sm) var(--tl-space-sm);
+    border: 1px solid var(--tl-rule);
+    border-radius: var(--tl-radius-md);
+    background: var(--tl-surface);
+  }
+  .md-typeset table[data-stack] > tbody > tr:nth-child(even) {
+    background: var(--tl-surface);
+  }
+  .md-typeset table[data-stack] td {
+    display: block;
+    min-width: 0;
+    padding: 0.2rem 0 0;
+    border: 0;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  /* A card is as wide as the column, so an endpoint URL or a long variable
+     name in a code span has to break rather than push the page sideways. */
+  .md-typeset table[data-stack] td code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .md-typeset table[data-stack] td:empty {
+    display: none;
+  }
+  .md-typeset table[data-stack] td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tl-text-mute);
+  }
+  .md-typeset table[data-stack] td:first-child {
+    padding: 0 0 0.3rem;
+    margin-bottom: 0.15rem;
+    border-bottom: 1px solid var(--tl-rule-subtle);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .md-typeset table[data-stack] td:first-child::before {
+    display: none;
+  }
+  .md-typeset table[data-stack] td:first-child code {
+    font-size: 0.85em;
+  }
+}
+
+/* Admonitions and details are 12.8px in Material at every width, which on a
+   phone is the smallest text on the page apart from captions. 14px below the
+   drawer breakpoint; the desktop size is unchanged. */
+@media (max-width: 60em) {
+  .md-typeset .admonition,
+  .md-typeset details {
+    font-size: 0.7rem;
+  }
+}
+
+/* The PyPI badge in the tablet header is a 16px-tall image; the link around
+   it gets the vertical padding a finger needs. */
+@media (max-width: 60em) {
+  .md-header__source.md-header__pypi {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+}
+
+/* Smaller touch-screen details: the file name in a collapsed source block's
+   summary, the copyright line's Legal link and Material's tab-strip scroll
+   arrows all get a readable size or a finger-sized hit area on phones. */
+@media (max-width: 60em) {
+  .md-typeset details > summary code {
+    font-size: 0.9em;
+  }
+}
+@media (hover: none) {
+  .md-footer-meta .footer-copy a {
+    display: inline-block;
+    padding: 0.5rem 0.25rem;
+    margin: -0.5rem -0.25rem;
+  }
+  .md-typeset .tabbed-button {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+  /* The larger copy button needs more clearance in the hero's install chip,
+     or it covers the closing quote of the command. */
+  .md-typeset .locus-hero__copy pre {
+    padding-right: 3rem;
+  }
+}
+
+/* Dark scheme: the holder behind the code copy button is a translucent light
+   square on the dark code background; on touch, where the button is larger,
+   it read as a lighter box in the corner of every block. Same token as the
+   block, so only the icon shows. */
+
+/* Headings on a phone wrap to two or three lines; balanced wrapping stops a
+   parenthesis or a short last word being left alone on the final line.
+   Browsers without text-wrap: balance ignore the rule. */
+@media (max-width: 60em) {
+  .md-typeset h1,
+  .md-typeset h2,
+  .md-typeset h3 {
+    text-wrap: balance;
+  }
+}
+
+/* ===================================================================
+   Mobile pass, round three: what the page-by-page review of the first
+   round's build found.
+   =================================================================== */
+
+/* Code copy button. Material renamed .md-clipboard to .md-code__button, so
+   the resting colour fix above never applied: the icon sat at 1.5:1 on the
+   block. Same tokens as the old rule. */
+.md-typeset .md-code__button {
+  color: var(--md-default-fg-color--lighter);
+  opacity: 1;
+}
+.md-typeset .md-code__button:hover,
+.md-typeset .md-code__button:focus-visible {
+  color: var(--tl-red);
+}
+[data-md-color-scheme="slate"] .md-typeset .md-code__button {
+  color: var(--md-default-fg-color--light);
+}
+/* The holder behind the button is translucent, so on touch, where the button
+   is always visible and larger, code glyphs showed through the icon in light
+   and a lighter square sat in the corner in dark. The holder takes the block
+   colour with a soft left edge, so a long first line fades under it like the
+   right-edge veil and nothing is drawn through the icon. */
+@media (hover: none) {
+  .md-typeset .md-code__nav {
+    top: 0.15em;
+    right: 0.15em;
+    padding: 0.15rem;
+    background-color: var(--tl-bg-soft);
+    box-shadow: -0.9rem 0 0.9rem -0.3rem var(--tl-bg-soft);
+    border-radius: 0.2rem;
+  }
+  .md-typeset .md-code__button {
+    width: 2em;
+    height: 2em;
+  }
+  /* Wrapped signatures wrap against the code box edge, under the button;
+     reserve its column so the wrap happens before it. */
+  .md-typeset .doc-signature pre > code {
+    padding-right: 3rem;
+  }
+}
+
+/* Heading permalinks are revealed on hover, which a touch screen has not got;
+   the invisible glyph still took an inline slot and, when a title filled the
+   column, wrapped alone onto a blank second line between the text and the
+   rule. Hidden below the drawer breakpoint, as the H1's already was. */
+@media (hover: none), (max-width: 60em) {
+  .md-typeset h2 .headerlink,
+  .md-typeset h3 .headerlink,
+  .md-typeset h4 .headerlink,
+  .md-typeset h5 .headerlink,
+  .md-typeset h6 .headerlink {
+    display: none;
+  }
+}
+
+/* Inline code inside admonitions and details inherits 0.85em of their 14px
+   phone size, 11.9px; the identifiers a note is made of get the 12px floor. */
+@media (max-width: 60em) {
+  .md-typeset .admonition code,
+  .md-typeset details code {
+    font-size: 0.9em;
+  }
+}
+
+/* Inline code in prose and lists: a long identifier that wraps is one chip
+   across the break instead of two pills, and docs/hooks/inline_code_breaks.py
+   gives it break opportunities at its separators so the browser does not cut
+   it at an arbitrary letter. Code in table cells stays whole; when a chip is
+   wider than the table can afford, mobile-tables.js lets the table's code wrap
+   (data-wrap-code) and, if that is not enough, stacks the table. */
+@media (max-width: 60em) {
+  .md-typeset :not(pre) > code {
+    -webkit-box-decoration-break: slice;
+    box-decoration-break: slice;
+  }
+}
+@media (max-width: 48em) {
+  .md-typeset table:not([class]):not([data-stack]) td code {
+    white-space: nowrap;
+  }
+  .md-typeset table[data-wrap-code]:not([data-stack]) td code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Stacked cards: a header that is a code identifier keeps its case and
+   face as a caption; a cell holding only a dash reads inline after its
+   caption; a table whose first column is a one- or two-character index shows
+   that index as a chip and uses the second cell as the card title. */
+@media (max-width: 48em) {
+  .md-typeset table[data-stack] td[data-label-code]::before {
+    font-family: var(--locus-mono);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .md-typeset table[data-stack] td[data-dash] {
+    display: flex;
+    gap: 0.4rem;
+    align-items: baseline;
+  }
+  .md-typeset table[data-stack] td[data-dash]::before {
+    margin-bottom: 0;
+  }
+  .md-typeset table[data-stack][data-index-col] td:first-child {
+    display: inline-block;
+    margin: 0 0 0.3rem;
+    padding: 0 0.45rem;
+    border: 1px solid var(--tl-rule);
+    border-radius: var(--tl-radius-pill);
+    font-family: var(--locus-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    line-height: 1.7;
+    color: var(--tl-text-mute);
+  }
+  .md-typeset table[data-stack][data-index-col] td:nth-child(2) {
+    padding: 0 0 0.3rem;
+    margin-bottom: 0.15rem;
+    border-bottom: 1px solid var(--tl-rule-subtle);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .md-typeset table[data-stack][data-index-col] td:nth-child(2)::before {
+    display: none;
+  }
+}
+
+/* Program output on a phone: a banner or rule line printed at sixty columns
+   is clipped to the line instead of wrapping into a stub (output-blocks.js
+   marks them), wrapped lines keep a hanging indent so a continuation reads as
+   one, and a column-aligned block scrolls instead of wrapping (the script sets
+   white-space: pre on it). The GSAR piecewise definition and the posture
+   report are the aligned cases. */
+@media (max-width: 48em) {
+  .md-typeset .language-text pre > code > span[id^="__span"] {
+    display: block;
+    padding-left: 2ch;
+    text-indent: -2ch;
+  }
+  .md-typeset .language-text pre > code > span.tl-out-rule {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+  }
+  .md-typeset .language-text pre > code.tl-out-aligned {
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .md-typeset .language-text pre > code.tl-out-aligned > span[id^="__span"] {
+    padding-left: 0;
+    text-indent: 0;
+  }
+}
+
+/* Block math scales to the phone column instead of clipping its right end. */
+@media (max-width: 36em) {
+  .md-typeset math[display="block"] {
+    font-size: 0.9rem;
+    padding: 0.6rem 0.25rem;
+  }
+}
+
+/* The hero's install command wraps on small phones instead of running under
+   the copy button: at the space, with the quoted package name kept whole. */
+@media (max-width: 36em) {
+  .md-typeset .locus-hero__copy pre > code {
+    white-space: pre-wrap;
+    overflow-wrap: normal;
+  }
+  .md-typeset .locus-hero__copy pre > code .s2 {
+    white-space: nowrap;
+  }
+}
+
+/* Link rows on the home page: each link stays on one line, so a row wraps
+   between links and the arrow never starts a line on its own. */
+.md-typeset .locus-links a {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* Docstring example fallback paragraphs match the code size and never
+   break an identifier or ligate an arrow. */
+.md-typeset .doc details.usage > p,
+.md-typeset .doc details.example > p {
+  font-size: 0.66rem;
+  word-break: normal;
+  overflow-wrap: normal;
+  font-variant-ligatures: none;
+  font-feature-settings: "kern";
+}
+
+/* Page top on phones: the action row sat in a 50px void under the header and
+   the title started 97px below it. Tighter margins bring the title to about
+   60px under the header while the actions keep their own row. */
+@media (max-width: 48em) {
+  .md-main__inner {
+    margin-top: 0.6rem;
+  }
+  .md-content__inner .locus-copy-page {
+    margin-bottom: 0.5rem;
+  }
+  .md-content__inner > .md-content__button {
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* Header controls on phones: the Oracle mark and the home mark get the same
+   40px box as Material's own buttons; the tagline is 12px rather than 10px
+   where it is shown (481px to 896px). */
+@media (max-width: 60em) {
+  .md-header__source.md-header__oci,
+  .md-header__button.md-logo {
+    min-width: 2rem;
+    min-height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+@media (max-width: 56em) and (min-width: 30.0625em) {
+  .md-header__ellipsis > .md-header__topic:first-of-type::after {
+    font-size: 0.6rem;
+    letter-spacing: 0.05em;
+  }
+}
+
+/* Drawer: every level's title takes the surface, ink and red hairline the
+   root level already had, instead of Material's grey slab. */
+@media (max-width: 76.1875em) {
+  .md-nav--primary .md-nav__title {
+    background-color: var(--locus-surface);
+    color: var(--locus-ink);
+    border-bottom: 2px solid var(--tl-red);
+    box-shadow: none;
+  }
+  .md-nav--primary .md-nav__title .md-nav__button,
+  .md-nav--primary .md-nav__title .md-nav__icon {
+    color: var(--locus-ink);
+  }
+}
+
+/* Footer on phones: the Next title wraps instead of truncating, the social
+   icons get finger-sized boxes, and the copyright line clears AA. */
+.md-footer-meta .md-copyright,
+.md-footer-meta .footer-copy {
+  color: rgba(255, 255, 255, 0.8);
+}
+@media (max-width: 44.9375em) {
+  .md-footer__link--next .md-footer__title,
+  .md-footer__link--next .md-ellipsis {
+    white-space: normal;
+  }
+}
+@media (hover: none) {
+  .md-social {
+    gap: 0.4rem;
+  }
+  .md-social__link {
+    display: inline-flex;
+    width: 2.2rem;
+    height: 2.2rem;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Code blocks inside content tabs take the same full-bleed treatment as
+   top-level blocks on phones, so one page does not show two code styles. */
+@media screen and (max-width: 44.9375em) {
+  .md-typeset .tabbed-block > .highlight,
+  .md-typeset .tabbed-block > .highlighttable {
+    margin-left: -0.8rem;
+    margin-right: -0.8rem;
+    border-left: 0;
+    border-radius: 0;
+  }
+}
+
+/* Notebook filter placeholder ends in an ellipsis rather than mid-word. */
+.notebook-filter__input {
+  text-overflow: ellipsis;
+}
+
+/* Diagram overlay: when the drawing pans, a line pinned to the bottom of the
+   screen says so (outside the panel, so it does not scroll with the drawing). */
+.tl-dia-overlay__hint {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0.5rem 1rem 0.9rem;
+  font: 500 0.66rem/1.4 var(--locus-sans);
+  color: var(--tl-text-mute);
+  text-align: center;
+  background: var(--tl-surface);
+  pointer-events: none;
+}

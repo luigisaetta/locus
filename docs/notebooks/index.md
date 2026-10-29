@@ -52,7 +52,7 @@ The series runs 01 to 89, ordered by topic: start here, the multi-agent shapes, 
     id="notebook-filter-input"
     class="notebook-filter__input"
     aria-label="Filter examples"
-    placeholder="Filter examples (e.g. oracle, oci, rag, hooks)…"
+    placeholder="Filter examples (oracle, rag, hooks…)"
     autocomplete="off"
     autocorrect="off"
     spellcheck="false" />
