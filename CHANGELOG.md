@@ -8,6 +8,27 @@ policy.
 
 ## [Unreleased]
 
+## [5.1.0] - 2026-10-29
+
+### Added
+
+- **Intent meanings in the goal frame.** `GoalFrame.primary_goal` carries one
+  line per `TaskType` (`TASK_TYPE_GUIDE`), so an extractor model sees what
+  separates `plan` from `build` or `research` from `diagnose` instead of
+  thirteen bare names.
+- **`locus-sdk-security` on PyPI.** The release workflow publishes the
+  security package next to `locus-sdk`, so `pip install locus-sdk-security`
+  replaces the install-from-repository line; the two stay in lockstep.
+- **Build it with Codex.** `codex/SPEC.md` and `codex/PROMPT.md` drive a
+  coding agent through the Quickstart and the first controlled action from a
+  clone: a fresh environment, a first agent with a typed tool against the
+  provider the operator names, the admission gate allowing, holding and
+  denying, and the rogue-agent challenge, each step with its checkpoint.
+  `AGENTS.md` at the repository root carries the rules a coding agent follows
+  here. The site gains the how-to page and the README a section;
+  `tests/docs/test_codex_spec.py` keeps the files the specification quotes
+  identical to the guide pages.
+
 ### Changed
 
 - **Cognitive router: a request too risky for its shape is held, not
@@ -35,16 +56,6 @@ policy.
   Command A beats the free-form baseline, Llama 3.3 70B does not). The
   assertions are the structural ones: selections stay in the registered set,
   including under prompt injection.
-
-### Added
-
-- **Intent meanings in the goal frame.** `GoalFrame.primary_goal` carries one
-  line per `TaskType` (`TASK_TYPE_GUIDE`), so an extractor model sees what
-  separates `plan` from `build` or `research` from `diagnose` instead of
-  thirteen bare names.
-- **`locus-sdk-security` on PyPI.** The release workflow publishes the
-  security package next to `locus-sdk`, so `pip install locus-sdk-security`
-  replaces the install-from-repository line; the two stay in lockstep.
 
 ## [5.0.0] - 2026-10-29
 
