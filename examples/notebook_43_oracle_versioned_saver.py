@@ -1,31 +1,28 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
 """Notebook 43: versioned agent history on Oracle Database 26ai.
 
-Notebook 42's ``oracle_checkpointer`` keeps **one row per thread** —
-``MERGE`` on save means the latest write wins and history is
-destructive. That's the right shape for most agent threads. But when
-you need a LangGraph-shape *history-preserving* saver — one row per
-``(thread_id, checkpoint_ns, checkpoint_id)`` plus a sibling table for
-intra-step pending writes — reach for
-:class:`OracleCheckpointSaver`.
+Notebook 42's ``oracle_checkpointer`` returns a ``StorageBackendAdapter``
+over ``OracleBackend``: the agent loop drives it, generating the
+checkpoint ids itself and ``MERGE``-upserting one row per
+``thread_id:checkpoint_id`` key. That is the right shape for live thread
+continuity. When you need a lineage your own code shapes — one row per
+``(thread_id, checkpoint_ns, checkpoint_id)`` with explicit parent links
+and metadata, plus a sibling table for intra-step pending writes — reach
+for :class:`OracleCheckpointSaver`.
 
 This notebook puts a Locus ``Agent`` on top of it. After every
-``run_sync`` the agent's :meth:`AgentState.to_checkpoint` snapshot is
+turn the agent's :meth:`AgentState.to_checkpoint` snapshot is
 written to the saver with a monotonic ``checkpoint_id`` and a parent
 link, so the saver ends up with the agent's full audit trail. We then
 demonstrate ``list_checkpoints`` (lineage), ``get(checkpoint_id=v1)``
 (rewind read), and ``put_writes`` (intra-step durability) — every
 operation driven by the agent's actual state, not synthetic blobs.
 
-It is the locus-native equivalent of ``langgraph-oracledb``'s
-``OracleSaver`` / ``AsyncOracleSaver`` — same two-table schema, same
-method surface — but with **zero** langchain / langgraph imports. The
-same Autonomous Database wallet drives both this saver and the
-single-row ``oracle_checkpointer`` side-by-side, so you can mix and
+The same Autonomous Database wallet drives both this saver and the
+loop-driven ``oracle_checkpointer`` side by side, so you can mix and
 match per workload.
 
 Key concepts:
@@ -34,17 +31,16 @@ Key concepts:
   ``(thread_id, checkpoint_ns, checkpoint_id)`` with
   ``parent_checkpoint_id`` walking the lineage) and ``<table>_writes``
   (pending intra-step writes keyed by ``task_id`` + monotonic ``idx``).
-- ``put(...)`` inserts; never upserts. Re-saving a different
-  ``checkpoint_id`` for the same thread *appends* — that's the whole
-  point of the versioned shape.
+- ``put(...)`` inserts; never upserts. Saving a different
+  ``checkpoint_id`` for the same thread *appends* a row, which is what
+  makes the shape versioned.
 - ``get(thread_id=...)`` with no ``checkpoint_id`` returns the newest
   row; ``list_checkpoints(...)`` enumerates the lineage newest-first.
 - ``put_writes(...)`` is idempotent: it replaces any prior writes for
   the same ``(thread, ns, checkpoint, task)`` tuple, so retries are
   safe.
 
-Run it::
-
+Run it:
     export ORACLE_DSN=mydb_low                   # tnsnames alias
     export ORACLE_USER=locus_app                 # least-privileged app schema
     export ORACLE_PASSWORD='<app-password>'
@@ -158,7 +154,7 @@ async def _drop_tables(saver: OracleCheckpointSaver) -> None:
 async def run_agent_with_versioned_history(agent: Agent, saver: OracleCheckpointSaver) -> None:
     """Drive the agent through three turns, snapshotting each one.
 
-    Each ``run_sync`` returns an :class:`AgentResult` whose ``.state``
+    Each ``arun`` returns an :class:`AgentResult` whose ``.state``
     is the post-turn :class:`AgentState`. We serialise that with
     :meth:`AgentState.to_checkpoint` (the same call the in-process
     checkpointer uses) and write it to the saver under a fresh
@@ -166,24 +162,17 @@ async def run_agent_with_versioned_history(agent: Agent, saver: OracleCheckpoint
     inside Oracle 26ai.
     """
     print("\n--- 1. Agent runs three turns; each snapshot lands in Oracle ---")
-    from locus.core.events import TerminateEvent  # noqa: PLC0415
 
     parent: str | None = None
     for i, prompt in enumerate(_TURNS, start=1):
-        # The agent's per-iteration checkpointer keeps the live thread
-        # going (turn N sees turn N-1's messages). We additionally
-        # snapshot the post-turn state into the versioned saver below.
-        # Using agent.run() (async generator) directly — we're already
-        # inside an event loop, so agent.run_sync would clash.
-        final = ""
-        stop_reason = "complete"
-        async for ev in agent.run(prompt, thread_id=THREAD_ID):
-            if isinstance(ev, TerminateEvent):
-                final = ev.final_message or ""
-                stop_reason = ev.reason or "complete"
-        state = agent._last_run_state  # type: ignore[attr-defined]  # set by run()
-        if state is None:
-            raise RuntimeError("agent.run() did not populate _last_run_state")
+        # The agent's own checkpointer keeps the live thread going (turn N
+        # sees turn N-1). ``arun`` is the awaitable form of ``run_sync`` for
+        # code already inside an event loop; its result carries the
+        # post-turn state we snapshot into the versioned saver.
+        result = await agent.arun(prompt, thread_id=THREAD_ID)
+        state = result.state
+        final = result.message
+        stop_reason = result.stop_reason
 
         cid = f"v{i}"
         snapshot = state.to_checkpoint()
@@ -194,7 +183,7 @@ async def run_agent_with_versioned_history(agent: Agent, saver: OracleCheckpoint
             checkpoint_data=snapshot,
             metadata={
                 "turn": i,
-                "iterations": len(state.messages),
+                "messages": len(state.messages),
                 "stop_reason": str(stop_reason),
             },
         )
@@ -279,7 +268,7 @@ async def main() -> None:
     print("Opening pool against Oracle 26ai…")
     saver = _build_saver()
 
-    # Live thread continuity comes from the single-row checkpointer
+    # Live thread continuity comes from the loop-driven checkpointer
     # (notebook 42's primitive); the versioned saver adds an audit
     # trail on top. Both ride the same Autonomous Database wallet.
     live_cp = oracle_checkpointer(
@@ -312,13 +301,13 @@ async def main() -> None:
         print(
             "\nThe agent ran live; Oracle 26ai kept the full lineage of "
             "its state. Use the single-row oracle_checkpointer (notebook "
-            "07) for live durability and OracleCheckpointSaver for the "
+            "42) for live durability and OracleCheckpointSaver for the "
             "auditable version history on top — same wallet, same pool."
         )
     finally:
         print("\n--- Cleanup: drop the demo tables ---")
         await _drop_tables(saver)
-        # Also delete the live thread row from the single-row checkpointer.
+        # Also delete the live thread's rows from the loop-driven checkpointer.
         try:
             await live_cp.delete(THREAD_ID)
         except Exception as exc:  # pragma: no cover — best-effort

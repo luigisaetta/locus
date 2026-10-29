@@ -13,9 +13,12 @@ toolkit, the conformance kit (:mod:`locus_security.testing`), the
 ``SecurityContext`` facade, the AI red-team probes and job verbs
 (``red_team`` / ``assure`` / ``monitor``), the SOC analyst factory, curated
 IR playbooks, and a set of **bundled reference/offline adapters** (intel /
-SIEM / EDR / scanner / fingerprint / AWS posture) so it runs standalone with
-no credentials. A live vendor adapter is one you write in your own package
-against the same contract, and pass in via ``security_toolset(extra=…)``.
+SIEM / EDR / scanner / fingerprint) so it runs standalone with no
+credentials. Cloud posture runs on the core OCI tools
+(:func:`locus.tools.describe_oci` / :func:`locus.tools.use_oci`), which the
+SOC analyst and ``security_toolset(oci=True)`` attach. A live vendor adapter
+is one you write in your own package against the same contract, and pass in
+via ``security_toolset(extra=…)``.
 
 The grounding vocabulary (``Evidence``, ``Severity``, ``ground_finding``, …)
 is re-exported here from :mod:`locus.control` so domain code has one import.
@@ -83,6 +86,7 @@ from locus.control.verification import (
     VerificationResult,
     verify,
 )
+from locus.tools import describe_oci, use_oci
 from locus_security.adapter import (
     SecurityAdapter,
     ToolAdapter,
@@ -96,15 +100,6 @@ from locus_security.adapter import (
 # Agentic AI-security surface: a Target (the AI under assessment), the job
 # verbs that act on it, the red-team probe library, and posture assessments.
 from locus_security.assess import guardrail_coverage
-from locus_security.aws import (
-    READONLY_PREFIXES,
-    aws_services,
-    describe_aws,
-    describe_aws_tool,
-    is_readonly_operation,
-    use_aws,
-    use_aws_tool,
-)
 from locus_security.context import (
     ActionsPort,
     CloudSource,
@@ -183,7 +178,7 @@ def security_toolset(
     edr: bool = True,
     scanner: bool = True,
     fingerprint: bool = True,
-    aws: bool = False,
+    oci: bool = False,
     allow_containment: bool = False,
     extra: list[Any] | None = None,
 ) -> list[Any]:
@@ -192,8 +187,10 @@ def security_toolset(
     Returns the read-only SOC triage loop by default — IOC enrichment, SIEM
     search, EDR forensics, vuln/posture scanning, and inference
     fingerprinting — from the **bundled reference adapters**. Containment
-    (``isolate_host``) and the AWS posture tools are opt-in (the latter needs
-    ``boto3`` from the ``[aws]`` extra).
+    (``isolate_host``) and the OCI cloud-posture tools are opt-in; the latter
+    are the core :func:`locus.tools.describe_oci` / :func:`locus.tools.use_oci`
+    (read-only by default) and need the ``oci`` SDK from the ``locus-sdk[oci]``
+    extra.
 
     ``extra`` merges tools from **external integrations** you imported
     explicitly (the LangChain model — no auto-discovery), e.g.::
@@ -217,8 +214,8 @@ def security_toolset(
         tools.extend([scan_dependencies_tool, scan_endpoint_tool])
     if fingerprint:
         tools.append(fingerprint_endpoint_tool)
-    if aws:
-        tools.extend([describe_aws_tool, use_aws_tool])
+    if oci:
+        tools.extend([describe_oci, use_oci])
     if extra:
         tools.extend(extra)
     return tools
@@ -291,14 +288,6 @@ __all__ = [
     "Severity",
     "TaxonomyTag",
     "severity_at_least",
-    # AWS posture (spec-driven, read-only)
-    "READONLY_PREFIXES",
-    "aws_services",
-    "describe_aws",
-    "describe_aws_tool",
-    "is_readonly_operation",
-    "use_aws",
-    "use_aws_tool",
     # SOC-analyst factory + grounded posture reporting
     "PostureEvidence",
     "PostureFinding",

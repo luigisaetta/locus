@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Swarm card: five SwarmAgent peers and no coordinator. Each claims the next
+  pending SwarmTask it can handle and shares what it finds with every other
+  peer through SharedContext; the two-way edges are that exchange, and the
+  primary node is the peer that has claimed the task.
+  locus/multiagent/swarm.py: Swarm.execute, Swarm._claim_task, SwarmAgent.work_on_task, SharedContext
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>Five peer agents in a ring, each linked both ways to its neighbours; one has claimed the task</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="node"><rect x="14" y="3" width="22" height="14" rx="3"/></g>
+  <g class="node"><rect x="51" y="3" width="22" height="14" rx="3"/></g>
+  <g class="node"><rect x="71" y="33" width="22" height="14" rx="3"/></g>
+  <g class="node"><rect x="37" y="39" width="22" height="14" rx="3"/></g>
+  <g class="node primary"><rect x="3" y="33" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M36,12.5 L49,12.5"/>
+  <path class="edge" marker-end="url(#ah)" d="M51,7.5 L38,7.5"/>
+  <path class="edge" marker-end="url(#ah)" d="M63.7,17 L73.2,31.3"/>
+  <path class="edge" marker-end="url(#ah)" d="M80.3,33 L70.8,18.7"/>
+  <path class="edge" marker-end="url(#ah)" d="M71,39.4 L61,41.2"/>
+  <path class="edge" marker-end="url(#ah)" d="M59,46.6 L69,44.8"/>
+  <path class="edge" marker-end="url(#ah)" d="M37,41.5 L27,39.8"/>
+  <path class="edge" marker-end="url(#ah)" d="M25,44.5 L35,46.2"/>
+  <path class="edge" marker-end="url(#ah)" d="M19.2,33 L24.4,18.9"/>
+  <path class="edge" marker-end="url(#ah)" d="M19.8,17 L14.6,31.1"/>
+</svg>

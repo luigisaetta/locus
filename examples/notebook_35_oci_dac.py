@@ -14,9 +14,11 @@ Key concepts:
 - Pass the endpoint OCID as the model id and Locus routes it through
   ``OCIModel`` (the OCI SDK client). The OpenAI-compatible client
   cannot speak ``DedicatedServingMode``, which is required for DACs.
-- Tool schemas pass through unchanged. Whether the model on the cluster
-  emits structured ``tool_calls`` (OpenAI / Llama / Cohere) or text
-  ``<tool_call>`` blocks (default Qwen3) depends on the deployment.
+- Tool schemas reach the cluster as the OCI SDK's ``FunctionDefinition``,
+  the conversion ``OCIModel`` applies to every id other than
+  ``cohere.command*``. Whether the model on the cluster emits structured
+  ``tool_calls`` (OpenAI / Llama / Cohere) or text ``<tool_call>``
+  blocks (default Qwen3) depends on the deployment.
 - Both ``complete()`` and SSE ``stream()`` work end-to-end against a
   DAC — the call sites look identical to a public model.
 
@@ -28,17 +30,17 @@ Part-by-part:
 - Part 4 — SSE ``stream()`` with deltas printed inline.
 - Part 5 — tool-using ``Agent`` on top of the DAC.
 
-Run it::
-
+Run it:
     pip install -e ".[oci]"
     export OCI_DAC_ENDPOINT_OCID=ocid1.generativeaiendpoint.oc1.uk-london-1....
     export OCI_DAC_COMPARTMENT_ID=ocid1.compartment.oc1....
     export OCI_DAC_REGION=uk-london-1
     export OCI_PROFILE=MY_DAC_PROFILE
+    export OCI_AUTH_TYPE=api_key                 # or security_token
     python examples/notebook_35_oci_dac.py
 
-Without the DAC env vars Parts 2-5 print the wiring snippet and skip,
-so the file still runs cleanly in CI.
+Without the DAC env vars Part 2 prints the wiring snippet and Parts 3-5
+skip, so the file still runs cleanly in CI.
 
 Difficulty: Intermediate
 """
@@ -47,6 +49,20 @@ from __future__ import annotations
 
 import asyncio
 import os
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from locus.models.providers.oci import OCIModel
+
+
+# Every live Part addresses the same endpoint, so resolve it once.
+REGION = os.environ.get("OCI_DAC_REGION", "us-chicago-1")
+ENDPOINT = f"https://inference.generativeai.{REGION}.oci.oraclecloud.com"
+# OCIModel defaults to API-key auth. Reading the type from the environment
+# lets a session-token profile (``oci session authenticate``) drive every
+# Part below — the same variable notebooks 38 and 45 honour.
+AUTH_TYPE = os.environ.get("OCI_AUTH_TYPE", "api_key")
 
 
 # =============================================================================
@@ -61,6 +77,7 @@ def example_routing() -> None:
     print("locus.models.registry inspects the model id:")
     print()
     print("  1. ocid1.generativeaiendpoint.<region>....   -> OCIModel (OCI SDK)")
+    # The registry matches every ``cohere.`` id; command-r is the common case.
     print("  2. cohere.command-r-*                         -> OCIModel (OCI SDK)")
     print("  3. everything else                            -> OCIChatCompletionsModel")
     print()
@@ -82,6 +99,20 @@ def example_routing() -> None:
 def _dac_env_ready() -> bool:
     return bool(
         os.environ.get("OCI_DAC_ENDPOINT_OCID") and os.environ.get("OCI_DAC_COMPARTMENT_ID")
+    )
+
+
+def _dac_model(max_tokens: int) -> OCIModel:
+    """Build the ``OCIModel`` Parts 3 and 4 call directly; one place to wire it."""
+    from locus.models.providers.oci import OCIModel
+
+    return OCIModel(
+        model_id=os.environ["OCI_DAC_ENDPOINT_OCID"],
+        compartment_id=os.environ["OCI_DAC_COMPARTMENT_ID"],
+        profile_name=os.environ.get("OCI_PROFILE", "DEFAULT"),
+        auth_type=AUTH_TYPE,
+        service_endpoint=ENDPOINT,
+        max_tokens=max_tokens,
     )
 
 
@@ -118,20 +149,20 @@ def example_configure_agent() -> None:
     from locus.agent import Agent
     from locus.models import get_model
 
-    region = os.environ.get("OCI_DAC_REGION", "us-chicago-1")
     model = get_model(
         f"oci:{os.environ['OCI_DAC_ENDPOINT_OCID']}",
         compartment_id=os.environ["OCI_DAC_COMPARTMENT_ID"],
         profile_name=os.environ.get("OCI_PROFILE", "DEFAULT"),
-        service_endpoint=f"https://inference.generativeai.{region}.oci.oraclecloud.com",
+        auth_type=AUTH_TYPE,
+        service_endpoint=ENDPOINT,
     )
     agent = Agent(
         model=model,
         system_prompt="You are a concise assistant. Reply briefly.",
         max_iterations=2,
     )
-    print(f"Agent configured against DAC endpoint in {region}.")
-    print(f"  underlying model class:  {type(agent._model).__name__}")
+    print(f"Agent configured against DAC endpoint in {REGION}.")
+    print(f"  underlying model class:  {type(agent.config.model).__name__}")
     print("  serving mode:             DedicatedServingMode")
 
 
@@ -149,17 +180,8 @@ async def example_complete() -> None:
         return
 
     from locus.core.messages import Message
-    from locus.models.providers.oci import OCIAuthType, OCIModel
 
-    region = os.environ.get("OCI_DAC_REGION", "us-chicago-1")
-    model = OCIModel(
-        model_id=os.environ["OCI_DAC_ENDPOINT_OCID"],
-        compartment_id=os.environ["OCI_DAC_COMPARTMENT_ID"],
-        profile_name=os.environ.get("OCI_PROFILE", "DEFAULT"),
-        auth_type=OCIAuthType.API_KEY,
-        service_endpoint=f"https://inference.generativeai.{region}.oci.oraclecloud.com",
-        max_tokens=128,
-    )
+    model = _dac_model(max_tokens=128)
 
     response = await model.complete(
         messages=[
@@ -187,17 +209,8 @@ async def example_stream() -> None:
         return
 
     from locus.core.messages import Message
-    from locus.models.providers.oci import OCIAuthType, OCIModel
 
-    region = os.environ.get("OCI_DAC_REGION", "us-chicago-1")
-    model = OCIModel(
-        model_id=os.environ["OCI_DAC_ENDPOINT_OCID"],
-        compartment_id=os.environ["OCI_DAC_COMPARTMENT_ID"],
-        profile_name=os.environ.get("OCI_PROFILE", "DEFAULT"),
-        auth_type=OCIAuthType.API_KEY,
-        service_endpoint=f"https://inference.generativeai.{region}.oci.oraclecloud.com",
-        max_tokens=64,
-    )
+    model = _dac_model(max_tokens=64)
 
     print("Streaming reply (chunks shown inline):")
     print("  ", end="", flush=True)
@@ -220,21 +233,26 @@ async def example_stream() -> None:
 async def example_agent_with_tool() -> None:
     """Wire a tool-using Agent on top of the DAC.
 
-    Locus sends the same OpenAI-style tool definitions to the DAC that
-    it sends to on-demand models. Whether the model on the cluster
-    emits structured tool calls or text-format ones depends on the
-    model and the deployment:
+    The ``Agent`` hands ``OCIModel`` the same OpenAI-style tool
+    definitions it hands any other model, and ``OCIModel`` converts
+    them to the OCI SDK's ``FunctionDefinition`` — the same conversion
+    whatever the serving mode. Whether the model on the cluster emits
+    structured tool calls or text-format ones depends on the model and
+    the deployment:
 
     - **OpenAI / Llama / Cohere on OCI** emit structured ``tool_calls``.
       Locus extracts them automatically.
     - **Qwen on a DAC** by default emits ``<tool_call>...</tool_call>``
-      text blocks. Locus's parser doesn't pick those up, so
-      ``result.metrics.tool_calls`` will be 0 even though the model
-      "called" the tool in its content. Two fixes:
+      text blocks. With the default ``text_tool_calls="auto"`` the
+      ``Agent`` parses text calls only for a model that declares
+      ``supports_native_tool_calls = False``, which ``OCIModel`` does
+      not, so ``result.metrics.tool_calls`` will be 0 even though the
+      model "called" the tool in its content. Two fixes:
         (a) Enable OpenAI-compatible tool-call output on the deployment
             (Qwen3 supports ``--enable-auto-tool-choice``).
-        (b) Add a post-processor that converts the text blocks into
-            Locus ``ToolCall`` objects.
+        (b) Build the ``Agent`` with ``text_tool_calls="on"``: Locus
+            then parses a ``<tool_call>`` tag whose body is a JSON call
+            naming a registered tool into a ``ToolCall`` and runs it.
 
     This part shows the wiring. The output depends on the model.
     """
@@ -253,12 +271,12 @@ async def example_agent_with_tool() -> None:
         """Return the sum of two integers."""
         return a + b
 
-    region = os.environ.get("OCI_DAC_REGION", "us-chicago-1")
     model = get_model(
         f"oci:{os.environ['OCI_DAC_ENDPOINT_OCID']}",
         compartment_id=os.environ["OCI_DAC_COMPARTMENT_ID"],
         profile_name=os.environ.get("OCI_PROFILE", "DEFAULT"),
-        service_endpoint=f"https://inference.generativeai.{region}.oci.oraclecloud.com",
+        auth_type=AUTH_TYPE,
+        service_endpoint=ENDPOINT,
     )
     agent = Agent(
         model=model,
@@ -267,9 +285,8 @@ async def example_agent_with_tool() -> None:
         max_iterations=4,
     )
 
-    result = await asyncio.to_thread(
-        agent.run_sync,
-        "Use the add_two_numbers tool to add 7 and 35, then state the result in one sentence.",
+    result = await agent.arun(
+        "Use the add_two_numbers tool to add 7 and 35, then state the result in one sentence."
     )
     print(f"final message:        {result.message.strip()[:200]}")
     print(f"iterations:           {result.metrics.iterations}")
@@ -279,11 +296,6 @@ async def example_agent_with_tool() -> None:
         print("Note: the model emitted a <tool_call> text block instead of a")
         print("structured tool_call. See the docstring for how to handle this")
         print("(deployment flag or post-processing parser).")
-
-
-# =============================================================================
-# Main
-# =============================================================================
 
 
 async def _async_main() -> None:

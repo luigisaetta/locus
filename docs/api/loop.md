@@ -1,13 +1,13 @@
 # ReAct loop
 
-!!! warning "Deprecated — removed in 3.0.0"
+!!! warning "Deprecated — scheduled for removal in a later major release"
 
     `locus.loop` is a second ReAct implementation, parallel to the one
     [`Agent`](agent.md) runs, and `Agent` has never used it. Two
     implementations of the same idea drift, and a bug fixed in one stays live
     in the other. Nothing here is a capability `Agent` lacks.
 
-    Everything below still imports and works until 3.0.0, per the
+    Everything below still imports and works until that release, per the
     [deprecation policy](https://github.com/oracle/locus/blob/main/DEPRECATION.md).
     Each access emits `LocusDeprecationWarning`; to find them in your own code:
 

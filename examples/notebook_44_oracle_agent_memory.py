@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
@@ -12,27 +11,31 @@ The Oracle-native memory path. Wires Locus's
 :class:`~locus.memory.manager.LLMMemoryManager` from notebook 37, this
 manager gets you:
 
-- LLM-backed memory extraction tuned on LongMemEval (94.4 % recall on
-  GPT-5.5 xhigh)
+- LLM-backed memory extraction benchmarked on LongMemEval (figures in
+  the upstream README)
 - Prompt-ready context cards with summaries + recent messages
 - Scoped retrieval (``user_id`` / ``agent_id`` / ``thread_id``)
-- Temporal reasoning + automatic memory expiry
+- Time-to-live retention (``MemoryRetentionConfig``), so records can
+  expire
 
-The trade-off: it's Oracle-only and the upstream is alpha
-(``oracleagentmemory`` 26.4.0, Dev Status 3). For non-Oracle backends
+The trade-off: it's Oracle-only — Locus pins
+``oracleagentmemory>=26.4.0,<27``. For non-Oracle backends
 (InMemoryStore / Redis / Postgres / OpenSearch) or for test
 environments, stick with notebook 37.
 
 Same two-session shape as notebook 37 so you can compare side-by-side:
 
-- Session A (``thread_id="t-a"``, ``user_id="alice"``) — agent learns
+- Session A (``thread_id=THREAD_A``, ``user_id="alice"``) — agent learns
   a fact about Alice; the manager's ``on_session_end`` hook ships the
-  transcript to ``Thread.add_messages_async``, which triggers
+  transcript to ``OracleThread.add_messages_async``, which triggers
   oracleagentmemory's LLM extractor.
-- Session B (``thread_id="t-b"``, **same** ``user_id="alice"``) — a
-  brand-new Agent; on session start the manager fetches a context card
-  for Alice via ``Thread.get_context_card_async`` and injects it into
-  the system prompt. The agent answers the follow-up.
+- Session B (``thread_id=THREAD_B``, **same** ``user_id="alice"``) — a
+  brand-new Agent; on session start the manager inserts one system
+  message right after the user's turn holding thread B's context card
+  (``OracleThread.get_context_card_async``, which has no messages or
+  summary yet for a new thread) and the records a ``search_async``
+  scoped to ``user_id`` returns from every thread — the route by which
+  Alice's preference reaches the model. The agent answers the follow-up.
 
 Prerequisites::
 
@@ -42,8 +45,7 @@ Prerequisites::
     # Or the bundle that covers every Oracle backend:
     pip install 'locus-sdk[checkpoints]'
 
-Run it::
-
+Run it:
     export ORACLE_DSN=mydb_low                   # tnsnames alias
     export ORACLE_USER=locus_app                 # least-privileged app schema
     export ORACLE_PASSWORD='<app-password>'
@@ -66,11 +68,11 @@ Run it::
 
     python examples/notebook_44_oracle_agent_memory.py
 
-If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` aren't set the notebook prints
-the wiring snippet and exits cleanly — no traceback, no
-half-initialised state. Same goes for ``oracleagentmemory`` not being
-installed: the manager raises a clear ImportError pointing at the
-extras command.
+If any of ``ORACLE_DSN``, ``ORACLE_USER``, ``ORACLE_PASSWORD`` or
+``ORACLE_WALLET`` is unset the notebook prints the wiring snippet and
+exits cleanly — no traceback, no half-initialised state. Same goes for
+``oracleagentmemory`` not being installed: the manager raises a clear
+ImportError pointing at the extras command.
 
 Difficulty: Intermediate. Self-contained — no prior notebook required.
 """
@@ -153,8 +155,8 @@ def _build_connection():
     """Open a sync oracledb *pool* — oracleagentmemory wants sync, and it
     runs memory extraction on a background thread. A single
     ``oracledb.Connection`` shared between that thread and the agent's
-    own queries is not thread-safe (it crashed the thin driver in
-    testing); a pool hands each caller its own session."""
+    own queries is not thread-safe; a pool hands each caller its own
+    session."""
     import oracledb
 
     return oracledb.create_pool(
@@ -179,13 +181,15 @@ def _build_manager(conn):
         extract_memories=True,
         table_name_prefix=TABLE_PREFIX,
         # First-run provisioning of the oracleagentmemory schema. For
-        # production swap to "managed" and create the schema as a DBA
-        # before deploying the runtime user.
+        # production swap to "require_existing" and create the schema as
+        # a DBA before deploying the runtime user.
         schema_policy="create_if_necessary",
-        # Force the LLM extractor to run on EVERY add_messages call so
-        # the demo's session B sees Alice's preference immediately. In
-        # production leave these as upstream defaults (-1) to batch
-        # extraction over a windowing schedule.
+        # Forwarded to create_thread for every thread the manager creates:
+        # extract after every appended message and keep a running context
+        # summary, so session A's single turn is enough to store Alice's
+        # preference. oracleagentmemory 26.6 deprecated these per-thread
+        # keywords in favour of ``memory_extraction_config``; the pinned
+        # ``<27`` releases still accept them.
         thread_defaults={
             "memory_extraction_frequency": 1,
             "memory_extraction_window": 0,
@@ -213,10 +217,9 @@ async def _drive_agent(agent: Agent, prompt: str, *, thread_id: str, user_id: st
     return final
 
 
-async def session_a(manager) -> None:
-    """Alice tells the agent her region preference; the manager extracts it."""
-    print("\n--- Session A: Alice teaches her preference (thread t-a) ---")
-    agent = Agent(
+def _build_agent(manager) -> Agent:
+    """Fresh Agent per session — the only thing the two sessions share is ``manager``."""
+    return Agent(
         config=AgentConfig(
             model=get_model(max_tokens=120),
             system_prompt=(
@@ -227,6 +230,12 @@ async def session_a(manager) -> None:
             max_iterations=2,
         )
     )
+
+
+async def session_a(manager) -> None:
+    """Alice tells the agent her region preference; the manager extracts it."""
+    print(f"\n--- Session A: Alice teaches her preference (thread {THREAD_A}) ---")
+    agent = _build_agent(manager)
 
     prompt = (
         "Hi — I'm Alice. I work on OCI GenAI infrastructure and I prefer "
@@ -240,22 +249,14 @@ async def session_a(manager) -> None:
 async def session_b(manager) -> None:
     """Brand-new Agent on a different thread — same user_id.
 
-    The manager's ``on_session_start`` pulls a context card for Alice
-    and injects it. Thread B has zero prior messages, so the only way
-    the agent knows about her region preference is via that card.
+    The manager's ``on_session_start`` inserts thread B's context card
+    (empty of messages and summary for a new thread) together with the
+    records a ``user_id``-scoped ``search_async`` returns from every
+    thread. Thread B has zero prior messages, so that block is the only
+    way the agent knows about her region preference.
     """
-    print("\n--- Session B: brand-new Agent recalls Alice's preference (thread t-b) ---")
-    agent = Agent(
-        config=AgentConfig(
-            model=get_model(max_tokens=120),
-            system_prompt=(
-                "You are a helpful OCI infrastructure assistant. Be concise. "
-                "Use any persistent facts you've been given about the user."
-            ),
-            memory_manager=manager,
-            max_iterations=2,
-        )
-    )
+    print(f"\n--- Session B: brand-new Agent recalls Alice's preference (thread {THREAD_B}) ---")
+    agent = _build_agent(manager)
 
     prompt = "Remind me which OCI region I prefer for inference, and what I work on."
     print(f"[{THREAD_B}] User : {prompt}")
@@ -286,13 +287,15 @@ async def show_what_was_extracted(conn) -> None:
         table_name_prefix=TABLE_PREFIX,
     )
     # Use the async variant — calling the sync `search` from inside an
-    # `async def` trips oracleagentmemory's "async-in-sync-from-async"
-    # guard at oracleagentmemory/core/oracleagentmemory.py:853.
+    # `async def` trips oracleagentmemory's "async-in-sync-from-async" guard.
     try:
         hits = await client.search_async("region preference", user_id=USER_ID, max_results=5)
     finally:
         await client.close_async()
-    print(f"\n--- Inspect: client.search(user_id={USER_ID!r}) returned {len(hits)} record(s) ---")
+    print(
+        f"\n--- Inspect: client.search_async(user_id={USER_ID!r}) returned "
+        f"{len(hits)} record(s) ---"
+    )
     for i, hit in enumerate(hits, start=1):
         snippet = (getattr(hit, "content", None) or str(hit))[:160].replace("\n", " ")
         record_type = getattr(hit, "record_type", "?")
@@ -306,7 +309,7 @@ async def main() -> None:
         return
 
     print_config()
-    print("\nOpening sync oracledb connection for oracleagentmemory…")
+    print("\nOpening sync oracledb pool for oracleagentmemory…")
     conn = _build_connection()
     manager = None
     try:

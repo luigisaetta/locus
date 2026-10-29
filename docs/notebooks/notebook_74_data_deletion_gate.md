@@ -1,83 +1,97 @@
-# A privacy gate that exports on its own and holds erasure for a human
+# Data deletion gate
 
-A privacy agent works a queue of GDPR data-subject requests. Some are safe to
-run on the agent's own authority — assembling a portable copy of someone's data
-under Article 15/20 copies, it does not change anything. One is not: a
-right-to-erasure delete under Article 17 permanently destroys every record tied
-to a person. The middle path is a gate: the reversible export goes through
-automatically; the irreversible erasure stops and waits for a named human.
+A privacy agent works a queue of General Data Protection Regulation (GDPR)
+data-subject requests. An Article 15/20 export assembles a portable copy of a
+person's data and changes nothing; an Article 17 erasure permanently destroys
+every record tied to that person. This example puts `admit()` between the
+agent and the datastore: the reversible export clears the gate on its own, the
+irreversible erasure stops and waits for the Data Protection Officer (DPO),
+and every decision lands on one hash-chained `AuditTrail`.
 
-The decision of *whether the data is deleted* does not live in the agent's
-prompt. It lives in ``admit``, a gate that runs before the side effect touches
-the datastore. The agent can be confused, prompt-injected, or simply wrong about
-which request it is processing; the erasure still only happens if the
-``ControlPolicy`` admits it.
+The decision of whether the data is deleted does not live in the agent's
+prompt. Two fields on one `ControlPolicy` carry it:
+`require_human_for={"irreversible"}` holds any action whose labels include the
+`irreversible` tag, however few records it touches, and `max_blast_radius=5`
+holds any action whose `blast_radius` is above five — here the number of data
+categories a request touches. `require_verification_score=0.0` switches the
+verification check off, because a data-subject request is a compliance action
+with no threat verdict to weigh. `admit()` asks the policy, records the
+decision on the trail whether or not it allows, and only then awaits
+`perform`, so an agent that is confused, prompt-injected or wrong about which
+request it is processing still cannot delete a record on its own authority.
 
-    Data-subject request arrives
-       │
-       ▼
-    Agent proposes an Action  ──>  admit(action, perform, policy, trail)
-       │                                │
-       │                                ├─ Article 15/20 export (reversible)
-       │                                │     → policy ALLOWs → export runs
-       │                                │
-       │                                └─ Article 17 erasure (irreversible)
-       │                                      → policy holds for a human
-       │                                      → AdmissionError, nothing deleted
-       ▼
-    Data Protection Officer reviews the held request and signs off
-       │
-       ▼
-    admit() re-admits the erasure under a signed-off policy
-
-Two plain fields on one ``ControlPolicy`` do the gating — no DSL, no rules
-engine. ``require_human_for={"irreversible"}`` means any action carrying the
-``irreversible`` tag always stops for a person, no matter how few records it
-touches. The export is left to clear on scope alone, capped by
-``max_blast_radius`` (an action may auto-proceed only if it touches at most 5
-data categories). ``require_verification_score`` is set to ``0.0`` because a
-data-subject request is a compliance action, not a security finding: there is no
-threat verdict to weigh, so the gate reasons purely over tags and scope.
-
-``admit()`` is the single enforcement point. It asks the policy, records the
-decision to the ``AuditTrail`` whether or not it allows, and only then awaits
-``perform``. There is no path to the side effect that skips the log. When the
-erasure is held, the script asserts the subject is still present in the
-datastore — proof the gate blocked the delete in code that runs *before* the
-side effect, not somewhere the model could talk its way around.
-
-After the hold, a human-in-the-loop step stands in for the Data Protection
-Officer resolving the ticket. The erasure is then re-admitted under a policy that
-no longer auto-holds irreversible actions — because a person is now the one
-authorizing this specific signed-off ticket — and lands on the *same* trail. So
-the record shows three events in order: the auto-allowed export, the held
-erasure, and the erasure that ran only after approval. That third record is a
-plain ``allow`` and does not name the DPO. To put the approver on the trail,
-re-admit the held action under the original policy with
-``admit(..., approved_by="dpo:alice@corp")`` instead: the action runs, and its
-record keeps the hold outcome (``require_human``) and gains an ``approved_by``
-field.
-
-``trail.verify()`` confirms the SHA-256 chain is internally consistent: edit or
-reorder a record, or delete one from the middle, and it returns ``False``. On
-its own it cannot catch records dropped off the end, or a chain rewritten and
-re-hashed from an edited record onward; the bare call this script makes returns
-``True`` for both. Before you hand the exported trail to a regulator, keep
-``trail.head`` where the agent cannot reach it and pass it back as
-``verify(expected_head=...)``, and sign the trail — see
+After the hold a stub stands in for the DPO resolving the ticket, and the
+erasure is re-admitted under a second policy whose `require_human_for` is
+empty. It lands on the same trail, so the record shows the allowed export, the
+held erasure and the erasure that ran only after sign-off. That third record
+is a plain `allow` and does not name the approver; re-admitting the held
+action under the original policy with `admit(..., approved_by="dpo:alice@corp")`
+runs it instead and writes a record that keeps the `require_human` outcome and
+gains an `approved_by` field. `trail.verify()` confirms the SHA-256 chain is
+internally consistent: an edited or reordered record, or one deleted from the
+middle, returns `False`. A bare call cannot catch records dropped off the end
+or a chain re-hashed from an edited record onward, so keep `trail.head` where
+the agent cannot reach it and pass it back as `verify(expected_head=...)`
+before treating the trail as evidence — see
 [what `verify()` catches](../api/control.md#what-verify-catches-and-the-one-thing-it-cannot).
 
-``perform`` here is a local stub: ``export`` reads from and ``erase`` pops from an
-in-memory dict instead of mutating Postgres, S3, or a search index, so the script
-runs offline with no datastore, no creds, no network. Swap those two functions
-for real deletes and the gate is unchanged.
+What this notebook covers:
 
-Run it (fully offline — no model, no provider, no network):
-    python examples/notebook_74_data_deletion_gate.py
+- A `ControlPolicy` that gates on the `irreversible` tag and on `blast_radius`,
+  with verification scoring switched off.
+- `admit()` allowing the export, raising `AdmissionError` for the erasure and
+  recording both decisions on the trail before any side effect runs.
+- The DPO sign-off and the re-admission under a second policy, and
+  `approved_by` as the way to name the approver on the record.
+- `trail.verify()`: what a bare call proves about the SHA-256 chain and what
+  `expected_head` adds.
+
+The drawing follows both requests through the gate: `admit()` hands each
+`Action` to `approve()` with the policy; the Article 15/20 export carries no
+label in `require_human_for` and its blast radius of 4 is within the cap of 5,
+so it is allowed and `perform()` runs it; the Article 17 erasure is held
+because its `irreversible` tag is in `require_human_for`, and nothing is
+deleted; once the DPO signs off, the erasure is re-admitted under a policy
+whose `require_human_for` is empty; and each decision is recorded on the same
+`AuditTrail` before its side effect runs:
+
+{{ locus_diagram gate-data-deletion }}
+
+## Key lines
+
+The gate call sits in `main()`, collapsed under Source:
+`admit(export, lambda: export_subject_data(SUBJECT), policy=policy, trail=trail)`
+returns what this function produces, because none of the export's labels is in
+`require_human_for` and its blast radius of 4 is within the cap of 5; the
+function copies the subject's record out of the in-memory datastore where a
+real version would read from a database, an object store or a search index:
+
+{{ locus_source examples/notebook_74_data_deletion_gate.py::export_subject_data }}
+
+The same call with the erasure raises `AdmissionError` before this function is
+awaited — the exception's `decision.outcome` is `require_human` and its
+`decision.reason` names the `irreversible` label — and the function runs only
+when the erasure is re-admitted under `signed_off_policy`; it pops the record
+from the datastore, which is why the script can assert that the subject is
+still present after the hold and gone after the approved run:
+
+{{ locus_source examples/notebook_74_data_deletion_gate.py::erase_subject_records }}
+
+## Run it
+
+```bash
+python examples/notebook_74_data_deletion_gate.py
+```
+
+The example calls `admit()` directly and builds no model, so it runs fully
+offline: no provider, no credentials, no network. `examples/config.py` and
+`LOCUS_MODEL_PROVIDER` play no part in this notebook. The two side effects read
+from and pop from an in-memory dict in place of a datastore; replace them with
+the real export and erasure and the gate is unchanged.
 
 ## Output
 
-Running it offline — no model and no credentials — prints a GDPR erasure, and the chain that proves it:
+Running it offline — no model and no credentials — prints the export allowed on its own, the erasure held with nothing deleted until the Data Protection Officer signs off and it is re-admitted, and the three-record trail that verifies intact:
 
 ```text
 Notebook 74: A human signs off before an agent erases personal data
@@ -114,8 +128,23 @@ OK: the export, the human hold, and the approved erasure are all on the record.
 ```
 <!-- notebook-output:end -->
 
+## See also
+
+- [Control-layer architecture](../concepts/control-layer.md) — where `admit()`
+  sits among the agent loop, approvals, persistence and audit.
+- [Admitting an action](../api/control.md#admitting-an-action) — the `admit()`
+  and `AdmissionError` reference, including `approved_by`.
+- [What `verify()` catches, and the one thing it cannot](../api/control.md#what-verify-catches-and-the-one-thing-it-cannot)
+  — anchoring `trail.head` and signing the trail.
+- [Notebook 71 — Payment refund gate](notebook_71_payment_refund_gate.md) — the
+  same gate over a refund's amount and ledger scope.
+- [Notebook 75 — Cloud resource gate](notebook_75_cloud_resource_gate.md) — the
+  same gate over `production` and `iam` labels.
+
 ## Source
 
-````python
---8<-- "examples/notebook_74_data_deletion_gate.py"
-````
+??? note "Full source — `examples/notebook_74_data_deletion_gate.py`"
+
+    ````python
+    --8<-- "examples/notebook_74_data_deletion_gate.py"
+    ````

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
@@ -7,7 +6,7 @@
 
 Oracle 23ai / 26ai ships a server-side chunking primitive,
 ``DBMS_VECTOR_CHAIN.UTL_TO_CHUNKS``. It tokenises and segments text
-without ever shipping the content back to Python — perfect for the
+without ever shipping the content back to Python — suited to the
 first stage of an ingest pipeline where the source CLOBs already live
 in the database. Locus wraps it as
 :class:`locus.rag.chunkers.OracleInDBChunker`, but the protagonist of
@@ -22,16 +21,15 @@ The agent gets two tools:
   counts. This is how an ingest agent inspects a corpus that already
   lives in ADB without pulling every CLOB back over the wire.
 
-The agent picks which tool to call from the user's prompt, sees the
-``ToolStartEvent`` / ``ToolCompleteEvent`` pair, and grounds its
-summary in the chunk stats the database returned.
+The agent picks which tool to call from the user's prompt, emits a
+``ToolStartEvent`` / ``ToolCompleteEvent`` pair around the call, and
+grounds its summary in the chunk stats the database returned.
 
 Prerequisite (one-time, out-of-band)::
 
     GRANT EXECUTE ON DBMS_VECTOR_CHAIN TO locus_app;
 
-Run it::
-
+Run it:
     export ORACLE_DSN=mydb_low                   # tnsnames alias in the wallet
     export ORACLE_USER=locus_app                 # least-privileged app schema
     export ORACLE_PASSWORD='<app-password>'
@@ -40,9 +38,9 @@ Run it::
 
     python examples/notebook_40_oracle_indb_chunker.py
 
-If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` / ``ORACLE_WALLET`` aren't set
-the notebook prints the wiring snippet and exits cleanly — no
-traceback, no half-initialised state.
+If any of ``ORACLE_DSN``, ``ORACLE_USER``, ``ORACLE_PASSWORD`` or
+``ORACLE_WALLET`` is unset the notebook prints the wiring snippet and
+exits cleanly — no traceback, no half-initialised state.
 
 Difficulty: Intermediate. Self-contained — no prior notebook required.
 """
@@ -54,12 +52,17 @@ import json
 import os
 import sys
 from collections import Counter
+from typing import TYPE_CHECKING
 
 from config import get_model, print_config
 
 from locus.agent import Agent
 from locus.rag.chunkers import OracleInDBChunker
 from locus.tools import tool
+
+
+if TYPE_CHECKING:
+    import oracledb
 
 
 _REQUIRED_ENV = (
@@ -141,7 +144,8 @@ def _conn_kwargs() -> dict[str, str]:
     }
 
 
-async def _setup_demo_table() -> None:
+async def _connect() -> oracledb.AsyncConnection:
+    """One async connection on the same wallet envelope the chunker uses."""
     import oracledb
 
     kw = _conn_kwargs()
@@ -151,10 +155,13 @@ async def _setup_demo_table() -> None:
         params["wallet_location"] = kw["wallet_location"]
         if kw["wallet_password"]:
             params["wallet_password"] = kw["wallet_password"]
-
-    conn = await oracledb.connect_async(
+    return await oracledb.connect_async(
         user=kw["user"], password=kw["password"], dsn=kw["dsn"], **params
     )
+
+
+async def _setup_demo_table() -> None:
+    conn = await _connect()
     try:
         cursor = conn.cursor()
         try:
@@ -179,19 +186,7 @@ async def _setup_demo_table() -> None:
 
 
 async def _drop_demo_table() -> None:
-    import oracledb
-
-    kw = _conn_kwargs()
-    params: dict[str, str] = {}
-    if kw["wallet_location"]:
-        params["config_dir"] = kw["wallet_location"]
-        params["wallet_location"] = kw["wallet_location"]
-        if kw["wallet_password"]:
-            params["wallet_password"] = kw["wallet_password"]
-
-    conn = await oracledb.connect_async(
-        user=kw["user"], password=kw["password"], dsn=kw["dsn"], **params
-    )
+    conn = await _connect()
     try:
         cursor = conn.cursor()
         try:
@@ -250,6 +245,8 @@ async def main() -> None:
 
     print_config()
 
+    # Deliberately tiny window: 20 words makes even one paragraph yield
+    # several chunks, so the stats the agent reports are visibly non-trivial.
     chunker = OracleInDBChunker(
         **_conn_kwargs(),
         max_tokens=20,
@@ -262,10 +259,10 @@ async def main() -> None:
     async def chunk_paragraph(text: str) -> dict:
         """Tokenise and segment a single passage inside the database.
 
-        Wraps DBMS_VECTOR_CHAIN.UTL_TO_CHUNKS. The text is bound to a
-        PL/SQL local and chunked server-side at the chunker's configured
-        max_tokens / overlap. Returns the chunk count, the total char
-        length, and a preview of the first chunk.
+        Wraps DBMS_VECTOR_CHAIN.UTL_TO_CHUNKS. The text is passed as a bind
+        variable to one SELECT over the function and chunked server-side at
+        the chunker's configured max_tokens / overlap. Returns the chunk
+        count, the total char length, and a preview of the first chunk.
 
         Args:
             text: The passage to chunk. Pass the user's full string.
@@ -285,11 +282,11 @@ async def main() -> None:
     async def chunk_table_rows(limit: int = 100) -> dict:
         """Stream chunks from every row in the demo CLOB table.
 
-        Wraps OracleInDBChunker.chunk_column over the
-        ``locus_notebook_40_docs`` table. The source CLOBs never leave
-        the database — only the chunk records come back. Useful for
-        an ingest agent that wants to know "how big is this corpus, in
-        chunks" before committing to write to a vector store.
+        Wraps OracleInDBChunker.chunk_column over the demo CLOB table
+        (``_TABLE``). The source CLOBs never leave the database — only
+        the chunk records come back. Useful for an ingest agent that
+        wants to know "how big is this corpus, in chunks" before
+        committing to write to a vector store.
 
         Args:
             limit: Cap on rows to inspect (default 100). Set higher for
@@ -299,19 +296,22 @@ async def main() -> None:
             {"rows": int, "chunks": int, "per_row": {source_id: count}}
         """
         per_row: Counter[str] = Counter()
-        seen = 0
+        chunks = 0
         async for chunk in chunker.chunk_column(
             table_name=_TABLE,
             text_column="body",
             id_column="id",
         ):
-            seen += 1
-            per_row[str(chunk["source_id"])] += 1
-            if seen >= limit * 50:  # safety stop
+            source_id = str(chunk["source_id"])
+            # chunk_column streams every row; stop before a new row would
+            # push the count past ``limit`` — the cap is on rows, not chunks.
+            if source_id not in per_row and len(per_row) >= limit:
                 break
+            per_row[source_id] += 1
+            chunks += 1
         return {
             "rows": len(per_row),
-            "chunks": seen,
+            "chunks": chunks,
             "per_row": dict(per_row),
         }
 
@@ -333,11 +333,10 @@ async def main() -> None:
             await _drive_agent(agent, query)
 
         print(
-            "\nThe agent picked the right primitive for each request — "
-            "single-string vs. column-streaming — and every chunk was "
-            "produced by UTL_TO_CHUNKS inside Oracle 26ai. Pair with "
-            "OracleInDBEmbeddings (notebook 41) for a fully in-database "
-            "ingest pipeline."
+            "\nEvery chunk above was produced by UTL_TO_CHUNKS inside Oracle "
+            "Database 26ai; the two tools expose its single-string and "
+            "column-streaming forms. Pair with OracleInDBEmbeddings "
+            "(notebook 41) for a fully in-database ingest pipeline."
         )
     finally:
         await chunker.close()

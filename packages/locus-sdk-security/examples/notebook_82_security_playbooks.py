@@ -1,17 +1,20 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
 """Notebook 82: SOC playbooks over the first-class security toolset.
 
-The SDK ships curated IR/SOC playbooks (``locus_security.phishing_triage``,
-``nist_800_61_ir``, ``ransomware_containment``, ``cloud_posture_audit``) and
-the agent-ready security adapters they drive (``security_toolset()`` —
-IOC enrichment, SIEM search, EDR forensics, vuln/posture scanning, inference
-fingerprinting). A playbook pins an investigation to its steps in order via
-the ``PlaybookEnforcer``; the toolset gives the agent the tools each step
-names.
+``locus_security`` (the separate ``locus-sdk-security`` package) ships curated
+IR/SOC playbooks (``phishing_triage``, ``nist_800_61_ir``,
+``ransomware_containment``, ``cloud_posture_audit``) and the agent-ready
+security adapters they drive (``security_toolset()`` — IOC enrichment, SIEM
+search, EDR forensics, vuln/posture scanning, inference fingerprinting). The
+enforcement comes from the core SDK: ``Agent(playbook=...)`` installs a
+``locus.playbooks.hook.PlaybookEnforcerHook`` that tracks the investigation
+through the playbook's steps in order and advances a step once its expected
+tools have been called. The bundled playbooks set ``allow_extra_tools=True``,
+so a tool outside the current step is recorded, not blocked; the toolset gives
+the agent the tools each step names.
 
 This notebook:
   1. lists the bundled playbooks,
@@ -19,11 +22,11 @@ This notebook:
   3. walks the PlaybookEnforcer deterministically to show the step gate.
 
 Runs offline on the bundled mock model — no credentials, no network. Set
-``LOCUS_MODEL_PROVIDER`` (+ key) for a live provider.
+``LOCUS_MODEL_PROVIDER`` (``openai`` or ``anthropic``, plus the matching API
+key) for a live provider.
 
-Run:
-    python examples/notebook_82_security_playbooks.py
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_82_security_playbooks.py
+Run it:
+    python packages/locus-sdk-security/examples/notebook_82_security_playbooks.py
 """
 
 from __future__ import annotations
@@ -45,7 +48,7 @@ async def main() -> int:
         print(f"  {pid:24s} {steps}")
     print()
 
-    # 2. Wire a playbook + the read-only triage toolset onto an agent.
+    # 2. Wire a playbook + the triage toolset plus the opt-in containment tool onto an agent.
     playbook = phishing_triage()
     tools = security_toolset(allow_containment=True)  # triage loop + isolate_host
     print(f"== Running '{playbook.name}' with {len(tools)} security tools (mock model) ==")

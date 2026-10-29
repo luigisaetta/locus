@@ -410,12 +410,12 @@ def test_soc_triage_factory_returns_controls() -> None:
     assert controls.edr is True
     assert controls.scanner is True
     assert controls.fingerprint is True
-    assert controls.readonly_aws is False
+    assert controls.readonly_oci is False
     assert controls.allow_containment is False
 
 
 def test_soc_triage_tools_include_all_soc_tools() -> None:
-    """Lines 197, 199, 201, 205, 207: all non-AWS branches active."""
+    """Lines 197, 199, 201, 205, 207: all non-OCI branches active."""
     names = {t.name for t in SecurityControls.soc_triage().tools()}
     assert "enrich_indicator" in names  # threat_intel
     assert "query_siem" in names  # siem
@@ -513,7 +513,8 @@ def test_ransomware_containment_playbook() -> None:
 def test_cloud_posture_audit_playbook() -> None:
     pb = cloud_posture_audit()
     assert pb.id == "cloud_posture_audit"
-    assert any("describe_aws" in s.expected_tools for s in pb.steps)
+    assert any("describe_oci" in s.expected_tools for s in pb.steps)
+    assert any("use_oci" in s.expected_tools for s in pb.steps)
 
 
 def test_all_playbooks_keyed_by_id() -> None:
@@ -562,34 +563,130 @@ async def test_ref_identity_disable() -> None:
     assert result["source"] == "offline-sample"
 
 
-async def test_ref_cloud_describe_exception_degrades_gracefully() -> None:
-    """Lines 192-193: describe_aws raises → returns degraded dict."""
+def _describe_oci_stub(service: str | None = None, **_: object) -> dict[str, object]:
+    """``describe_oci`` as the SDK answers it, without importing the SDK."""
+    if service is None:
+        return {"status": "ok", "level": "services", "services": ["core", "identity"]}
+    if service == "identity":
+        return {"status": "ok", "level": "clients", "clients": ["IdentityClient"]}
+    if service == "core":
+        return {
+            "status": "ok",
+            "level": "clients",
+            "clients": ["BlockstorageClient", "ComputeClient", "VirtualNetworkClient"],
+        }
+    return {"status": "error", "error": f"No OCI service module named '{service}'."}
+
+
+async def test_ref_cloud_describe_forwards_to_describe_oci() -> None:
+    """describe() hands service/client/operation straight to the core tool."""
     from locus_security.context import _RefCloud
 
     cloud = _RefCloud()
-    with patch("locus_security.context.describe_aws", side_effect=RuntimeError("no boto3")):
-        result = await cloud.describe(service="iam")
-    assert result["available"] is False
-    assert "no boto3" in result["reason"]
+    with patch("locus_security.context.describe_oci", side_effect=_describe_oci_stub) as d:
+        assert (await cloud.describe())["level"] == "services"
+        assert (await cloud.describe("identity"))["clients"] == ["IdentityClient"]
+        await cloud.describe("core", "list_instances", client="ComputeClient")
+    d.assert_called_with(service="core", client="ComputeClient", operation="list_instances")
 
 
-async def test_ref_cloud_events_success() -> None:
-    """Lines 198-199: use_aws returns a dict → forwarded."""
+async def test_ref_cloud_describe_resolves_the_only_client() -> None:
+    """service + operation on a one-client service → that client is filled in."""
     from locus_security.context import _RefCloud
 
     cloud = _RefCloud()
-    fake_response = {"ResponseMetadata": {}, "Items": []}
-    with patch("locus_security.context.use_aws", return_value=fake_response):
-        result = await cloud.events("iam", "GetAccountSummary")
-    assert result == fake_response
+    with patch("locus_security.context.describe_oci", side_effect=_describe_oci_stub) as d:
+        await cloud.describe("identity", "list_users")
+    d.assert_called_with(service="identity", client="IdentityClient", operation="list_users")
 
 
-async def test_ref_cloud_events_exception_degrades_gracefully() -> None:
-    """Lines 200-201: use_aws raises → returns degraded dict."""
+async def test_ref_cloud_describe_asks_for_a_client_when_ambiguous() -> None:
+    """service + operation on a multi-client service → error listing the clients."""
     from locus_security.context import _RefCloud
 
     cloud = _RefCloud()
-    with patch("locus_security.context.use_aws", side_effect=RuntimeError("no creds")):
-        result = await cloud.events("iam", "GetAccountSummary")
-    assert result["available"] is False
-    assert "no creds" in result["reason"]
+    with patch("locus_security.context.describe_oci", side_effect=_describe_oci_stub):
+        result = await cloud.describe("core", "list_instances")
+    assert result["status"] == "error"
+    assert "client=" in result["error"]
+    assert "ComputeClient" in result["clients"]
+
+
+async def test_ref_cloud_events_runs_use_oci_as_the_configured_identity() -> None:
+    """events() passes profile / auth_type / region through to use_oci."""
+    from locus_security.context import _RefCloud
+
+    cloud = _RefCloud(profile="security-audit", auth_type="security_token", region="us-ashburn-1")
+    fake = {"status": "ok", "data": [{"id": "ocid1.user.oc1..a"}]}
+    with (
+        patch("locus_security.context.describe_oci", side_effect=_describe_oci_stub),
+        patch("locus_security.context.use_oci", return_value=fake) as u,
+    ):
+        result = await cloud.events("identity", "list_users", {"compartment_id": "ocid1.t"})
+    assert result == fake
+    u.assert_called_once_with(
+        service="identity",
+        client="IdentityClient",
+        operation="list_users",
+        parameters={"compartment_id": "ocid1.t"},
+        region="us-ashburn-1",
+        profile="security-audit",
+        auth_type="security_token",
+    )
+
+
+async def test_ref_cloud_events_explicit_client_skips_resolution() -> None:
+    """An explicit client is used as given; describe_oci is not consulted."""
+    from locus_security.context import _RefCloud
+
+    cloud = _RefCloud()
+    fake = {"status": "ok", "data": []}
+    with (
+        patch("locus_security.context.describe_oci") as d,
+        patch("locus_security.context.use_oci", return_value=fake) as u,
+    ):
+        result = await cloud.events("core", "list_instances", client="ComputeClient")
+    assert result == fake
+    d.assert_not_called()
+    assert u.call_args.kwargs["client"] == "ComputeClient"
+
+
+async def test_ref_cloud_events_ambiguous_client_is_an_error_not_a_call() -> None:
+    """A multi-client service with no client → error, use_oci never runs."""
+    from locus_security.context import _RefCloud
+
+    cloud = _RefCloud()
+    with (
+        patch("locus_security.context.describe_oci", side_effect=_describe_oci_stub),
+        patch("locus_security.context.use_oci") as u,
+    ):
+        result = await cloud.events("core", "list_instances")
+    assert result["status"] == "error"
+    assert result["clients"] == ["BlockstorageClient", "ComputeClient", "VirtualNetworkClient"]
+    u.assert_not_called()
+
+
+async def test_ref_cloud_events_unknown_service_returns_the_describe_error() -> None:
+    """When the service itself is unknown, the describe_oci error is returned as is."""
+    from locus_security.context import _RefCloud
+
+    cloud = _RefCloud()
+    with (
+        patch("locus_security.context.describe_oci", side_effect=_describe_oci_stub),
+        patch("locus_security.context.use_oci") as u,
+    ):
+        result = await cloud.events("nope", "list_things")
+    assert result["status"] == "error"
+    assert "nope" in result["error"]
+    u.assert_not_called()
+
+
+async def test_ref_cloud_degrades_without_the_oci_sdk() -> None:
+    """No oci SDK → describe_oci's own error dict, nothing raised."""
+    from locus_security.context import _RefCloud
+
+    cloud = _RefCloud()
+    missing = {"status": "error", "error": "The 'oci' SDK is not installed."}
+    with patch("locus_security.context.describe_oci", return_value=missing):
+        assert await cloud.describe() == missing
+        assert (await cloud.events("identity", "list_users"))["status"] == "error"

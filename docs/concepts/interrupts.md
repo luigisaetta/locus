@@ -2,7 +2,7 @@
 title: Interrupts
 ---
 
-# Interrupts & human-in-the-loop
+# Interrupts and human-in-the-loop
 
 Sometimes the agent shouldn't decide alone. A human approves the
 $4,000 refund. A release manager signs off before the deploy goes
@@ -20,6 +20,13 @@ action at the [admission gate](control-layer.md#the-enforcement-boundary),
 and with `on_refusal="interrupt"` and an approval store the run itself
 pauses until a named person decides ([below](#a-hold-that-pauses-the-run)).
 
+Both pauses share one shape, drawn below for an `async def` graph node that
+calls `interrupt()`: the run unwinds and, with a checkpointer and a
+`thread_id`, is checkpointed, a person decides, and the caller resumes with
+the answer so the node runs again and carries on.
+
+{{ locus_diagram interrupt-resume }}
+
 ## The shape
 
 The SDK ships a built-in `ask_user` tool. The model calls it like any
@@ -28,17 +35,19 @@ agent yields an `InterruptEvent` and stops. Your app reads the question
 off the event, gets an answer, and calls `agent.resume(answer)` to
 continue.
 
+{{ locus_model_tabs }}
+
 ```python
 from locus.agent import Agent
 from locus.core.events import InterruptEvent
-from locus.tools.decorator import tool
+from locus.tools import tool
 
 @tool(idempotent=True)
 def issue_refund(order_id: str, amount: float) -> dict:
     return billing.refund(order_id, amount)
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, issue_refund],
     # ``ask_user`` is auto-registered only in explicit-completion mode; the
     # default is "auto", where it is absent and the prompt below would ask
@@ -60,12 +69,14 @@ async for event in agent.run("Refund order ord-4821 if the return is eligible.")
 When the model calls `ask_user`, the runtime captures the question and
 yields an `InterruptEvent(question=..., options=..., interrupt_id=...)`,
 then pauses. Your app surfaces the question to a human and threads the
-answer back via `agent.resume(...)`. You can also expose your own
-pause-for-input by calling
-[`interrupt(...)`](https://github.com/oracle/locus/blob/main/src/locus/core/interrupt.py)
-from inside a tool body — `ask_user` is just the built-in wrapper.
+answer back via `agent.resume(...)`. Inside an `async def` graph node the
+same pause is
+[`interrupt(...)`](https://github.com/oracle/locus/blob/main/src/locus/core/interrupt.py),
+which the `StateGraph` catches and resumes with `Command(resume=...)`; in an
+Agent run the pause is the interrupt marker `ask_user` returns, and a gated
+tool held for approval returns the same marker ([below](#a-hold-that-pauses-the-run)).
 
-## Three ways the human responds
+## Two ways the human responds
 
 ### Synchronous — read from stdin
 
@@ -94,14 +105,14 @@ async for event in agent.resume("approved"):
 The loop threads the response into the next Think and continues
 streaming events.
 
-### Steering — a second model votes
+## Steering — a second model votes
 
 Not strictly human-in-the-loop, but lives in the same family. The
 `SteeringHook` runs an LLM-as-judge on every tool call before it
 fires:
 
 ```python
-from locus.hooks.builtin.steering import SteeringHook
+from locus.hooks.builtin import SteeringHook
 from locus.models import get_model
 
 agent = Agent(
@@ -196,32 +207,27 @@ termination algebra to fire:
 1. **Hook raises to short-circuit the loop.** Any hook callback can
    raise to abort the run. Useful for budget guards.
 
-   ```python
-   class BudgetGuard(HookProvider):
-       async def on_iteration_start(
-           self, iteration: int, state: AgentState
-       ) -> None:
-           if state.total_tokens_used > 100_000:
-               raise RuntimeError("token budget exceeded")
-   ```
+    ```python
+    class BudgetGuard(HookProvider):
+        async def on_iteration_start(self, iteration: int, state: AgentState) -> None:
+            if state.total_tokens_used > 100_000:
+                raise RuntimeError(f"token budget exceeded at {state.total_tokens_used} tokens")
+    ```
 
 2. **Caller cancels the task.** Standard `asyncio` cancellation:
 
-   ```python
-   run = asyncio.create_task(agent.run(prompt))
-   # ... later
-   run.cancel()
-   ```
+    ```python
+    run = asyncio.create_task(agent.run(prompt))
+    # ... later
+    run.cancel()
+    ```
 
 3. **`agent.cancel()`.** Sets a flag the runner polls between nodes;
    the loop exits at the next safe point with
    `TerminateEvent(reason="cancelled")` (and `result.stop_reason ==
-   "cancelled"`). State still flushes to the checkpointer first, so the
-   conversation can resume cleanly later.
-
-In the `agent.cancel()` case the loop emits a final
-`TerminateEvent(reason="cancelled")` so your downstream observability
-gets a clean signal.
+   "cancelled"`), so downstream observability gets a clean signal. State
+   still flushes to the checkpointer first, so the conversation can resume
+   cleanly later.
 
 ## What you don't lose on cancel
 
@@ -245,7 +251,7 @@ debugging, or branch off a new thread from the partial conversation.
 - [Incident response](https://github.com/oracle/locus/blob/main/examples/notebook_77_incident_response.py)
   — `interrupt()` as the page-the-human gate after severity
   classification.
-- [Support concession approval](https://github.com/oracle/locus/blob/main/examples/notebook_78_procurement_approval.py)
+- [Support concession approval](https://github.com/oracle/locus/blob/main/examples/notebook_78_concession_approval.py)
   — three stacked `interrupt()` gates on the top tier.
 - [Contract review](https://github.com/oracle/locus/blob/main/examples/notebook_79_contract_review.py)
   — `interrupt()` for human counsel inside a refinement loop.

@@ -1,27 +1,27 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
-"""Notebook 83: agentic AI red-teaming — grounded findings or abstentions.
+"""Notebook 83: red-team an AI agent — grounded findings or abstentions.
 
-The flagship of the agentic-AI-security SDK: point a ``Target`` at an AI
-system and run the OWASP-ASI / MITRE-ATLAS red-team suite. Every result is a
-grounded ``Evidence`` (the attack landed, with tool-backed evidence) or an
-``Abstention`` (no evidence — so nothing is asserted). That abstain-by-
-construction property is the line no other red-team tool draws: AI scorers
-hallucinate vulnerabilities; Locus refuses to ship one it cannot evidence.
+Point a ``Target`` at an AI system and run the OWASP-ASI red-team suite.
+Every result is a grounded ``Evidence`` (the attack landed, with tool-backed
+evidence) or an ``Abstention`` (no evidence — so nothing is asserted). That
+abstain-by-construction property is the point: AI scorers can hallucinate
+vulnerabilities; Locus does not ship a finding it cannot evidence.
 
 This notebook points the same suite at two targets:
-  1. a *vulnerable* bot that obeys injected instructions  -> grounded Findings
+  1. a *vulnerable* bot that obeys injected instructions  -> grounded ``Evidence``
+     (five of the six probes; the proof-of-execution probe asks for the SHA-256
+     of a fresh nonce, which an echoing bot cannot compute, so it abstains)
   2. a *hardened* bot that refuses them                    -> Abstentions
 
 Runs fully offline — no credentials, no network — via ``Target.from_callable``.
-Point ``Target.endpoint(url, ...)`` at a real LLM/agent endpoint to red-team it
-for real.
+Point ``Target.endpoint(url, ...)`` at a deployed LLM or agent endpoint to run
+the same suite against it.
 
-Run:
-    python examples/notebook_83_agent_red_team.py
+Run it:
+    python packages/locus-sdk-security/examples/notebook_83_agent_red_team.py
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ async def main() -> int:
     await _assess(hardened)
 
     print(
-        "\nThe vulnerable bot produced grounded Findings; the hardened bot abstained "
+        "\nThe vulnerable bot produced grounded Evidence; the hardened bot abstained "
         "across the board. No vulnerability is ever asserted without evidence."
     )
     return 0

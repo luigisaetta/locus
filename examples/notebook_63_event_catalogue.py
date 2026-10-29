@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
@@ -7,21 +6,24 @@
 
 When a PCI DSS assessor asks "what can your payment agents do, and how
 would you know they did it?" — the question behind a payments-operations
-monitoring control — the answer is the event catalogue. Every component
-in Locus emits typed events under one stable prefix: agent.*,
-multiagent.*, composition.*, router.*, rag.*, memory.*, a2a.*, skills.*,
-deepagent.*. The EV_* constants in locus.observability.emit are the
-canonical registry — change one place, propagates everywhere — so the
-artifact you hand an assessor is generated from the code itself, not a
-spreadsheet that drifts out of date the day after it's signed.
+monitoring control — the answer is the event catalogue. Locus components
+emit typed events under a stable prefix per subsystem: agent.*,
+multiagent.*, composition.*, rag.*, memory.*, a2a.*, skills.*,
+deepagent.*, research.*, model.*, tool.* and harness.* (the router.*
+events are published as string literals outside the registry). The EV_*
+constants in locus.observability.emit are the canonical registry: change
+a constant and every emission site that imports it follows, so the
+artifact you hand an assessor is generated from the code itself rather
+than from a spreadsheet that drifts out of date.
 
-- List every EV_* constant and its category prefix (always in sync with
-  the codebase because it's read at import time — no stale spreadsheet).
-- Drive a two-stage dispute-triage pipeline (SequentialPipeline +
-  LoopAgent machinery) that surfaces composition.* events end-to-end.
+- List every EV_* constant and its category prefix (read from the
+  installed module when the script runs, so the list cannot drift from
+  the code).
+- Drive a two-stage dispute-triage SequentialPipeline that surfaces
+  composition.* events end-to-end.
 
-Run it
-    # Default: the bundled mock model (set LOCUS_MODEL_PROVIDER for a live provider)
+Run it:
+    # Default: OCI GenAI if ~/.oci/config has a usable profile, else the bundled mock model
     python examples/notebook_63_event_catalogue.py
 
     # Offline / no credentials:
@@ -37,7 +39,7 @@ from collections import defaultdict
 from config import get_model
 
 from locus.agent import Agent
-from locus.agent.composition import LoopAgent, SequentialPipeline
+from locus.agent.composition import SequentialPipeline
 from locus.observability import get_event_bus, run_context
 
 
@@ -65,9 +67,9 @@ def part1_catalogue_tour() -> None:
             print(f"    - {ev}")
 
 
-# Part 2: SequentialPipeline and LoopAgent emit composition.* events
-# at every stage / iteration boundary — each stage of the dispute-triage
-# pipeline leaves its own entry in the audit trail.
+# Part 2: SequentialPipeline emits composition.* events at every stage
+# boundary — each stage of the dispute-triage pipeline leaves its own
+# entry in the audit trail.
 
 
 async def part2_composition() -> None:
@@ -86,13 +88,14 @@ async def part2_composition() -> None:
             async for ev in bus.subscribe(rid):
                 if ev.event_type.startswith("composition."):
                     seen.append(ev.event_type)
-                if ev.event_type == "composition.fanout.completed":
-                    break
+                # Stages are 0-indexed, so stage 1 is the last of our two.
                 if ev.event_type == "composition.stage.completed" and ev.data.get("stage") == 1:
                     print("composition events seen so far:", seen)
                     return
 
         consumer_task = asyncio.create_task(consumer())
+        # Yield once so the subscriber attaches before the first event is
+        # published; otherwise the first stage's events are missed.
         await asyncio.sleep(0)
 
         await pipeline.run(

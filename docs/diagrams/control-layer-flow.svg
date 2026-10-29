@@ -51,23 +51,23 @@
   <text class="label" x="566" y="255">every decision</text>
 
   <!-- policy -> outcomes -->
-  <path class="edge allow" marker-end="url(#ah)" d="M646,176 C700,176 700,57 754,57"/>
-  <rect class="label-bg" x="677" y="106" width="46" height="20" rx="4"/>
-  <text class="label" x="700" y="116">allow</text>
-  <path class="edge hold" marker-end="url(#ah)" d="M646,191 L754,191"/>
-  <rect class="label-bg" x="680" y="181" width="40" height="20" rx="4"/>
-  <text class="label" x="700" y="191">hold</text>
-  <path class="edge deny" marker-end="url(#ah)" d="M646,206 C700,206 700,325 754,325"/>
-  <rect class="label-bg" x="679" y="256" width="42" height="20" rx="4"/>
-  <text class="label" x="700" y="266">deny</text>
+  <path class="edge allow" marker-end="url(#ah)" d="M646,176 C694,176 694,57 742,57"/>
+  <rect class="label-bg" x="671" y="106" width="46" height="20" rx="4"/>
+  <text class="label" x="694" y="116">allow</text>
+  <path class="edge hold" marker-end="url(#ah)" d="M646,191 L742,191"/>
+  <rect class="label-bg" x="674" y="181" width="40" height="20" rx="4"/>
+  <text class="label" x="694" y="191">hold</text>
+  <path class="edge deny" marker-end="url(#ah)" d="M646,206 C694,206 694,325 742,325"/>
+  <rect class="label-bg" x="673" y="256" width="42" height="20" rx="4"/>
+  <text class="label" x="694" y="266">deny</text>
 
   <!-- approval store -> side effect / not executed -->
-  <path class="edge allow" marker-end="url(#ah)" d="M836,162 L836,88"/>
-  <rect class="label-bg" x="768" y="114" width="136" height="20" rx="4"/>
-  <text class="label" x="836" y="124">approved, on resume</text>
-  <path class="edge deny" marker-end="url(#ah)" d="M836,220 L836,294"/>
-  <rect class="label-bg" x="808" y="247" width="56" height="20" rx="4"/>
-  <text class="label" x="836" y="257">denied</text>
+  <path class="edge allow" marker-end="url(#ah)" d="M834,162 L834,88"/>
+  <rect class="label-bg" x="766" y="114" width="136" height="20" rx="4"/>
+  <text class="label" x="834" y="124">approved, on resume</text>
+  <path class="edge deny" marker-end="url(#ah)" d="M834,220 L834,294"/>
+  <rect class="label-bg" x="806" y="247" width="56" height="20" rx="4"/>
+  <text class="label" x="834" y="257">denied</text>
 
   <g class="node optional">
     <rect x="24" y="28" width="170" height="58" rx="12"/>
@@ -103,19 +103,19 @@
   </g>
 
   <g class="node allow">
-    <rect x="756" y="28" width="160" height="58" rx="12"/>
-    <text x="836" y="47">Side effect</text>
-    <text class="sub" x="836" y="68">perform() runs</text>
+    <rect x="744" y="28" width="180" height="58" rx="12"/>
+    <text x="834" y="47">Side effect</text>
+    <text class="sub" x="834" y="68">allow · perform() runs</text>
   </g>
   <g class="node hold">
-    <rect x="756" y="162" width="160" height="58" rx="12"/>
-    <text x="836" y="181">Approval store</text>
-    <text class="sub" x="836" y="202">waits for a person</text>
+    <rect x="744" y="162" width="180" height="58" rx="12"/>
+    <text x="834" y="181">Approval store</text>
+    <text class="sub" x="834" y="202">hold · awaits a person</text>
   </g>
   <g class="node deny">
-    <rect x="756" y="296" width="160" height="58" rx="12"/>
-    <text x="836" y="315">Not executed</text>
-    <text class="sub" x="836" y="336">refusal to model</text>
+    <rect x="744" y="296" width="180" height="58" rx="12"/>
+    <text x="834" y="315">Not executed</text>
+    <text class="sub" x="834" y="336">deny · refusal to model</text>
   </g>
 
   <text class="note" x="470" y="398">A resumed call is weighed again, so an approval never overrides a deny.</text>

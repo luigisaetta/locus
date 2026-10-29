@@ -189,12 +189,41 @@ def _model_with(client: AsyncMock, *, model: str = "gpt-5.6-sol", **kwargs: Any)
 class TestApiSelection:
     @pytest.mark.parametrize(
         "model",
-        ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6", "openai.gpt-5.6-sol"],
+        [
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-5.6",
+            "openai.gpt-5.6-sol",
+            "gpt-6-sol",
+            "gpt-6-luna",
+            "gpt-6-astra",
+            "gpt-6.1-sol",
+            "gpt-6.1-terra",
+            "openai.gpt-6.1-sol",
+            "gpt-5-pro",
+            "gpt-5.2-pro",
+            "gpt-5.4-pro",
+            "gpt-5.5-pro",
+            "gpt-5.5-pro-2026-04-23",
+        ],
     )
-    def test_gpt_5_6_family_requires_responses(self, model: str) -> None:
+    def test_responses_only_families_require_responses(self, model: str) -> None:
         assert OpenAIModel._requires_responses_api(model) is True
 
-    @pytest.mark.parametrize("model", ["gpt-5.5", "gpt-5", "gpt-5-codex", "gpt-4o", "o3-mini"])
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "gpt-5.5",
+            "gpt-5",
+            "gpt-5-codex",
+            "gpt-4o",
+            "o3-mini",
+            "gpt-5.4-mini",
+            "gpt-5-mini",
+            "gpt-5.5-2026-04-23",
+        ],
+    )
     def test_other_families_do_not_require_responses(self, model: str) -> None:
         assert OpenAIModel._requires_responses_api(model) is False
 

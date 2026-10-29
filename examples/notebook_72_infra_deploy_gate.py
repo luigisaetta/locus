@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
@@ -7,10 +6,11 @@
 
 A deploy agent watches CI, and when a build is green it proposes the next
 action: roll the new image onto staging, or promote / roll back production.
-Letting it act freely is how a 3 a.m. agent takes the checkout API down.
-Blocking everything for a human is how you stop shipping. The middle path
-is a gate: cheap, reversible staging changes go through automatically; any
-change to the production environment stops and waits for a named human.
+Left to act on its own, the agent can take the checkout API down overnight
+with nobody watching; requiring a human for every change stops releases
+altogether. The middle path is a gate: cheap, reversible staging changes go
+through automatically; any change to the production environment stops and
+waits for a human.
 
     Build is green
        │
@@ -20,9 +20,9 @@ change to the production environment stops and waits for a named human.
        ▼
     admit(action, perform, policy, trail)
        │
-       ├─ environment == "staging"     ──> ALLOW: perform() runs, kubectl applies
+       ├─ staging, blast_radius <= max_blast_radius  ──> ALLOW: perform() runs, kubectl applies
        │
-       └─ environment == "production"  ──> require_human: AdmissionError, nothing runs
+       └─ environment == "production"                ──> require_human: AdmissionError, nothing runs
 
 The rule lives in one `ControlPolicy`. `require_human_for={"production"}`
 means any action carrying the `production` label always stops for a person —
@@ -34,11 +34,11 @@ log — the held production rollback is on the trail next to the staging
 deploy that actually ran.
 
 `perform` here is a local stub: it appends to an in-memory list instead of
-calling kubectl, so the script runs offline with no cluster, no creds, no
-network. Swap that one function for a real `kubectl rollout` call and the
+calling kubectl, so the script runs offline with no cluster, no credentials,
+no network. Swap that one function for a real `kubectl rollout` call and the
 gate is unchanged.
 
-Run it
+Run it:
     python examples/notebook_72_infra_deploy_gate.py
 
     # Fully offline — this example needs no model, no provider, no network.
@@ -108,13 +108,13 @@ async def propose(
             policy=POLICY,
             trail=trail,
         )
-        print(f"  ALLOWED — the agent acted on its own authority.")
+        print("  ALLOWED — the agent acted on its own authority.")
         print(f"  Applied: {result}")
     except AdmissionError as exc:
         decision = exc.decision
         print(f"  HELD ({decision.outcome}) — nothing was applied.")
         print(f"  Reason: {decision.reason}")
-        print(f"  Next: route to the on-call human for sign-off.")
+        print("  Next: route to the on-call human for sign-off.")
 
 
 async def main() -> None:

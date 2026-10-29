@@ -9,37 +9,38 @@ orchestrator routes a privacy request (a data-subject access/erasure
 request) to a chosen set of specialist agents, runs them in parallel
 under a semaphore, then correlates their outputs into a single privacy
 assessment. Compared with a swarm (Notebook 24), the decision of who
-investigates what is centralised in the privacy officer instead of
+investigates what is centralized in the privacy officer instead of
 emerging from capability tags — which means the routing step is a
 single, auditable choke point. That matters for compliance: a central
-router constrains which systems each specialist may touch and makes
-over-collection or unauthorized access far easier to evidence than the
-same fleet self-organizing — exactly the accountability and
-data-minimization posture GDPR and CCPA expect you to demonstrate.
+router records which specialist was asked what, so over-collection or
+unauthorized access is easier to evidence than with the same fleet
+self-organizing — the accountability and data-minimization posture GDPR
+and CCPA expect you to demonstrate. The tools attached to each
+specialist, not the router, set what that specialist may ask for.
 
+Key ideas:
 - ``Specialist`` is a domain-focused agent with tools, a system prompt,
   and a confidence threshold. Locus ships pre-built ones for logs,
   metrics, traces, and code — all useful evidence sources when tracing
-  where personal data flows.
-- ``Orchestrator`` registers specialists, emits ``RoutingDecision``
+  where personal data flows. ``Specialist.execute`` is a single model
+  turn: the tool schemas go to the model, but a tool call it returns is
+  not run.
+- ``Orchestrator`` registers specialists, records ``RoutingDecision``
   objects, and runs the chosen specialists concurrently behind
   ``max_parallel_specialists`` (an asyncio.Semaphore).
-- ``RoutingDecision`` is the typed object the orchestrator's planner
-  returns — which specialists, which sub-task per specialist, and the
-  reasoning.
-- The final ``OrchestrationResult`` carries each specialist's output,
+- ``RoutingDecision`` is the typed object the orchestrator's routing
+  step returns — which specialists, which sub-task per specialist, and
+  the reasoning.
+- The final ``OrchestratorResult`` carries each specialist's output,
   the decisions trail, and a correlated summary.
 
 Run it:
     .venv/bin/python examples/notebook_22_orchestrator_pattern.py
 
-The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
-(or anthropic) and the matching credentials to use a live model. Set
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable
+profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER``
+(``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
 ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
-
-This notebook uses Locus's "Model B" slot (``LOCUS_MODEL_ID_B``) for the
-short commentary calls — set a cheaper model there to cut runtime; falls
-back to Model A when unset.
 
 Prerequisites:
 - Notebook 02 (Agent basics).
@@ -49,9 +50,8 @@ Prerequisites:
 import asyncio
 import time
 
-from config import get_model, get_model_b, print_config
+from config import get_model, print_config
 
-from locus.agent import Agent
 from locus.multiagent import (
     Orchestrator,
     RoutingDecision,
@@ -63,22 +63,6 @@ from locus.multiagent import (
     create_trace_analyst,
 )
 from locus.tools.decorator import tool
-
-
-async def _llm_call(
-    prompt: str, *, system: str = "Reply in one short sentence.", max_tokens: int = 80
-) -> str:
-    """One model call with a timing/token banner — used for commentary."""
-    # Slot B (a cheaper/faster model) is enough for short commentary;
-    # falls back to slot A when LOCUS_MODEL_ID_B is unset.
-    agent = Agent(model=get_model_b(max_tokens=max_tokens), system_prompt=system)
-    t0 = time.perf_counter()
-    res = await agent.arun(prompt)
-    dt = time.perf_counter() - t0
-    print(
-        f"  [model call: {dt:.2f}s · {res.metrics.prompt_tokens}→{res.metrics.completion_tokens} tokens]"
-    )
-    return res.message.strip()
 
 
 async def main():
@@ -126,14 +110,20 @@ async def main():
         description="Query the data catalog for stores holding a subject's records",
     )
     async def query_data_catalog() -> str:
-        return "Catalog: 3 stores hold records for subject S-8842, latest: crm.customers with email, phone, home address"
+        return (
+            "Catalog: 3 stores hold records for subject S-8842, latest: "
+            "crm.customers with email, phone, home address"
+        )
 
     @tool(
         name="check_consent_ledger",
         description="Check the consent ledger for a subject's current permissions",
     )
     async def check_consent_ledger() -> str:
-        return "Consent ledger: marketing consent withdrawn 2026-03-12 for S-8842; 2 systems still receiving feeds"
+        return (
+            "Consent ledger: marketing consent withdrawn 2026-03-12 for S-8842; "
+            "2 systems still receiving feeds"
+        )
 
     inventory_specialist = Specialist(
         name="Data Inventory Specialist",
@@ -154,10 +144,6 @@ When analyzing, look for processing without a lawful basis, stale retention, and
 
     print(f"Custom Specialist: {inventory_specialist.name}")
     print(f"  Tools: {[t.name for t in inventory_specialist.tools]}")
-    _ai_note = await _llm_call(
-        "In one sentence, why is a custom Specialist with data-catalog tools better than a generic Agent for personal-data discovery?"
-    )
-    print(f"AI commentary: {_ai_note}")
 
     # =========================================================================
     # Part 3: run one specialist on its own
@@ -198,8 +184,10 @@ When analyzing, look for processing without a lawful basis, stale retention, and
     print("\n=== Part 5: Orchestrator Configuration ===\n")
 
     # max_parallel_specialists caps the asyncio.Semaphore that bounds
-    # fan-out. Drop to 1 to serialise (useful when debugging a flaky
-    # specialist).
+    # fan-out. Drop to 1 to serialize (useful when debugging a flaky
+    # specialist). correlation_threshold is a declared field that this
+    # release of Orchestrator stores but never reads; it is printed below
+    # as configuration only.
     orchestrator.max_parallel_specialists = 3
     orchestrator.correlation_threshold = 0.7
 
@@ -263,9 +251,6 @@ Prioritize based on the urgency and statutory deadline indicated in the task."""
     print("Orchestration Result:")
     print(f"  Success: {orch_result.success}")
     print(f"  Duration: {orch_result.duration_ms:.0f}ms")
-    # The three specialists ran concurrently behind the semaphore — not
-    # serially. Per-specialist budgets average ~5s, so parallel ~= 5s
-    # vs serial ~= 15s.
     print(f"  Parallel cap: max_parallel_specialists={orchestrator.max_parallel_specialists}")
     print(f"  Decisions made: {len(orch_result.decisions)}")
 
@@ -274,10 +259,13 @@ Prioritize based on the urgency and statutory deadline indicated in the task."""
         if decision.specialists:
             print(f"    Specialists: {decision.specialists}")
 
+    # The specialists ran concurrently behind the semaphore, so the
+    # orchestration total above should sit near the slowest specialist
+    # below rather than near their sum.
     print("\nSpecialist Results:")
     for spec_id, spec_result in orch_result.specialist_results.items():
         status = "OK" if spec_result.success else f"ERROR: {spec_result.error}"
-        print(f"  {spec_id}: {status}")
+        print(f"  {spec_id}: {status} ({spec_result.duration_ms:.0f}ms)")
         if spec_result.output:
             print(f"    Output preview: {spec_result.output[:100]}...")
 
@@ -311,43 +299,8 @@ Prioritize based on the urgency and statutory deadline indicated in the task."""
     if p8.output:
         print(f"  Output: {p8.output[:160]}")
 
-    # =========================================================================
-    # Part 9: common orchestration shapes
-    # =========================================================================
-    print("\n=== Part 9: Common Patterns ===\n")
-
-    print("Pattern 1: Parallel Analysis")
-    print("  Invoke multiple specialists at once, correlate, produce one privacy assessment.")
-    print()
-
-    print("Pattern 2: Sequential Refinement")
-    print("  Broad data discovery first, then route to a specific specialist based on findings.")
-    print()
-
-    print("Pattern 3: Hierarchical Routing")
-    print(
-        "  Top-level officer routes to sub-orchestrators per domain (customer data, employee data)."
-    )
-    print()
-
-    print("Pattern 4: Consensus Analysis")
-    print("  Multiple specialists analyse the same records; flag disagreements.")
-
-    # =========================================================================
-    # Part 10: things to keep in mind
-    # =========================================================================
-    print("\n=== Part 10: Best Practices ===\n")
-
-    print("1. Give specialists focused, non-overlapping data domains.")
-    print("2. Use clear specialist_type names — they show up in the audit trail.")
-    print("3. Write domain-specific system prompts.")
-    print("4. Set max_parallel_specialists to match your provider quota.")
-    print("5. Include correlation logic in the summariser.")
-    print("6. Handle specialist failures gracefully — one bad specialist shouldn't kill the run.")
-    print("7. Track per-specialist confidence and duration.")
-
     print("\n" + "=" * 60)
-    print("Next: Notebook 23 — Specialist Agents")
+    print("Next: Notebook 23 — RIGHTSIZER — the cloud-rightsizing specialist")
     print("=" * 60)
 
 

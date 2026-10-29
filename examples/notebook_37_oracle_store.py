@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
@@ -10,33 +9,32 @@ state — same ``thread_id`` resumes a conversation. :class:`OracleStore`
 is the other half of long-term memory: a namespaced key/value store
 for *cross-thread* facts. The Locus agent loop reaches into it through
 :class:`~locus.memory.manager.LLMMemoryManager`, which extracts
-memories at the end of a session and injects them into the system
-prompt at the start of the next one.
+memories at the end of a session and, at the start of the next one,
+inserts them as a system message right after the user's turn.
 
 The agent in this notebook is the protagonist. It learns a fact about
 the user in thread A, the manager writes the fact to Oracle 26ai, and
 a brand-new agent in thread B answers a question that depends on that
-fact — even though thread B's checkpoint never saw thread A's
-messages.
+fact — even though thread B never saw thread A's messages.
 
 Key concepts:
 
 - ``OracleStore`` implements the :class:`BaseStore` contract on top of
   Oracle 26ai. Pass ``dimension=N`` for vector-mode storage; leave it
-  unset for plain JSON K/V.
+  unset for plain JSON key/value rows.
 - ``LLMMemoryManager(store=oracle_store, namespace_prefix=("users",
   user_id))`` is the agent-facing surface. Hand it to
   ``Agent(memory_manager=...)`` and the agent loop calls
-  ``manager.extract(messages)`` at session end and
-  ``manager.retrieve()`` at session start.
+  ``manager.on_session_end`` (extract and save) when a run finishes and
+  ``manager.on_session_start`` (recall and inject) before the first
+  model call.
 - ``namespace_prefix`` scopes the store per tenant or per user. The
   same OracleStore can host memories for thousands of users without
   cross-talk.
 - For deterministic demos we pass an explicit ``extract_fn``; in
   production point it at an LLM-backed extractor.
 
-Run it::
-
+Run it:
     export ORACLE_DSN=mydb_low                   # tnsnames alias
     export ORACLE_USER=locus_app                 # least-privileged app schema
     export ORACLE_PASSWORD='<app-password>'
@@ -128,8 +126,9 @@ def _build_store() -> OracleStore:
         wallet_location=os.path.expanduser(os.environ["ORACLE_WALLET"]),
         wallet_password=os.environ.get("ORACLE_WALLET_PASSWORD", ""),
         table_name=TABLE_NAME,
-        # K/V mode is fine for this demo — no vector embedding required
-        # for the manager's recall surface, which uses list_keys / get.
+        # Key/value mode is enough here: the manager recalls through
+        # store.search() — a LIKE substring match against the new user turn,
+        # then a recency pass with query=None — so no vector embedding is needed.
         dimension=None,
     )
 
@@ -146,7 +145,8 @@ async def _drop_table(store: OracleStore) -> None:
 
 
 _FAVORITE_RX = re.compile(
-    r"(?:i\s+(?:prefer|like|use|work\s+with|run\s+on)|my\s+(?:favourite|favorite)\s+\w+\s+is)\s+([^\.\n]+)",
+    r"(?:i\s+(?:prefer|like|use|work\s+with|run\s+on)|my\s+(?:favourite|favorite)\s+\w+\s+is)"
+    r"\s+([^\.\n]+)",
     re.IGNORECASE,
 )
 _ROLE_RX = re.compile(r"i\s+(?:work\s+on|build|maintain|own)\s+([^\.\n]+)", re.IGNORECASE)
@@ -199,16 +199,11 @@ def _build_manager(store: OracleStore) -> LLMMemoryManager:
 
 
 async def _drive_agent(agent: Agent, prompt: str, *, thread_id: str) -> None:
-    """Async-friendly driver — we're already inside an event loop, so we
-    can't call ``agent.run_sync`` (it spins up its own loop). ``agent.run``
-    is the async generator that powers run_sync under the hood.
-    """
+    """One turn on ``thread_id`` — ``arun`` is the awaitable form of
+    ``run_sync`` for code that is already inside an event loop."""
     print(f"\n[{thread_id}] User : {prompt}")
-    final = ""
-    async for event in agent.run(prompt, thread_id=thread_id):
-        if event.event_type == "terminate":
-            final = getattr(event, "final_message", "") or ""
-    print(f"[{thread_id}] Agent: {final.strip()}")
+    result = await agent.arun(prompt, thread_id=thread_id)
+    print(f"[{thread_id}] Agent: {result.message.strip()}")
 
 
 async def thread_a(manager: LLMMemoryManager) -> None:
@@ -233,10 +228,10 @@ async def thread_a(manager: LLMMemoryManager) -> None:
 async def show_persisted(store: OracleStore) -> None:
     """Inspect what the manager wrote to Oracle after thread A.
 
-    Uses ``store.search`` instead of ``list_keys``/``get`` because the
-    BaseStore's ``StoreItem`` wrapper makes the (namespace, key, value)
-    triple available in one call — the same surface the LLM memory
-    manager reaches for at session start.
+    Uses ``store.search`` — the same call the LLM memory manager makes at
+    session start (it only falls back to ``list_keys``/``get`` when a
+    backend cannot search). The ``StoreItem`` wrapper hands back the
+    (namespace, key, value) triple in one call.
     """
     print("\n--- What's in OracleStore now (admin view) ---")
     for memory_type in MemoryType:
@@ -254,8 +249,8 @@ async def show_persisted(store: OracleStore) -> None:
 async def thread_b(manager: LLMMemoryManager) -> None:
     """Session 2 — fresh agent, fresh thread, no prior messages.
 
-    The memory manager runs ``retrieve()`` against Oracle at session
-    start and injects the recovered memories into the system prompt.
+    At session start the memory manager recalls the stored facts from
+    Oracle and inserts them as a system message right after the prompt.
     The model never sees thread A's messages — only the extracted
     facts.
     """
@@ -293,8 +288,8 @@ async def main() -> None:
             "\nThread B's agent never saw thread A's messages. It loaded "
             "Alice's preference from OracleStore at session start and "
             "answered from there. Same wallet, same pool kwargs as the "
-            "RAG store (06), the checkpointer (07), and the versioned "
-            "saver (12)."
+            "RAG store (notebook 38), the checkpointer (notebook 42), and "
+            "the versioned saver (notebook 43)."
         )
     finally:
         print("\n--- Cleanup: drop the demo table ---")

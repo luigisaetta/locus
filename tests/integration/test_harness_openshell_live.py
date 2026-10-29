@@ -9,10 +9,17 @@ and the ``openshell`` package is installed. ``LOCUS_OPENSHELL_WORKSPACE``
 picks the workspace (default ``default``); ``LOCUS_OPENSHELL_TOKEN`` is sent
 as the bearer token when set. A sandbox is created for the module and
 deleted after it.
+
+The provider test needs more: ``LOCUS_OPENSHELL_PROVIDER`` names an OpenShell
+provider of type ``oci-genai`` on that gateway (see
+``examples/openshell-gateway/README.md``), ``LOCUS_OPENSHELL_IMAGE`` an image
+with ``curl`` (the default sandbox image has none), and optionally
+``LOCUS_OPENSHELL_OCI_REGION`` / ``LOCUS_OPENSHELL_OCI_MODEL``.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import time
 import uuid
@@ -33,18 +40,28 @@ pytest.importorskip("openshell")
 from locus.harness import OpenShellBackend, build_harness  # noqa: E402
 
 
-@pytest.fixture(scope="module")
-def sandbox() -> Iterator[OpenShellBackend]:
+WORKSPACE = os.environ.get("LOCUS_OPENSHELL_WORKSPACE", "default")
+PROVIDER = os.environ.get("LOCUS_OPENSHELL_PROVIDER", "")
+
+
+def _create(prefix: str, **extra: object) -> OpenShellBackend:
     options: dict[str, object] = {}
     token = os.environ.get("LOCUS_OPENSHELL_TOKEN")
     if token:
         options["bearer_token"] = token
-    backend = OpenShellBackend.create(
-        workspace=os.environ.get("LOCUS_OPENSHELL_WORKSPACE", "default"),
-        name=f"locus-harness-{uuid.uuid4().hex[:8]}",
+    return OpenShellBackend.create(
+        workspace=WORKSPACE,
+        # OpenShell caps sandbox names at 19 characters.
+        name=f"{prefix}-{uuid.uuid4().hex[:8]}",
         endpoint=ENDPOINT,
+        **extra,
         **options,
     )
+
+
+@pytest.fixture(scope="module")
+def sandbox() -> Iterator[OpenShellBackend]:
+    backend = _create("lh")
     try:
         yield backend
     finally:
@@ -88,3 +105,37 @@ async def test_the_harness_edits_and_runs_in_the_sandbox(sandbox: OpenShellBacke
     started = time.monotonic()
     assert "live/app.py" in await h.tool("glob").execute(pattern="**/*.py")
     assert time.monotonic() - started < 60
+
+
+@pytest.mark.skipif(not PROVIDER, reason="LOCUS_OPENSHELL_PROVIDER is not set")
+def test_a_provider_credential_reaches_oci_genai_from_the_sandbox() -> None:
+    """The gateway holds the key; the sandbox sees a placeholder the proxy swaps at OCI."""
+    region = os.environ.get("LOCUS_OPENSHELL_OCI_REGION", "us-chicago-1")
+    model = os.environ.get("LOCUS_OPENSHELL_OCI_MODEL", "meta.llama-3.3-70b-instruct")
+    backend = _create(
+        "lp", image=os.environ.get("LOCUS_OPENSHELL_IMAGE") or None, providers=[PROVIDER]
+    )
+    try:
+        placeholder = backend.exec('printf %s "$OCI_GENAI_API_KEY"', timeout=30)
+        assert placeholder.exit_code == 0
+        assert placeholder.output, "the provider's variable is not in the sandbox"
+        assert not placeholder.output.startswith(b"sk-"), "the sandbox holds the real key"
+
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": "Reply with the single word OK."}],
+            "max_tokens": 5,
+        }
+        backend.write_bytes("live/body.json", json.dumps(body).encode())
+        result = backend.exec(
+            "curl -sS --fail-with-body --max-time 90 "
+            f"https://inference.generativeai.{region}.oci.oraclecloud.com/openai/v1/chat/completions"
+            ' -H "Authorization: Bearer $OCI_GENAI_API_KEY" -H "Content-Type: application/json"'
+            " --data @live/body.json",
+            timeout=120,
+        )
+        assert result.exit_code == 0, result.output.decode(errors="replace")
+        reply = json.loads(result.output)
+        assert reply["choices"][0]["message"]["content"].strip()
+    finally:
+        backend.close()

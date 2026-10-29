@@ -7,7 +7,8 @@ LM Studio, llama.cpp, LiteLLM) differ only in **base URL** and **which
 environment variable holds the key** — so Locus reaches all of them through
 the same `OpenAIModel`, with no extra client dependency.
 
-Address one by prefix:
+Address one by prefix (per-provider variables and examples:
+[Configure a model provider](../../how-to/configure-providers.md)):
 
 ```python
 from locus.agent import Agent

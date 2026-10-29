@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <strong>OCI Generative AI · Oracle Database 26ai · OpenAI · Anthropic · 17 OpenAI-compatible routes</strong><br>
+  <strong>OCI Generative AI · Oracle Database 26ai · OpenAI · Anthropic · 18 OpenAI-compatible routes</strong><br>
   <em>Same <code>Agent</code>, same loop, same event stream — only the model id changes.</em>
 </p>
 
@@ -158,7 +158,7 @@ agent = Agent(model="oci:openai.gpt-5.5", tools=[retriever.as_tool()])
 | **[Observability and streaming](https://locusagents.ai/concepts/observability/)** | Opt-in `EventBus`; one `run_context()` streams 40+ typed events from every layer; SSE and token streaming; OpenTelemetry hook. |
 | **[Server and deploy](https://locusagents.ai/concepts/server/)** | `locus serve` / `AgentServer` (FastAPI, bearer auth, `POST /invoke`, `POST /stream`, threads); multi-stage `Dockerfile` and the `ghcr.io/oracle/locus-runner` image for OKE. |
 | **[Skills, playbooks, evaluation](https://locusagents.ai/concepts/skills/)** | Progressive-disclosure skills, enforced playbooks, `EvalCase` / `EvalRunner` / `EvalReport` regression suites. |
-| **[Model providers](https://locusagents.ai/concepts/models/)** | `oci:`, `openai:`, `anthropic:` native; `gemini:`, `openrouter:`, `together:`, `groq:`, `ollama:`, `vllm:` and 11 more OpenAI-compatible routes; failover chains, credential pooling, prompt-cache breakpoints. |
+| **[Model providers](https://locusagents.ai/how-to/configure-providers/)** | `oci:`, `openai:`, `anthropic:` native; `gemini:`, `openrouter:`, `together:`, `runpod:`, `groq:`, `ollama:`, `vllm:` and 11 more OpenAI-compatible routes; failover chains, credential pooling, prompt-cache breakpoints. |
 
 Every backend is an optional extra — install only what you use
 (`pip install "locus-sdk[oci,oracledb]"` for the Oracle stack, `[qdrant,s3,rerank-local]` for others).
@@ -223,6 +223,24 @@ AgentServer(agent=my_agent, api_key=os.environ["API_KEY"]).run(host="0.0.0.0", p
 ```
 
 → [Notebooks](https://locusagents.ai/notebooks/) · [Deploy](https://locusagents.ai/how-to/deploy/)
+
+---
+
+## Build it with Codex
+
+Hand [OpenAI Codex](https://developers.openai.com/codex) the prompt in [`codex/`](codex/) and it
+installs Locus in a fresh environment, writes a first agent with a typed tool, puts an admission
+gate in front of a payment, runs the rogue-agent challenge, and reports, against the provider you
+name: OCI Generative AI from a profile in `~/.oci/config`, OpenAI or Anthropic from a key in the
+environment, or none for the offline parts. [`AGENTS.md`](AGENTS.md) carries the rules it follows;
+[`codex/SPEC.md`](codex/SPEC.md) is written for a person to follow by hand as well.
+
+```bash
+git clone https://github.com/oracle/locus.git && cd locus
+codex -s workspace-write -c sandbox_workspace_write.network_access=true "$(cat codex/PROMPT.md)"
+```
+
+→ [Build it with Codex](https://locusagents.ai/how-to/codex/)
 
 ---
 

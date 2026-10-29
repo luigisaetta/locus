@@ -1,17 +1,17 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
 """Notebook 27: human-approved disbursement — multi-agent HITL.
 
-Notebook 15 covered HITL for a single agent. A production payments
-operations fleet typically has a triage agent, several specialists, and
-a human gate for irreversible actions — nobody releases a high-value
-wire on an agent's say-so alone. Releasing funds is a high-blast-radius
-action (money moved out the door can't be un-sent, and it is the inverse
-of LLM06 Excessive Agency: a disbursement agent must not move money
-without a human in the loop). This notebook walks three combinations:
+Notebook 15 paused a graph that had no agents in it for a human
+answer. A production payments operations fleet typically has a triage
+agent, several specialists, and a human gate for irreversible actions —
+nobody releases a high-value wire on an agent's say-so alone. Releasing
+funds is a high-blast-radius action (money moved out the door can't be
+un-sent), and the human gate is the control against LLM06 Excessive
+Agency: a disbursement agent must not be able to move money without a
+person in the loop. This notebook walks three combinations:
 
 - Pattern A — approval gate: triage classifies a payment exception, a
   disbursement specialist drafts the release action, a human approves
@@ -19,28 +19,32 @@ without a human in the loop). This notebook walks three combinations:
 - Pattern B — human-as-tool: when triage isn't confident about the
   transaction type, it asks the human instead of guessing. The answer
   becomes part of state for downstream specialists.
-- Pattern C — long-pause workflow: state survives across an interrupt
-  boundary so the approver on the next shift (different process,
-  different caller) can resume the disbursement where it left off.
+- Pattern C — snapshot + resume: the paused state is held across the
+  interrupt boundary so the approver on the next shift can resume the
+  disbursement where it left off.
 
+Key ideas:
 - ``interrupt(payload)`` is a function-level primitive. Any node can
   call it; the graph catches the InterruptException, snapshots state,
-  and returns an ``InterruptState`` to the caller.
+  and returns a ``GraphResult`` whose ``interrupt`` field is an
+  ``InterruptState``.
 - Resume with ``graph.execute(Command(resume=<answer>, update=state))``
   — the ``interrupt()`` call returns the resume value.
-- Pair with a checkpointer for multi-process / multi-day pauses that
-  preserve every specialist's context.
+- Pattern C keeps the paused state in memory; a multi-process or
+  multi-day pause would persist that snapshot in a checkpointer instead
+  and rebuild the model from config on resume.
 
 Run it:
     .venv/bin/python examples/notebook_27_multiagent_human_in_loop.py
 
-The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
-(or anthropic) and the matching credentials to use a live model. Set
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable
+profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER``
+(``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
 ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
 - Notebook 12 (basic graph).
-- Notebook 15 (single-agent HITL).
+- Notebook 15 (human in the loop in a graph without agents).
 """
 
 from __future__ import annotations
@@ -48,11 +52,10 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from config import get_model
+from config import get_model, print_config
 
 from locus.agent import Agent, AgentConfig
 from locus.core import Command, interrupt
-from locus.core.events import TerminateEvent
 from locus.multiagent.graph import END, START, StateGraph
 
 
@@ -87,11 +90,7 @@ DISBURSEMENT_PROMPT = (
 
 
 async def _run_agent(agent: Agent, prompt: str) -> str:
-    final = ""
-    async for event in agent.run(prompt):
-        if isinstance(event, TerminateEvent):
-            final = event.final_message or ""
-    return final.strip()
+    return ((await agent.arun(prompt)).message or "").strip()
 
 
 # ---------------------------------------------------------------------------
@@ -117,8 +116,9 @@ async def human_approval_node(state: dict[str, Any]) -> dict[str, Any]:
     """Pause the graph until the human approves or rejects the disbursement.
 
     ``interrupt()`` raises an InterruptException; the graph catches it,
-    snapshots state, and hands an ``InterruptState`` back to the caller.
-    On resume, ``interrupt()`` returns the resume value.
+    snapshots state, and hands an ``InterruptState`` back to the caller
+    as ``GraphResult.interrupt``. On resume, ``interrupt()`` returns the
+    resume value.
     """
     response = interrupt(
         {
@@ -239,7 +239,7 @@ async def demo_pattern_b(model: Any) -> None:
     result = await graph.execute(initial)
     if result.interrupt:
         payload = result.interrupt.interrupt.payload
-        print(f"  ⏸  Triage escalated. Asking human:")
+        print("  ⏸  Triage escalated. Asking human:")
         print(f"     {payload.get('question')}")
         print("  ▶  Human responds: 'refund'")
         final = await graph.execute(Command(resume="refund", update=result.final_state))
@@ -249,22 +249,23 @@ async def demo_pattern_b(model: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Pattern C — Long-pause workflow with checkpointing
+# Pattern C — Long-pause workflow: snapshot + resume
 # ---------------------------------------------------------------------------
 
 
 async def demo_pattern_c(model: Any) -> None:
-    """Long-pause workflow: persist the snapshot, resume next shift.
+    """Long-pause workflow: hold the paused state, resume next shift.
 
-    The simple in-memory shape is: hold the InterruptState from the
-    first ``execute`` call somewhere durable, then call ``execute``
-    again with ``Command(resume=...)`` when the approver responds.
-
-    For multi-process / multi-day reviews, swap the in-memory
-    snapshot for a checkpointer (Redis / Postgres / MySQL / S3 object
-    storage). The graph's built-in checkpointer hook expects an
-    AgentState; for pure-graph flows like this one, persisting the
-    InterruptState yourself is the simpler path.
+    The shape is: keep the state from the first ``execute`` call
+    somewhere, then call ``execute`` again with ``Command(resume=...)``
+    when the approver responds. Here "somewhere" is a local variable; a
+    multi-process or multi-day review would persist the same dict in a
+    checkpointer (Oracle Database 26ai, Redis, Postgres). The graph can
+    do that itself when ``GraphConfig(checkpointer=..., thread_id=...)``
+    is set, but it then reloads the saved state and ignores the
+    ``update`` passed with the resume, so a state that carries a live
+    model object under ``__model__``, as this one does, is simpler to
+    store yourself and rehydrate on resume.
     """
     print("\n=== Pattern C: Long-pause workflow (snapshot + resume) ===\n")
 
@@ -285,14 +286,16 @@ async def demo_pattern_c(model: Any) -> None:
     print(f"  ⏸  Paused at {paused.interrupt.node_id}")
     print(
         f"     Snapshot has {len(snapshot_state)} state keys — persist these "
-        "to Redis / Postgres / a payment-approval queue / etc."
+        "to a checkpointer / a payment-approval queue / etc."
     )
 
     # ... time passes; the next shift's approver comes back ...
     print("  ▶  Next shift: load snapshot, resume with the approver's answer")
-    # The snapshot only carries JSON-friendly state. Re-attach the model
-    # object explicitly; production code would also rebuild it from
-    # config rather than holding a reference in memory.
+    # ``paused.final_state`` is still the in-memory dict, model object
+    # included, so nothing was actually serialised here. A production
+    # resume would load the JSON snapshot from the store and attach a
+    # model rebuilt from config — written out explicitly so the shape is
+    # right once the snapshot really does cross a process boundary.
     resumed = await graph.execute(
         Command(resume="yes", update={**snapshot_state, "__model__": model}),
     )
@@ -305,13 +308,21 @@ async def demo_pattern_c(model: Any) -> None:
 
 
 async def main() -> None:
+    print("=" * 60)
     print("Notebook 27: human-approved disbursement — multi-agent HITL")
     print("=" * 60)
+    print()
+
+    print_config()
 
     model = get_model()
     await demo_pattern_a(model)
     await demo_pattern_b(model)
     await demo_pattern_c(model)
+
+    print("\n" + "=" * 60)
+    print("Next: Notebook 28 — emergent incident routing — the model picks the specialist protocol")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

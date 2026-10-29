@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The conversation managers and where the agent loop runs them, per src/locus.
+  Every iteration, after the termination checks (agent/runtime_loop.py:912) and
+  before the request is sent, two steps keep the message list inside the window:
+    compact the state   _compact_context (runtime_loop.py:1050; def :3321-3407). Only a
+                        ContextCompactor (:3337-3339); server-stateful models skip it (:3340-3341).
+                        measure (:3354); under the threshold -> nothing (:3355-3356); else the
+                        on_before_compaction hook runs first (:3358-3365; agent/hook_orchestrator.py:135-163
+                        run_before_compaction; hooks/provider.py:296-327 BeforeCompactionEvent, :522-533
+                        HookProvider.on_before_compaction): event.cancel skips the compaction (:3366-3368),
+                        event.instructions is appended to the summary prompt (:3376; memory/compaction.py:704-705).
+                        compact() (:3370-3378); its result replaces state.messages (:3385) and a
+                        CompactionEvent is yielded (:3395-3407); exhausted -> TerminateEvent
+                        context_exhausted (:1053-1064). The CompactionTracker lives on the run (:3342-3344).
+    shape the request   _get_model_response (runtime_loop.py:3155): manager.async_apply() on a copy of
+                        state.messages (:3186-3192). Every ConversationManager has async_apply: the base
+                        delegates to apply() (memory/conversation.py:38-45), so NullManager and
+                        SlidingWindowManager run their apply() through it, while SummarizingManager and
+                        LLMCompactor override it (their summarize_fn paths exist only there; LLMCompactor.apply()
+                        is the no-LLM fallback, memory/compactor.py:187-189). Orphan tool pairs removed (:3195);
+                        the state is unchanged. Server-stateful models send only the new messages (:3181-3184).
+    think, execute      the model call and its tool calls; the reply and the tool results are appended
+                        to the state and the next iteration starts.
+  Strategies, all ConversationManager (memory/conversation.py:17-48):
+    NullManager            returns the list unchanged                          conversation.py:51-62
+    SlidingWindowManager   leading system messages kept (:139-145), then the last window_size
+                           messages (:147-160), orphan tool results dropped (:167-178), the opening
+                           user turn re-attached only when no user turn survives (:190-195); while a
+                           user turn survives, the task goes with the oldest     conversation.py:65-217
+    SummarizingManager     over threshold, all but the last keep_recent non-system messages are folded
+                           into one summary message placed after the system prompt (:287-306, :370-405);
+                           summarize_fn when it is async (:392-393), else an extractive fallback
+                           (:323-336)                                            conversation.py:220-417
+    LLMCompactor           per request, at context_length * trigger_fraction (:195-198): tool results
+                           older than tool_output_ttl_turns become placeholders (:201, :273-304); then
+                           system, summary (only with summarize_fn, :212-216, :240-250), the first
+                           head_turns, and a token-budgeted tail (:223-227, :306-324); without
+                           summarize_fn the middle is dropped (:326-345)        memory/compactor.py:107-258
+    ContextCompactor       apply() returns its input (:382-388): the loop drives compact() (:394-478).
+                           threshold = (context_length - reserved_tokens) * trigger_fraction (:330-338).
+                           1. clear tool outputs older than the newest tool_output_keep_tokens, the newest
+                              always kept whole (:480-514). With an OutputArchive (:157-166; SessionArchive,
+                              memory/observation_pack.py:1106-1157, from ObservationPack.archive_for :1006-1008)
+                              the stub names the archive id obs_recall reads it back by (:504-513);
+                              without one, a lossy stub (:814-825). Enough when it frees a tenth of the
+                              usable window: stage "prune" (:438-448).
+                           2. else summarise: head = leading system messages + the task (:735-750), the
+                              latest user message pinned (:546-549, :567), the last tail_turns turns kept
+                              verbatim (:552-566), older turns folded into a summary written by
+                              summary_model (:602-617, :662-720), or a note without one, stage "truncate"
+                              (:618-620, :878-884); result = head, summary, pinned, tail (:633-639).
+                           exhausted when a summary is needed again within min_iterations_between_summaries
+                           (:453-470) or the result is still over the threshold (:641).
+                           CompactionTracker (:186-224) remembers the last summary iteration and the
+                           provider's reported tokens (runtime_loop.py:3310-3311).
+  Default with no conversation_manager (agent/initializer.py:211-262): ContextCompactor when the
+  window is known and compaction is enabled (:218-238; summary_model defaults to the agent's model,
+  agent/config.py:208-215), LLMCompactor when the window is known and compaction is off
+  (:239-249; AgentConfig(compaction=False), config.py:187, :667-670), SlidingWindowManager when
+  the window is unknown (:250-262).
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 766" role="img" aria-labelledby="title desc">
+  <title id="title">Conversation managers and where the loop runs them</title>
+  <desc id="desc">Two steps in every iteration of the agent loop, both before the model call. Compact the state: only a ContextCompactor rewrites state.messages, once the context reaches its threshold, and the on_before_compaction hook runs first and can cancel the compaction or add instructions for the summary. Shape the request: the configured manager's async_apply() trims a copy of the messages for this request and the state is unchanged. Think then calls the model and Execute runs its tool calls; the reply and its tool results join the list and the next iteration starts. With ObservationPack on, the tool output a compaction clears goes to an OutputArchive and the stub left behind names the id obs_recall reads it back by. What each strategy keeps: NullManager keeps everything. SlidingWindowManager keeps the leading system messages and the last window_size messages; the oldest are dropped, and the opening task is re-attached only when no user turn survives. SummarizingManager keeps the system prompt, folds older turns into one summary message and keeps the last keep_recent messages. LLMCompactor works on a token budget: stale tool output becomes a stub, the first head_turns and a token-budgeted tail stay, and the middle is folded into a summary when summarize_fn is set or dropped otherwise. ContextCompactor first clears old tool output to stubs, keeping the newest whole; when that is not enough it keeps the system prompt, the task and the latest user message verbatim with the last tail_turns turns, and folds the older turns into a summary written by its summary model. A compaction that cannot get under the threshold ends the run with context_exhausted. With no conversation_manager the agent uses ContextCompactor when the model's window is known, LLMCompactor instead when compaction is turned off, and SlidingWindowManager when the window is unknown.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- where in the iteration -->
+  <text class="note" x="690" y="40">Every iteration: the termination checks run first,</text>
+  <text class="note" x="690" y="58">then the request is kept inside the window and sent.</text>
+
+  <!-- the hook, before compaction -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M355,74 L355,106"/>
+  <rect class="label-bg" x="363" y="80" width="112" height="20" rx="4"/>
+  <text class="label" x="419" y="90">at the threshold</text>
+  <g class="node optional">
+    <rect x="255" y="16" width="200" height="58" rx="12"/>
+    <text x="355" y="35">on_before_compaction</text>
+    <text class="sub" x="355" y="56">cancel · instructions</text>
+  </g>
+
+  <!-- compact -> archive (only with ObservationPack) -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M270,137 L158,137"/>
+  <rect class="label-bg" x="174" y="127" width="80" height="20" rx="4"/>
+  <text class="label" x="214" y="137">tool output</text>
+  <g class="store">
+    <path d="M16,113 A71,9 0 0 1 158,113 V161 A71,9 0 0 1 16,161 Z M16,113 A71,9 0 0 0 158,113"/>
+    <g class="node">
+      <text x="87" y="129">OutputArchive</text>
+      <text class="sub" x="87" y="148">read by obs_recall</text>
+    </g>
+  </g>
+
+  <!-- the row: compact -> shape -> think -> execute -->
+  <path class="edge" marker-end="url(#ah)" d="M440,137 L476,137"/>
+  <path class="edge" marker-end="url(#ah)" d="M640,137 L676,137"/>
+  <path class="edge" marker-end="url(#ah)" d="M764,137 L800,137"/>
+
+  <!-- execute -> next iteration -> compact -->
+  <path class="edge" marker-end="url(#ah)" d="M862,166 C862,240 355,240 355,168"/>
+  <rect class="label-bg" x="402" y="212" width="412" height="20" rx="4"/>
+  <text class="label" x="608" y="222">next iteration · the reply and its tool results join the list</text>
+
+  <g class="node optional">
+    <rect x="270" y="108" width="170" height="58" rx="12"/>
+    <text x="355" y="127">Compact the state</text>
+    <text class="sub" x="355" y="148">ContextCompactor only</text>
+  </g>
+  <g class="node primary">
+    <rect x="476" y="108" width="164" height="58" rx="12"/>
+    <text x="558" y="127">Shape the request</text>
+    <text class="sub" x="558" y="148">async_apply()</text>
+  </g>
+  <g class="node">
+    <rect x="676" y="108" width="88" height="58" rx="12"/>
+    <text x="720" y="127">Think</text>
+    <text class="sub" x="720" y="148">model call</text>
+  </g>
+  <g class="node">
+    <rect x="800" y="108" width="124" height="58" rx="12"/>
+    <text x="862" y="127">Execute</text>
+    <text class="sub" x="862" y="148">runs tool calls</text>
+  </g>
+
+  <!-- lane A: the managers that shape each request -->
+  <g class="lane">
+    <rect x="16" y="252" width="908" height="272" rx="12"/>
+    <text class="lane-title" x="32" y="274">Shape the request</text>
+  </g>
+  <text class="note" x="700" y="274">async_apply() shapes each request; state.messages is unchanged</text>
+
+  <g class="node">
+    <rect x="28" y="288" width="204" height="50" rx="12"/>
+    <text x="130" y="303">NullManager</text>
+    <text class="sub" x="130" y="324">keeps everything</text>
+  </g>
+  <g class="node"><rect x="244" y="300" width="60" height="26" rx="8"/><text class="sub" x="274" y="313">system</text></g>
+  <g class="node"><rect x="309" y="300" width="46" height="26" rx="8"/><text class="sub" x="332" y="313">task</text></g>
+  <g class="node"><rect x="360" y="300" width="80" height="26" rx="8"/><text class="sub" x="400" y="313">assistant</text></g>
+  <g class="node"><rect x="445" y="300" width="46" height="26" rx="8"/><text class="sub" x="468" y="313">tool</text></g>
+  <g class="node"><rect x="496" y="300" width="46" height="26" rx="8"/><text class="sub" x="519" y="313">tool</text></g>
+  <g class="node"><rect x="547" y="300" width="80" height="26" rx="8"/><text class="sub" x="587" y="313">assistant</text></g>
+  <g class="node"><rect x="632" y="300" width="46" height="26" rx="8"/><text class="sub" x="655" y="313">tool</text></g>
+  <g class="node"><rect x="683" y="300" width="28" height="26" rx="8"/><text class="sub" x="697" y="313">…</text></g>
+  <g class="node"><rect x="716" y="300" width="46" height="26" rx="8"/><text class="sub" x="739" y="313">user</text></g>
+  <g class="node"><rect x="767" y="300" width="80" height="26" rx="8"/><text class="sub" x="807" y="313">assistant</text></g>
+  <g class="node"><rect x="852" y="300" width="46" height="26" rx="8"/><text class="sub" x="875" y="313">tool</text></g>
+
+  <g class="node">
+    <rect x="28" y="346" width="204" height="50" rx="12"/>
+    <text x="130" y="361">SlidingWindowManager</text>
+    <text class="sub" x="130" y="382">last window_size messages</text>
+  </g>
+  <g class="node"><rect x="244" y="358" width="60" height="26" rx="8"/><text class="sub" x="274" y="371">system</text></g>
+  <rect class="label-bg on-lane" x="375" y="361" width="100" height="20" rx="4"/>
+  <text class="label" x="425" y="371">oldest dropped</text>
+  <g class="node"><rect x="547" y="358" width="80" height="26" rx="8"/><text class="sub" x="587" y="371">assistant</text></g>
+  <g class="node"><rect x="632" y="358" width="46" height="26" rx="8"/><text class="sub" x="655" y="371">tool</text></g>
+  <g class="node"><rect x="683" y="358" width="28" height="26" rx="8"/><text class="sub" x="697" y="371">…</text></g>
+  <g class="node"><rect x="716" y="358" width="46" height="26" rx="8"/><text class="sub" x="739" y="371">user</text></g>
+  <g class="node"><rect x="767" y="358" width="80" height="26" rx="8"/><text class="sub" x="807" y="371">assistant</text></g>
+  <g class="node"><rect x="852" y="358" width="46" height="26" rx="8"/><text class="sub" x="875" y="371">tool</text></g>
+
+  <g class="node">
+    <rect x="28" y="404" width="204" height="50" rx="12"/>
+    <text x="130" y="419">SummarizingManager</text>
+    <text class="sub" x="130" y="440">summary + last keep_recent</text>
+  </g>
+  <g class="node"><rect x="244" y="416" width="60" height="26" rx="8"/><text class="sub" x="274" y="429">system</text></g>
+  <g class="node"><rect x="309" y="416" width="66" height="26" rx="8"/><text class="sub" x="342" y="429">summary</text></g>
+  <rect class="label-bg on-lane" x="398" y="419" width="126" height="20" rx="4"/>
+  <text class="label" x="461" y="429">older turns folded</text>
+  <g class="node"><rect x="547" y="416" width="80" height="26" rx="8"/><text class="sub" x="587" y="429">assistant</text></g>
+  <g class="node"><rect x="632" y="416" width="46" height="26" rx="8"/><text class="sub" x="655" y="429">tool</text></g>
+  <g class="node"><rect x="683" y="416" width="28" height="26" rx="8"/><text class="sub" x="697" y="429">…</text></g>
+  <g class="node"><rect x="716" y="416" width="46" height="26" rx="8"/><text class="sub" x="739" y="429">user</text></g>
+  <g class="node"><rect x="767" y="416" width="80" height="26" rx="8"/><text class="sub" x="807" y="429">assistant</text></g>
+  <g class="node"><rect x="852" y="416" width="46" height="26" rx="8"/><text class="sub" x="875" y="429">tool</text></g>
+
+  <g class="node">
+    <rect x="28" y="462" width="204" height="50" rx="12"/>
+    <text x="130" y="477">LLMCompactor</text>
+    <text class="sub" x="130" y="498">head + token-budgeted tail</text>
+  </g>
+  <g class="node"><rect x="244" y="474" width="60" height="26" rx="8"/><text class="sub" x="274" y="487">system</text></g>
+  <g class="node optional"><rect x="309" y="474" width="66" height="26" rx="8"/><text class="sub" x="342" y="487">summary</text></g>
+  <g class="node"><rect x="380" y="474" width="86" height="26" rx="8"/><text class="sub" x="423" y="487">head turns</text></g>
+  <rect class="label-bg on-lane" x="476" y="477" width="94" height="20" rx="4"/>
+  <text class="label" x="523" y="487">middle folded</text>
+  <g class="node"><rect x="580" y="474" width="80" height="26" rx="8"/><text class="sub" x="620" y="487">assistant</text></g>
+  <g class="node"><rect x="665" y="474" width="46" height="26" rx="8"/><text class="sub" x="688" y="487">stub</text></g>
+  <g class="node"><rect x="716" y="474" width="46" height="26" rx="8"/><text class="sub" x="739" y="487">user</text></g>
+  <g class="node"><rect x="767" y="474" width="80" height="26" rx="8"/><text class="sub" x="807" y="487">assistant</text></g>
+  <g class="node"><rect x="852" y="474" width="46" height="26" rx="8"/><text class="sub" x="875" y="487">tool</text></g>
+
+  <!-- lane B: the compactor that rewrites the state -->
+  <g class="lane">
+    <rect x="16" y="534" width="908" height="156" rx="12"/>
+    <text class="lane-title" x="32" y="556">Compact the state</text>
+  </g>
+  <text class="note" x="574" y="556">compact() rewrites state.messages; when it cannot get under the threshold the run ends: context_exhausted</text>
+
+  <g class="node">
+    <rect x="28" y="570" width="204" height="50" rx="12"/>
+    <text x="130" y="585">ContextCompactor</text>
+    <text class="sub" x="130" y="606">1 · clear old tool output</text>
+  </g>
+  <g class="node"><rect x="244" y="582" width="60" height="26" rx="8"/><text class="sub" x="274" y="595">system</text></g>
+  <g class="node"><rect x="309" y="582" width="46" height="26" rx="8"/><text class="sub" x="332" y="595">task</text></g>
+  <g class="node"><rect x="360" y="582" width="80" height="26" rx="8"/><text class="sub" x="400" y="595">assistant</text></g>
+  <g class="node"><rect x="445" y="582" width="46" height="26" rx="8"/><text class="sub" x="468" y="595">stub</text></g>
+  <g class="node"><rect x="496" y="582" width="46" height="26" rx="8"/><text class="sub" x="519" y="595">stub</text></g>
+  <g class="node"><rect x="547" y="582" width="80" height="26" rx="8"/><text class="sub" x="587" y="595">assistant</text></g>
+  <g class="node"><rect x="632" y="582" width="46" height="26" rx="8"/><text class="sub" x="655" y="595">stub</text></g>
+  <g class="node"><rect x="683" y="582" width="28" height="26" rx="8"/><text class="sub" x="697" y="595">…</text></g>
+  <g class="node"><rect x="716" y="582" width="46" height="26" rx="8"/><text class="sub" x="739" y="595">user</text></g>
+  <g class="node"><rect x="767" y="582" width="80" height="26" rx="8"/><text class="sub" x="807" y="595">assistant</text></g>
+  <g class="node"><rect x="852" y="582" width="46" height="26" rx="8"/><text class="sub" x="875" y="595">tool</text></g>
+
+  <g class="node">
+    <rect x="28" y="628" width="204" height="50" rx="12"/>
+    <text x="130" y="643">ContextCompactor</text>
+    <text class="sub" x="130" y="664">2 · summarise older turns</text>
+  </g>
+  <g class="node"><rect x="244" y="640" width="60" height="26" rx="8"/><text class="sub" x="274" y="653">system</text></g>
+  <g class="node"><rect x="309" y="640" width="46" height="26" rx="8"/><text class="sub" x="332" y="653">task</text></g>
+  <g class="node"><rect x="360" y="640" width="66" height="26" rx="8"/><text class="sub" x="393" y="653">summary</text></g>
+  <rect class="label-bg on-lane" x="440" y="643" width="126" height="20" rx="4"/>
+  <text class="label" x="503" y="653">older turns folded</text>
+  <g class="node"><rect x="580" y="640" width="46" height="26" rx="8"/><text class="sub" x="603" y="653">user</text></g>
+  <g class="node"><rect x="631" y="640" width="80" height="26" rx="8"/><text class="sub" x="671" y="653">assistant</text></g>
+  <g class="node"><rect x="716" y="640" width="46" height="26" rx="8"/><text class="sub" x="739" y="653">tool</text></g>
+  <g class="node"><rect x="767" y="640" width="80" height="26" rx="8"/><text class="sub" x="807" y="653">assistant</text></g>
+  <g class="node"><rect x="852" y="640" width="46" height="26" rx="8"/><text class="sub" x="875" y="653">tool</text></g>
+
+  <text class="note" x="470" y="714">Dashed chips are conditional: a summary needs summarize_fn.</text>
+  <text class="note" x="470" y="732">SlidingWindowManager re-attaches the task when no user turn survives the window.</text>
+  <text class="note" x="470" y="750">No conversation_manager: window known → ContextCompactor, or LLMCompactor when compaction is off; unknown → SlidingWindowManager.</text>
+</svg>

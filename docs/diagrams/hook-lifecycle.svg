@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Where hooks fire in a run of locus.agent.Agent, and how the events reach the
+  providers. Drawn from src/locus; line numbers as of this commit.
+    the nine hook points   HookProvider.on_* in hooks/provider.py:415-533 (before/after invocation,
+                           before/after tool call, iteration start/end, before/after model call,
+                           before compaction)
+    on_before_invocation   once, as the run starts                      agent/runtime_loop.py:814
+    on_iteration_start     top of every pass of the loop                 agent/runtime_loop.py:850
+    on_before_compaction   only when the conversation manager is a ContextCompactor and the next
+                           request measures at or over its threshold   agent/runtime_loop.py:1050,
+                           :3337-3338, :3355-3358; event.cancel skips the compaction (:3366-3368),
+                           event.instructions steer the summary (:3376)
+    on_before_model_call   before model.complete()                      agent/runtime_loop.py:3218
+    on_after_model_call    after it; event.retry re-calls the model      agent/runtime_loop.py:3283-3285
+    on_before_tool_call    before each tool the model called; event.cancel skips the tool body
+                           and no after-hook fires                      agent/runtime_loop.py:1407-1446, :1609-1610
+    on_after_tool_call     after each tool; event.retry re-runs it, event.result replaces the
+                           result                                        agent/runtime_loop.py:1767, :1777, :1807
+    on_iteration_end       closes the iteration, at the next pass or when the loop exits
+                                                                        agent/runtime_loop.py:848-849, :1903-1904
+    on_after_invocation    once, in the run's finally block, success = no errors
+                                                                        agent/runtime_loop.py:1951
+    the resume path _run_from_state has the same seams (:2031-2032, :2119, :2238, :2369, :2426).
+  Dispatch: Agent(hooks=[...]) (agent/config.py:745) is copied into one list and handed to
+    HookOrchestrator (agent/initializer.py:95-98); plugins, skills and a playbook enforcer append
+    to the same list (initializer.py:106, :117, :148). The orchestrator calls each hook in list
+    order for before_*, iteration_start and before_compaction (hook_orchestrator.py:59-62, :80-82,
+    :109-113, :160-163, :186-189) and in reverse for after_* and iteration_end (:74-76, :90-92,
+    :130-133, :219-222). The Agent does not sort by priority.
+  HookRegistry sorts providers by priority, lower first (hooks/registry.py:97-101) and exposes
+    them as .providers (:104-107), which is what you pass as hooks= (examples/notebook_69:393).
+  Built-in providers and their default priority bands (hooks/provider.py:349-373):
+    GuardrailsHook SECURITY_DEFAULT (builtin/guardrails.py:201), SteeringHook SECURITY_DEFAULT
+    (builtin/steering.py:144), ContentFilterHook SECURITY_DEFAULT + 10 (builtin/guardrails.py:710),
+    TelemetryHook OBSERVABILITY_MIN + 10 (builtin/telemetry.py:73), LoggingHook
+    OBSERVABILITY_DEFAULT (builtin/logging.py:50), ModelRetryHook DEFAULT (builtin/retry.py:54).
+  Styled by the .tl-dia classes in docs/stylesheets/locus.css; see docs/diagrams/README.md.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 782" role="img" aria-labelledby="title desc">
+  <title id="title">Where hooks fire in a run</title>
+  <desc id="desc">A run begins with on_before_invocation and ends with on_after_invocation, each fired once. Inside, every iteration of the agent loop fires on_iteration_start; then on_before_compaction, only when a ContextCompactor finds the next request at its threshold; then on_before_model_call and on_after_model_call around the model call; then, when the model made tool calls, on_before_tool_call and on_after_tool_call around each tool call; then on_iteration_end, after which the loop starts the next iteration or the run ends. Every one of these hook points hands its event to the agent's hook dispatch, the HookOrchestrator, which calls the providers in the list you pass as hooks: in list order for before hooks and iteration start, in reverse order for after hooks and iteration end. The built-in providers in their default priority order are GuardrailsHook, SteeringHook and ContentFilterHook in the security band, TelemetryHook and LoggingHook in the observability band, and ModelRetryHook in the default band. A HookRegistry sorts providers by priority, lower first, and its providers list is what you hand to the agent as hooks.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- the loop: one lane, every pass fires these in this order -->
+  <g class="lane">
+    <rect x="16" y="74" width="300" height="588" rx="12"/>
+    <text class="lane-title" x="32" y="96">Each iteration</text>
+  </g>
+
+  <!-- the flow, top to bottom -->
+  <path class="edge" marker-end="url(#ah)" d="M220,45 L220,114"/>
+  <rect class="label-bg on-lane" x="184" y="86" width="72" height="20" rx="4"/>
+  <text class="label" x="220" y="96">run starts</text>
+  <path class="edge" marker-end="url(#ah)" d="M220,145 L220,168"/>
+  <path class="edge" marker-end="url(#ah)" d="M220,199 L220,222"/>
+  <path class="edge" marker-end="url(#ah)" d="M220,253 L220,276"/>
+  <path class="edge" marker-end="url(#ah)" d="M220,329 L220,352"/>
+  <path class="edge dashed" marker-end="url(#ah)" d="M220,383 L220,414"/>
+  <rect class="label-bg on-lane" x="236" y="389" width="70" height="20" rx="4"/>
+  <text class="label" x="271" y="399">tool calls</text>
+  <path class="edge" marker-end="url(#ah)" d="M220,445 L220,468"/>
+  <path class="edge" marker-end="url(#ah)" d="M220,521 L220,544"/>
+  <path class="edge" marker-end="url(#ah)" d="M220,575 L220,598"/>
+  <path class="edge" marker-end="url(#ah)" d="M220,629 L220,678"/>
+  <rect class="label-bg on-lane" x="188" y="635" width="64" height="20" rx="4"/>
+  <text class="label" x="220" y="645">run ends</text>
+
+  <!-- back to the top: next iteration -->
+  <path class="edge" marker-end="url(#ah)" d="M139,614 H80 V130 H138"/>
+  <rect class="label-bg on-lane" x="30" y="362" width="100" height="20" rx="4"/>
+  <text class="label" x="80" y="372">next iteration</text>
+
+  <!-- every hook point hands its event to the dispatcher -->
+  <path class="edge" d="M301,30 H342 M301,130 H342 M301,184 H342 M301,238 H342 M301,368 H342 M301,430 H342 M301,560 H342 M301,614 H342 M301,694 H342"/>
+  <path class="edge" d="M342,30 V694"/>
+  <path class="edge" marker-end="url(#ah)" d="M342,362 L400,362"/>
+  <text class="note" x="482" y="321">every hook point hands its event here</text>
+  <path class="edge" marker-end="url(#ah)" d="M563,362 L598,362"/>
+
+  <!-- the hook points -->
+  <g class="node"><rect x="140" y="16" width="160" height="28" rx="8"/><text class="sub" x="220" y="30">on_before_invocation</text></g>
+  <g class="node"><rect x="140" y="116" width="160" height="28" rx="8"/><text class="sub" x="220" y="130">on_iteration_start</text></g>
+  <g class="node optional"><rect x="140" y="170" width="160" height="28" rx="8"/><text class="sub" x="220" y="184">on_before_compaction</text></g>
+  <g class="node"><rect x="140" y="224" width="160" height="28" rx="8"/><text class="sub" x="220" y="238">on_before_model_call</text></g>
+  <g class="node"><rect x="140" y="354" width="160" height="28" rx="8"/><text class="sub" x="220" y="368">on_after_model_call</text></g>
+  <g class="node"><rect x="140" y="416" width="160" height="28" rx="8"/><text class="sub" x="220" y="430">on_before_tool_call</text></g>
+  <g class="node"><rect x="140" y="546" width="160" height="28" rx="8"/><text class="sub" x="220" y="560">on_after_tool_call</text></g>
+  <g class="node"><rect x="140" y="600" width="160" height="28" rx="8"/><text class="sub" x="220" y="614">on_iteration_end</text></g>
+  <g class="node"><rect x="140" y="680" width="160" height="28" rx="8"/><text class="sub" x="220" y="694">on_after_invocation</text></g>
+
+  <!-- the two loop steps the hooks surround -->
+  <g class="node">
+    <rect x="140" y="278" width="160" height="50" rx="12"/>
+    <text x="220" y="293">Model call</text>
+    <text class="sub" x="220" y="314">model.complete()</text>
+  </g>
+  <g class="node">
+    <rect x="140" y="470" width="160" height="50" rx="12"/>
+    <text x="220" y="485">Tool call</text>
+    <text class="sub" x="220" y="506">the tool body runs</text>
+  </g>
+
+  <!-- the dispatcher -->
+  <g class="node primary">
+    <rect x="402" y="333" width="160" height="58" rx="12"/>
+    <text x="482" y="352">Hook dispatch</text>
+    <text class="sub" x="482" y="373">HookOrchestrator</text>
+  </g>
+
+  <!-- the providers, one list, in the order the agent holds them -->
+  <g class="lane">
+    <rect x="600" y="214" width="324" height="296" rx="12"/>
+    <text class="lane-title" x="616" y="236">Providers</text>
+  </g>
+  <text class="note" x="850" y="236">default priority band</text>
+  <text class="note" x="762" y="260">before_* and iteration_start: first to last</text>
+  <g class="node"><rect x="614" y="274" width="140" height="26" rx="8"/><text class="sub" x="684" y="287">GuardrailsHook</text></g>
+  <text class="note" x="850" y="291">security</text>
+  <g class="node"><rect x="614" y="308" width="140" height="26" rx="8"/><text class="sub" x="684" y="321">SteeringHook</text></g>
+  <text class="note" x="850" y="325">security</text>
+  <g class="node"><rect x="614" y="342" width="140" height="26" rx="8"/><text class="sub" x="684" y="355">ContentFilterHook</text></g>
+  <text class="note" x="850" y="359">security</text>
+  <g class="node"><rect x="614" y="376" width="140" height="26" rx="8"/><text class="sub" x="684" y="389">TelemetryHook</text></g>
+  <text class="note" x="850" y="393">observability</text>
+  <g class="node"><rect x="614" y="410" width="140" height="26" rx="8"/><text class="sub" x="684" y="423">LoggingHook</text></g>
+  <text class="note" x="850" y="427">observability</text>
+  <g class="node"><rect x="614" y="444" width="140" height="26" rx="8"/><text class="sub" x="684" y="457">ModelRetryHook</text></g>
+  <text class="note" x="850" y="461">default</text>
+  <text class="note" x="762" y="494">after_* and iteration_end: last to first</text>
+
+  <!-- optional: a registry sorts the list by priority before you hand it over -->
+  <path class="edge dashed" marker-end="url(#ah)" d="M684,565 L684,512"/>
+  <rect class="label-bg" x="700" y="528" width="162" height="20" rx="4"/>
+  <text class="label" x="781" y="538">hooks=registry.providers</text>
+  <g class="node optional">
+    <rect x="604" y="566" width="160" height="52" rx="12"/>
+    <text x="684" y="582">HookRegistry</text>
+    <text class="sub" x="684" y="603">sorts by priority</text>
+  </g>
+
+  <text class="note" x="470" y="748">Dashed: on_before_compaction fires only when a ContextCompactor finds the next request at its threshold.</text>
+  <text class="note" x="470" y="768">Tool hooks fire once per tool call. The Agent keeps the order of its hooks=[…] list; a HookRegistry sorts by priority, lower first.</text>
+</svg>

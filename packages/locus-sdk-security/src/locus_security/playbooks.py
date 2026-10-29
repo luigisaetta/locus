@@ -13,8 +13,9 @@ pins the investigation to its steps in order, recording any violations.
 The tool names referenced here (``query_siem``, ``enrich_indicator``,
 ``fetch_host_timeline``, ``list_detections``, ``isolate_host``,
 ``scan_dependencies``, ``scan_endpoint``, ``fingerprint_endpoint``,
-``describe_aws``, ``use_aws``, ``submit_posture``) match the adapter tools so
-a playbook and its toolset stay in lockstep.
+``describe_oci``, ``use_oci``, ``submit_posture``) match the adapter tools —
+and, for the two OCI ones, the core :mod:`locus.tools` — so a playbook and its
+toolset stay in lockstep.
 """
 
 from __future__ import annotations
@@ -142,18 +143,18 @@ def cloud_posture_audit() -> Playbook:
     return Playbook(
         id="cloud_posture_audit",
         name="Cloud posture audit",
-        description="Map the account from the API spec, gather read-only evidence, "
+        description="Map the tenancy from the OCI SDK, gather read-only evidence, "
         "and submit a grounded posture report.",
         steps=[
             PlaybookStep(
                 id="discover",
-                description="Discover the account's services and read-only operations.",
-                expected_tools=["describe_aws"],
+                description="Discover the tenancy's services, clients and read-only operations.",
+                expected_tools=["describe_oci"],
             ),
             PlaybookStep(
                 id="gather",
                 description="Gather evidence with read-only API calls.",
-                expected_tools=["use_aws"],
+                expected_tools=["use_oci"],
                 hints=["Cite the exact API fact behind every proposed finding."],
             ),
             PlaybookStep(

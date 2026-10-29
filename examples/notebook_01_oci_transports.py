@@ -1,7 +1,7 @@
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
-"""Notebook 01: pick the right Oracle Cloud Infrastructure (OCI) Generative AI client for your model.
+"""Notebook 01: pick the right Oracle Cloud Infrastructure (OCI) Generative AI client for a model.
 
 Locus ships three model classes for OCI GenAI. They are not
 interchangeable — the right one depends on which model family you call
@@ -9,28 +9,34 @@ and whether you want OCI to hold the conversation history. This file
 builds an agent against each, runs the same prompt, and prints a
 decision table.
 
-Key concepts:
+Key ideas:
 
 - ``OCIChatCompletionsModel`` is the default. It targets the OpenAI-compatible
   endpoint at ``/openai/v1/chat/completions`` and covers OpenAI, Meta,
-  Mistral, xAI, Gemini, and non-R-series Cohere in one class.
+  Mistral, xAI, and Gemini in one class.
 - ``OCIModel`` targets OCI's proprietary chat endpoint
   (``/20231130/actions/chat``) via the official OCI Python SDK. It is
-  required for Cohere R-series (``cohere.command-r*``), which the
-  OpenAI-compatible endpoint rejects.
+  required for Cohere (``cohere.command-r*`` and ``cohere.command-a*``),
+  which the OpenAI-compatible endpoint rejects.
 - ``OCIResponsesModel`` targets the Responses endpoint
   (``/openai/v1/responses``). Use it for Responses-only models such as
   ``openai.gpt-5.5-pro`` or to push conversation state to the server.
 - The runtime reads ``model.server_stateful``: when it is ``True``,
   Locus sends only the latest turn and threads OCI's continuation id
-  via ``AgentState.provider_state``.
-- ``ConversationManager`` is the one Locus primitive that bypasses on
-  the Responses path (no client-side history to trim). Memory, hooks,
-  tool calling, streaming, structured output, and checkpointing all
-  apply identically across the three classes.
+  via ``AgentState.provider_state``. ``OCIResponsesModel`` reports
+  ``True`` unless built with ``store=False`` (Zero Data Retention
+  tenancies), in which case it sends the full history like the other
+  two. Resuming that OCI-side thread on a later run needs a
+  checkpointer attached, so the continuation id is reloaded with the
+  rest of the state.
+- On the server-stateful path the runtime skips ``ConversationManager``
+  and the observation pack (no client-side history to reshape) and calls
+  ``complete()`` rather than ``stream()``. Memory, hooks, tool calling,
+  and checkpointing apply identically across the three classes. A native
+  ``response_format`` is attached only for ``OCIChatCompletionsModel``;
+  the other two fall back to the prompted-JSON path.
 
-Run it::
-
+Run it:
     export OCI_PROFILE=<your-profile>
     export OCI_REGION=us-chicago-1                   # or your region
     export OCI_COMPARTMENT=ocid1.compartment.oc1..…  # GenAI access
@@ -46,7 +52,6 @@ import argparse
 import asyncio
 import os
 import sys
-from typing import Any
 
 
 def _env(name: str) -> str:
@@ -85,19 +90,22 @@ def example_responses_transport() -> None:
     result = agent.run_sync("What is the largest mammal on Earth?")
     print(f"  reply:           {result.message.strip()}")
     print(f"  iterations:      {result.metrics.iterations}")
-    # After turn 1, AgentState carries the continuation id, so a follow-up
-    # agent.run(...) on the same thread_id resumes the OCI-side thread.
-    print(f"  server_stateful: {type(model).server_stateful}")
+    # After turn 1, AgentState carries the continuation id. Give the agent a
+    # checkpointer and a follow-up run on the same thread_id reloads that
+    # state and resumes the OCI-side thread; without one, every run starts
+    # a fresh thread. server_stateful is False when the model was built with
+    # store=False (ZDR tenancies) — then the full history travels each turn.
+    print(f"  server_stateful: {model.server_stateful}")
     print()
 
 
 # =============================================================================
-# OCIModel — OCI SDK against the proprietary chat endpoint (Cohere R-series)
+# OCIModel — OCI SDK against the proprietary chat endpoint (Cohere)
 # =============================================================================
 
 
 def example_sdk_transport() -> None:
-    """Required for Cohere R-series. OpenAI-compatible endpoint rejects them."""
+    """Required for Cohere (Command R and Command A); OpenAI-compatible endpoint rejects them."""
     from locus.agent import Agent
     from locus.models.providers.oci import OCIModel
 
@@ -119,7 +127,7 @@ def example_sdk_transport() -> None:
     result = agent.run_sync("What is the largest mammal on Earth?")
     print(f"  reply:           {result.message.strip()}")
     print(f"  iterations:      {result.metrics.iterations}")
-    print(f"  server_stateful: {getattr(type(model), 'server_stateful', False)}")
+    print(f"  server_stateful: {getattr(model, 'server_stateful', False)}")
     print()
 
 
@@ -129,7 +137,7 @@ def example_sdk_transport() -> None:
 
 
 def example_v1_transport() -> None:
-    """The default. One class for OpenAI, Meta, Mistral, xAI, Gemini, and non-R Cohere."""
+    """The default. One class for OpenAI, Meta, Mistral, xAI, and Gemini."""
     from locus.agent import Agent
     from locus.models.providers.oci import OCIChatCompletionsModel
 
@@ -146,7 +154,7 @@ def example_v1_transport() -> None:
     result = agent.run_sync("What is the largest mammal on Earth?")
     print(f"  reply:           {result.message.strip()}")
     print(f"  iterations:      {result.metrics.iterations}")
-    print(f"  server_stateful: {getattr(type(model), 'server_stateful', False)}")
+    print(f"  server_stateful: {getattr(model, 'server_stateful', False)}")
     print()
 
 
@@ -157,6 +165,10 @@ def example_v1_transport() -> None:
 
 def print_comparison() -> None:
     """A quick decision table the reader can refer back to."""
+    # Rows describe each class called on its own. Through Agent, the
+    # server-stateful Responses path answers via complete() rather than a
+    # token stream, and only OCIChatCompletionsModel receives a native
+    # response_format. OCIModel also serves cohere.command-a*.
     print("=== Decision table ===\n")
     rows: list[tuple[str, str, str, str]] = [
         (
@@ -192,11 +204,6 @@ def print_comparison() -> None:
     for r in rows:
         print(" ".join(f"{c:<{w}}" for c, w in zip(r, cols, strict=False)))
     print()
-
-
-# =============================================================================
-# Main
-# =============================================================================
 
 
 async def _amain(which: str) -> None:

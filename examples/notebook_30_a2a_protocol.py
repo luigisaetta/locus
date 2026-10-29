@@ -7,18 +7,19 @@ Notebook 30: A2A — cross-org payment-intel sharing between spec-compliant peer
 A2A (Agent-to-Agent) is the public cross-framework protocol at
 https://a2aproject.github.io/A2A/. Locus implements the server and
 client sides on the A2A **v1.0** wire format; this notebook publishes one
-payment network's risk agent behind ``A2AServer``, drives every v1.0
-method from a partner bank's ``A2AClient``, and inspects the typed
+payment network's risk agent behind ``A2AServer``, drives the five v1.0
+methods a partner bank's ``A2AClient`` exposes, and inspects the typed
 task lifecycle — the plumbing of a cross-org payment-risk mesh.
 
 Trust note: a cross-org payment mesh spans organizational boundaries,
 so treat every inbound message as untrusted input. The wire here is
-authenticated with a bearer token and the partner agent's reach is
-bounded by its published ``AgentSkill`` set, but a partner's response
+authenticated with a bearer token and the partner agent's scope is
+declared by its published ``AgentSkill`` set, but a partner's response
 can still carry indirect prompt injection the same way any other tool
 output can. Ground what a peer asserts about a merchant or a card BIN;
 do not promote it to a decline or a chargeback unverified.
 
+Key ideas:
 - Agent Card published at ``/.well-known/agent-card.json`` carries
   capabilities, typed ``AgentSkill`` entries, provider metadata,
   ``protocolVersion``, and ``supportedInterfaces`` — enough for any
@@ -33,14 +34,18 @@ do not promote it to a decline or a chargeback unverified.
   unchanged; the v1.0 conversion happens at the HTTP boundary.
 - ``A2AClient.invoke`` is the backwards-compatible flat shape for peers
   that haven't picked up the spec yet.
-- ``A2AClient.as_tool(...)`` wraps a remote agent as a Locus ``@tool``
-  so a local payments agent can delegate risk questions transparently.
+- ``A2AClient.as_tool(...)`` wraps a remote agent as a Locus ``@tool``.
+  The generated tool is synchronous and calls ``asyncio.run`` internally
+  over the flat ``invoke`` path, so it can only be invoked from sync
+  code — not from inside a running event loop such as this notebook's
+  ``main``.
 
 Run it:
     .venv/bin/python examples/notebook_30_a2a_protocol.py
 
-The default provider is the bundled mock model. Set LOCUS_MODEL_PROVIDER=openai
-(or anthropic) and the matching credentials to use a live model. Set
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable
+profile, otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER``
+(``oci``, ``openai``, ``anthropic``, ``mock``) to choose. Set
 ``LOCUS_MODEL_PROVIDER=mock`` for offline runs.
 
 Prerequisites:
@@ -78,7 +83,7 @@ def _free_port() -> int:
     return port
 
 
-def _start_server(server: A2AServer, port: int) -> threading.Thread:
+async def _start_server(server: A2AServer, port: int) -> threading.Thread:
     """Run uvicorn in a daemon thread so the client below can drive it."""
     import uvicorn
 
@@ -88,9 +93,12 @@ def _start_server(server: A2AServer, port: int) -> threading.Thread:
     uv = uvicorn.Server(config)
     thread = threading.Thread(target=uv.run, daemon=True, name="a2a-server")
     thread.start()
+    # Poll with an async sleep: a blocking sleep here would stall the event
+    # loop this coroutine is running on. uvicorn exposes ``started`` as a
+    # plain bool set from the server thread — there is no Event to await.
     deadline = time.monotonic() + 10.0
-    while time.monotonic() < deadline and not uv.started:
-        time.sleep(0.05)
+    while time.monotonic() < deadline and not uv.started:  # noqa: ASYNC110
+        await asyncio.sleep(0.05)
     if not uv.started:
         msg = "uvicorn did not start within deadline"
         raise RuntimeError(msg)
@@ -138,7 +146,7 @@ async def main() -> None:
         ],
         api_key=api_key,
     )
-    _start_server(server, port)
+    await _start_server(server, port)
     print(f"  A2AServer listening on http://127.0.0.1:{port}")
 
     base_url = f"http://127.0.0.1:{port}"
@@ -275,12 +283,15 @@ async def main() -> None:
         name="ask_partner_risk", description="ask the partner network's payment-risk agent"
     )
     print(f"  tool.name = {tool.name}, tool.description = {tool.description}")
-    # tool.fn calls asyncio.run() internally, so it can only be invoked
-    # from sync code. We're already inside an async main, so just
-    # inspect the tool object instead of calling it.
+    # The generated tool calls asyncio.run() internally, which raises inside
+    # a running event loop — so it is inspected here, not called. Hand it to
+    # an agent driven from sync code (``run_sync``) to actually use it.
 
     print("\n" + "=" * 60)
-    print("Next: Notebook 31 — DeepAgent")
+    print(
+        "Next: Notebook 31 — DeepAgent — scoped service-fleet reliability review "
+        "grounded in prior notes"
+    )
     print("=" * 60)
 
 

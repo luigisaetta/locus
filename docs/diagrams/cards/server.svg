@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Server card: AgentServer (the band) is the FastAPI process `locus serve`
+  starts around one Agent, the subject (or a GraphRunnable adapter over a
+  graph). A client's POST /invoke, /stream or /resume runs it (agent.run,
+  agent.resume) and the reply comes back out as JSON or an SSE stream. The
+  store beside the agent is its checkpointer: every thread is loaded and saved
+  under principal:thread_id, and GET/DELETE /threads/{thread_id} read it.
+  locus/server/app.py: AgentServer (/invoke, /stream, /resume, /threads/{thread_id}),
+  agent.config.checkpointer; locus/server/adapters.py: GraphRunnable;
+  locus/cli.py: serve
+  Cylinder caps are cubic curves, not arcs: the glyph lint reads every number
+  in d literally and an arc's 0 flags would read as an out-of-bounds point.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">
+  <title>A request from a client into a server band holding one agent and its thread store, and the response back out beneath</title>
+  <defs><marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g class="lane"><rect x="35" y="14" width="57" height="28" rx="4"/></g>
+  <g class="node"><rect x="4" y="21" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M26,25 L42,25"/>
+  <g class="node primary"><rect x="44" y="21" width="22" height="14" rx="3"/></g>
+  <path class="edge" marker-end="url(#ah)" d="M44,31 L28,31"/>
+  <g class="store"><path d="M71,21 C71,18 85,18 85,21 L85,35 C85,38 71,38 71,35 Z M71,21 C71,24 85,24 85,21"/></g>
+</svg>

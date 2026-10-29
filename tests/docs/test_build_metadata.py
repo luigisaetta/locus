@@ -236,3 +236,116 @@ def test_pages_without_diagrams_never_touch_the_disk(monkeypatch) -> None:
     assert (
         build_metadata.on_page_markdown("text", config={"extra": {"sdk_version": "dev"}}) == "text"
     )
+
+
+def test_model_tabs_render_the_block_once_per_provider() -> None:
+    markdown = (
+        "Intro.\n\n{{ locus_model_tabs }}\n\n```python\n"
+        'agent = Agent(model="{{ locus_model }}")\n\nprint(agent)\n```\n\nAfter.\n'
+    )
+    tabs = [{"label": "OCI", "model": "oci:a.b"}, {"label": "OpenAI", "model": "openai:c"}]
+
+    rendered = build_metadata.on_page_markdown(
+        markdown, config={"extra": {"sdk_version": "1.0.0", "model_tabs": tabs}}
+    )
+
+    assert rendered == (
+        "Intro.\n\n"
+        '=== "OCI"\n\n    ```python\n    agent = Agent(model="oci:a.b")\n\n    print(agent)\n    ```\n\n'
+        '=== "OpenAI"\n\n    ```python\n    agent = Agent(model="openai:c")\n\n    print(agent)\n    ```\n'
+        "\n\nAfter.\n"
+    )
+
+
+def test_model_tabs_block_without_the_model_token_is_an_error() -> None:
+    markdown = "{{ locus_model_tabs }}\n```python\nx = 1\n```\n"
+    with pytest.raises(RuntimeError, match="locus_model"):
+        build_metadata.on_page_markdown(
+            markdown,
+            config={
+                "extra": {"sdk_version": "1.0.0", "model_tabs": [{"label": "A", "model": "a:b"}]}
+            },
+        )
+
+
+def test_model_tabs_without_config_is_an_error() -> None:
+    markdown = '{{ locus_model_tabs }}\n```python\nm = "{{ locus_model }}"\n```\n'
+    with pytest.raises(RuntimeError, match="extra.model_tabs"):
+        build_metadata.on_page_markdown(markdown, config={"extra": {"sdk_version": "1.0.0"}})
+
+
+def test_source_macro_quotes_a_symbol_by_name(tmp_path) -> None:
+    (tmp_path / "examples").mkdir()
+    (tmp_path / "examples" / "demo.py").write_text(
+        'import os\n\n\n@tool\ndef lookup(order_id: str) -> str:\n    """Look up."""\n    return order_id\n\n\n'
+        "class Flow:\n    def build(self):\n        return 1\n\n    def run(self):\n        return 2\n"
+    )
+    roots = [tmp_path]
+    assert build_metadata.render_source("examples/demo.py", "lookup", roots) == (
+        '```python\n@tool\ndef lookup(order_id: str) -> str:\n    """Look up."""\n    return order_id\n```'
+    )
+    assert build_metadata.render_source("examples/demo.py", "Flow.run", roots) == (
+        "```python\ndef run(self):\n    return 2\n```"
+    )
+    with pytest.raises(RuntimeError, match="no function or class named missing"):
+        build_metadata.render_source("examples/demo.py", "missing", roots)
+    with pytest.raises(RuntimeError, match="does not exist"):
+        build_metadata.render_source("examples/nope.py", "lookup", roots)
+
+
+def test_source_macro_expands_on_a_page(tmp_path) -> None:
+    (tmp_path / "mkdocs.yml").write_text("site_name: x\n")
+    (tmp_path / "examples").mkdir()
+    (tmp_path / "examples" / "demo.py").write_text("def main():\n    return 1\n")
+    rendered = build_metadata.on_page_markdown(
+        "Before.\n\n{{ locus_source examples/demo.py::main }}\n\nAfter.\n",
+        config={
+            "extra": {"sdk_version": "1.0.0"},
+            "config_file_path": str(tmp_path / "mkdocs.yml"),
+        },
+    )
+    assert rendered == "Before.\n\n```python\ndef main():\n    return 1\n```\n\nAfter.\n"
+
+
+_GLYPH = (
+    '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56">\n'
+    "<title>Three stages</title>\n<!-- authoring note -->\n"
+    '<defs><marker id="ah"><path class="arrowhead" d="M0,0 L6,3 L0,6 z"/></marker></defs>\n'
+    '<g class="node"><rect x="6" y="21" width="22" height="14" rx="3"/></g>\n'
+    '<path class="edge" marker-end="url(#ah)" d="M28,28 L35,28"/>\n</svg>\n'
+)
+
+
+def _glyph_dir(tmp_path, name: str = "pipe"):
+    cards = tmp_path / "diagrams" / "cards"
+    cards.mkdir(parents=True, exist_ok=True)
+    (cards / f"{name}.svg").write_text(_GLYPH)
+    return tmp_path
+
+
+def test_a_card_glyph_is_inlined_on_one_line_and_hidden_from_assistive_tech(tmp_path) -> None:
+    out = build_metadata.render_glyph("pipe", _glyph_dir(tmp_path))
+    assert out.startswith('<span class="tl-glyph" aria-hidden="true"><svg')
+    assert out.endswith("</svg></span>")
+    assert "\n" not in out, "the span sits inside a list item's paragraph"
+    assert "<?xml" not in out and "authoring note" not in out
+
+
+def test_card_glyph_ids_are_namespaced(tmp_path) -> None:
+    out = build_metadata.render_glyph("pipe", _glyph_dir(tmp_path))
+    assert 'id="card-pipe--ah"' in out and "url(#card-pipe--ah)" in out
+
+
+def test_a_card_glyph_token_expands_inside_a_list_item(tmp_path) -> None:
+    docs = _glyph_dir(tmp_path)
+    rendered = build_metadata.on_page_markdown(
+        "- {{ locus_glyph pipe }} **[Pipelines](x.md)**\n",
+        config={"extra": {"sdk_version": "dev"}, "docs_dir": str(docs)},
+    )
+    assert rendered.startswith('- <span class="tl-glyph" aria-hidden="true"><svg')
+    assert rendered.rstrip().endswith("</svg></span> **[Pipelines](x.md)**")
+
+
+def test_a_missing_card_glyph_fails_the_build(tmp_path) -> None:
+    with pytest.raises(RuntimeError, match="does not exist"):
+        build_metadata.render_glyph("nope", tmp_path)

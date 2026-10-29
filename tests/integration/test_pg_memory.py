@@ -125,7 +125,9 @@ async def test_true_semantic_recall_with_real_embedder() -> None:
         assert store.capabilities.semantic_search is True
         ns = ("acme", "user", "fede")
         await store.put(ns, "fy", {"content": "the company fiscal year starts in April"})
-        await store.put(ns, "stack", {"content": "the platform runs on AWS EKS with Aurora"})
+        await store.put(
+            ns, "stack", {"content": "the platform runs on OKE with Autonomous Database"}
+        )
         await store.put(ns, "coffee", {"content": "prefers oat milk flat whites"})
 
         # "accounting period" shares no token with "fiscal year" — semantics only.

@@ -11,37 +11,46 @@ the round-trip happen. The typed contracts are ordinary Pydantic models —
 the same ``ContactPoint``, ``Resolution``, and priority enums a Locus
 support agent emits ticket updates with.
 
+Key ideas:
 - ``extract_json`` and ``parse_structured`` — pull JSON out of a model
   reply and validate it against a Pydantic schema (a typed model that
   the LLM must produce JSON for).
 - ``create_schema_prompt`` / ``create_output_instructions`` — emit the
-  schema-aware system prompt the model needs to comply.
-- ``Agent(output_schema=YourModel)`` — constrained decoding plus a
-  prompted-JSON fallback wired into the agent loop, so the parsed
-  Pydantic object lands on ``result.parsed``.
+  schema-aware instruction the model needs to comply.
+- ``Agent(output_schema=YourModel)`` — the schema instruction rides the
+  system prompt, supporting providers also receive a native
+  ``response_format``, and the parsed Pydantic object lands on
+  ``result.parsed``.
 - ``StructuredOutputError`` for strict-mode parse failures.
 - ``ConversationVerdict`` — a notebook-local schema the model produces as
-  constrained JSON in Part 6, classifying a chat transcript into
+  prompted JSON in Part 6, classifying a chat transcript into
   (intent, sentiment) with a confidence and an ``evidence_coverage``
-  signal a downstream grounding step uses to abstain.
+  signal a downstream grounding step can use to abstain.
 
 Run it:
-    # The bundled mock model is the default; set LOCUS_MODEL_PROVIDER for a live provider.
-    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o python examples/notebook_07_structured_output.py
+    # Default: OCI GenAI if ~/.oci/config has a usable profile, else the bundled mock model
+    python examples/notebook_07_structured_output.py
 
-    # Offline:
-    LOCUS_MODEL_PROVIDER=mock python examples/notebook_07_structured_output.py
+    # Force a provider and model:
+    export LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
+    python examples/notebook_07_structured_output.py
+
+    # There is no offline run: every part needs a live model that can
+    # produce JSON, so under the mock provider the notebook exits at once.
 
 Prerequisites:
-- An OpenAI or Anthropic API key (or set ``LOCUS_MODEL_PROVIDER`` to
-  ``openai`` / ``anthropic`` / ``mock``).
-- A model that supports constrained JSON decoding for Part 8 — the
-  ``check_structured_output_capable()`` helper exits cleanly under mock.
+- A live, JSON-capable model: OCI GenAI (the default when an OCI profile
+  is present), or an OpenAI / Anthropic key with the matching
+  ``LOCUS_MODEL_PROVIDER``.
+- For Part 8, a model that returns JSON matching the schema, natively via
+  ``response_format`` or through the prompted instruction and schema
+  repair — the ``check_structured_output_capable()`` helper exits cleanly
+  under mock.
 """
 
 import asyncio
+import functools
 import json
-import time
 from enum import StrEnum
 
 from config import get_model
@@ -63,6 +72,17 @@ from locus.core.structured import (
 # ---------------------------------------------------------------------------
 
 
+@functools.lru_cache(maxsize=1)
+def _model():
+    """One model client for the whole notebook.
+
+    Building a provider client per call re-reads credentials and re-opens
+    HTTP pools eight times for no gain; the per-call knobs (system prompt,
+    token cap) live on the Agent instead.
+    """
+    return get_model()
+
+
 def _banner(result, label: str = "") -> None:
     m = result.metrics
     tag = f" {label}" if label else ""
@@ -75,14 +95,9 @@ def _banner(result, label: str = "") -> None:
 async def _llm_call(
     prompt: str, *, system: str = "Reply in one sentence.", max_tokens: int = 100
 ) -> str:
-    agent = Agent(model=get_model(max_tokens=max_tokens), system_prompt=system)
-    t0 = time.perf_counter()
+    agent = Agent(model=_model(), system_prompt=system, max_tokens=max_tokens)
     res = await agent.arun(prompt)
-    dt = time.perf_counter() - t0
-    print(
-        f"  [model call: {dt:.2f}s · "
-        f"{res.metrics.prompt_tokens}→{res.metrics.completion_tokens} tokens]"
-    )
+    _banner(res)
     return res.message.strip()
 
 
@@ -273,9 +288,9 @@ async def main() -> None:
     # =========================================================================
     # Part 6: A typed verdict schema — ConversationVerdict from a chat
     #         transcript. The model maps the conversation to an (intent,
-    #         sentiment) read with a confidence. Low evidence_coverage is the
-    #         signal a downstream grounding step uses to abstain rather than
-    #         auto-route on a guess — see notebook 55.
+    #         sentiment) read with a confidence. A low evidence_coverage is a
+    #         typed signal a downstream grounding step can use to abstain
+    #         rather than auto-route on a guess — see notebook 55.
     # =========================================================================
     print("\n=== Part 6: ConversationVerdict ===\n")
     cv_instructions = create_output_instructions(ConversationVerdict)
@@ -324,31 +339,28 @@ async def main() -> None:
     # =========================================================================
     print("\n=== Part 8: Agent(output_schema=IssueList) ===\n")
     live_agent = Agent(
-        model=get_model(max_tokens=300),
+        model=_model(),
+        max_tokens=300,
         output_schema=IssueList,
         system_prompt=(
             "You are a support-ticket triager. Report exactly three "
             "distinct issues for the ticket under review as a structured list."
         ),
     )
-    t0 = time.perf_counter()
     live = await live_agent.arun(
         "Triage: a customer reports the mobile app crashes on checkout, they were "
         "double-charged for one order, and the help center login link is broken. "
         "Top three issues."
     )
-    dt = time.perf_counter() - t0
-    print(
-        f"  [model call: {dt:.2f}s · "
-        f"{live.metrics.prompt_tokens}→{live.metrics.completion_tokens} tokens]"
-    )
+    _banner(live, "output_schema")
     report: IssueList | None = live.parsed
     if not isinstance(report, IssueList):
         raise TypeError(
             "Triage agent returned no parsed IssueList. The configured model "
-            "could not honor the JSON schema. Use a stronger model "
-            "(e.g. openai.gpt-4o, openai.gpt-5, anthropic.claude-3-5-sonnet) "
-            f"for notebook 07 (Part 8). Raw output: {live.message!r}"
+            "could not honor the JSON schema. Use a stronger model for "
+            "notebook 07 (Part 8) — e.g. LOCUS_MODEL_PROVIDER=oci "
+            "LOCUS_MODEL_ID=openai.gpt-4o, or LOCUS_MODEL_PROVIDER=openai "
+            f"LOCUS_MODEL_ID=gpt-4o. Raw output: {live.message!r}"
         )
     for f in report.issues:
         print(f"  {f.title[:40]:<40}  confidence={f.confidence:.2f}  priority={f.priority.value}")

@@ -3,17 +3,20 @@
 # https://oss.oracle.com/licenses/upl/
 """Notebook 52: RAG providers — a payments runbook KB on any vector store.
 
-A payments operations team's runbook corpus outlives any single backend
-choice. The same corpus that feeds the dispute assistant (notebook 51)
-also carries decline-code playbooks and chargeback procedures, and
-production RAG is two pluggable pieces, both behind one Locus interface:
+A payments operations team's runbook corpus — decline-code playbooks,
+chargeback procedures, refund SLAs — outlives any single backend choice.
+Production RAG is two pluggable pieces, both behind one Locus interface:
 
 - **Embeddings** — ``OpenAIEmbeddings`` (``text-embedding-3-small`` /
-  ``-3-large``) or ``CohereEmbeddings`` (Cohere's direct API).
+  ``-3-large``), ``CohereEmbeddings`` (Cohere's direct API),
+  ``OCIEmbeddings`` (Cohere embedding models served by OCI Generative AI)
+  or ``OracleInDBEmbeddings`` (ONNX models running inside Oracle Database
+  26ai).
 - **Vector store** — ``InMemoryVectorStore`` for demos and tests, or a
   durable backend: ``PgVectorStore``, ``OpenSearchVectorStore``,
-  ``QdrantVectorStore``, ``ChromaVectorStore``. Swapping is a one-line
-  change; the retrieve/add API is identical.
+  ``QdrantVectorStore``, ``ChromaVectorStore`` or ``OracleVectorStore``
+  (Oracle Database 26ai). Swapping is a one-line change; the retrieve/add
+  API is identical.
 
 Choice of embedding model and distance metric is an operations
 decision, not just a tuning knob: it sets retrieval precision, and weak
@@ -22,15 +25,15 @@ answer to a merchant. What each part covers (all against the same
 runbook corpus):
 
 - Part 1 — embedding-model selection (small vs large dimensions).
-- Part 2 — distance metric choices (COSINE / DOT / EUCLIDEAN).
-- Part 3 — Qdrant in-memory store as a drop-in for InMemoryVectorStore.
+- Part 2 — three ``distance_metric`` strings (COSINE / DOT / EUCLIDEAN) and
+  what the store does with them.
+- Part 3 — Qdrant in-memory store as a drop-in for ``InMemoryVectorStore``.
 - Part 4 — batch ingest, ``count()``, ``clear()``.
 
 Run it:
+    # Embeddings need an OpenAI API key; without it the notebook prints
+    # what's missing and exits cleanly.
     export OPENAI_API_KEY=sk-...
-    python examples/notebook_52_rag_providers.py
-
-    # Offline (skips the live demo cleanly when the key is missing):
     python examples/notebook_52_rag_providers.py
 """
 
@@ -38,9 +41,10 @@ import asyncio
 import os
 import sys
 
+from config import get_embedder
+
 from locus.rag import (
     InMemoryVectorStore,
-    OpenAIEmbeddings,
     QdrantVectorStore,
     RAGRetriever,
 )
@@ -49,10 +53,6 @@ from locus.rag.stores.base import Document
 
 def _missing_env() -> list[str]:
     return [name for name in ("OPENAI_API_KEY",) if not os.environ.get(name)]
-
-
-def _embedder(model: str) -> OpenAIEmbeddings:
-    return OpenAIEmbeddings(model=model)
 
 
 def _store(*, dimension: int, distance: str = "COSINE") -> InMemoryVectorStore:
@@ -93,7 +93,7 @@ async def part1_embedding_models():
     print("=" * 60)
 
     for model in ["text-embedding-3-small", "text-embedding-3-large"]:
-        embedder = _embedder(model)
+        embedder = get_embedder(model=model)
         store = _store(dimension=embedder.config.dimension)
         retriever = RAGRetriever(embedder=embedder, store=store)
         print(f"\n  {model} → dim={embedder.config.dimension}")
@@ -104,8 +104,11 @@ async def part1_embedding_models():
 
 
 # =============================================================================
-# Part 2: Distance metric variants — COSINE is the default; DOT and
-#         EUCLIDEAN are alternative shapes the store supports.
+# Part 2: Distance metric variants — the metric is a property of the store.
+#         InMemoryVectorStore matches "cosine" and "euclidean" exactly and
+#         scores any other name, including the upper-case ones below, as a
+#         dot product; OracleVectorStore is the backend that spells the
+#         metrics COSINE / DOT / EUCLIDEAN.
 # =============================================================================
 
 
@@ -114,15 +117,24 @@ async def part2_distance_metrics():
     print("Part 2: Distance metric variants on the same corpus")
     print("=" * 60)
 
-    embedder = _embedder("text-embedding-3-small")
+    embedder = get_embedder(model="text-embedding-3-small")
     query = "issuer declined the card for not enough money"
+
+    # The metric is a property of the store, not the vectors: embed the
+    # corpus and the query once, then load the same Documents into three
+    # stores so the only thing that differs between the rows is the metric.
+    results = await embedder.embed_batch(CORPUS)
+    docs = [
+        Document(id=f"runbook_{i}", content=text, embedding=r.embedding)
+        for i, (text, r) in enumerate(zip(CORPUS, results, strict=True))
+    ]
+    q = await embedder.embed(query)
 
     for metric in ["COSINE", "DOT", "EUCLIDEAN"]:
         store = _store(dimension=embedder.config.dimension, distance=metric)
-        retriever = RAGRetriever(embedder=embedder, store=store)
-        await retriever.add_documents(CORPUS)
-        hits = await retriever.retrieve(query, limit=2)
-        top = hits.documents[0]
+        await store.add_batch(docs)
+        hits = await store.search(query_embedding=q.embedding, limit=2)
+        top = hits[0]
         print(f"  {metric}: top score={top.score:.4f}  → {top.document.content[:60]}…")
 
 
@@ -137,7 +149,7 @@ async def part3_swap_backend():
     print("Part 3: QdrantVectorStore (location=':memory:')")
     print("=" * 60)
 
-    embedder = _embedder("text-embedding-3-small")
+    embedder = get_embedder(model="text-embedding-3-small")
     try:
         store = QdrantVectorStore(
             location=":memory:",
@@ -180,7 +192,7 @@ async def part4_batch():
     print("Part 4: Batch ingest + count + clear")
     print("=" * 60)
 
-    embedder = _embedder("text-embedding-3-small")
+    embedder = get_embedder(model="text-embedding-3-small")
     store = _store(dimension=embedder.config.dimension)
     retriever = RAGRetriever(embedder=embedder, store=store)
 
@@ -188,11 +200,6 @@ async def part4_batch():
     print(f"  After add_documents: runbooks = {await store.count()}")
     await store.clear()
     print(f"  After clear():       runbooks = {await store.count()}")
-
-
-# =============================================================================
-# Main
-# =============================================================================
 
 
 async def main():

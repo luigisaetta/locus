@@ -9,7 +9,27 @@ affects the world. The model decides *"call `lookup_order` with order_id='ord-48
 the SDK runs your `lookup_order` function, captures the return value, and
 feeds it back. From your side, a tool is **a regular Python function
 with a `@tool` decorator** — the SDK introspects the signature and
-docstring to build the schema the model sees.
+docstring to build the schema the model sees. The drawing follows that
+round trip: `@tool` reads the signature and docstring into a `Tool` with
+a JSON schema, the `ToolRegistry` offers it to the model, and a call
+comes back through the executor, your function and a `ToolResult`,
+cut to size when it is too long, to the observation the model reads
+next.
+
+{{ locus_diagram tool-pipeline }}
+
+Two parts of the drawing have no section of their own on this page. A
+function that declares a `ctx: ToolContext` parameter receives the
+call's `run_id`, `iteration`, `state` and invocation metadata, and that
+parameter is left out of the schema the model sees; see
+[Accessing context](../how-to/custom-tools.md#accessing-context) and
+the [`ToolContext` reference](../api/tools.md#tool-context). A result
+longer than [`max_tool_result_length`](../api/agent.md#agentconfig) is
+cut to its head and tail around a marker that says how much was removed.
+With a `tool_result_store` configured it is stored whole and a reference
+key is inlined instead; with the ObservationPack on it goes whole up to
+the pack's inline limit and above that is archived whole and sent cut
+around a pointer to the archive.
 
 This is the seam most production code touches. Get tools right and
 the rest of the framework gets out of your way.
@@ -32,7 +52,7 @@ the rest of the framework gets out of your way.
 from locus.tools import tool
 @tool
 def lookup_order(order_id: str, include_history: bool = False) -> dict:
-    """Return the order record for ``order_id``; include past events when ``include_history``."""
+    """Return the order record for ``order_id``, with past events when ``include_history``."""
     return billing.get_order(order_id, include_history)
 ```
 
@@ -42,8 +62,10 @@ mark optional parameters.
 
 ### 2. Pass to the agent
 
+{{ locus_model_tabs }}
+
 ```python
-agent = Agent(model="{{ locus_example_model }}", tools=[lookup_order])
+agent = Agent(model="{{ locus_model }}", tools=[lookup_order])
 ```
 
 That's the wiring. The model now sees `lookup_order` in its tool list and
@@ -64,9 +86,9 @@ schema marshalling.
 
 ### Idempotent tools — the model can retry; the side effect can't
 
-This is the SDK's flagship tool primitive. Some side-effecting tools
-should not repeat for an identical call within a run — issuing a refund, paging
-on-call, rolling out a deploy. Mark them `idempotent=True`:
+Some side-effecting tools should not repeat for an identical call
+within a run — issuing a refund, paging on-call, rolling out a deploy.
+Mark them `idempotent=True`:
 
 ```python
 @tool(idempotent=True)
@@ -105,7 +127,8 @@ def score_priority(amount: float, age_days: int) -> float:
 async def query_siem(query: str) -> str:
     """Search the SIEM (a security team's log platform) for matching events."""
     async with httpx.AsyncClient() as c:
-        return (await c.get(f"https://siem.example/search?q={query}")).text  # async — runs on the loop
+        # async — runs on the loop
+        return (await c.get(f"https://siem.example/search?q={query}")).text
 ```
 
 ### Parallel by default — fast when the model wants multiple things
@@ -162,7 +185,10 @@ Override the auto-derived defaults when the function name doesn't
 read well to the model:
 
 ```python
-@tool(name="lookup_customer", description="Return the account record and open orders for a customer id.")
+@tool(
+    name="lookup_customer",
+    description="Return the account record and open orders for a customer id.",
+)
 async def _lookup_customer_internal(customer_id: str) -> dict:
     ...
 ```
@@ -203,7 +229,7 @@ through `LocusMCPServer` — same `@tool`, no rewrite. See
 |---|---|
 | Model never calls the tool | Description / docstring isn't telling the model when to use it. Be explicit: *"Use this tool when the user asks about X."* |
 | Tool fires twice on the same input | You're seeing the model retry. Add `idempotent=True` (a refund goes out once, not twice). |
-| `TypeError: missing 1 required positional argument` at call time | Function signature has a parameter without a default that you didn't surface in the docstring; the model omitted it. Add a default or explain the parameter. |
+| `TypeError: lookup_order was called with the wrong arguments — missing required argument(s): …` in the tool result | Function signature has a parameter without a default that you didn't surface in the docstring; the model omitted it, and `sig.bind()` rejects the call before your function runs. Add a default or explain the parameter. |
 | Tool returns Python objects but the model echoes `<__main__.X object at 0x…>` | Tool return value isn't JSON-serialisable. Return a dict / Pydantic model / list of strings, not arbitrary objects. |
 | Async tool blocks the event loop | The "async" body is calling sync I/O. Wrap the blocking call in `asyncio.to_thread(...)` or use an async client. |
 

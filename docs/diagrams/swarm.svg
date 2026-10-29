@@ -39,8 +39,8 @@
 
   <!-- queue -> result -->
   <path class="edge" marker-end="url(#ah)" d="M467,175 H680"/>
-  <rect class="label-bg" x="518" y="165" width="112" height="20" rx="4"/>
-  <text class="label" x="574" y="175">no task pending</text>
+  <rect class="label-bg" x="512" y="165" width="124" height="20" rx="4"/>
+  <text class="label" x="574" y="175">no claimable task</text>
 
   <!-- queue -> agents: each claims the next task it can handle -->
   <path class="edge" marker-end="url(#ah)" d="M322,204 C322,250 122,244 122,288"/>

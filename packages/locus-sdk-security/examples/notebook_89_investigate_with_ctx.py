@@ -1,20 +1,19 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
 """Notebook 89: investigate an incident with SecurityContext — no vendor names.
 
-The point of `SecurityContext` is that you reason in *domains*, not vendors. The
-whole investigation below never says "Splunk" or "Okta" or "CrowdStrike" — it
-says logs, identity, threat-intel, endpoint, actions. Swap a real vendor in by
-injecting a provider (`SecurityContext(logs=SplunkLogs())`); the investigation
-code does not change.
+The point of `SecurityContext` is that you reason in *domains*, not vendors.
+None of the calls below names a vendor — they name logs, identity, threat
+intel, endpoint and actions. Swap a live vendor in by injecting a provider for
+one domain (`SecurityContext(logs=MyLogs())`); the investigation code does not
+change.
 
 Runs offline on the bundled reference providers.
 
-Run:
-    python examples/notebook_89_investigate_with_ctx.py
+Run it:
+    python packages/locus-sdk-security/examples/notebook_89_investigate_with_ctx.py
 """
 
 from __future__ import annotations
@@ -40,7 +39,8 @@ async def main() -> int:
     # 3. Threat intel: enrich an observed indicator.
     intel = await ctx.threat_intel.enrich("198.51.100.23")
     print(
-        f"3. threat_intel.enrich -> {intel.get('classification', intel.get('verdict', 'see record'))}"
+        "3. threat_intel.enrich -> "
+        f"{intel.get('classification', intel.get('verdict', 'see record'))}"
     )
 
     # 4. Endpoint: pull the host's recent forensics.
@@ -57,7 +57,7 @@ async def main() -> int:
     print(f"5. actions.request_approval -> {decision.outcome.upper()}: {decision.reason}")
 
     print(
-        "\nOne investigation, six domains, zero vendor names. The same code runs "
+        "\nOne investigation, five domains, zero vendor names. The same code runs "
         "against real Splunk / Okta / CrowdStrike once you inject those providers."
     )
     return 0

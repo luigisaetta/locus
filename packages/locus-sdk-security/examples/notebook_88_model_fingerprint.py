@@ -1,23 +1,21 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
-"""Notebook 88: Model & hardware fingerprinting via timing side-channels.
+"""Notebook 88: Model and hardware fingerprinting via timing side-channels.
 
 Scenario
 ────────
-A CISO is about to sign a $2 M/year contract with a vendor claiming to serve
+A CISO is about to sign a $2M/year contract with a vendor claiming to serve
 "GPT-4o on H100 clusters."  Before signing, she wants to verify:
   - Is the model actually GPT-4o (or a smaller substitute)?
   - Is it running on H100 (or shared consumer-grade GPU)?
   - How confident is the classifier, and can this be grounded in evidence?
 
-Timing side-channels are the only non-intrusive signal available to a buyer
-with black-box API access: TTFT (time-to-first-token), inter-token latency,
-and tail percentiles differ significantly across model families and hardware
-classes because of differences in FLOPs, KV-cache behaviour, and memory
-bandwidth.
+Timing side-channels are the cheapest non-intrusive signal available to a
+buyer with black-box API access: TTFT (time-to-first-token), inter-token
+latency and throughput differ across model families, inference engines and
+hardware classes.
 
 How it works
 ────────────
@@ -28,32 +26,37 @@ streams and extracts a feature vector over ``FEATURE_KEYS``
 With ``OPENAI_API_KEY`` (and optional ``TIMING_BASE_URL`` for any
 OpenAI-compatible endpoint), the live streaming path is used.  Without it,
 a deterministic offline sample is returned — enough to exercise the full
-classify → ground pipeline.
+classify → ground pipeline.  A live run also falls back to that sample when
+every request fails, and it never returns a partial vector.
 
 ``fingerprint_to_finding(features, asset=...)`` classifies the feature
-vector, then calls ``ground_fingerprint`` internally: if feature coverage
-clears the threshold, a grounded ``FingerprintFinding`` is returned; if too
-few features were observed (e.g., the endpoint rate-limited or timed out),
-the result is an ``Abstention`` — nothing is asserted.
+vector with the bundled ``default_classifier`` — a deterministic heuristic
+placeholder for a trained classifier, replaceable through ``classifier=`` —
+then calls ``ground_fingerprint`` internally: if the verdict's feature
+coverage clears ``min_coverage`` (0.75 by default), a grounded
+``FingerprintFinding`` is returned; a thinner vector (from a measurement
+that observed fewer of the four keys) is filed as an ungrounded claim and
+the result is an ``Abstention`` — nothing is asserted.  The printed
+interpretation compares only the hardware class with the vendor's claim;
+the model line is left to the reader.
 
-The ``AuditTrail`` records the probe and its grounding decision, exportable
-as JSONL for vendor SLA disputes or procurement audit evidence.
+The ``AuditTrail`` records the session markers and the result's type with
+its scalar fields (the asset of a finding, the reason of an abstention),
+exportable as JSONL for vendor SLA disputes or procurement audit evidence.
 
 Run (offline, no credentials):
-    python examples/notebook_88_model_fingerprint.py
+    python packages/locus-sdk-security/examples/notebook_88_model_fingerprint.py
 
 Run against a real OpenAI-compatible endpoint:
     OPENAI_API_KEY=sk-... TIMING_BASE_URL=https://vendor-api.example.com/v1 \\
-    python examples/notebook_88_model_fingerprint.py
+    python packages/locus-sdk-security/examples/notebook_88_model_fingerprint.py
 """
 
 from __future__ import annotations
 
-import asyncio
 import os
 
 from locus.control import AuditTrail
-from locus.control.taxonomy import AtlasTechnique
 from locus_security import (
     FEATURE_KEYS,
     fingerprint_to_finding,
@@ -71,16 +74,12 @@ from locus_security import (
 _MODEL = os.environ.get("FINGERPRINT_MODEL", "gpt-4o-mini")
 
 # Number of timed streaming samples to collect.
-# More samples = better feature coverage but more API cost and latency.
+# More samples give a steadier estimate of each feature at more API cost and
+# latency; the number of feature keys observed does not depend on it.
 _SAMPLES = int(os.environ.get("FINGERPRINT_SAMPLES", "10"))
 
 # Human-readable asset name for the Evidence (e.g., the vendor + contract ref).
 _ASSET = os.environ.get("FINGERPRINT_ASSET", "vendor-inference-api")
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 
 def run_fingerprint() -> None:
@@ -91,7 +90,7 @@ def run_fingerprint() -> None:
     Offline path: no credentials needed — deterministic sample used instead.
     """
     using_live = bool(os.environ.get("OPENAI_API_KEY"))
-    print(f"== Model / hardware fingerprinting via timing side-channels ==")
+    print("== Model / hardware fingerprinting via timing side-channels ==")
     print(f"   model  : {_MODEL!r}")
     print(f"   samples: {_SAMPLES}")
     print(f"   path   : {'live API stream' if using_live else 'offline deterministic sample'}")
@@ -132,7 +131,7 @@ def run_fingerprint() -> None:
     print()
     if is_finding(result):
         v = result.verdict
-        print(f"  [FINDING ] Grounded FingerprintFinding")
+        print("  [FINDING ] Grounded FingerprintFinding")
         print(f"             gsar_score : {result.gsar_score:.2f}")
         print(f"             model      : {v.model}")
         print(f"             engine     : {v.engine}")
@@ -144,14 +143,14 @@ def run_fingerprint() -> None:
         print(f"             taxonomy   : {taxonomy_str}")
         print()
         print("  Interpretation:")
-        print(f"    Vendor claims 'GPT-4o on H100 clusters'.")
+        print("    Vendor claims 'GPT-4o on H100 clusters'.")
         print(f"    Timing fingerprint identifies: {v.model} / {v.engine} / {v.hardware}.")
-        if "H100" in v.hardware or "A100" in v.hardware:
+        if "H100" in v.hardware:
             print("    Hardware class CONSISTENT with H100 claim.")
         else:
             print(f"    Hardware class {v.hardware!r} may DIVERGE from H100 claim — investigate.")
     else:
-        print(f"  [ABSTAIN ] Insufficient timing evidence — cannot ground a finding")
+        print("  [ABSTAIN ] Insufficient timing evidence — cannot ground a finding")
         print(f"             reason     : {result.reason}")
         print(f"             gsar_score : {result.gsar_score:.2f}")
         print()
@@ -173,12 +172,12 @@ def run_fingerprint() -> None:
     if not using_live:
         print(
             "To probe a real vendor endpoint, run:\n"
-            f"  OPENAI_API_KEY=sk-... \\\n"
-            f"  TIMING_BASE_URL=https://vendor-api.example.com/v1 \\\n"
-            f"  FINGERPRINT_MODEL=gpt-4o \\\n"
-            f"  FINGERPRINT_SAMPLES=20 \\\n"
-            f"  FINGERPRINT_ASSET='VendorCo-contract-2026' \\\n"
-            f"  python examples/notebook_88_model_fingerprint.py"
+            "  OPENAI_API_KEY=sk-... \\\n"
+            "  TIMING_BASE_URL=https://vendor-api.example.com/v1 \\\n"
+            "  FINGERPRINT_MODEL=gpt-4o \\\n"
+            "  FINGERPRINT_SAMPLES=20 \\\n"
+            "  FINGERPRINT_ASSET='VendorCo-contract-2026' \\\n"
+            "  python packages/locus-sdk-security/examples/notebook_88_model_fingerprint.py"
         )
 
 

@@ -295,6 +295,8 @@ class OpenShellBackend(SessionBackend):
         name: str | None = None,
         endpoint: str | None = None,
         spec: Any = None,
+        image: str | None = None,
+        providers: Sequence[str] | None = None,
         labels: Mapping[str, str] | None = None,
         ready_timeout: float = 300.0,
         root: str = SANDBOX_ROOT,
@@ -304,8 +306,22 @@ class OpenShellBackend(SessionBackend):
         """Create a sandbox, wait until it is ready, and return a backend over it.
 
         The backend owns the sandbox: :meth:`close` deletes it.
+
+        Args:
+            spec: An ``openshell`` ``SandboxSpec``; the gateway's defaults
+                when omitted. ``image`` and ``providers`` are applied to a
+                copy of it.
+            image: The container image the sandbox runs instead of the
+                gateway's default.
+            providers: OpenShell providers to attach. A provider keeps a
+                credential at the gateway; inside the sandbox its variable
+                holds a placeholder that the sandbox proxy swaps for the real
+                value only at the provider's endpoints, so a command can call
+                a model without ever holding the key.
         """
         client = _client(endpoint, client_options)
+        if image or providers:
+            spec = _spec(spec, image, providers)
         ref = client.create(workspace=workspace, name=name, spec=spec, labels=labels)
         client.wait_ready(ref.name, workspace=workspace, timeout_seconds=ready_timeout)
         return cls(client, ref.name, workspace=workspace, root=root, env=env, owns_sandbox=True)
@@ -322,3 +338,17 @@ def _client(endpoint: str | None, options: Mapping[str, Any]) -> Any:
     if endpoint is None:
         return openshell.SandboxClient.from_active_cluster(**options)
     return openshell.SandboxClient(endpoint, **options)
+
+
+def _spec(spec: Any, image: str | None, providers: Sequence[str] | None) -> Any:
+    """A copy of ``spec`` (or a fresh one) with ``image`` and ``providers`` set."""
+    from openshell._proto import openshell_pb2  # the SDK's request types
+
+    merged = openshell_pb2.SandboxSpec()
+    if spec is not None:
+        merged.CopyFrom(spec)
+    if image:
+        merged.template.image = image
+    if providers:
+        merged.providers.extend(providers)
+    return merged

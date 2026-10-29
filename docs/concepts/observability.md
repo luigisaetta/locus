@@ -5,9 +5,10 @@ title: Observability
 # Observability
 
 What the agent did, how long each step took, and what it cost — two
-built-in hooks plus the standard OpenTelemetry stack cover every piece
-you need. No vendor lock-in: Locus emits OTLP (the OpenTelemetry wire
-protocol), you point it at whatever backend you run.
+built-in hooks plus the standard OpenTelemetry stack cover logs, traces
+and metrics, and every result carries its token and cost totals. Locus
+emits OTLP (the OpenTelemetry wire protocol), so any OpenTelemetry
+backend works.
 
 ## When to wire what
 
@@ -15,6 +16,7 @@ protocol), you point it at whatever backend you run.
 |---|---|
 | Structured per-event lines for log aggregators (Loki, Splunk) | `StructuredLoggingHook` |
 | OTLP traces and metrics for dashboards (Grafana, Honeycomb) | `TelemetryHook` |
+| Live per-run event stream for a browser or dashboard, without an OTLP stack | `run_context()` + `bus.subscribe(run_id)`, or `EventBusHook` — see [In-process SSE](#in-process-sse-eventbus) |
 | Token and cost totals on every result (a resumed `thread_id` reports the thread's running total) | nothing — `AgentResult.metrics` already has it |
 | Per-run trace ID surfaced to the user (for support tickets) | telemetry hook + log the active span's trace ID |
 
@@ -22,13 +24,15 @@ protocol), you point it at whatever backend you run.
 
 ### Structured logs
 
+{{ locus_model_tabs }}
+
 ```python
 import logging
 from locus.agent import Agent
 from locus.hooks.builtin import StructuredLoggingHook
 
 agent = Agent(
-    model="{{ locus_example_model }}",
+    model="{{ locus_model }}",
     tools=[lookup_order, check_refund_policy, issue_refund],
     hooks=[StructuredLoggingHook(level=logging.INFO)],
 )
@@ -90,9 +94,9 @@ case = sorted(
 for e in case:
     if e["event"] == "tool_call_completed":
         print(f'{e["timestamp"]}  {e["tool_name"]:<20} success={e["success"]}')
-# 2026-05-02T01:30:58.1Z  lookup_order         success=True
-# 2026-05-02T01:31:01.4Z  check_refund_policy  success=True
-# 2026-05-02T01:31:02.4Z  issue_refund         success=True
+# 2026-05-02T01:30:58.117402+00:00  lookup_order         success=True
+# 2026-05-02T01:31:01.390115+00:00  check_refund_policy  success=True
+# 2026-05-02T01:31:02.481923+00:00  issue_refund         success=True
 ```
 
 Because the stamped `thread_id` is stable across a multi-turn
@@ -168,11 +172,16 @@ counts, it adds up across turns when you resume a checkpointed
 `thread_id`, so on a resumed thread it is the thread's total so far,
 not just the latest turn's. It is `None` —
 unpriced, never free — when those prices are unknown. The built-in
-table prices only some models, and lookup is an exact match once the
-`openai:` / `anthropic:` prefix is stripped, so
-`anthropic:claude-sonnet-4-6` does not inherit the `claude-sonnet-4`
-price. Register prices for your model with
-`register_metadata(ModelMetadata(..., input_price_per_mtok=..., output_price_per_mtok=...))`
+table prices only some models. Lookup strips Locus's own provider
+prefixes (`openai:`, `anthropic:` and the OpenAI-compatible routing
+prefixes such as `vllm:` or `openrouter:`) and then needs an entry for
+the slug that remains: a dated snapshot or `-latest` suffix resolves to
+its base slug, but a longer id never inherits a shorter entry's price.
+`oci:` is not one of those prefixes, so an OCI id is looked up whole,
+and the table has no OCI entry — for the `{{ locus_example_model }}`
+agent above, `cost_usd` is `None` until you register the model's list
+price under its full id. Register prices for your model with
+`register_metadata(ModelMetadata(model_id="{{ locus_example_model }}", ..., input_price_per_mtok=..., output_price_per_mtok=...))`
 from `locus.models.metadata` before you construct the agent — prices
 are read once, when the `Agent` is built. The same prices drive `max_cost_usd`: set
 a budget on an unpriced model and the `Agent` constructor raises
@@ -211,12 +220,18 @@ the agent before anything leaves, see [Safety](safety.md).
 ## In-process SSE (EventBus)
 
 For browser streaming, real-time dashboards, or any use case where you need
-to watch the full inner cognition of a run without standing up an OTLP stack,
+to watch every event of a run without standing up an OTLP stack,
 the SDK ships a zero-dependency in-process pub/sub bus.
 
 ### How it works
 
-Every emission site in the SDK reads `current_run_id()` from a `ContextVar`.
+The diagram follows an event from the code that emits it, through the
+`run_context()` gate, onto the bus and out to the subscribers that read
+it.
+
+{{ locus_diagram observability-pipeline }}
+
+Every `emit()` call site in the SDK reads `current_run_id()` from a `ContextVar`.
 When no `run_context()` is active the emit returns immediately — no bus, no
 allocation, one `ContextVar.get()` per call site. The singleton is never
 instantiated.
@@ -264,7 +279,7 @@ bus as a canonical `agent.*` event — no hook registration, no config flag:
 | `ReflectEvent` | `agent.reflect` |
 | `GroundingEvent` | `agent.grounding` |
 | `ModelChunkEvent` | `agent.model.chunk` (only with `run(..., stream_tokens=True)`) |
-| `ModelCompleteEvent` | `agent.model.completed` + `agent.tokens.used` |
+| `ModelCompleteEvent` | `agent.model.completed` + `agent.tokens.used` — mapped, but never fires: the loop does not yield `ModelCompleteEvent` (see [Events](events.md#modelcompleteevent)) |
 | `InterruptEvent` | `agent.interrupt` (human-in-the-loop pause) |
 | `TerminateEvent` | `agent.terminate` |
 
@@ -276,6 +291,7 @@ survive interleaved events from concurrent runs without subtracting timestamps.
 For non-async host code or agents you don't control at construction time:
 
 ```python
+import asyncio
 from locus.observability import EventBusHook, get_event_bus
 from locus.agent import Agent
 run_id = "my-run-1"
@@ -286,15 +302,25 @@ agent = Agent(
 )
 result = agent.run_sync("Investigate the spike in checkout latency after deploy-77.")
 
-# Read the history after the fact.
-bus = get_event_bus()
-for event in bus._history.get(run_id, []):
-    print(event.event_type, event.data)
+
+# Read the history after the fact: close the stream, and a late subscriber
+# is replayed the run's retained events and then ends.
+async def replay():
+    bus = get_event_bus()
+    await bus.close_stream(run_id)
+    async for event in bus.subscribe(run_id):
+        print(event.event_type, event.data)
+
+
+asyncio.run(replay())
 ```
 
 `EventBusHook` bridges every agent-lifecycle hook (`on_before_invocation`,
 `on_iteration_start/end`, `on_before/after_tool_call`, `on_before/after_model_call`)
-onto the bus. It never mutates events or breaks execution.
+onto the bus. It never mutates events or breaks execution. `close_stream(run_id)`
+marks the run finished but keeps its history, so a subscriber that connects
+afterwards receives the retained events followed by the end-of-stream
+sentinel; `drop_history(run_id)` forgets them.
 
 ### Subscribe shapes
 
@@ -302,7 +328,7 @@ onto the bus. It never mutates events or breaks execution.
 |---|---|---|
 | `bus.subscribe(run_id)` | One run | Yes — last 500 events, then live |
 | `bus.subscribe_global()` | All runs | No — live only |
-| `bus._history.get(run_id, ())` | One run | Yes — direct deque read (tests) |
+| `bus.subscribe(run_id)` after `close_stream(run_id)` | One finished run | Yes — history, then the end-of-stream sentinel |
 
 ### Capacity and drop accounting
 

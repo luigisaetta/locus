@@ -206,10 +206,10 @@ def test_security_toolset_defaults_are_readonly() -> None:
     assert "scan_endpoint" in names
     assert "fingerprint_endpoint" in names
     assert "isolate_host" not in names  # containment off by default
-    assert "use_aws" not in names  # aws off by default
+    assert "use_oci" not in names  # OCI posture off by default
 
 
-def test_security_toolset_containment_and_aws_optin() -> None:
-    names = {t.name for t in security_toolset(allow_containment=True, aws=True)}
+def test_security_toolset_containment_and_oci_optin() -> None:
+    names = {t.name for t in security_toolset(allow_containment=True, oci=True)}
     assert "isolate_host" in names
-    assert {"describe_aws", "use_aws"} <= names
+    assert {"describe_oci", "use_oci"} <= names

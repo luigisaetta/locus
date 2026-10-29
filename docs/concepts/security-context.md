@@ -33,15 +33,17 @@ asyncio.run(main())
 
 Each domain is a small `Protocol` — a *port* — that a provider implements. The
 handle is the same whether the provider is the offline reference or a live vendor.
+Identity is the surface most attacks touch; its `disable` is the write the
+examples on this page gate.
 
 | Handle | Domain | Methods |
 |---|---|---|
 | `ctx.logs` | SIEM / log search | `search(query, window="24h")` |
 | `ctx.endpoint` | EDR host forensics + containment | `get_host`, `detections`, `isolate` |
-| `ctx.identity` | identity provider (the surface most attacks touch) | `get_user`, `risk`, `signins`, `disable` |
-| `ctx.cloud` | cloud control-plane evidence (read-only) | `describe`, `events` |
+| `ctx.identity` | identity provider | `get_user`, `risk`, `signins`, `disable` |
+| `ctx.cloud` | cloud control plane, read-only | `describe`, `events` |
 | `ctx.threat_intel` | IOC reputation / enrichment | `enrich` |
-| `ctx.actions` | decide on **and run** a response action | `request_approval(action, finding=…, verdict=…)` · `execute(action, perform, finding=…, verdict=…)` |
+| `ctx.actions` | decide on **and run** a response action | `request_approval(action, …)`<br>`execute(action, perform, …)` |
 
 Reads are plain domain calls. **Writes** — `endpoint.isolate`, `identity.disable` —
 model real-world actions: run them through the [admission gate](#admission-control-the-enforcement-point) so they fire only after the chain clears.
@@ -50,13 +52,17 @@ model real-world actions: run them through the [admission gate](#admission-contr
     In the current build the bundled reference adapters **and** the vendor
     templates (Entra/Okta/Auth0 `disable`, CrowdStrike `isolate`) return a
     **simulated offline-sample receipt** — they record the decision but do
-    **not** lock an account out or quarantine a host. Wire and verify the live
-    vendor write path before treating these as enforcement.
+    **not** lock an account out or quarantine a host — that includes the
+    `disable` in step 4 below. Wire and verify the live vendor write path
+    before treating these as enforcement.
 
 ## Zero-config by default
 
-Every domain defaults to a bundled **offline reference adapter**, so
-`SecurityContext()` works with no credentials, no network, and no vendor account.
+Every domain except cloud defaults to a bundled **offline reference adapter**;
+cloud defaults to the read-only cloud-posture provider, which reports
+`status: error` instead of raising when the `oci` SDK or a profile is missing.
+`SecurityContext()` therefore works with no credentials, no network, and no
+vendor account.
 The reference identity provider, for instance, returns two deterministic users —
 a low-risk `jsmith@example.com` and a high-risk `mallory@example.com` with
 impossible-travel sign-ins — so examples, tests, and CI all run the same code path
@@ -67,8 +73,9 @@ offline, then flip individual domains to live vendors one at a time.
 
 ## Going live — inject a provider
 
-Core never imports a vendor. A live provider is a class you write that satisfies
-the domain port, and you inject it explicitly:
+Core imports no vendor SDK for logs, endpoint, identity or threat intel; the
+cloud port is the one exception, covered below. A live provider is a class you
+write that satisfies the domain port, and you inject it explicitly:
 
 ```python
 from locus_security import SecurityContext
@@ -78,22 +85,25 @@ class MyIdentity:  # satisfies the identity port
     ...
 
 
-# Identity goes live; logs, endpoint, threat-intel and cloud stay on the offline reference.
+# Identity goes live; logs, endpoint and threat-intel stay on the offline
+# reference, and cloud on the bundled read-only OCI provider.
 ctx = SecurityContext(identity=MyIdentity())
 ```
 
 Keep an offline path: resolve credentials from the environment and fall back to a
 deterministic sample when none are present, so the same code runs in CI. Cloud
-posture is the one live provider in core: `locus_security.aws`
-(`pip install locus-sdk[aws]`). [Build an integration](../how-to/build-an-integration.md)
+posture is the one live provider in the bundle: `ctx.cloud` drives the core
+`describe_oci` / `use_oci` tools (`pip install locus-sdk[oci]`) as the profile
+you give it, and reports `status: error` rather than raising when the SDK or
+the profile is missing. [Build an integration](../how-to/build-an-integration.md)
 walks through writing one.
 
 ## A full investigation — grounded, verified, gated
 
-The facade earns its place in the *whole loop*, not in any one call. An AI agent
-that merely reads telemetry is a chatbot; the moment it can **act**, three things
-have to be true — the data is real, the claim is verified, and the action is
-gated. `SecurityContext` puts the trust spine right in the path:
+The facade earns its place in the *whole loop*, not in any one call. An agent
+that only reads telemetry has no side effects to govern; once it can **act**,
+three conditions must hold — the data is real, the claim is verified, and the
+action is gated. `SecurityContext` puts the trust chain in the path:
 
 ```python
 import asyncio
@@ -102,17 +112,14 @@ from locus_security import Evidence, SecurityContext, Severity
 
 
 async def main():
-    # Offline reference providers; inject your own per domain to go live.
-    # ctx.actions defaults to ControlPolicy(), which sends production
-    # account-disables to a human.
+    # Offline reference providers; ControlPolicy() holds production disables for a human.
     ctx = SecurityContext()
 
-    # 1. INVESTIGATE — by domain.
+    # 1. Investigate by domain.
+    # risk -> {'user': 'mallory@example.com', 'risk': 'high', 'impossible_travel': True}
     risk = await ctx.identity.risk("mallory@example.com")
-    # -> {'user': ..., 'risk': 'high', 'impossible_travel': True}
 
-    # 2. FORM A FINDING, then VERIFY it. An independent skeptic challenges the
-    #    evidence and re-scores confidence — a thin claim is refuted, not acted on.
+    # 2. Form a finding and verify it; a thin claim is refuted, not acted on.
     finding = Evidence(
         title="Account compromise: impossible-travel sign-ins",
         description="High-risk user with impossible travel between two sign-ins.",
@@ -124,19 +131,16 @@ async def main():
     )
     verdict = await verify(finding)
     if not verdict.survives:
-        return  # abstain — no hallucinated containment
+        return  # abstain
 
-    # 3. PROPOSE CONTAINMENT — gated by policy through ctx.actions.
+    # 3. Propose containment through the policy gate.
     decision = ctx.actions.request_approval(
         Action(name="disable_user", asset="mallory@example.com", environment="production"),
         finding=finding,
         verdict=verdict,
-    )
-    # decision.outcome -> "require_human": a person decides, with the evidence
-    # and the verdict attached. The agent never disables a prod account on its own.
+    )   # decision.outcome -> "require_human"
 
-    # 4. ON APPROVAL, ACT. NB: in the current build `disable` returns a simulated
-    #    offline-sample receipt — it does not yet lock the account out.
+    # 4. Act only on approval.
     if decision.allowed:
         await ctx.identity.disable("mallory@example.com")
 
@@ -147,12 +151,11 @@ asyncio.run(main())
 `"require_human"` is the **held** outcome — every decision comes back allowed,
 held, or denied, and a held action waits for a person before anything fires.
 
-> **One investigation, six domains, zero vendor names** in the logic. Swap
-> the reference identity provider for your own, or the threat-intel feed for
-> another, and steps 1–4 are untouched. That is the platform bet: program against domains —
-> security is one of them — and
-> the trust spine — [grounding](gsar.md), verification, policy, and a hash-chained
-> audit trail — applies no matter whose API is behind the port.
+The investigation above names no vendor. Swap the reference identity provider
+for your own, or the threat-intel feed for another, and steps 1–4 are untouched.
+This is the design principle: program against domains — security is one of
+them — and the trust chain — [grounding](gsar.md), verification, policy, and a
+hash-chained audit trail — applies no matter whose API is behind the port.
 
 The gate in step 3 is a `ControlPolicy`: `require_human_for={"production"}` by
 default, alongside `require_verification_score`, `max_blast_radius`, `deny_for`,
@@ -208,9 +211,9 @@ its `environment`, its `kind`, its `blast_radius`, and any `tags`.
 
 This has a consequence worth stating plainly: **an action that declares nothing
 cannot be gated by label.** Rather than guess a plausible-looking default, Locus
-labels it `environment: "unknown"` — honest, but it matches no rule written for
-`production`. Writing `require_human_for={"production"}` and expecting it to
-catch an undeclared action is the one mistake this design invites.
+labels it `environment: "unknown"` — a deliberate default that matches no rule
+written for `production`. Writing `require_human_for={"production"}` and
+expecting it to catch an undeclared action is the mistake to avoid.
 
 So declaring labels is not documentation. It is the input the policy reasons
 over, and the thing that lets a tool earn an unattended path:
@@ -233,10 +236,12 @@ The domain handles are the *programmatic* facade — what your own code calls. W
 you want an autonomous `locus.Agent` to drive the investigation, hand it the
 *agent* facade instead:
 
+{{ locus_model_tabs }}
+
 ```python
 from locus import Agent
 
-agent = Agent(model="{{ locus_example_model }}", tools=ctx.toolset())
+agent = Agent(model="{{ locus_model }}", tools=ctx.toolset())
 ```
 
 `toolset()` returns the agent-ready security tool bundle built from the **bundled
@@ -244,7 +249,7 @@ reference adapters** — it does not read the providers you injected into `ctx`,
 live `identity` or `logs` provider is not reachable from these tools. It is
 read-only by default and covers threat intel, SIEM, EDR, scanning and
 fingerprinting; pass `ctx.toolset(allow_containment=True)` for `isolate_host`,
-`aws=True` for the cloud-posture tools, and `extra=[...]` to merge tools you wrote
+`oci=True` for the cloud-posture tools, and `extra=[...]` to merge tools you wrote
 against your own live providers. There is no identity tool in the bundle, and
 admission (`ctx.actions`) is not a tool — to gate a side-effecting tool you hand
 the agent, wrap it with `gate_tool` or call `admit()` in your own code.
@@ -252,9 +257,11 @@ the agent, wrap it with `gate_tool` or call `admit()` in your own code.
 ## The one-way dependency
 
 Core (`locus-sdk`) defines the ports and ships the offline reference providers;
-it **never imports a vendor**. A vendor provider lives in your own package, which
-depends on core. You inject providers explicitly, so there is no hidden vendor coupling and the offline path is
-always intact.
+it **imports no vendor SDK for logs, endpoint, identity or threat intel**, and
+the cloud port's bundled OCI provider degrades to `status: error` rather than
+failing. A vendor provider lives in your own package, which depends on core. You
+inject providers explicitly, so there is no hidden vendor coupling and the
+offline path is always intact.
 
 See also: [Agentic AI-security](agentic-ai-security.md) ·
 [Grounded findings](security.md) · [GSAR typed grounding](gsar.md) ·

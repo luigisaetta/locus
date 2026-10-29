@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
@@ -25,10 +24,12 @@ Key concepts:
   and the agent loop persists state on every iteration.
 - ``agent.run_sync(prompt, thread_id="...")`` loads state for that
   thread before the first model call and saves after each iteration.
-- ``checkpoint_every_n_iterations=1`` means a mid-loop crash recovers
-  to the last completed iteration, not the start of the turn.
-- ``cp.list_threads()`` enumerates every persisted conversation — the
-  primitive admin dashboards use to enumerate sessions.
+- ``checkpoint_every_n_iterations=1`` saves after every iteration
+  (already the default for this adapter on a thread), so a process
+  killed mid-turn loses at most the iteration in flight.
+- ``cp.list_threads()`` on the agent's own checkpointer — the
+  enumeration an admin dashboard would use (see the note in
+  ``first_session``).
 
 The demo simulates two sessions. Session 1 starts a conversation and
 the agent persists the state to Oracle automatically. Session 2 spins
@@ -36,8 +37,7 @@ up a brand-new ``Agent`` instance — different Python object, same
 ``thread_id``, same Oracle pool — and the agent recalls turn 1 without
 being told what was said.
 
-Run it::
-
+Run it:
     export ORACLE_DSN=mydb_low                   # tnsnames alias
     export ORACLE_USER=locus_app                 # least-privileged app schema
     export ORACLE_PASSWORD='<app-password>'
@@ -46,8 +46,9 @@ Run it::
 
     python examples/notebook_42_oracle_26ai_checkpointer.py
 
-If ``ORACLE_DSN`` / ``ORACLE_PASSWORD`` aren't set the notebook prints
-the wiring snippet and exits cleanly — no traceback, no
+If any of ``ORACLE_DSN``, ``ORACLE_USER``, ``ORACLE_PASSWORD`` or
+``ORACLE_WALLET`` is unset the notebook prints the missing names and
+the wiring snippet, then exits cleanly — no traceback, no
 half-initialised state.
 
 Difficulty: Intermediate. Self-contained — no prior notebook required.
@@ -127,14 +128,8 @@ def _build_checkpointer():
 
 
 def _build_agent():
-    """Fresh ``Agent`` instance, fresh checkpointer pool — same Oracle table.
-
-    Returning a new ``Agent`` per call is the whole point: it proves the
-    durability lives in 26ai, not in the Python object. The two agents
-    below share nothing in memory; the conversation survives because
-    the Locus agent loop loaded state from Oracle before its first
-    model call.
-    """
+    """Fresh ``Agent`` and checkpointer pool per call — the two sessions share
+    nothing in memory, so continuity can only come from Oracle 26ai."""
     return Agent(
         model=get_model(max_tokens=120),
         system_prompt=(
@@ -143,9 +138,10 @@ def _build_agent():
             "you earlier in this thread."
         ),
         checkpointer=_build_checkpointer(),
-        # Persist after every iteration, not just at session end. A
-        # mid-loop crash on a tool call recovers to the last completed
-        # iteration instead of the start of the turn.
+        # Save after every iteration, so a crash mid-turn loses at most the
+        # iteration in flight. On a thread this adapter already saves that
+        # often by default (it can delete a single save); the setting makes
+        # it explicit.
         checkpoint_every_n_iterations=1,
     )
 
@@ -154,40 +150,44 @@ async def first_session() -> None:
     """Session 1 — operator starts a conversation; agent persists turn 1."""
     print("\n--- Session 1: agent persists turn 1 to Oracle 26ai ---")
     agent = _build_agent()
+    cp = agent.config.checkpointer
+    try:
+        prompt = "p99 on checkout-api spiked at 14:02. The deploy at 13:58 looks suspicious."
+        result = agent.run_sync(prompt, thread_id=THREAD_ID)
+        print(f"User : {prompt}")
+        print(f"Agent: {result.message.strip()}")
+        print(f"  state size after this turn: {len(result.state.messages)} messages")
 
-    result = agent.run_sync(
-        "p99 on checkout-api spiked at 14:02. The deploy at 13:58 looks suspicious.",
-        thread_id=THREAD_ID,
-    )
-    print(f"User : p99 on checkout-api spiked at 14:02 (after the 13:58 deploy).")
-    print(f"Agent: {result.message.strip()}")
-    print(f"  state size after this turn: {len(result.state.messages)} messages")
-
-    # The state hit Oracle, not just memory. Confirm via the
-    # checkpointer's admin surface — the same one a dashboard would use.
-    cp = _build_checkpointer()
-    threads = await cp.list_threads()
-    print(f"  threads currently in {TABLE_NAME}: {threads}")
+        # The agent's own checkpointer is the admin surface a dashboard would
+        # use. Note: the adapter forwards its default pattern "*" unchanged to
+        # the Oracle backend's LIKE filter, which matches no row, so this
+        # prints []; cp.list_threads(pattern="%") lists the stored keys.
+        threads = await cp.list_threads()
+        print(f"  threads currently in {TABLE_NAME}: {threads}")
+    finally:
+        await cp.close()
 
 
 async def second_session() -> None:
     """Session 2 — different ``Agent`` object, same ``thread_id``.
 
-    The new agent loads state from Oracle on the first ``run_sync``
-    call. The model never sees turn 1 in the prompt — Locus reads
-    ``thread_id`` from the checkpointer and injects the recovered
-    messages into the agent loop.
+    The new agent loads the thread's newest checkpoint from Oracle on
+    the first ``run_sync`` call. The application passes only the new
+    prompt; Locus loads the saved state for ``thread_id`` from the
+    checkpointer and starts the new turn on it, so the model sees turn 1
+    as prior messages.
     """
     print("\n--- Session 2: a brand-new Agent resumes the thread ---")
     agent = _build_agent()
-
-    result = agent.run_sync(
-        "Has anything like that happened in the last fortnight?",
-        thread_id=THREAD_ID,
-    )
-    print("User : Has anything like that happened in the last fortnight?")
-    print(f"Agent: {result.message.strip()}")
-    print(f"  state size after this turn: {len(result.state.messages)} messages")
+    cp = agent.config.checkpointer
+    try:
+        prompt = "Has anything like that happened in the last fortnight?"
+        result = agent.run_sync(prompt, thread_id=THREAD_ID)
+        print(f"User : {prompt}")
+        print(f"Agent: {result.message.strip()}")
+        print(f"  state size after this turn: {len(result.state.messages)} messages")
+    finally:
+        await cp.close()
 
     print(
         "\nThe second Agent loaded prior turns from Oracle 26ai before "

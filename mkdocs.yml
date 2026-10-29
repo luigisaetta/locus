@@ -12,13 +12,10 @@ exclude_docs: |
   internal/
   doc-gen/
   diagrams/README.md
+  diagrams/cards/README.md
   # Engineering notes that live next to the code they describe (linked from
   # the README and CHANGELOG on GitHub), not pages of the site.
-  decision.md
-  harness.md
   observation-pack.md
-  pg-checkpointer.md
-  runner.md
 
 theme:
   name: material
@@ -29,20 +26,27 @@ theme:
     text: Inter
     code: JetBrains Mono
   palette:
-  # Each scheme advertises the icon for the OTHER mode — clicking it
-  # switches to that mode: slate (dark) shows a sun, default (light) a moon.
-  - scheme: slate
+  # First visit follows the operating system (the first entry has no scheme,
+  # so Material resolves it from prefers-color-scheme); the toggle then cycles
+  # system → light → dark and the choice is remembered per browser.
+  - media: (prefers-color-scheme)
+    toggle:
+      icon: material/brightness-auto
+      name: Switch to light mode
+  - media: '(prefers-color-scheme: light)'
+    scheme: default
     primary: custom
     accent: custom
     toggle:
       icon: material/brightness-7
-      name: Switch to light mode
-  - scheme: default
+      name: Switch to dark mode
+  - media: '(prefers-color-scheme: dark)'
+    scheme: slate
     primary: custom
     accent: custom
     toggle:
       icon: material/brightness-4
-      name: Switch to dark mode
+      name: Switch to system preference
   features:
   - navigation.instant
   - navigation.sections
@@ -50,6 +54,10 @@ theme:
   - navigation.tabs.sticky
   - navigation.indexes
   - navigation.top
+  - navigation.footer
+  - toc.follow
+  - content.action.edit
+  - content.action.view
   - content.code.copy
   - content.code.annotate
   - content.tabs.link
@@ -60,12 +68,17 @@ theme:
 hooks:
 - hooks/cache_bust.py
 - hooks/build_metadata.py
+# After build_metadata so the Markdown twins carry the expanded build facts.
+- hooks/llms_txt.py
 
 extra_css:
 - stylesheets/locus.css
 
 extra_javascript:
 - javascripts/header-home.js
+- javascripts/copy-page.js
+- javascripts/diagram-zoom.js
+- javascripts/table-filter.js
 - javascripts/notebook-filter.js
 - javascripts/sidebar-filter.js
 
@@ -75,7 +88,18 @@ extra:
   homepage: https://locusagents.ai/
   # The model every generic example uses; the build hook expands
   # {{ locus_example_model }} everywhere, so change it here, not on the pages.
-  example_model: openai:gpt-4o-mini
+  example_model: oci:openai.gpt-5.5
+  # Provider tab sets ({{ locus_model_tabs }}): one example model id per
+  # provider, shown as linked tabs so a reader picks a provider once.
+  model_tabs:
+  - label: OCI
+    model: oci:openai.gpt-5.5
+  - label: OpenAI
+    model: openai:gpt-4o
+  - label: Anthropic
+    model: anthropic:claude-sonnet-5-5
+  - label: Self-hosted
+    model: ollama:qwen3
   social:
   - icon: fontawesome/brands/github
     link: https://github.com/oracle/locus
@@ -178,14 +202,17 @@ nav:
     - Executors: concepts/executors.md
     - MCP: concepts/mcp.md
     - Multi-modal providers: concepts/multi-modal-providers.md
+    - The coding harness: harness.md
   - Memory and RAG:
     - Memory — short-term and long-term: concepts/memory.md
     - Checkpointers & Store: concepts/checkpointers.md
     - Long-term memory manager: concepts/memory-manager.md
     - RAG: concepts/rag.md
+    - PgCheckpointer and retention: pg-checkpointer.md
   - Reasoning:
     - Reasoning patterns: concepts/reasoning.md
     - GSAR (typed grounding): concepts/gsar.md
+    - Typed decisions: decision.md
   - Observability and serving:
     - Observability: concepts/observability.md
     - Events: concepts/events.md
@@ -221,106 +248,121 @@ nav:
     - Guarantees & boundaries: why-locus.md
     - Compatibility & releases: compatibility.md
     - About & maintainers: about.md
-- Notebooks:
+- How-to:
   - Quickstart: how-to/quickstart.md
-  - Overview: notebooks/index.md
-  - Start here:
-    - 01 · OCI transports — start here: notebooks/notebook_01_oci_transports.md
-    - 02 · Basic agent: notebooks/notebook_02_basic_agent.md
-    - 03 · Agent with tools: notebooks/notebook_03_agent_with_tools.md
-    - 04 · A chat loop: notebooks/notebook_04_chat_loop.md
-    - 05 · Conversation memory: notebooks/notebook_05_agent_memory.md
-    - 06 · Streaming events: notebooks/notebook_06_agent_streaming.md
-    - 07 · Structured output: notebooks/notebook_07_structured_output.md
-    - 08 · Termination conditions: notebooks/notebook_08_termination.md
-    - 09 · Lifecycle hooks: notebooks/notebook_09_agent_hooks.md
-    - 10 · Advanced hooks and guardrails: notebooks/notebook_10_hooks_advanced.md
-    - 11 · Model providers: notebooks/notebook_11_model_providers.md
-  - Multi-agent shapes:
-    - 12 · Basic graph: notebooks/notebook_12_basic_graph.md
-    - 13 · Conditional routing: notebooks/notebook_13_conditional_routing.md
-    - 14 · State reducers: notebooks/notebook_14_state_reducers.md
-    - 15 · Human in the loop: notebooks/notebook_15_human_in_the_loop.md
-    - 16 · Advanced graph patterns: notebooks/notebook_16_advanced_patterns.md
-    - 17 · Resilient graphs: notebooks/notebook_17_graph_advanced.md
-    - 18 · Functional API: notebooks/notebook_18_functional_api.md
-    - 19 · Composition — pipelines: notebooks/notebook_19_composition.md
-    - 20 · Scatter-gather with Send: notebooks/notebook_20_map_reduce_code_review.md
-    - 21 · Supervisor and critic loop: notebooks/notebook_21_supervisor_critic_loop.md
-    - 22 · Orchestrator: notebooks/notebook_22_orchestrator_pattern.md
-    - 23 · Specialist agents: notebooks/notebook_23_specialist_agents.md
-    - 24 · Swarm: notebooks/notebook_24_swarm_multiagent.md
-    - 25 · Handoff: notebooks/notebook_25_agent_handoff.md
-    - 26 · Debate with a judge: notebooks/notebook_26_debate_with_judge.md
-    - 27 · Multi-agent human in the loop: notebooks/notebook_27_multiagent_human_in_loop.md
-    - 28 · Emergent routing: notebooks/notebook_28_emergent_routing.md
-    - 29 · Cognitive router: notebooks/notebook_29_cognitive_router.md
-    - 30 · A2A protocol: notebooks/notebook_30_a2a_protocol.md
-    - 31 · DeepAgent: notebooks/notebook_31_deepagent.md
-    - 32 · Research workflow: notebooks/notebook_32_research_workflow.md
-  - Oracle Cloud and Database 26ai:
-    - 33 · OCI v1 chat: notebooks/notebook_33_oci_openai_chat.md
-    - 34 · OCI Responses: notebooks/notebook_34_oci_responses.md
-    - 35 · OCI Dedicated AI Cluster: notebooks/notebook_35_oci_dac.md
-    - 36 · OCI tools — drive the control plane: notebooks/notebook_36_oci_tools.md
-    - 37 · Oracle 26ai store: notebooks/notebook_37_oracle_store.md
-    - 38 · Oracle 26ai RAG: notebooks/notebook_38_oracle_26ai_rag.md
-    - 39 · Oracle ADB loader: notebooks/notebook_39_oracle_adb_loader.md
-    - 40 · Oracle in-DB chunker: notebooks/notebook_40_oracle_indb_chunker.md
-    - 41 · Oracle in-DB embeddings: notebooks/notebook_41_oracle_indb_embeddings.md
-    - 42 · Oracle 26ai checkpointer: notebooks/notebook_42_oracle_26ai_checkpointer.md
-    - 43 · Oracle versioned saver: notebooks/notebook_43_oracle_versioned_saver.md
-    - 44 · Oracle agent memory: notebooks/notebook_44_oracle_agent_memory.md
-    - 45 · Cohere reranker on Oracle 26ai: notebooks/notebook_45_cohere_reranker.md
-  - The harness — tools, skills, memory, RAG, reasoning:
-    - 46 · MCP integration: notebooks/notebook_46_mcp_integration.md
-    - 47 · Plugins: notebooks/notebook_47_plugins.md
-    - 48 · Skills: notebooks/notebook_48_skills.md
-    - 49 · Playbooks: notebooks/notebook_49_playbooks.md
-    - 50 · Checkpoint backends: notebooks/notebook_50_checkpoint_backends.md
-    - 51 · RAG basics: notebooks/notebook_51_rag_basics.md
-    - 52 · RAG providers: notebooks/notebook_52_rag_providers.md
-    - 53 · RAG agents: notebooks/notebook_53_rag_agents.md
-    - 54 · Reasoning patterns: notebooks/notebook_54_reasoning_patterns.md
-    - 55 · GSAR typed grounding: notebooks/notebook_55_gsar_typed_grounding.md
-    - 56 · Evaluation: notebooks/notebook_56_evaluation.md
-    - 57 · Multi-modal providers: notebooks/notebook_57_multimodal_providers.md
-    - 58 · Audio response: notebooks/notebook_58_audio_response.md
-    - 59 · Audio chat: notebooks/notebook_59_audio_chat.md
-  - Observability, streaming, serving:
-    - 60 · Observability basics: notebooks/notebook_60_observability_basics.md
-    - 61 · Agent yield bridge: notebooks/notebook_61_agent_yield_bridge.md
-    - 62 · EventBus subscribers: notebooks/notebook_62_eventbus_subscribers.md
-    - 63 · Event catalogue: notebooks/notebook_63_event_catalogue.md
-    - 64 · SSE streaming: notebooks/notebook_64_sse_streaming.md
-    - 65 · Agent server: notebooks/notebook_65_agent_server.md
-    - 66 · LiteLLM gateway: notebooks/notebook_66_litellm_gateway.md
-    - 67 · LiteLLM cost guardrails: notebooks/notebook_67_litellm_gateway_cost.md
-  - Control layer and security:
-    - 68 · Steering: notebooks/notebook_68_steering.md
-    - 69 · Guardrails — prompt injection: notebooks/notebook_69_guardrails_security.md
-    - 70 · Trace hygiene: notebooks/notebook_70_guardrails_advanced.md
-    - 71 · Payment refund gate: notebooks/notebook_71_payment_refund_gate.md
-    - 72 · Infra deploy gate: notebooks/notebook_72_infra_deploy_gate.md
-    - 73 · Support account gate: notebooks/notebook_73_support_account_gate.md
-    - 74 · Data deletion gate: notebooks/notebook_74_data_deletion_gate.md
-    - 75 · Cloud resource gate: notebooks/notebook_75_cloud_resource_gate.md
-    - 76 · Incident response with an audit chain: notebooks/notebook_76_ir_audit_trail.md
-  - Real-world workflows:
-    - 77 · Incident response runbook: notebooks/notebook_77_incident_response.md
-    - 78 · Procurement approval: notebooks/notebook_78_procurement_approval.md
-    - 79 · Contract review: notebooks/notebook_79_contract_review.md
-    - 80 · Vendor integrations: notebooks/notebook_80_vendor_integrations.md
-  - Security operations (locus-sdk-security):
-    - 81 · Grounded cloud-posture agent: notebooks/notebook_81_cloud_posture_agent.md
-    - 82 · SOC playbooks: notebooks/notebook_82_security_playbooks.md
-    - 83 · Red-team an AI agent: notebooks/notebook_83_agent_red_team.md
-    - 84 · Red-team a support bot: notebooks/notebook_84_redteam_support_bot.md
-    - 85 · CI security gate: notebooks/notebook_85_ci_security_gate.md
-    - 86 · Verify findings: notebooks/notebook_86_verify_findings.md
-    - 87 · SOC alert triage: notebooks/notebook_87_soc_alert_triage.md
-    - 88 · Model and hardware fingerprinting: notebooks/notebook_88_model_fingerprint.md
-    - 89 · Investigate with SecurityContext: notebooks/notebook_89_investigate_with_ctx.md
+  - Build it with Codex: how-to/codex.md
+  - Configure a model provider: how-to/configure-providers.md
+  - Environment variables: how-to/environment-variables.md
+  - First controlled action: how-to/first-controlled-action.md
+  - Persist conversations: how-to/persist-conversations.md
+  - Build a custom tool: how-to/custom-tools.md
+  - Add a checkpointer backend: how-to/custom-checkpointer.md
+  - Build a security integration: how-to/build-an-integration.md
+  - OCI Generative AI models: how-to/oci-models.md
+  - Dedicated AI Clusters: how-to/oci-dac.md
+  - LiteLLM gateway: how-to/litellm-gateway.md
+  - Deploy: how-to/deploy.md
+  - The box runner: runner.md
+- Notebooks:
+  - Examples: notebooks/index.md
+  - By topic:
+    - Start here:
+      - 01 · OCI transports — start here: notebooks/notebook_01_oci_transports.md
+      - 02 · Basic agent: notebooks/notebook_02_basic_agent.md
+      - 03 · Agent with tools: notebooks/notebook_03_agent_with_tools.md
+      - 04 · A chat loop: notebooks/notebook_04_chat_loop.md
+      - 05 · Conversation memory: notebooks/notebook_05_agent_memory.md
+      - 06 · Streaming events: notebooks/notebook_06_agent_streaming.md
+      - 07 · Structured output: notebooks/notebook_07_structured_output.md
+      - 08 · Termination conditions: notebooks/notebook_08_termination.md
+      - 09 · Lifecycle hooks: notebooks/notebook_09_agent_hooks.md
+      - 10 · Advanced hooks and guardrails: notebooks/notebook_10_hooks_advanced.md
+      - 11 · Model providers: notebooks/notebook_11_model_providers.md
+    - Multi-agent shapes:
+      - 12 · Basic graph: notebooks/notebook_12_basic_graph.md
+      - 13 · Conditional routing: notebooks/notebook_13_conditional_routing.md
+      - 14 · State reducers: notebooks/notebook_14_state_reducers.md
+      - 15 · Human in the loop: notebooks/notebook_15_human_in_the_loop.md
+      - 16 · Advanced graph patterns: notebooks/notebook_16_advanced_patterns.md
+      - 17 · Resilient graphs: notebooks/notebook_17_graph_advanced.md
+      - 18 · Functional API: notebooks/notebook_18_functional_api.md
+      - 19 · Composition — pipelines: notebooks/notebook_19_composition.md
+      - 20 · Scatter-gather with Send: notebooks/notebook_20_map_reduce_support_triage.md
+      - 21 · Supervisor and critic loop: notebooks/notebook_21_supervisor_critic_loop.md
+      - 22 · Orchestrator: notebooks/notebook_22_orchestrator_pattern.md
+      - 23 · Specialist agents: notebooks/notebook_23_specialist_agents.md
+      - 24 · Swarm: notebooks/notebook_24_swarm_multiagent.md
+      - 25 · Handoff: notebooks/notebook_25_agent_handoff.md
+      - 26 · Debate with a judge: notebooks/notebook_26_debate_with_judge.md
+      - 27 · Multi-agent human in the loop: notebooks/notebook_27_multiagent_human_in_loop.md
+      - 28 · Emergent routing: notebooks/notebook_28_emergent_routing.md
+      - 29 · Cognitive router: notebooks/notebook_29_cognitive_router.md
+      - 30 · A2A protocol: notebooks/notebook_30_a2a_protocol.md
+      - 31 · DeepAgent: notebooks/notebook_31_deepagent.md
+      - 32 · Research workflow: notebooks/notebook_32_research_workflow.md
+    - Oracle Cloud and Database 26ai:
+      - 33 · OCI v1 chat: notebooks/notebook_33_oci_openai_chat.md
+      - 34 · OCI Responses: notebooks/notebook_34_oci_responses.md
+      - 35 · OCI Dedicated AI Cluster: notebooks/notebook_35_oci_dac.md
+      - 36 · OCI tools — drive the control plane: notebooks/notebook_36_oci_tools.md
+      - 37 · Oracle 26ai store: notebooks/notebook_37_oracle_store.md
+      - 38 · Oracle 26ai RAG: notebooks/notebook_38_oracle_26ai_rag.md
+      - 39 · Oracle ADB loader: notebooks/notebook_39_oracle_adb_loader.md
+      - 40 · Oracle in-DB chunker: notebooks/notebook_40_oracle_indb_chunker.md
+      - 41 · Oracle in-DB embeddings: notebooks/notebook_41_oracle_indb_embeddings.md
+      - 42 · Oracle 26ai checkpointer: notebooks/notebook_42_oracle_26ai_checkpointer.md
+      - 43 · Oracle versioned saver: notebooks/notebook_43_oracle_versioned_saver.md
+      - 44 · Oracle agent memory: notebooks/notebook_44_oracle_agent_memory.md
+      - 45 · Cohere reranker on Oracle 26ai: notebooks/notebook_45_cohere_reranker.md
+    - The harness — tools, skills, memory, RAG, reasoning:
+      - 46 · MCP integration: notebooks/notebook_46_mcp_integration.md
+      - 47 · Plugins: notebooks/notebook_47_plugins.md
+      - 48 · Skills: notebooks/notebook_48_skills.md
+      - 49 · Playbooks: notebooks/notebook_49_playbooks.md
+      - 50 · Checkpoint backends: notebooks/notebook_50_checkpoint_backends.md
+      - 51 · RAG basics: notebooks/notebook_51_rag_basics.md
+      - 52 · RAG providers: notebooks/notebook_52_rag_providers.md
+      - 53 · RAG agents: notebooks/notebook_53_rag_agents.md
+      - 54 · Reasoning patterns: notebooks/notebook_54_reasoning_patterns.md
+      - 55 · GSAR typed grounding: notebooks/notebook_55_gsar_typed_grounding.md
+      - 56 · Evaluation: notebooks/notebook_56_evaluation.md
+      - 57 · Multi-modal providers: notebooks/notebook_57_multimodal_providers.md
+      - 58 · Audio response: notebooks/notebook_58_audio_response.md
+      - 59 · Audio chat: notebooks/notebook_59_audio_chat.md
+    - Observability, streaming, serving:
+      - 60 · Observability basics: notebooks/notebook_60_observability_basics.md
+      - 61 · Agent yield bridge: notebooks/notebook_61_agent_yield_bridge.md
+      - 62 · EventBus subscribers: notebooks/notebook_62_eventbus_subscribers.md
+      - 63 · Event catalogue: notebooks/notebook_63_event_catalogue.md
+      - 64 · SSE streaming: notebooks/notebook_64_sse_streaming.md
+      - 65 · Agent server: notebooks/notebook_65_agent_server.md
+      - 66 · LiteLLM gateway: notebooks/notebook_66_litellm_gateway.md
+      - 67 · LiteLLM cost guardrails: notebooks/notebook_67_litellm_gateway_cost.md
+    - Control layer and security:
+      - 68 · Steering: notebooks/notebook_68_steering.md
+      - 69 · Guardrails — prompt injection: notebooks/notebook_69_guardrails_security.md
+      - 70 · Trace hygiene: notebooks/notebook_70_guardrails_advanced.md
+      - 71 · Payment refund gate: notebooks/notebook_71_payment_refund_gate.md
+      - 72 · Infra deploy gate: notebooks/notebook_72_infra_deploy_gate.md
+      - 73 · Support account gate: notebooks/notebook_73_support_account_gate.md
+      - 74 · Data deletion gate: notebooks/notebook_74_data_deletion_gate.md
+      - 75 · Cloud resource gate: notebooks/notebook_75_cloud_resource_gate.md
+      - 76 · Incident response with an audit chain: notebooks/notebook_76_ir_audit_trail.md
+    - Real-world workflows:
+      - 77 · Incident response runbook: notebooks/notebook_77_incident_response.md
+      - 78 · Concession approval: notebooks/notebook_78_concession_approval.md
+      - 79 · Contract review: notebooks/notebook_79_contract_review.md
+      - 80 · Vendor integrations: notebooks/notebook_80_vendor_integrations.md
+    - Security operations (locus-sdk-security):
+      - 81 · Grounded cloud-posture agent: notebooks/notebook_81_cloud_posture_agent.md
+      - 82 · SOC playbooks: notebooks/notebook_82_security_playbooks.md
+      - 83 · Red-team an AI agent: notebooks/notebook_83_agent_red_team.md
+      - 84 · Red-team a support bot: notebooks/notebook_84_redteam_support_bot.md
+      - 85 · CI security gate: notebooks/notebook_85_ci_security_gate.md
+      - 86 · Verify findings: notebooks/notebook_86_verify_findings.md
+      - 87 · SOC alert triage: notebooks/notebook_87_soc_alert_triage.md
+      - 88 · Model and hardware fingerprinting: notebooks/notebook_88_model_fingerprint.md
+      - 89 · Investigate with SecurityContext: notebooks/notebook_89_investigate_with_ctx.md
 - API reference:
   - Overview: api/index.md
   - Agent: api/agent.md

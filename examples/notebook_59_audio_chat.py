@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
@@ -14,7 +13,7 @@ spoken guidance back.
 
 Pipeline::
 
-                         (synth via notebook 58 if absent)
+              (synthesized here with gpt-4o-mini-tts on first run)
                                        │
                                        ▼
                           ./notebook_59_question.wav
@@ -30,27 +29,27 @@ Pipeline::
                           ./notebook_59_answer.wav
                           (+ printed transcript)
 
-- One model call replaces three (transcribe → chat → synthesise),
+- One model call replaces three (transcribe → chat → synthesize),
   cutting latency for a payments line that must answer in seconds.
 - A plain OpenAI client — no realtime websocket plumbing required.
 - gpt-audio returns a PCM-16 audio block, wrapped in a WAV header for
   portability (re-encode to mp3 with ffmpeg if you need it).
 
 Prerequisites: an OpenAI API key with access to an audio-capable model
-(gpt-audio for chat, gpt-4o-mini-tts to synthesise the cardholder's
+(gpt-audio for chat, gpt-4o-mini-tts to synthesize the cardholder's
 question on first run).
 
-Run it
+Run it:
     LOCUS_MODEL_PROVIDER=openai \\
     OPENAI_API_KEY=sk-... \\
     python examples/notebook_59_audio_chat.py
 
-    afplay notebook_59_answer.wav   # macOS
+    afplay examples/notebook_59_answer.wav   # macOS
 
 Note: with LOCUS_MODEL_PROVIDER=mock (or no OPENAI_API_KEY) the
 notebook runs fully offline — it skips the network and produces a
-short simulated PCM-16 reply so you can read the event flow before
-wiring real credentials.
+short simulated PCM-16 reply, so you can follow the three steps and
+check the output file before adding real credentials.
 """
 
 from __future__ import annotations
@@ -70,11 +69,11 @@ TTS_VOICE = "alloy"
 
 ROOT = Path(__file__).resolve().parent
 QUESTION_WAV = ROOT / "notebook_59_question.wav"
-ANSWER_MP3 = ROOT / "notebook_59_answer.mp3"
+ANSWER_WAV = ROOT / "notebook_59_answer.wav"
 
 SAMPLE_RATE = 24000  # gpt-audio returns mono PCM-16 at 24 kHz
 
-# The cardholder's question — synthesised once on first run, reused thereafter.
+# The cardholder's question — synthesized once on first run, reused thereafter.
 QUESTION_TEXT = (
     "Hi, payments support? My card was just declined twice trying to pay for "
     "my order, but my bank says I have funds. What should I do?"
@@ -138,14 +137,14 @@ def _write_wav_pcm16(pcm: bytes, path: Path) -> int:
 
 
 async def _ensure_question_audio(client) -> bytes:
-    """Synthesise the caller's question once; reuse it on subsequent runs."""
+    """Synthesize the caller's question once; reuse it on subsequent runs."""
     if QUESTION_WAV.exists():
         return QUESTION_WAV.read_bytes()
     if client is None:  # offline: write a placeholder tone instead of TTS
         print(f"→ offline: writing placeholder caller audio → {QUESTION_WAV.name}")
         _write_wav_pcm16(_synth_tone_pcm16(), QUESTION_WAV)
         return QUESTION_WAV.read_bytes()
-    print(f"→ synthesising caller audio with {TTS_MODEL!r} (one-time)")
+    print(f"→ synthesizing caller audio with {TTS_MODEL!r} (one-time)")
     speech = await client.audio.speech.create(
         model=TTS_MODEL,
         voice=TTS_VOICE,
@@ -174,7 +173,7 @@ async def _voice_reply(client, audio_b64: str) -> tuple[str, str]:
     response = await client.chat.completions.create(
         model=CHAT_MODEL,
         modalities=["text", "audio"],
-        audio={"voice": "alloy", "format": "pcm16"},
+        audio={"voice": TTS_VOICE, "format": "pcm16"},
         messages=[
             {"role": "system", "content": SUPPORT_SYSTEM},
             {
@@ -209,16 +208,15 @@ async def main() -> None:
     audio_b64 = base64.b64encode(audio_in).decode("ascii")
 
     # Step 2: one multimodal chat-completions call does transcribe + advise
-    # + synthesise in a single round-trip.
+    # + synthesize in a single round-trip.
     print(f"\n→ cardholder asks: {QUESTION_TEXT!r}")
     transcript, pcm_b64 = await _voice_reply(client, audio_b64)
 
     print(f"\n← support transcript:\n{transcript.strip()}\n")
 
     # Step 3: write the spoken advice (PCM16 in a WAV wrapper).
-    out_wav = ANSWER_MP3.with_suffix(".wav")
-    out_size = _write_wav_pcm16(base64.b64decode(pcm_b64), out_wav)
-    print(f"✓ wrote {out_size:,} bytes → {out_wav}")
+    out_size = _write_wav_pcm16(base64.b64decode(pcm_b64), ANSWER_WAV)
+    print(f"✓ wrote {out_size:,} bytes → {ANSWER_WAV}")
     print("  Play it on macOS:        afplay notebook_59_answer.wav")
     print("  Linux (aplay):           aplay notebook_59_answer.wav")
     print("  Re-encode to mp3:        ffmpeg -i notebook_59_answer.wav notebook_59_answer.mp3")

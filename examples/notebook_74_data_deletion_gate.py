@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
@@ -26,7 +25,7 @@ holds the irreversible erasure for a person to approve.
     Data Protection Officer reviews the held request and signs off
        │
        ▼
-    admit() runs the erasure under the DPO's recorded authority
+    admit() re-admits the erasure under a signed-off policy
        │
        ▼
     AuditTrail = the compliance record (every decision, hash-chained)
@@ -41,11 +40,13 @@ Why this shape:
   rules engine — plain :class:`ControlPolicy` fields.
 - Every attempt — the allowed export, the held erasure, and the erasure that
   runs after sign-off — lands on the same :class:`AuditTrail`. The trail is
-  hash-chained and tamper-evident: edit, delete, or reorder a record and
-  :meth:`AuditTrail.verify` returns ``False``. That makes it the artifact you
-  hand a regulator to show the erasure happened with human authorization.
+  hash-chained and tamper-evident: edit a record, reorder records, or delete
+  one from the middle and :meth:`AuditTrail.verify` returns ``False``; anchor
+  ``trail.head`` externally and pass it back as ``expected_head`` to catch
+  truncation. That makes it the artifact you hand a regulator to show the
+  erasure happened with human authorization.
 
-Run it
+Run it:
     # Fully offline — no network, no credentials. The "perform" steps mutate
     # a local in-memory datastore.
     python examples/notebook_74_data_deletion_gate.py
@@ -65,9 +66,9 @@ from locus.control import (
 
 
 # A stand-in for the systems that hold a data subject's personal data. In a
-# real deployment these are rows in Postgres, objects in S3, documents in a
-# search index, and so on. Here they are just keys in a dict so the example
-# runs offline with no credentials.
+# real deployment these are rows in a relational database, objects in an
+# object store, documents in a search index, and so on. Here they are just
+# keys in a dict so the example runs offline with no credentials.
 
 SUBJECT = "subject:eu-44213"  # pseudonymous handle for one EU data subject
 
@@ -188,7 +189,7 @@ async def main() -> None:
     approved = dpo_signs_off(erase)
     assert approved
 
-    # The erasure now runs under the DPO's recorded authority. We re-admit with
+    # The erasure now runs after the DPO's sign-off. We re-admit with
     # a policy that no longer auto-holds irreversible actions, because a human
     # is now the one authorizing this specific signed-off ticket. The second
     # admission lands on the same trail, so the record shows the erasure ran

@@ -1,32 +1,39 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
 
 """Notebook 28: emergent incident routing — the model picks the specialist protocol.
 
-The default router (Notebook 29) is deterministic: the LLM fills a
-``GoalFrame``, then ``_rank_key`` picks a protocol via tuple
-comparison. Reproducible, auditable, rule-based — exactly what an
-on-call lead wants from an incident router.
+Two incident routers share one tool registry and one protocol registry:
+the default rule-based router that Notebook 29 introduces, and an
+emergent router whose compiler carries an ``LLMProtocolPicker``. The same
+five on-call requests go through both, and the table marks the rows where
+the two modes chose a different protocol.
 
-This notebook covers the opt-in second mode. When multiple protocols
-pass the filter — say a latency regression that could go to the
-service-mesh specialist or the capacity-planning specialist — an
+The default router is deterministic: the model fills a ``GoalFrame``,
+then ``_rank_key`` picks a protocol by tuple comparison. The result is
+reproducible, auditable and rule-based, which is what an on-call lead
+expects from an incident router.
+
+The emergent router is the opt-in second mode. When more than one
+protocol passes the filter — for example, a ``COMPARE`` goal at LOW risk,
+which both ``debate`` and ``specialist_fanout`` handle — the
 ``LLMProtocolPicker`` asks the model to make the last-mile choice and
-records its rationale on the ``router.protocol.selected`` event. Moving
-*only* the disambiguation step to the model keeps the routing audit
-trail intact, which matters when the router itself can fan work out to
-agents that touch production infrastructure.
+returns a one-sentence rationale with its pick. On a ``Router.dispatch()``
+the compiler records that rationale on the ``router.protocol.selected``
+event. Moving *only* the disambiguation step to the model keeps the
+routing audit trail intact, which matters when a routed protocol fans
+work out to agents that act on production systems.
 
-- Filtering, policy gating, capability binding, and builder dispatch
+What this notebook covers:
+- Filtering, policy gating, capability binding and builder dispatch
   stay rule-based. Only the disambiguation step moves to the model.
-- The picker short-circuits when only one candidate survives the
-  filter — no extra LLM call, no extra token spend.
+- The compiler skips the picker when only one candidate survives the
+  filter: no extra model call, no extra token spend.
 - If the picker raises or returns an unknown protocol id, the compiler
-  falls back to ``_rank_key`` and emits
-  ``router.protocol.picker_fallback`` so the degradation is
-  observable.
+  falls back to ``_rank_key``; when it has a run id, as it does on
+  every ``Router.dispatch()``, it also emits
+  ``router.protocol.picker_fallback``, so the degradation is observable.
 - The same five on-call requests run through both routers side by
   side. Rows marked ``≠`` are where the two modes disagreed.
 
@@ -49,7 +56,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from config import check_structured_output_capable, get_model
+from config import check_structured_output_capable, get_model, print_config
 
 from locus.agent import Agent
 from locus.router import (
@@ -126,7 +133,7 @@ def _build_extractor(model) -> Agent:
 
 
 def build_routers() -> tuple[Router, Router, Any]:
-    """Return (default, emergent) — same registry, only the picker differs."""
+    """Return (default, emergent, model) — same registry, only the picker differs."""
     model = get_model()
 
     tools = create_registry(runbook_search, get_slo_metric, list_incidents)
@@ -180,7 +187,10 @@ def build_routers() -> tuple[Router, Router, Any]:
 PROMPTS = [
     "What does the runbook KB say about saturation as an incident family?",
     "Triage the error-rate spike: pull SLO metrics, list recent incidents, correlate.",
-    "Outline a three-step hardening plan for our autoscaling policies. Read-only — no prod changes.",
+    (
+        "Outline a three-step hardening plan for our autoscaling policies. "
+        "Read-only — no prod changes."
+    ),
     "Compare connection draining vs pod eviction for shedding load during a latency incident.",
     "Generate a Python function that counts 5xx responses per upstream host, with tests.",
 ]
@@ -197,12 +207,20 @@ async def _selected(router: Router, prompt: str, frame: GoalFrame) -> str:
 
 
 async def main() -> None:
+    print("=" * 60)
+    print("Notebook 28: emergent incident routing — the model picks the specialist protocol")
+    print("=" * 60)
+    print()
+
+    print_config()
+    print()
+
     check_structured_output_capable()
     default, emergent, model = build_routers()
 
-    print(f"{'─' * 90}")
-    print(f"  REQUEST                                         | DEFAULT             | EMERGENT")
-    print(f"{'─' * 90}")
+    print("─" * 90)
+    print("  REQUEST                                         | DEFAULT             | EMERGENT")
+    print("─" * 90)
 
     for prompt in PROMPTS:
         # Routing is the subject here, so compile() — choose and build the
@@ -221,7 +239,7 @@ async def main() -> None:
         marker = "  " if d_pid == e_pid else "≠ "
         print(f"{marker}{prompt[:48]:<48} | {d_pid:<19} | {e_pid}")
 
-    print(f"{'─' * 90}")
+    print("─" * 90)
     print(
         "Read each row left-to-right: on-call request → default protocol → emergent\n"
         "protocol. When the two columns differ (≠), the picker's rationale field on\n"
@@ -233,6 +251,10 @@ async def main() -> None:
     close = getattr(model, "close", None)
     if close is not None:
         await close()
+
+    print("\n" + "=" * 60)
+    print("Next: Notebook 29 — Cognitive router — risk-gated routing for infra/devops requests")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

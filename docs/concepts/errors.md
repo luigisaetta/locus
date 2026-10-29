@@ -18,7 +18,7 @@ except LocusError as exc:
     raise
 ```
 
-## When you'll catch which
+## Which exception to catch
 
 | Situation | Catch |
 |---|---|
@@ -26,6 +26,7 @@ except LocusError as exc:
 | `GSARConfig.fail_on_low_score` is set and the GSAR decision for a `run_sync` / `arun` result is not `proceed` | `GSARValidationError` (carries `.decision` and `.score`) |
 | Every credential in a `CredentialPoolModel` is cooling down | `ModelAuthError` (its `kind` is `model_pool_exhausted`) |
 | A safety check rejected input — `safe_resolve` (path), `validate_url` (URL), or `MCPClient.connect()` (server URL or launch package) | `ValidationError` |
+| `Agent.resume(..., perform_dangling=True)` while the [held approval](interrupts.md#a-hold-that-pauses-the-run) is still undecided | `ApprovalPendingError` (carries `.thread_id`, `.interrupt_id`, `.question` and `.metadata`; the thread stays paused) |
 | Provider auth, quota or rate-limit failure | The provider SDK's own exception — it is not wrapped. [`classify`](providers/resilience.md#classifying-an-error) maps it to a `FailoverReason` |
 | A tool raised | Nothing — the loop returns the error to the model as the tool's result; `result.metrics.tool_errors` counts them |
 
@@ -39,6 +40,8 @@ other model errors; they are public, so your own model adapters and
 checkpointers can raise them under the same root.
 
 ## Hierarchy
+
+Every class descends from `LocusError`; the string under each name is its `kind`.
 
 {{ locus_diagram error-hierarchy }}
 
@@ -79,7 +82,7 @@ credential pool carries `kind="model_pool_exhausted"`.
 
 ### Differentiated retry policy
 
-Provider errors are not `LocusError`s, so route them on what
+Provider errors are outside the `LocusError` hierarchy, so route them on what
 [`classify`](providers/resilience.md#classifying-an-error) says rather
 than on their class:
 
@@ -89,17 +92,19 @@ import time
 from locus.core.errors import GSARValidationError, LocusError
 from locus.models.failover import FailoverReason, classify
 
-for attempt in range(3):
-    try:
-        return agent.run_sync(prompt)
-    except GSARValidationError:
-        return fallback_path(prompt)     # answer not grounded — degrade gracefully
-    except LocusError:
-        raise                            # everything else from the hierarchy: no retry
-    except Exception as exc:             # provider errors arrive unwrapped
-        if classify(exc).reason is not FailoverReason.RATE_LIMIT:
-            raise                        # anything but a rate limit: no retry
-        time.sleep(2 ** attempt)         # rate limit — exponential back-off
+def run_with_backoff(prompt: str):
+    for attempt in range(3):
+        try:
+            return agent.run_sync(prompt)
+        except GSARValidationError:
+            return fallback_path(prompt)     # answer not grounded — degrade gracefully
+        except LocusError:
+            raise                            # everything else from the hierarchy: no retry
+        except Exception as exc:             # provider errors arrive unwrapped
+            if classify(exc).reason is not FailoverReason.RATE_LIMIT:
+                raise                        # anything but a rate limit: no retry
+            time.sleep(2 ** attempt)         # rate limit — exponential back-off
+    raise RuntimeError("still rate-limited after 3 attempts")
 ```
 
 ### Chained causes
@@ -119,8 +124,8 @@ except (TypeError, ValueError) as exc:
     )
 ```
 
-The full chain shows up in `traceback.format_exc()` and structured-
-log adapters — you don't lose context.
+The full chain shows up in `traceback.format_exc()` and in
+structured-logging adapters — you do not lose context.
 
 ## Common gotchas
 

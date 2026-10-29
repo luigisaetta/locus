@@ -4,7 +4,7 @@
 """
 Notebook 04: a chat loop — actually talking to your agent.
 
-Every other example in this suite is a batch script: it asks one thing,
+The other examples in this series are batch scripts: each asks one thing,
 prints the answer, and exits. That is the right shape for teaching a
 primitive and the wrong shape for the first thing most people want to do,
 which is have a conversation.
@@ -16,11 +16,11 @@ have to hold in your own code. Every turn is saved; the next turn resumes
 from the saved state. Swap ``MemoryCheckpointer`` for Redis or Postgres and
 the same conversation survives a restart.
 
-Key ideas:
+What this notebook covers:
 - A ``thread_id`` names the conversation; the checkpointer stores it.
 - The loop keeps no history of its own — the agent's state is the history.
-- Tool calls are printed as they happen, so you can see the agent act
-  rather than infer it from the answer.
+- Each answer is printed with the tool calls the agent made to reach it, so
+  you can see the agent act rather than infer it from the answer.
 - ``/reset`` starts a fresh thread, which shows the boundary a
   ``thread_id`` draws: same agent, no shared memory.
 
@@ -31,18 +31,15 @@ Non-interactive (CI, or just to see the shape) — the script detects a
 non-tty and replays a scripted conversation instead of prompting:
     echo "" | .venv/bin/python examples/notebook_04_chat_loop.py
 
-Live model:
-    LOCUS_MODEL_PROVIDER=openai LOCUS_MODEL_ID=gpt-4o
-    (or LOCUS_MODEL_PROVIDER=anthropic, or any OpenAI-compatible
-    provider: ollama, vllm, groq, together, openrouter, ...).
-Set LOCUS_MODEL_PROVIDER=mock for an offline run.
+The default provider is OCI GenAI when ``~/.oci/config`` holds a usable profile,
+otherwise the bundled mock model; set ``LOCUS_MODEL_PROVIDER`` (``oci``,
+``openai``, ``anthropic``, ``mock``) to choose.
 """
 
 import asyncio
-import os
 import sys
 
-from config import get_model, print_config
+from config import get_model, print_config, resolved_provider
 
 from locus.agent import Agent
 from locus.memory.backends import MemoryCheckpointer
@@ -83,8 +80,12 @@ def build_agent() -> Agent:
         model=get_model(),
         tools=[get_weather],
         checkpointer=MemoryCheckpointer(),
-        # Write after every iteration so an interrupted turn resumes cleanly
-        # rather than losing the tool call that was in flight.
+        # Save after every iteration, once its tool results are in the state:
+        # on a durable backend a process exit mid-turn leaves a state that
+        # Agent.continue_turn picks up from the last completed iteration
+        # instead of re-running finished tool calls. On a thread with a
+        # checkpointer that can delete single checkpoints this is already
+        # the default; it is explicit here so the cadence is visible.
         checkpoint_every_n_iterations=1,
         system_prompt=(
             "You are a concise travel assistant. Use the weather tool when "
@@ -109,7 +110,7 @@ async def scripted_run(agent: Agent) -> None:
         print(f"  you  : {line}")
         await say(agent, thread_id, line)
 
-    if os.environ.get("LOCUS_MODEL_PROVIDER", "mock").lower() == "mock":
+    if resolved_provider() == "mock":
         # Be straight about it: the mock answers the same way whatever it is
         # asked, so this run shows the loop and the tool calls but proves
         # nothing about memory. Against a real model the third answer names
@@ -170,7 +171,7 @@ async def main() -> None:
 
     print()
     print("=" * 60)
-    print("Next: Notebook 06 — Streaming")
+    print("Next: Notebook 05 — Conversation memory: remembering what you told it")
     print("=" * 60)
 
 

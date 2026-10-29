@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025, 2026 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v1.0 as shown at
 # https://oss.oracle.com/licenses/upl/
@@ -29,18 +28,17 @@ Key concepts:
   as with any other model.
 - Streaming arrives as ``ModelChunkEvent`` from the SSE
   ``output_text.delta`` stream — agent-layer code doesn't change.
-- ``ConversationManager`` is the one Locus primitive that bypasses on
-  this path (no client-side history to trim). Memory, Reflexion, GSAR,
-  grounding, idempotency, checkpointing, output schema, streaming, and
-  termination conditions all apply.
+- With ``store=True`` the runtime loop skips ``ConversationManager``
+  (no client-side history to trim) and calls ``complete()`` rather than
+  ``stream()``. Memory, Reflexion, GSAR, grounding, idempotency,
+  checkpointing, output schema, and termination conditions all apply.
 
-Run it::
-
+Run it:
     export OCI_PROFILE=<your-profile>
     export OCI_REGION=us-chicago-1
     export OCI_COMPARTMENT=ocid1.compartment.…
     # Optional: also exercise store=True (skip if your tenant has ZDR).
-    export OCI_RESPONSES_STORE=0
+    export OCI_RESPONSES_STORE=1
     python examples/notebook_34_oci_responses.py
 
 Difficulty: Intermediate
@@ -213,11 +211,6 @@ async def part4_streaming() -> None:
             chunks += 1
     print(f"\n  ({chunks} chunks)\n")
     await model.aclose()
-
-
-# =============================================================================
-# Main
-# =============================================================================
 
 
 async def _amain() -> None:

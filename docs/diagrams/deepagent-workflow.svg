@@ -16,7 +16,7 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 424" role="img" aria-labelledby="title desc">
   <title id="title">The research workflow</title>
-  <desc id="desc">Execute runs an agent tool loop that gathers evidence. Causal inference then builds a causal chain from that evidence; it is on by default, and with causal_inference set to False Execute goes straight to Summarize. Summarize distils the evidence into a summary, and Grounding eval scores the summary's claims against the evidence. If the score meets the threshold the run is done. Below the threshold, while regenerations are left, Regenerate rewrites the summary without re-running tools and sends it back to Grounding eval. Once regenerations are used up, while replans are left, Replan writes a prompt focused on the ungrounded claims and sends it back to Execute. When both are used up, the run ends.</desc>
+  <desc id="desc">Execute runs an agent tool loop that gathers evidence. Causal inference then builds a causal chain from that evidence; it is on by default, and with causal_inference set to False Execute goes straight to Summarize. Summarize distills the evidence into a summary, and Grounding eval scores the summary's claims against the evidence. If the score meets the threshold the run is done. Below the threshold, while regenerations are left, Regenerate rewrites the summary without re-running tools and sends it back to Grounding eval. Once regenerations are used up, while replans are left, Replan writes a prompt focused on the ungrounded claims and sends it back to Execute. When both are used up, the run ends.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
@@ -47,7 +47,8 @@
 
   <!-- grounding_eval -> done -->
   <path class="edge" marker-end="url(#ah)" d="M764,183 L838,183 Q868,183 868,213 L868,302"/>
-  <rect class="label-bg" x="808" y="238" width="120" height="40" rx="4"/>
+  <rect class="label-bg" x="808" y="238" width="120" height="20" rx="4"/>
+  <rect class="label-bg" x="808" y="258" width="120" height="20" rx="4"/>
   <text class="label" x="868" y="248">score ≥ threshold</text>
   <text class="label" x="868" y="268">or both used up</text>
 
@@ -69,7 +70,7 @@
   <g class="node">
     <rect x="424" y="154" width="140" height="58" rx="12"/>
     <text x="494" y="173">Summarize</text>
-    <text class="sub" x="494" y="194">distils evidence</text>
+    <text class="sub" x="494" y="194">distills evidence</text>
   </g>
   <g class="node primary">
     <rect x="614" y="154" width="150" height="58" rx="12"/>
