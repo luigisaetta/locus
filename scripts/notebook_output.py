@@ -136,7 +136,9 @@ def run_notebook(stem: str, sdk: Path) -> str:
     )
     if completed.returncode != 0:
         raise SystemExit(f"{stem} exited {completed.returncode}:\n{completed.stderr[-2000:]}")
-    return completed.stdout.rstrip("\n")
+    # Trailing whitespace is dropped line by line: a page that carried it would
+    # fail the repository's whitespace hook, and it carries no information.
+    return "\n".join(line.rstrip() for line in completed.stdout.splitlines()).rstrip("\n")
 
 
 def uses_model(stem: str, sdk: Path) -> bool:
